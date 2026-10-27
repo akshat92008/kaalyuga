@@ -1,0 +1,6 @@
+{
+  "name": "Rudra: Ashen Warborn — Kurukshetra Mythic Action Roguelike",
+  "description": "AAA Hades-inspired isometric 3D mythic action roguelike featuring Rudra the Ashen Warborn, the Bloodforged Parashu Great-Axe, Kalaripayattu stances, and Deva Boons.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

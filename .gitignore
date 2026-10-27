@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Testing
+coverage/
+
+# Next.js build output
+.next/
+out/
+build/
+dist/
+
+# OS and Editor files
+.DS_Store
+*.pem
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Blender temporary & backup files
+*.blend1
+*.blend2
+/tmp/
+
+# Large Archives & Binaries
+*.zip
+*.tar.gz
+*.dmg
+*.iso
+
+# Local Environment
+.env*.local
