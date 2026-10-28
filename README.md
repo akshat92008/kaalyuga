@@ -5,11 +5,11 @@
 
 ## ⚔️ Project Overview
 
-**Kaliyuga: The Bleeding Crown** is an isometric 3D mythic action roguelike inspired by *Hades* and *Black Myth: Wukong*, infused with ancient Indian mythology (Kurukshetra, Kalaripayattu, Deva Boons, and the Asura Warlords). 
+**Kaliyuga: The Bleeding Crown** is an isometric 3D mythic action roguelike inspired by *Hades* and *classic mythological action games*, infused with ancient Indian mythology (Kurukshetra, Kalaripayattu, Deva Boons, and the Asura Warlords). 
 
 The repository contains:
 1. **The Complete Playable Game**: Full Next.js 15 + React 19 + TypeScript + Three.js application with a custom 3D isometric combat engine (`rudra3dRenderer.ts`, `boss3dRenderer.ts`), procedural chambers, boon drafting systems, and dynamic audio.
-2. **God of War-Tier Cutscene Suite**: Master Blender 5.2 EEVEE Next 3D production files, procedural bone keyframing pipelines, and high-fidelity 1080p CinemaScope cutscene exports.
+2. **Cutscene Suite**: Master Blender 5.2 EEVEE Next 3D production files, procedural bone keyframing pipelines, and high-fidelity 1080p CinemaScope cutscene exports.
 3. **Full 3D & 2D Asset Vault**: High-poly rigged characters, 4K PBR textures (Albedo, Normal, Roughness, Metallic), combat animation libraries, weapons, and concept turnaround sheets.
 
 ---
@@ -21,7 +21,7 @@ kaliyuga/
 ├── app/                           # Next.js 15 App Router (layout, page, global styling)
 ├── components/                    # UI & Gameplay React Components
 │   ├── game/
-│   │   ├── WukongArena.tsx        # Main 3D Canvas Arena & Combat Loop
+│   │   ├── KaliyugaArena.tsx        # Main 3D Canvas Arena & Combat Loop
 │   │   ├── TitleScreen.tsx        # Mythic Title & Mode Selection
 │   │   ├── BoonModal.tsx          # Deva Boon Upgrade Interface
 │   │   ├── StoryCodexModal.tsx    # Lore Codex & Bestiary

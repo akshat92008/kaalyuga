@@ -80,51 +80,51 @@ export default function StoryCodexModal({
                 />
                 <img
                   src={GAME_ASSETS.parashuAxeArt}
-                  alt="Bloodforged Khanda-Parashu Great-Axe"
+                  alt="Broken Iron Mace"
                   referrerPolicy="no-referrer"
                   className="w-full h-44 object-contain border border-[#c89d46]/40 bg-[#141218] p-2"
                 />
               </div>
               <div className="md:col-span-7 space-y-4 leading-relaxed">
                 <h3 className="font-display text-xl font-bold text-[#f2c45a]">
-                  The Eighteenth Night of Kurukshetra &amp; The Bleeding Crown
+                  The Bleeding Crown
                 </h3>
                 <p>
-                  On the final night of the Great War of Kurukshetra, the forbidden{' '}
-                  <strong>Brahmashira Astra</strong> tore open the sky. You are{' '}
-                  <strong>Rudra the Ash-Bound</strong>—a deserted royal guard who tried to shield
-                  the Shishira healer camp, including the young physician <strong>Shachi</strong>,
-                  from the celestial fallout.
+                  <strong>Rudra</strong> was an immortal commander, kept alive by a gem set in his
+                  brow. On his father <strong>Kaala-Chakra</strong>&apos;s word he burned the Shishira
+                  camp with the Brahmashira. He asked only his father. He did not walk the
+                  two hundred paces to look. Roughly forty thousand died, among them{' '}
+                  <strong>Ila</strong>, daughter of the ferrywoman <strong>Savitri</strong>.
                 </p>
                 <p>
-                  Bound to the <strong>Homa Fire Shrine</strong> on the banks of the Vaitarani River
-                  and wielding the <strong>3D Bloodforged Khanda-Parashu Great-Axe</strong>, every
-                  death returns you to the embers until the Dharma-Rot Sovereigns of Kurukshetra
-                  are laid to rest.
+                  The Preserver said, &quot;Go and look.&quot; Then he broke the gem into six shards and threw
+                  Rudra into the river of the dead. Three thousand years later Savitri pulls him out.
+                  &quot;Get up. You owe a lot of people.&quot; He carries a broken iron mace, and the souls
+                  in the gem are what keep him alive.
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
                   <div className="p-4 bg-[#14131a] border border-[#c89d46]/25">
                     <div className="text-xs text-[#d4a548] uppercase tracking-wider mb-1">
-                      Act I · Chambers 1–3
+                      Act I
                     </div>
                     <div className="font-display font-bold text-[#f5ebd6] mb-1">
-                      Shores of Vaitarani &amp; Elephant Trenches
+                      The Charnel Plains
                     </div>
                     <p className="text-xs text-[#a99e8b]">
-                      Carve through Kuru Ash-Infantry and Charnel Pyre-Hounds before challenging
-                      Dundubhi, the Bronze Buffalo Demon at the Altar of the War-Drum.
+                      Fight through the ash-infantry of Kurukshetra and break Dundubhi, the Bronze
+                      Buffalo Demon, at the Altar of the War-Drum.
                     </p>
                   </div>
                   <div className="p-4 bg-[#14131a] border border-[#c89d46]/25">
                     <div className="text-xs text-[#d4a548] uppercase tracking-wider mb-1">
-                      Act II · Chambers 4–6
+                      Boss
                     </div>
                     <div className="font-display font-bold text-[#f5ebd6] mb-1">
-                      Burning Shishira Camp &amp; Iron Sanctuary
+                      Vrikodara
                     </div>
                     <p className="text-xs text-[#a99e8b]">
-                      Relive the night the Brahmashira fell and confront Vrikodara, the starving
-                      Iron Rakshasa who broke his own body to shield the orphans of Kurukshetra.
+                      Rudra&apos;s blood-brother in arms. He grieves, and he blames the man who
+                      burned the camp. You will have to listen as you fight him.
                     </p>
                   </div>
                 </div>
@@ -216,7 +216,7 @@ export default function StoryCodexModal({
                 <div className="grid grid-cols-2 gap-3">
                   <img
                     src={GAME_ASSETS.parashuAxeArt}
-                    alt="Bloodforged Khanda-Parashu Great-Axe"
+                    alt="Broken Iron Mace"
                     referrerPolicy="no-referrer"
                     className="w-full h-40 object-contain bg-black/50 p-2 border border-[#c89d46]/30"
                   />
