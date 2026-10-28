@@ -115,28 +115,28 @@ export default function KeepersShrineModal({
 
         {/* Footer Actions */}
         <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-t border-[#c89d46]/25 bg-[#110f14]">
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2.5">
             <button
               type="button"
               data-testid="jump-boss1-btn"
               onClick={() => {
-                onStartChamber(2);
+                onStartChamber(4);
                 onClose();
               }}
-              className="px-4 py-2.5 bg-[#261116] hover:bg-[#381820] text-[#ff6b78] border border-[#a83240]/60 text-xs font-bold tracking-[0.1em] uppercase transition-colors cursor-pointer whitespace-nowrap"
+              className="px-3.5 py-2.5 bg-[#261116] hover:bg-[#381820] text-[#ff6b78] border border-[#a83240]/60 text-xs font-bold tracking-[0.1em] uppercase transition-colors cursor-pointer whitespace-nowrap"
             >
-              [VANGUARD BOSS] FIGHT DUNDUBHI · BUFFALO DEMON
+              [CHAMBER 5 BOSS] DUNDUBHI · 3D WAR-DRUM DEMON
             </button>
             <button
               type="button"
               data-testid="jump-boss2-btn"
               onClick={() => {
-                onStartChamber(5);
+                onStartChamber(11);
                 onClose();
               }}
-              className="px-4 py-2.5 bg-[#291910] hover:bg-[#3b2416] text-[#ffaa5c] border border-[#b86b28]/60 text-xs font-bold tracking-[0.1em] uppercase transition-colors cursor-pointer whitespace-nowrap"
+              className="px-3.5 py-2.5 bg-[#291910] hover:bg-[#3b2416] text-[#ffaa5c] border border-[#b86b28]/60 text-xs font-bold tracking-[0.1em] uppercase transition-colors cursor-pointer whitespace-nowrap"
             >
-              [SOVEREIGN BOSS] FIGHT VRIKODARA · IRON RAKSHASA
+              [CHAMBER 12 BOSS] VRIKODARA · 3D IRON RAKSHASA
             </button>
           </div>
 
@@ -150,7 +150,7 @@ export default function KeepersShrineModal({
               }}
               className="px-5 py-2.5 bg-[#d4a548] hover:bg-[#e4b85c] text-[#090807] font-bold text-xs tracking-[0.12em] uppercase border border-[#f5dca0] transition-colors cursor-pointer whitespace-nowrap"
             >
-              START FULL 6-CHAMBER VERTICAL SLICE
+              START FULL 12-CHAMBER VERTICAL SLICE
             </button>
             <button
               type="button"

@@ -383,7 +383,7 @@ export function rollCelestialBoonOffer(
 ): CelestialBoonSpec[] {
   const ownedSet = new Set(ownedBoons);
   const pool = CELESTIAL_BOONS.filter((b) => !ownedSet.has(b.id));
-  const source = pool.length >= 3 ? [...pool] : [...CELESTIAL_BOONS];
+  const source = [...pool];
 
   const picked: CelestialBoonSpec[] = [];
   while (picked.length < 3 && source.length > 0) {

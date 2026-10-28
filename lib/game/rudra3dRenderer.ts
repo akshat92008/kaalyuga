@@ -448,8 +448,12 @@ export class Rudra3DRenderer {
 
     for (const track of baseClip.tracks) {
       const itemSize = track.getValueSize();
-      const interpolant = track.createInterpolant();
-      const baseVal = Array.from(interpolant.evaluate(0.18) as Float32Array | number[]);
+      const interpolant = (
+        track as THREE.KeyframeTrack & {
+          createInterpolant: () => { evaluate: (t: number) => Float32Array | number[] };
+        }
+      ).createInterpolant();
+      const baseVal = Array.from(interpolant.evaluate(0.18));
 
       const isSpine =
         track.name.includes('Spine') && track.name.endsWith('.quaternion');
@@ -803,6 +807,9 @@ export class Rudra3DRenderer {
     return true;
   }
 
+  private readonly scratchRotQ = new THREE.Quaternion();
+  private readonly scratchEuler = new THREE.Euler();
+
   private applyProceduralSwingPose(
     spineYaw: number,
     spinePitch: number,
@@ -810,8 +817,8 @@ export class Rudra3DRenderer {
     foreArmBend: number,
     wristPitch: number
   ) {
-    const rotQ = new THREE.Quaternion();
-    const euler = new THREE.Euler();
+    const rotQ = this.scratchRotQ;
+    const euler = this.scratchEuler;
 
     if (this.spine1Bone) {
       euler.set(spinePitch * 0.5, spineYaw * 0.5, 0, 'XYZ');

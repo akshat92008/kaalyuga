@@ -30,8 +30,8 @@ export interface ChamberSpec {
 }
 
 export const GAME_ASSETS = {
-  titleBackdrop: '/assets/aistudio/Gemini_Generated_Image_ey07c4ey07c4ey07_1de21fb8.png',
-  shrineBackdrop: '/assets/aistudio/Gemini_Generated_Image_vjfugjvjfugjvjfu_d880974a.png',
+  titleBackdrop: '/assets/aistudio/Gemini_Generated_Image_pzbeilpzbeilpzbe_288ae9d4.png',
+  shrineBackdrop: '/assets/aistudio/Gemini_Generated_Image_7zsvk7zsvk7zsvk7_677c7311.png',
   wukongHeroCutout: '/assets/aistudio/Ashen_Warrior_with_Weathered_Sword_d61d6072.png',
   wukongPortrait: '/assets/aistudio/Wounded_Warrior_with_Bloodied_Greatsword_43996349.png',
   divineTrio: '/assets/aistudio/Gemini_Generated_Image_1zhpc51zhpc51zhp_b2abd8b8.jpeg',
@@ -42,6 +42,17 @@ export const GAME_ASSETS = {
       '/models/Meshy_AI_Ashen_Warborn_biped/Meshy_AI_Ashen_Warborn_biped_Meshy_Merged_Animations.fbx',
     parashuAxeFbx:
       '/models/Meshy_AI_Bloodforged_Trident_A_1025041928_texture_fbx/Meshy_AI_Bloodforged_Trident_A_1025041928_texture.fbx',
+    dundubhiFbx:
+      '/models/Meshy_AI_Runebound_Minotaur_Warlord_20261025_texture_fbx/Meshy_AI_Runebound_Minotaur_Warlord_20261025_texture.fbx',
+    dundubhiAnims: {
+      idle: '/models/Meshy_AI_Runebound_Minotaur_Warlord_20261025_texture_fbx/mutant_idle.fbx',
+      run: '/models/Meshy_AI_Runebound_Minotaur_Warlord_20261025_texture_fbx/mutant_run.fbx',
+      swipe: '/models/Meshy_AI_Runebound_Minotaur_Warlord_20261025_texture_fbx/mutant_swiping.fbx',
+      jumpAttack: '/models/Meshy_AI_Runebound_Minotaur_Warlord_20261025_texture_fbx/mutant_jump_attack.fbx',
+      roar: '/models/Meshy_AI_Runebound_Minotaur_Warlord_20261025_texture_fbx/mutant_roaring.fbx',
+    },
+    vrikodaraFbx:
+      '/models/Meshy_AI_Infernal_Maw_Sovereign_20261025_texture_fbx/Meshy_AI_Infernal_Maw_Sovereign_20261025_texture.fbx',
   },
   spellsVfxSheet: '/assets/aistudio/Gemini_Generated_Image_smm68fsmm68fsmm6_cc64e922.png',
   magmaCraterDecal: '/assets/aistudio/Gemini_Generated_Image_42ht5k42ht5k42ht_d2fecf3a.png',
@@ -51,7 +62,7 @@ export const GAME_ASSETS = {
   wukongAction2x2: '/assets/aistudio/Gemini_Generated_Image_f9tq97f9tq97f9tq_cf95a1d1.png',
 
   // ============================================================================
-  // KALIYUGA: THE BLEEDING CROWN — BESPOKE CHAPTER 1 VERTICAL SLICE ASSETS (32)
+  // KALIYUGA: THE BLEEDING CROWN — BESPOKE CHAPTER 1 VERTICAL SLICE ASSETS
   // ============================================================================
   rudra: {
     idle: '/assets/aistudio/Ashen_Warrior_with_Weathered_Sword_d61d6072.png',
@@ -94,7 +105,11 @@ export const GAME_ASSETS = {
   },
   arenas: {
     vaitaraniRiver: '/assets/aistudio/Gemini_Generated_Image_vjfugjvjfugjvjfu_d880974a.png',
+    drownedShallows: '/assets/aistudio/Gemini_Generated_Image_tbakuftbakuftbak_c9baa1f3.png',
+    mistRavine: '/assets/aistudio/Gemini_Generated_Image_48l81o48l81o48l8_6757a043.png',
     charnelPlains: '/assets/aistudio/Gemini_Generated_Image_ey07c4ey07c4ey07_1de21fb8.png',
+    warDrumColosseum: '/assets/aistudio/Gemini_Generated_Image_d26ytnd26ytnd26y_833d582c.png',
+    spiritChainGrove: '/assets/aistudio/Gemini_Generated_Image_lcvwbvlcvwbvlcvw_f51e31fc.png',
     shishiraCamp: '/assets/aistudio/Gemini_Generated_Image_acbxb7acbxb7acbx_9e34bd2e.png',
   },
 
@@ -124,7 +139,7 @@ export const CHAMBERS: ChamberSpec[] = [
     backgroundUrl: '/assets/aistudio/Gemini_Generated_Image_vjfugjvjfugjvjfu_d880974a.png',
     ambientHue: '#ff7b29',
     lanternColor: '#ff521b',
-    floorTint: 'rgba(255, 110, 35, 0.08)',
+    floorTint: 'rgba(255, 110, 35, 0.06)',
     isBossChamber: false,
     braziers: [
       { x: 0.22, y: 0.37, color: '#ff7b24', radius: 165 },
@@ -152,11 +167,11 @@ export const CHAMBERS: ChamberSpec[] = [
     chapterTitle: 'Chapter I: Kurukshetra — The Bleeding Crown',
     chineseSubtitle: 'ACT I · REED-BANKS OF THE ASHEN TIDE',
     name: 'DROWNED CHARIOT SHALLOWS',
-    subtitle: 'Sunken War-Banners · Bone-Archer Crossfire',
-    backgroundUrl: '/assets/aistudio/Gemini_Generated_Image_vjfugjvjfugjvjfu_d880974a.png',
-    ambientHue: '#ff6e24',
-    lanternColor: '#ff521b',
-    floorTint: 'rgba(235, 95, 35, 0.08)',
+    subtitle: 'Sunken Blood-Moat Bridges · Bone-Archer Crossfire',
+    backgroundUrl: '/assets/aistudio/Gemini_Generated_Image_tbakuftbakuftbak_c9baa1f3.png',
+    ambientHue: '#ff8e2b',
+    lanternColor: '#ff621b',
+    floorTint: 'rgba(235, 115, 35, 0.06)',
     isBossChamber: false,
     braziers: [
       { x: 0.24, y: 0.32, color: '#ff7b24', radius: 160 },
@@ -184,15 +199,16 @@ export const CHAMBERS: ChamberSpec[] = [
     chineseSubtitle: 'ACT I · THE CORPSE-MIST RAVINE',
     name: 'FOG OF BROKEN VOWS',
     subtitle: 'Sarama Hellhound Pack · Savitri’s Lantern Trail',
-    backgroundUrl: '/assets/aistudio/Gemini_Generated_Image_ey07c4ey07c4ey07_1de21fb8.png',
+    backgroundUrl: '/assets/aistudio/Gemini_Generated_Image_48l81o48l81o48l8_6757a043.png',
     ambientHue: '#ff6829',
     lanternColor: '#ff521b',
-    floorTint: 'rgba(215, 95, 35, 0.09)',
+    floorTint: 'rgba(215, 95, 35, 0.06)',
     isBossChamber: false,
     braziers: [
-      { x: 0.59, y: 0.20, color: '#ff6d1f', radius: 165 },
-      { x: 0.89, y: 0.44, color: '#ff7d26', radius: 160 },
-      { x: 0.79, y: 0.86, color: '#ff5a1a', radius: 170 },
+      { x: 0.22, y: 0.34, color: '#ff6d1f', radius: 165 },
+      { x: 0.78, y: 0.34, color: '#ff7d26', radius: 160 },
+      { x: 0.22, y: 0.76, color: '#ff5a1a', radius: 165 },
+      { x: 0.78, y: 0.76, color: '#ff5a1a', radius: 165 },
     ],
     props: [
       { type: 'pagoda_lantern', x: 0.28, y: 0.38 },
@@ -220,7 +236,7 @@ export const CHAMBERS: ChamberSpec[] = [
     backgroundUrl: '/assets/aistudio/Gemini_Generated_Image_ey07c4ey07c4ey07_1de21fb8.png',
     ambientHue: '#ff5e22',
     lanternColor: '#ff521b',
-    floorTint: 'rgba(225, 85, 30, 0.09)',
+    floorTint: 'rgba(225, 85, 30, 0.06)',
     isBossChamber: false,
     braziers: [
       { x: 0.55, y: 0.22, color: '#ff6d1f', radius: 165 },
@@ -249,17 +265,17 @@ export const CHAMBERS: ChamberSpec[] = [
     chineseSubtitle: 'DUNDUBHI · BAIT HIS CHARGE INTO PILLARS TO CRACK ARMOR!',
     name: 'COURTYARD OF THE WAR-DRUM',
     subtitle: '3D Mini-Boss Encounter · Bait Charge Into Basalt Pillars to Shatter His Drum-Chest',
-    backgroundUrl: '/assets/aistudio/Gemini_Generated_Image_ey07c4ey07c4ey07_1de21fb8.png',
+    backgroundUrl: '/assets/aistudio/Gemini_Generated_Image_d26ytnd26ytnd26y_833d582c.png',
     ambientHue: '#ff4219',
     lanternColor: '#ff6a1a',
-    floorTint: 'rgba(235, 75, 25, 0.11)',
+    floorTint: 'rgba(235, 75, 25, 0.08)',
     isBossChamber: true,
     bossId: 'xuemo',
     braziers: [
-      { x: 0.59, y: 0.20, color: '#ff6d1f', radius: 175 },
-      { x: 0.89, y: 0.44, color: '#ff7d26', radius: 175 },
-      { x: 0.79, y: 0.86, color: '#ff6d1f', radius: 175 },
-      { x: 0.25, y: 0.75, color: '#ff551a', radius: 155 },
+      { x: 0.24, y: 0.24, color: '#ff6d1f', radius: 185 },
+      { x: 0.76, y: 0.24, color: '#ff7d26', radius: 185 },
+      { x: 0.24, y: 0.78, color: '#ff6d1f', radius: 185 },
+      { x: 0.76, y: 0.78, color: '#ff551a', radius: 185 },
     ],
     props: [
       { type: 'dragon_pillar', x: 0.32, y: 0.36 },
@@ -279,15 +295,15 @@ export const CHAMBERS: ChamberSpec[] = [
     chineseSubtitle: 'ACT II · OUTER PERIMETER OF SHISHIRA',
     name: 'ASH-CHOKED MEDICINAL GROVE',
     subtitle: 'Where the Brahmashira Sky-Fire First Touched Earth',
-    backgroundUrl: '/assets/aistudio/Gemini_Generated_Image_acbxb7acbxb7acbx_9e34bd2e.png',
-    ambientHue: '#ff9636',
-    lanternColor: '#ff8024',
-    floorTint: 'rgba(255, 130, 45, 0.09)',
+    backgroundUrl: '/assets/aistudio/Gemini_Generated_Image_lcvwbvlcvwbvlcvw_f51e31fc.png',
+    ambientHue: '#38bdf8',
+    lanternColor: '#5ce6ff',
+    floorTint: 'rgba(56, 189, 248, 0.05)',
     isBossChamber: false,
     braziers: [
-      { x: 0.50, y: 0.16, color: '#ffbe44', radius: 210 },
-      { x: 0.22, y: 0.38, color: '#ff8024', radius: 165 },
-      { x: 0.82, y: 0.44, color: '#ff6d1f', radius: 175 },
+      { x: 0.50, y: 0.16, color: '#5ce6ff', radius: 210 },
+      { x: 0.22, y: 0.38, color: '#38bdf8', radius: 165 },
+      { x: 0.82, y: 0.44, color: '#f5c451', radius: 175 },
     ],
     props: [
       { type: 'incense_cauldron', x: 0.30, y: 0.42 },
@@ -313,7 +329,7 @@ export const CHAMBERS: ChamberSpec[] = [
     backgroundUrl: '/assets/aistudio/Gemini_Generated_Image_acbxb7acbxb7acbx_9e34bd2e.png',
     ambientHue: '#ff9636',
     lanternColor: '#ff8024',
-    floorTint: 'rgba(255, 130, 45, 0.10)',
+    floorTint: 'rgba(255, 130, 45, 0.07)',
     isBossChamber: false,
     braziers: [
       { x: 0.50, y: 0.16, color: '#ffbe44', radius: 220 },
@@ -343,10 +359,10 @@ export const CHAMBERS: ChamberSpec[] = [
     chineseSubtitle: 'ACT II · INNER WARD OF THE HEALERS',
     name: 'COURTYARD OF SILENT CRADLES',
     subtitle: 'Charred Stretchers & Broken Shields · Elite Vanguard Siege',
-    backgroundUrl: '/assets/aistudio/Gemini_Generated_Image_acbxb7acbxb7acbx_9e34bd2e.png',
+    backgroundUrl: '/assets/aistudio/Gemini_Generated_Image_48l81o48l81o48l8_6757a043.png',
     ambientHue: '#ff8429',
     lanternColor: '#ff701f',
-    floorTint: 'rgba(245, 110, 40, 0.10)',
+    floorTint: 'rgba(245, 110, 40, 0.07)',
     isBossChamber: false,
     braziers: [
       { x: 0.48, y: 0.18, color: '#ffbe44', radius: 210 },
@@ -375,10 +391,10 @@ export const CHAMBERS: ChamberSpec[] = [
     chineseSubtitle: 'ACT III · STEPS OF MELTED BRONZE',
     name: 'CAULDRON CAUSEWAY',
     subtitle: 'Rivers of Molten Iron · Heavy Asura Garrison',
-    backgroundUrl: '/assets/aistudio/Gemini_Generated_Image_vjfugjvjfugjvjfu_d880974a.png',
+    backgroundUrl: '/assets/aistudio/Gemini_Generated_Image_tbakuftbakuftbak_c9baa1f3.png',
     ambientHue: '#ff5524',
     lanternColor: '#ff3b1c',
-    floorTint: 'rgba(255, 75, 35, 0.10)',
+    floorTint: 'rgba(255, 75, 35, 0.07)',
     isBossChamber: false,
     braziers: [
       { x: 0.22, y: 0.37, color: '#ff6422', radius: 165 },
@@ -407,10 +423,10 @@ export const CHAMBERS: ChamberSpec[] = [
     chineseSubtitle: 'ACT III · DEFILED TEMPLE STEPS',
     name: 'SANCTUARY OF BROKEN OATHS',
     subtitle: 'Outer Threshold of Vrikodara’s Cave Refuge · Three-Wave Gauntlet',
-    backgroundUrl: '/assets/aistudio/Gemini_Generated_Image_vjfugjvjfugjvjfu_d880974a.png',
+    backgroundUrl: '/assets/aistudio/Gemini_Generated_Image_lcvwbvlcvwbvlcvw_f51e31fc.png',
     ambientHue: '#ff4726',
     lanternColor: '#ff2b1c',
-    floorTint: 'rgba(255, 65, 35, 0.10)',
+    floorTint: 'rgba(255, 65, 35, 0.07)',
     isBossChamber: false,
     braziers: [
       { x: 0.22, y: 0.37, color: '#ff6422', radius: 160 },
@@ -441,10 +457,10 @@ export const CHAMBERS: ChamberSpec[] = [
     chineseSubtitle: 'ACT III · ANTECHAMBER OF THE IRON RAKSHASA',
     name: 'HALL OF CHAINED PILLARS',
     subtitle: 'Final Royal Guard Phalanx Before the Sovereign’s Seat',
-    backgroundUrl: '/assets/aistudio/Gemini_Generated_Image_ey07c4ey07c4ey07_1de21fb8.png',
+    backgroundUrl: '/assets/aistudio/Gemini_Generated_Image_d26ytnd26ytnd26y_833d582c.png',
     ambientHue: '#ff3b1f',
     lanternColor: '#ff4d1a',
-    floorTint: 'rgba(230, 50, 25, 0.11)',
+    floorTint: 'rgba(230, 50, 25, 0.08)',
     isBossChamber: false,
     braziers: [
       { x: 0.58, y: 0.20, color: '#ff6d1f', radius: 175 },
@@ -477,7 +493,7 @@ export const CHAMBERS: ChamberSpec[] = [
     backgroundUrl: '/assets/aistudio/Gemini_Generated_Image_ey07c4ey07c4ey07_1de21fb8.png',
     ambientHue: '#ff8a36',
     lanternColor: '#ff9838',
-    floorTint: 'rgba(210, 45, 25, 0.12)',
+    floorTint: 'rgba(210, 45, 25, 0.08)',
     isBossChamber: true,
     bossId: 'tiger_vanguard',
     braziers: [
@@ -497,6 +513,3 @@ export const CHAMBERS: ChamberSpec[] = [
     ],
   },
 ];
-
-
-

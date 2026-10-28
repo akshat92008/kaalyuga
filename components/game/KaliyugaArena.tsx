@@ -261,6 +261,40 @@ export default function KaliyugaArena() {
     const b3d = new Boss3DRenderer(420);
     rudra3dRef.current = r3d;
     boss3dRef.current = b3d;
+
+    // Load persisted Ashen Karma & Homa Fire Shrine upgrade ranks from localStorage
+    try {
+      const raw = window.localStorage.getItem('kaliyuga_save_v1');
+      if (raw) {
+        const parsed = JSON.parse(raw) as {
+          ashenKarma?: number;
+          ranks?: Partial<ShrineRanks>;
+        };
+        const mergedRanks: ShrineRanks = {
+          ...INITIAL_SHRINE_RANKS,
+          ...(parsed.ranks || {}),
+        };
+        const savedKarma =
+          typeof parsed.ashenKarma === 'number' && Number.isFinite(parsed.ashenKarma)
+            ? Math.max(0, Math.round(parsed.ashenKarma))
+            : INITIAL_ASHEN_KARMA;
+        simRef.current.ranks = mergedRanks;
+        simRef.current.ashenKarma = savedKarma;
+        const derived = computeDerivedPlayerStats(mergedRanks);
+        simRef.current.player.maxHp = derived.maxHp;
+        simRef.current.player.hp = derived.maxHp;
+        simRef.current.player.displayHp = derived.maxHp;
+        simRef.current.player.maxGourdSips = derived.maxGourdSips;
+        simRef.current.player.gourdSips = derived.maxGourdSips;
+        simRef.current.player.extraLives = derived.extraLives;
+        simRef.current.player.focusOrbs = derived.startingFocusOrbs;
+        setShrineRanks(mergedRanks);
+        setAshenKarma(savedKarma);
+      }
+    } catch {
+      // Ignore storage read errors in restricted environments
+    }
+
     return () => {
       r3d.dispose();
       b3d.dispose();
@@ -1330,7 +1364,7 @@ export default function KaliyugaArena() {
     }
     p.gourdSips -= 1;
     const boonMods = computeBoonModifiers(sim.activeBoons);
-    const healRatio = 0.42 + boonMods.gourdInstantHealRatio * 0.45;
+    const healRatio = 0.42 * (1 + boonMods.gourdInstantHealRatio);
     const heal = Math.round(p.maxHp * healRatio);
     p.hp = Math.min(p.maxHp, p.hp + heal);
     p.action = 'gourd';
@@ -3639,7 +3673,7 @@ export default function KaliyugaArena() {
             spawnFloatingText(
               p.x,
               p.y - 82,
-              'JIUMING HAOMAO · LIFE-SAVING STRAND REVIVE!',
+              'MRITYUNJAYA MANTRA · DEATHLESS REVIVE!',
               '#ffd86b',
               1.3
             );
@@ -3647,6 +3681,12 @@ export default function KaliyugaArena() {
             sim.state = 'gameover';
             document.body.dataset.state = 'gameover';
             setAshenKarma(sim.ashenKarma);
+            try {
+              window.localStorage.setItem(
+                'kaliyuga_save_v1',
+                JSON.stringify({ ashenKarma: sim.ashenKarma, ranks: sim.ranks })
+              );
+            } catch {}
             setGameState('gameover');
             setOutcomeMode('defeat');
             soundEngine.playGong('defeat');
@@ -3663,6 +3703,12 @@ export default function KaliyugaArena() {
             sim.karmaRunDelta += clearBonus;
             sim.score += chamberSpec.isBossChamber ? 1500 : 500;
             setAshenKarma(sim.ashenKarma);
+            try {
+              window.localStorage.setItem(
+                'kaliyuga_save_v1',
+                JSON.stringify({ ashenKarma: sim.ashenKarma, ranks: sim.ranks })
+              );
+            } catch {}
 
             // Grant +1 Celestial Boon Offer on every Chamber Clear before the final Boss!
             if (sim.chamberIndex < CHAMBERS.length - 1) {
@@ -3826,102 +3872,31 @@ export default function KaliyugaArena() {
       ctx.fillStyle = chamberSpec.floorTint;
       ctx.fillRect(0, 0, worldW, worldH);
 
-      // 1.5. AAA Hades-Style Isometric Grand Chamber Architecture & Basalt Flagstone Floor
+      // 1.5. AAA Hades-Style Atmospheric Chamber Vignette & Sacred Sanctum Mandala
+      // (Preserves 100% clarity of the hand-painted isometric chamber artwork without wireframe grid clutter)
       ctx.save();
-      // Deep atmospheric chamber floor grade so characters, slash smears & telegraphs pop with crisp contrast
       const chamberGrade = ctx.createRadialGradient(
         worldW * 0.5,
         worldH * 0.52,
-        worldW * 0.08,
+        worldW * 0.14,
         worldW * 0.5,
         worldH * 0.52,
-        worldW * 0.56
+        worldW * 0.58
       );
-      chamberGrade.addColorStop(0, 'rgba(18, 12, 11, 0.20)');
-      chamberGrade.addColorStop(0.65, 'rgba(10, 7, 8, 0.48)');
-      chamberGrade.addColorStop(1, 'rgba(3, 2, 4, 0.84)');
+      chamberGrade.addColorStop(0, 'rgba(14, 10, 9, 0.06)');
+      chamberGrade.addColorStop(0.68, 'rgba(8, 6, 7, 0.28)');
+      chamberGrade.addColorStop(1, 'rgba(3, 2, 4, 0.72)');
       ctx.fillStyle = chamberGrade;
       ctx.fillRect(0, 0, worldW, worldH);
 
-      // Isometric Diamond Basalt Flagstone Grid across the vast chamber floor
-      const tileW = 148;
-      const tileH = 74;
-      ctx.lineWidth = 1.15;
-      for (let gy = Math.floor(minY / tileH); gy <= Math.ceil(maxY / tileH); gy++) {
-        for (let gx = Math.floor(minX / tileW); gx <= Math.ceil(maxX / tileW); gx++) {
-          const cx = gx * tileW + (gy % 2 === 0 ? 0 : tileW * 0.5);
-          const cy = gy * tileH;
-          const distFromCenter = Math.hypot(
-            (cx - worldW * 0.5) / (worldW * 0.44),
-            (cy - worldH * 0.52) / (worldH * 0.39)
-          );
-          if (distFromCenter > 1.04) continue;
-
-          const tileAlpha = Math.max(0.04, (1 - distFromCenter * 0.76) * 0.22);
-          if ((gx + gy) % 3 === 0) {
-            ctx.fillStyle = `rgba(255, 196, 120, ${tileAlpha * 0.14})`;
-          } else if ((gx * 7 + gy * 13) % 5 === 0) {
-            ctx.fillStyle = `rgba(12, 9, 10, ${tileAlpha * 0.65})`;
-          } else {
-            ctx.fillStyle = `rgba(28, 20, 18, ${tileAlpha * 0.28})`;
-          }
-
-          ctx.beginPath();
-          ctx.moveTo(cx, cy - tileH * 0.48);
-          ctx.lineTo(cx + tileW * 0.48, cy);
-          ctx.lineTo(cx, cy + tileH * 0.48);
-          ctx.lineTo(cx - tileW * 0.48, cy);
-          ctx.closePath();
-          ctx.fill();
-
-          ctx.strokeStyle = `rgba(218, 165, 92, ${tileAlpha * 0.52})`;
-          ctx.stroke();
-
-          if ((gx + gy) % 2 === 0 && distFromCenter < 0.80) {
-            ctx.strokeStyle = `rgba(255, 220, 155, ${tileAlpha * 0.22})`;
-            ctx.beginPath();
-            ctx.moveTo(cx, cy - tileH * 0.38);
-            ctx.lineTo(cx + tileW * 0.38, cy);
-            ctx.lineTo(cx, cy + tileH * 0.38);
-            ctx.lineTo(cx - tileW * 0.38, cy);
-            ctx.closePath();
-            ctx.stroke();
-          }
-        }
-      }
-
-      // Ornate Isometric Sacred Sanctum Mandala & Chola Bronze Inlay Rings at Chamber Center
+      // Subtle Chola Bronze Sanctum Inlay Ring at Chamber Center
       ctx.save();
       ctx.translate(worldW * 0.5, worldH * 0.52);
       ctx.scale(1, 0.52);
-
-      ctx.strokeStyle = 'rgba(228, 168, 86, 0.22)';
-      ctx.lineWidth = 3.5;
-      ctx.beginPath();
-      ctx.arc(0, 0, worldW * 0.34, 0, Math.PI * 2);
-      ctx.stroke();
-
-      const midRingR = worldW * 0.20;
-      ctx.strokeStyle = 'rgba(235, 180, 98, 0.24)';
-      ctx.lineWidth = 2.2;
-      ctx.beginPath();
-      ctx.arc(0, 0, midRingR, 0, Math.PI * 2);
-      ctx.stroke();
-
-      for (let i = 0; i < 16; i++) {
-        const ang = (i / 16) * Math.PI * 2;
-        ctx.strokeStyle = i % 2 === 0 ? 'rgba(235, 180, 98, 0.16)' : 'rgba(255, 108, 42, 0.11)';
-        ctx.lineWidth = i % 2 === 0 ? 1.8 : 1.1;
-        ctx.beginPath();
-        ctx.moveTo(Math.cos(ang) * (midRingR * 0.42), Math.sin(ang) * (midRingR * 0.42));
-        ctx.lineTo(Math.cos(ang) * midRingR, Math.sin(ang) * midRingR);
-        ctx.stroke();
-      }
-
-      ctx.strokeStyle = 'rgba(255, 198, 105, 0.26)';
+      ctx.strokeStyle = 'rgba(235, 180, 98, 0.14)';
       ctx.lineWidth = 2.0;
       ctx.beginPath();
-      ctx.arc(0, 0, midRingR * 0.42, 0, Math.PI * 2);
+      ctx.arc(0, 0, worldW * 0.19, 0, Math.PI * 2);
       ctx.stroke();
       ctx.restore();
 
@@ -5748,20 +5723,28 @@ export default function KaliyugaArena() {
     sim.ranks = res.ranks;
     sim.ashenKarma = res.availableKarma;
     const derived = computeDerivedPlayerStats(sim.ranks);
+    const boonMods = computeBoonModifiers(sim.activeBoons);
     const hpDelta = Math.max(0, derived.maxHp - prevDerived.maxHp);
     const sipsDelta = Math.max(0, derived.maxGourdSips - prevDerived.maxGourdSips);
     const livesDelta = Math.max(0, derived.extraLives - prevDerived.extraLives);
 
+    const nextMaxSips = derived.maxGourdSips + boonMods.gourdBonusMaxSips;
     sim.player.maxHp = derived.maxHp;
     sim.player.hp = Math.min(derived.maxHp, sim.player.hp + hpDelta);
     sim.player.displayHp = sim.player.hp;
-    sim.player.maxGourdSips = derived.maxGourdSips;
-    sim.player.gourdSips = Math.min(derived.maxGourdSips, sim.player.gourdSips + sipsDelta);
+    sim.player.maxGourdSips = nextMaxSips;
+    sim.player.gourdSips = Math.min(nextMaxSips, sim.player.gourdSips + sipsDelta);
     sim.player.extraLives += livesDelta;
     sim.player.focusOrbs = Math.max(sim.player.focusOrbs, derived.startingFocusOrbs);
 
     setShrineRanks({ ...sim.ranks });
     setAshenKarma(sim.ashenKarma);
+    try {
+      window.localStorage.setItem(
+        'kaliyuga_save_v1',
+        JSON.stringify({ ashenKarma: sim.ashenKarma, ranks: sim.ranks })
+      );
+    } catch {}
     soundEngine.playSpell('gourd');
   }, []);
 

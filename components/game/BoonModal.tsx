@@ -72,7 +72,7 @@ export default function BoonModal({
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-[#c89d46]/30 pb-5 mb-6">
           <div>
             <div className="text-xs font-mono-num tracking-[0.2em] text-[#d4a548] uppercase mb-1">
-              VEDIC ALTAR OF THE DEVAS · CHAMBER {chamberId}/6
+              VEDIC ALTAR OF THE DEVAS · CHAMBER {chamberId}/12
             </div>
             <h2 className="font-display text-2xl md:text-3xl font-bold tracking-wider text-[#f7efe0]">
               CHOOSE YOUR VEDIC ASTRA BOON
@@ -193,7 +193,7 @@ export default function BoonModal({
         </div>
 
         <div className="mt-5 flex items-center justify-between text-[11px] font-mono-num text-[#8f8473]">
-          <span>TIP: STACK PATRON BOONS WITH SHADOW STRIKE (BACKSTAB) &amp; CLOUD STEP DASH-STRIKES</span>
+          <span>TIP: STACK PATRON ASTRAS WITH SHADOW STRIKE (BACKSTAB) &amp; PHANTOM STEP DASH-STRIKES</span>
           <span>KEYS: [1] [2] [3] SELECT BOON</span>
         </div>
       </div>
