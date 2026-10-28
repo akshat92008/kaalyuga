@@ -20,18 +20,22 @@ const jetbrains = JetBrains_Mono({
   variable: '--font-jetbrains',
 });
 
+const SITE_TITLE = 'Kaliyuga: The Bleeding Crown';
+const SITE_DESCRIPTION =
+  'An undying warrior who burned a camp of healers climbs a mountain for revenge, and learns the truth about the father who sent him. Vertical slice demo.';
+
 export const metadata: Metadata = {
-  title: 'Wukong Master Guide — Technical Code Audit & Sandbox',
-  description: 'Comprehensive code audit, security vulnerability assessment, performance optimization analysis, and patched playable sandbox for Black Myth: Wukong — Ashen Mandate.',
+  title: SITE_TITLE,
+  description: SITE_DESCRIPTION,
   openGraph: {
-    title: 'Wukong Master Guide — Technical Code Audit & Sandbox',
-    description: 'Comprehensive code audit, security vulnerability assessment, performance optimization analysis, and patched playable sandbox for Black Myth: Wukong — Ashen Mandate.',
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
     type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Wukong Master Guide — Technical Code Audit & Sandbox',
-    description: 'Comprehensive code audit, security vulnerability assessment, performance optimization analysis, and patched playable sandbox for Black Myth: Wukong — Ashen Mandate.',
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
   },
 };
 

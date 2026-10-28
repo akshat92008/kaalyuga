@@ -248,11 +248,8 @@ const MAX_AMBIENT_MOTES = 64;
 const WORLD_SCALE = 2.85;
 const BASE_CAMERA_ZOOM = 0.74;
 
-export interface WukongArenaProps {
-  onOpenAudit?: () => void;
-}
 
-export default function WukongArena({ onOpenAudit }: WukongArenaProps = {}) {
+export default function KaliyugaArena() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rudra3dRef = useRef<Rudra3DRenderer | null>(null);
   const boss3dRef = useRef<Boss3DRenderer | null>(null);
@@ -1286,12 +1283,12 @@ export default function WukongArena({ onOpenAudit }: WukongArenaProps = {}) {
     if (typeof window !== 'undefined' && process.env.NODE_ENV !== 'production') {
       (
         window as unknown as {
-          __WUKONG_TEST__?: {
+          __KALIYUGA_TEST__?: {
             startGameAtChamber: (idx: number) => void;
             getSnapshot: () => unknown;
           };
         }
-      ).__WUKONG_TEST__ = Object.freeze({
+      ).__KALIYUGA_TEST__ = Object.freeze({
         startGameAtChamber,
         getSnapshot: () =>
           Object.freeze({
@@ -4496,17 +4493,22 @@ export default function WukongArena({ onOpenAudit }: WukongArenaProps = {}) {
             const renderedBoss3D =
               boss3d &&
               boss3d.updateAndRender({
-                bossType,
+                kind: bossType,
                 dt: simDt > 0 ? simDt : dt,
-                animTime: e.animTime,
-                facingX: Math.cos(e.aimAngle) || e.facing,
-                facingY: Math.sin(e.aimAngle),
+                vx: e.vx,
+                vy: e.vy,
+                facing: e.facing,
+                aimAngle: e.aimAngle,
                 aiState: e.aiState,
                 attackKind: e.attackKind,
+                windupProgress:
+                  e.aiState === 'windup'
+                    ? Math.min(1, Math.max(0, 1 - e.aiTimer / Math.max(0.01, e.windupDuration)))
+                    : 0,
                 phase: e.phase,
                 armorCracked: Boolean(e.armorCracked),
-                postureBroken: e.postureBrokenTimer > 0,
-                isHurt: isFlash,
+                isPostureBroken: e.postureBrokenTimer > 0,
+                isHitFlash: isFlash,
               });
 
             // Dundubhi Bronze War-Drum Armor Ring indicator on the arena floor
@@ -5777,7 +5779,7 @@ export default function WukongArena({ onOpenAudit }: WukongArenaProps = {}) {
       {/* Isolated 2.5D Isometric Canvas Container */}
       <canvas
         ref={canvasRef}
-        data-testid="wukong-canvas"
+        data-testid="kaliyuga-canvas"
         onMouseMove={(e) => {
           const rect = e.currentTarget.getBoundingClientRect();
           const sx = e.clientX - rect.left;
@@ -5812,7 +5814,6 @@ export default function WukongArena({ onOpenAudit }: WukongArenaProps = {}) {
           onStartOdyssey={() => startGameAtChamber(0)}
           onOpenShrine={() => setShrineOpen(true)}
           onOpenStory={() => setStoryOpen(true)}
-          onOpenAudit={onOpenAudit}
         />
       )}
 
@@ -5987,21 +5988,6 @@ export default function WukongArena({ onOpenAudit }: WukongArenaProps = {}) {
 
             {/* Top-Right Utility Controls */}
             <div className="pointer-events-auto flex items-center gap-1 relative shrink-0">
-              {onOpenAudit && (
-                <button
-                  type="button"
-                  tabIndex={-1}
-                  data-testid="hud-audit-btn"
-                  onClick={(e) => {
-                    e.currentTarget.blur();
-                    onOpenAudit();
-                  }}
-                  className="px-2 py-1.5 bg-[#0f1c18]/92 hover:bg-[#162923] border border-[#3ee0a8]/55 text-[10px] font-mono-num text-[#3ee0a8] cursor-pointer whitespace-nowrap"
-                >
-                  AUDIT 9.8/10
-                </button>
-              )}
-
               <div className="px-2 py-1.5 bg-[#0b1815]/90 border border-[#2a8f6c]/55 text-[10px] font-mono-num text-[#3ee0a8] whitespace-nowrap">
                 {hud.fps} FPS
               </div>

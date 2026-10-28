@@ -8,7 +8,6 @@ interface TitleScreenProps {
   onStartOdyssey: () => void;
   onOpenShrine: () => void;
   onOpenStory: () => void;
-  onOpenAudit?: () => void;
 }
 
 interface EmberMote {
@@ -28,7 +27,6 @@ export default function TitleScreen({
   onStartOdyssey,
   onOpenShrine,
   onOpenStory,
-  onOpenAudit,
 }: TitleScreenProps) {
   const fxCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const backdropImgRef = useRef<HTMLImageElement | null>(null);
@@ -203,20 +201,10 @@ export default function TitleScreen({
         <div className="flex items-center gap-3 text-xs tracking-[0.22em] text-[#e0b456]/95 uppercase">
           <span>CHOLA BRONZE &amp; KURUKSHETRA ASH</span>
           <span aria-hidden="true">·</span>
-          <span>2.5D Isometric Mythological Action Vertical Slice</span>
+          <span>Mythological Action · Vertical Slice</span>
         </div>
         <div className="flex items-center gap-4 text-xs text-[#f2dfc0]/90 font-mono-num">
           <span>HOMA SHRINE KARMA: {ashenKarma}</span>
-          {onOpenAudit && (
-            <button
-              type="button"
-              data-testid="open-audit-btn"
-              onClick={onOpenAudit}
-              className="px-3 py-1 bg-[#141218]/90 hover:bg-[#221e29] border border-[#3ee0a8]/55 text-[#3ee0a8] text-[11px] font-mono-num uppercase tracking-wider cursor-pointer transition-colors"
-            >
-              ARCHITECTURAL AUDIT
-            </button>
-          )}
         </div>
       </div>
 
@@ -340,18 +328,18 @@ export default function TitleScreen({
               letterSpacing="4.8"
               fontFamily="var(--font-jakarta), sans-serif"
             >
-              RUDRA THE ASH-BOUND · TWELVE-CHAMBER VERTICAL SLICE
+              ACT I · THE CHARNEL PLAINS
             </text>
           </svg>
         </div>
 
         <p className="text-sm md:text-base text-[#e4d9c5]/95 max-w-xl leading-relaxed mb-8 drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]">
-          Wield the <span className="text-[#f7cf78] font-semibold">3D Bloodforged Khanda-Parashu Great-Axe</span> across the scorched plains of Kurukshetra. Claim{' '}
-          <span className="text-[#f7cf78] font-semibold">Vedic Deva Astras</span> from Agni, Indra
-          &amp; Rudra-Shiva, chain <span className="text-[#63f2ff] font-semibold">360° Phantom Step Dash-Strikes</span>{' '}
-          and <span className="text-[#f7cf78] font-semibold">Kalaripayattu Parries</span>, and shatter the
-          Posture of <span className="text-[#ff855e] font-semibold">Dundubhi the Buffalo Demon</span>{' '}
-          and <span className="text-[#ff855e] font-semibold">Vrikodara the Iron Rakshasa</span>.
+          Rudra cannot die. Three thousand years ago he burned a camp of healers on his father&apos;s word, without walking
+          two hundred paces to look. Now a ferrywoman has pulled him from the river of the dead. Take the{' '}
+          <span className="text-[#f7cf78] font-semibold">Iron Mace</span> across Kurukshetra, break the{' '}
+          <span className="text-[#ff855e] font-semibold">Posture</span> of{' '}
+          <span className="text-[#ff855e] font-semibold">Dundubhi the Buffalo Demon</span> and{' '}
+          <span className="text-[#ff855e] font-semibold">Vrikodara</span>, and decide who is Taken and who is Released.
         </p>
 
         {/* <= 3 Primary Menu Actions */}
@@ -389,10 +377,10 @@ export default function TitleScreen({
       {/* Single Flat Borderless Control Hint Line in Bottom Safe Margin */}
       <div className="relative z-10 px-10 pb-6 flex flex-wrap items-center justify-between gap-4 text-xs tracking-[0.14em] text-[#cfc2ab]/85 uppercase">
         <span>
-          WASD / Left Stick 360° Move · LMB / [X] Parashu Combo · RMB / [Y] Tapas Unleash · Space / [A] Phantom Step · [B]
-          Vedic Astras · Tab / [RB] Stance · PC &amp; Console Gamepad Ready
+          WASD / Left Stick 360° Move · LMB / [X] Mace Combo · RMB / [Y] Heavy Strike · Space / [A] Phantom Step · [B]
+          Astras · Tab / [RB] Stance · PC &amp; Console Gamepad Ready
         </span>
-        <span className="text-[#e5b95c]/90 font-mono-num">3D RUDRA + 3D BOSSES (DUNDUBHI &amp; VRIKODARA) · 12 CHAMBERS</span>
+        <span className="text-[#e5b95c]/90 font-mono-num">ACT I VERTICAL SLICE · DUNDUBHI &amp; VRIKODARA</span>
       </div>
     </div>
   );
