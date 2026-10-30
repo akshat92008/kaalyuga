@@ -73,14 +73,14 @@ export default function StoryCodexModal({
             <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
               <div className="md:col-span-5 space-y-4">
                 <img
-                  src={GAME_ASSETS.wukongPortrait}
+                  src={GAME_ASSETS.rudra.idle}
                   alt="Rudra the Ash-Bound Warrior"
                   referrerPolicy="no-referrer"
-                  className="w-full h-64 object-cover border border-[#c89d46]/40 bg-[#141218]"
+                  className="w-full h-64 object-contain border border-[#c89d46]/40 bg-[#141218] p-2"
                 />
                 <img
-                  src={GAME_ASSETS.parashuAxeArt}
-                  alt="Broken Iron Mace"
+                  src={GAME_ASSETS.rudra.slam}
+                  alt="Bloodforged Parashu Great-Axe"
                   referrerPolicy="no-referrer"
                   className="w-full h-44 object-contain border border-[#c89d46]/40 bg-[#141218] p-2"
                 />
@@ -215,16 +215,16 @@ export default function StoryCodexModal({
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <img
-                    src={GAME_ASSETS.parashuAxeArt}
-                    alt="Broken Iron Mace"
+                    src={GAME_ASSETS.rudra.slam}
+                    alt="Bloodforged Parashu Great-Axe"
                     referrerPolicy="no-referrer"
                     className="w-full h-40 object-contain bg-black/50 p-2 border border-[#c89d46]/30"
                   />
                   <img
-                    src={GAME_ASSETS.spellsVfxSheet}
+                    src={GAME_ASSETS.rudra.astra}
                     alt="Vedic Astras and Fire Slash VFX"
                     referrerPolicy="no-referrer"
-                    className="w-full h-40 object-cover border border-[#c89d46]/30"
+                    className="w-full h-40 object-contain bg-black/50 p-2 border border-[#c89d46]/30"
                   />
                 </div>
               </div>

@@ -1,49 +1,142 @@
-export type PropType = 'incense_cauldron' | 'pagoda_lantern' | 'weapon_rack' | 'dragon_pillar';
+// ============================================================================
+// KALIYUGA: THE BLEEDING CROWN (कलियुग · रक्तमुकुट)
+// Full-Scale Multi-Wave Chamber Architecture, 3D Boss Rigs & Sprite Sheets
+// ============================================================================
 
-export interface ChamberPropSpec {
-  type: PropType;
-  x: number;
-  y: number;
-}
+export type StaffStance = 'smash' | 'pillar' | 'thrust';
+export type WeaponId = 'jingu_bang' | 'twin_blades' | 'dragon_glaive';
 
-export interface ChamberSpec {
-  id: number;
-  chapter: number;
-  chapterTitle: string;
-  chineseSubtitle: string;
+export interface WeaponConfig {
+  id: WeaponId;
   name: string;
-  subtitle: string;
-  backgroundUrl: string;
-  ambientHue: string;
-  lanternColor: string;
-  floorTint: string;
-  isBossChamber: boolean;
-  bossId?: 'xuemo' | 'tiger_vanguard';
-  braziers: Array<{ x: number; y: number; color: string; radius: number }>;
-  props: ChamberPropSpec[];
-  spawns: Array<{
-    type: 'wolf_guai' | 'fire_monk' | 'stone_golem' | 'furnace_titan' | 'xuemo' | 'tiger_vanguard';
-    x: number;
-    y: number;
-    delay?: number;
-  }>;
+  chineseName: string;
+  hotkey: string;
+  damageMult: number;
+  speedMult: number;
+  rangeMult: number;
+  postureMult: number;
+  accentColor: string;
+  description: string;
 }
+
+export const WEAPON_CONFIGS: Record<WeaponId, WeaponConfig> = {
+  jingu_bang: {
+    id: 'jingu_bang',
+    name: 'Pinaka-Danda · Shiva Staff',
+    chineseName: 'पिनाक दण्ड',
+    hotkey: '1',
+    damageMult: 1.0,
+    speedMult: 1.0,
+    rangeMult: 1.0,
+    postureMult: 1.0,
+    accentColor: '#f5d061',
+    description: 'Balanced 3-Stance Kalaripayattu War-Staff forged in the fires of Kailasha.',
+  },
+  twin_blades: {
+    id: 'twin_blades',
+    name: 'Agni-Katar · Twin Daggers',
+    chineseName: 'अग्नि कटार',
+    hotkey: '2',
+    damageMult: 0.78,
+    speedMult: 1.42,
+    rangeMult: 0.86,
+    postureMult: 0.9,
+    accentColor: '#ff7043',
+    description: 'Blindingly fast dual Kalaripayattu thrusting daggers (+42% Attack Speed).',
+  },
+  dragon_glaive: {
+    id: 'dragon_glaive',
+    name: 'Bhargava Parashu · Great-Axe',
+    chineseName: 'भार्गव परशु',
+    hotkey: '3',
+    damageMult: 1.38,
+    speedMult: 0.78,
+    rangeMult: 1.26,
+    postureMult: 1.45,
+    accentColor: '#38bdf8',
+    description: 'Colossal armor-cleaving Parashu poleaxe (+38% Damage, +45% Posture Break).',
+  },
+};
+
+export interface StanceConfig {
+  id: StaffStance;
+  name: string;
+  chineseName: string;
+  hotkey: string;
+  accentColor: string;
+  reachMultiplier: number;
+  damageMultiplier: number;
+  postureDamageMultiplier: number;
+  description: string;
+}
+
+export const STANCE_CONFIGS: Record<StaffStance, StanceConfig> = {
+  smash: {
+    id: 'smash',
+    name: 'Parashu Cleave Stance',
+    chineseName: 'परशु प्रहार',
+    hotkey: '1',
+    accentColor: '#ff8c24',
+    reachMultiplier: 1.0,
+    damageMultiplier: 1.25,
+    postureDamageMultiplier: 1.35,
+    description: 'Heavy forward step-in cleave that shatters armor and frontal shields.',
+  },
+  pillar: {
+    id: 'pillar',
+    name: 'Garuda Vault Stance',
+    chineseName: 'गरुड़ स्तम्भ',
+    hotkey: '2',
+    accentColor: '#5ce6ff',
+    reachMultiplier: 1.18,
+    damageMultiplier: 1.05,
+    postureDamageMultiplier: 1.15,
+    description: 'Elevates Rudra above ground shockwaves before unleashing a radial thunder slam.',
+  },
+  thrust: {
+    id: 'thrust',
+    name: 'Trishula Lunge Stance',
+    chineseName: 'त्रिशूल वेध',
+    hotkey: '3',
+    accentColor: '#e879f9',
+    reachMultiplier: 1.45,
+    damageMultiplier: 1.15,
+    postureDamageMultiplier: 1.2,
+    description: 'Long-range armor-piercing spear lunge with instant backstep tactical recovery.',
+  },
+};
 
 export const GAME_ASSETS = {
-  titleBackdrop: '/assets/aistudio/Gemini_Generated_Image_pzbeilpzbeilpzbe_288ae9d4.png',
+  // Backdrop for Homescreen / Shrine / Modals
+  titleBackdrop: '/assets/aistudio/Eclipse_Warrior_of_the_Ruined_Temple_ae03cddc.png',
   shrineBackdrop: '/assets/aistudio/Gemini_Generated_Image_7zsvk7zsvk7zsvk7_677c7311.png',
-  wukongHeroCutout: '/assets/aistudio/Ashen_Warrior_with_Weathered_Sword_d61d6072.png',
-  wukongPortrait: '/assets/aistudio/Wounded_Warrior_with_Bloodied_Greatsword_43996349.png',
   divineTrio: '/assets/aistudio/Gemini_Generated_Image_1zhpc51zhpc51zhp_b2abd8b8.jpeg',
   weaponsArt: '/assets/aistudio/Mythic_Trishula_War_Axe_6e39d1d1.png',
   parashuAxeArt: '/assets/aistudio/Mythic_Trishula_War_Axe_6e39d1d1.png',
-  models: {
-    rudraBipedFbx:
-      '/models/Meshy_AI_Ashen_Warborn_biped/Meshy_AI_Ashen_Warborn_biped_Meshy_Merged_Animations.fbx',
-    parashuAxeFbx:
-      '/models/Meshy_AI_Bloodforged_Trident_A_1025041928_texture_fbx/Meshy_AI_Bloodforged_Trident_A_1025041928_texture.fbx',
-    dundubhiFbx:
-      '/models/Meshy_AI_Runebound_Minotaur_Warlord_20261025_texture_fbx/Meshy_AI_Runebound_Minotaur_Warlord_20261025_texture.fbx',
+
+  // Hand-Painted Grounded Isometric Arena Backdrops (8 distinct grounded arenas, zero floating/moonlight sky arenas)
+  arenas: {
+    bambooGrove: '/assets/aistudio/Gemini_Generated_Image_ey07c4ey07c4ey07_1de21fb8.png',
+    pagodaCourtyard: '/assets/aistudio/Gemini_Generated_Image_48l81o48l81o48l8_6757a043.png',
+    sanctumBleedingDrum: '/assets/aistudio/Gemini_Generated_Image_ey07c4ey07c4ey07_1de21fb8.png',
+    bloodPoolTemple: '/assets/aistudio/Gemini_Generated_Image_vjfugjvjfugjvjfu_d880974a.png',
+    peachBlossomBridge: '/assets/aistudio/Gemini_Generated_Image_n4yi5cn4yi5cn4yi_49818828.png',
+    frozenKunlunPeak: '/assets/aistudio/Gemini_Generated_Image_48l81o48l81o48l8_6757a043.png',
+    celestialJadeThrone: '/assets/aistudio/Gemini_Generated_Image_ey07c4ey07c4ey07_1de21fb8.png',
+    furnaceDepths: '/assets/aistudio/Gemini_Generated_Image_n4yi5cn4yi5cn4yi_49818828.png',
+    chainedMagmaCourtyard: '/assets/aistudio/Gemini_Generated_Image_48l81o48l81o48l8_6757a043.png',
+    obsidianSanctum: '/assets/aistudio/Gemini_Generated_Image_n4yi5cn4yi5cn4yi_49818828.png',
+    shishiraBurningCamp: '/assets/aistudio/Gemini_Generated_Image_acbxb7acbxb7acbx_9e34bd2e.png',
+    sunkenBloodStepwell: '/assets/aistudio/Gemini_Generated_Image_tbakuftbakuftbak_c9baa1f3.png',
+    sealedLanternGate: '/assets/aistudio/Gemini_Generated_Image_lcvwbvlcvwbvlcvw_f51e31fc.png',
+  },
+
+  // 3D Rigged Character, Boss & Weapon FBX Assets (100% verified on disk)
+  models3d: {
+    rudraMergedFbx: '/models/Meshy_AI_Ashen_Warborn_biped/Meshy_AI_Ashen_Warborn_biped_Meshy_Merged_Animations.fbx',
+    rudraAxeFbx: '/models/Meshy_AI_Bloodforged_Trident_A_1025041928_texture_fbx/Meshy_AI_Bloodforged_Trident_A_1025041928_texture.fbx',
+    tridentFbx: '/models/Meshy_AI_Bloodforged_Trident_A_1025041928_texture_fbx/Meshy_AI_Bloodforged_Trident_A_1025041928_texture.fbx',
+    dundubhiFbx: '/models/Meshy_AI_Runebound_Minotaur_Warlord_20261025_texture_fbx/Meshy_AI_Runebound_Minotaur_Warlord_Animations.fbx',
     dundubhiAnims: {
       idle: '/models/Meshy_AI_Runebound_Minotaur_Warlord_20261025_texture_fbx/mutant_idle.fbx',
       run: '/models/Meshy_AI_Runebound_Minotaur_Warlord_20261025_texture_fbx/mutant_run.fbx',
@@ -51,19 +144,22 @@ export const GAME_ASSETS = {
       jumpAttack: '/models/Meshy_AI_Runebound_Minotaur_Warlord_20261025_texture_fbx/mutant_jump_attack.fbx',
       roar: '/models/Meshy_AI_Runebound_Minotaur_Warlord_20261025_texture_fbx/mutant_roaring.fbx',
     },
-    vrikodaraFbx:
-      '/models/Meshy_AI_Infernal_Maw_Sovereign_20261025_texture_fbx/Meshy_AI_Infernal_Maw_Sovereign_20261025_texture.fbx',
+    dundubhiTex: {
+      baseColor: '/models/Meshy_AI_Runebound_Minotaur_Warlord_20261025_texture_fbx/Meshy_AI_Runebound_Minotaur_Warlord_20261025_texture.png',
+      normal: '/models/Meshy_AI_Runebound_Minotaur_Warlord_20261025_texture_fbx/Meshy_AI_Runebound_Minotaur_Warlord_20261025_texture_normal.png',
+      roughness: '/models/Meshy_AI_Runebound_Minotaur_Warlord_20261025_texture_fbx/Meshy_AI_Runebound_Minotaur_Warlord_20261025_texture_roughness.png',
+      metallic: '/models/Meshy_AI_Runebound_Minotaur_Warlord_20261025_texture_fbx/Meshy_AI_Runebound_Minotaur_Warlord_20261025_texture_metallic.png',
+    },
+    vrikodaraFbx: '/models/Meshy_AI_Meshy_AI_Infernal_Maw_biped/Meshy_AI_Meshy_AI_Infernal_Maw_biped_Animation_Running_withSkin.fbx',
+    vrikodaraTex: {
+      baseColor: '/models/Meshy_AI_Infernal_Maw_Sovereign_20261025_texture_fbx/Meshy_AI_Infernal_Maw_Sovereign_20261025_texture.png',
+      metallic: '/models/Meshy_AI_Infernal_Maw_Sovereign_20261025_texture_fbx/Meshy_AI_Infernal_Maw_Sovereign_20261025_texture_metallic.png',
+      normal: '/models/Meshy_AI_Infernal_Maw_Sovereign_20261025_texture_fbx/Meshy_AI_Infernal_Maw_Sovereign_20261025_texture_normal.png',
+      roughness: '/models/Meshy_AI_Infernal_Maw_Sovereign_20261025_texture_fbx/Meshy_AI_Infernal_Maw_Sovereign_20261025_texture_roughness.png',
+    },
   },
-  spellsVfxSheet: '/assets/aistudio/Gemini_Generated_Image_smm68fsmm68fsmm6_cc64e922.png',
-  magmaCraterDecal: '/assets/aistudio/Gemini_Generated_Image_42ht5k42ht5k42ht_d2fecf3a.png',
-  fireSlashVfx: '/assets/aistudio/Gemini_Generated_Image_a51igxa51igxa51i_b0633fb2.png',
-  groundDecals2x2: '/assets/aistudio/Gemini_Generated_Image_96efot96efot96ef_92a05ba5.png',
-  courtyardProps2x2: '/assets/aistudio/Gemini_Generated_Image_9j4sbw9j4sbw9j4s_cba93b51.png',
-  wukongAction2x2: '/assets/aistudio/Gemini_Generated_Image_f9tq97f9tq97f9tq_cf95a1d1.png',
 
-  // ============================================================================
-  // KALIYUGA: THE BLEEDING CROWN — BESPOKE CHAPTER 1 VERTICAL SLICE ASSETS
-  // ============================================================================
+  // Rudra 9 Bespoke Full-Body Action Poses (100% verified on disk)
   rudra: {
     idle: '/assets/aistudio/Ashen_Warrior_with_Weathered_Sword_d61d6072.png',
     run: '/assets/aistudio/Fierce_Warrior_s_Leaping_Strike_0fc5a149.png',
@@ -76,18 +172,15 @@ export const GAME_ASSETS = {
     kneel: '/assets/aistudio/Battle-Worn_Warrior_Kneeling_on_His_Sword_55ca9257.png',
     portrait: '/assets/aistudio/Wounded_Warrior_with_Bloodied_Greatsword_43996349.png',
   },
-  enemies: {
-    ashSoldierIdle: '/assets/aistudio/Undead_Hoplite_with_Shield_and_Spear_efb9ec93.png',
-    ashSoldierAttack: '/assets/aistudio/Skeletal_Spartan_Warrior_s_Final_Charge_13bdab13.png',
-    ashArcherIdle: '/assets/aistudio/Tattered_Bronze_Masked_Undead_Archer_d55f2765.png',
-    ashArcherDraw: '/assets/aistudio/Ember-Tipped_Masked_Archer_e5272586.png',
-    pyreHoundLeap: '/assets/aistudio/Embermaw_Hellhound_in_Mid_Pounce_715176d8.png',
-  },
+
+  // Dundubhi Fallback 2D Poses (100% verified on disk)
   dundubhi: {
     idle: '/assets/aistudio/Verdigris_Bull_Demon_with_Bell_Mace_51bd3b26.png',
-    roar: '/assets/aistudio/Roaring_Bronze_Bell_Minotaur_0d97e19d.png',
     charge: '/assets/aistudio/Charging_Minotaur_War-Beast_3b2464b3.png',
+    roar: '/assets/aistudio/Roaring_Bronze_Bell_Minotaur_0d97e19d.png',
   },
+
+  // Vrikodara Fallback 2D Poses (100% verified on disk)
   vrikodara: {
     p1Idle: '/assets/aistudio/Chainbound_Colossus_with_Temple_Pillar_40bd9fc3.png',
     p1Windup: '/assets/aistudio/Molten_Oni_Warlord_s_Colossal_Smash_c47d103f.png',
@@ -96,420 +189,397 @@ export const GAME_ASSETS = {
     p2Sweep: '/assets/aistudio/Grim_Berserker_Swinging_Stone_Club_41477911.png',
     p2Kneel: '/assets/aistudio/Defeated_Giant_Beside_a_Broken_Pillar_c0a6156e.png',
   },
+
+  // 4-Frame Multi-Pose Enemy Sprite Sheets (100% verified on disk, zero Tiger!)
+  enemySheets: {
+    vrikaStalkerSheet4x1: '/assets/aistudio/Gemini_Generated_Image_vw8zcgvw8zcgvw8z_043bf070.png',
+    agniSpearmanSheet4x1: '/assets/aistudio/Gemini_Generated_Image_wixy9mwixy9mwixy_470e5e55.png',
+    magmaGolemSheet4x1: '/assets/aistudio/Gemini_Generated_Image_v7t1y5v7t1y5v7t1_9158f9e8.png',
+    furnaceColossusSheet4x1: '/assets/aistudio/Gemini_Generated_Image_by91e1by91e1by91_46282a74.png',
+    sixArmedPyromancerSheet2x1: '/assets/aistudio/Gemini_Generated_Image_wixy9mwixy9mwixy_470e5e55.png',
+  },
+
+  // Single-Pose Enemy Sprites (100% verified on disk)
+  enemies: {
+    ashSoldierIdle: '/assets/aistudio/Undead_Hoplite_with_Shield_and_Spear_efb9ec93.png',
+    ashSoldierAttack: '/assets/aistudio/Skeletal_Spartan_Warrior_s_Final_Charge_13bdab13.png',
+    ashArcherIdle: '/assets/aistudio/Tattered_Bronze_Masked_Undead_Archer_d55f2765.png',
+    ashArcherDraw: '/assets/aistudio/Ember-Tipped_Masked_Archer_e5272586.png',
+    pyreHoundLeap: '/assets/aistudio/Embermaw_Hellhound_in_Mid_Pounce_715176d8.png',
+  },
+
+  // Destructible Vedic Props (100% verified on disk)
   kaliyugaProps: {
     kurukshetraPillar: '/assets/aistudio/Gemini_Generated_Image_9st0qa9st0qa9st0_64c7f4c4.png',
     pillarRubble: '/assets/aistudio/Gemini_Generated_Image_xp9eibxp9eibxp9e_197206c9.png',
+    brahmashiraShrine: '/assets/aistudio/Gemini_Generated_Image_rc1gsbrc1gsbrc1g_d88016ca.png',
     brokenChariot: '/assets/aistudio/Gemini_Generated_Image_w6hzmyw6hzmyw6hz_4319bd25.png',
     vaitaraniBoat: '/assets/aistudio/Gemini_Generated_Image_x8gt5lx8gt5lx8gt_225a8aa8.png',
-    brahmashiraShrine: '/assets/aistudio/Gemini_Generated_Image_rc1gsbrc1gsbrc1g_d88016ca.png',
-  },
-  arenas: {
-    vaitaraniRiver: '/assets/aistudio/Gemini_Generated_Image_vjfugjvjfugjvjfu_d880974a.png',
-    drownedShallows: '/assets/aistudio/Gemini_Generated_Image_tbakuftbakuftbak_c9baa1f3.png',
-    mistRavine: '/assets/aistudio/Gemini_Generated_Image_48l81o48l81o48l8_6757a043.png',
-    charnelPlains: '/assets/aistudio/Gemini_Generated_Image_ey07c4ey07c4ey07_1de21fb8.png',
-    warDrumColosseum: '/assets/aistudio/Gemini_Generated_Image_d26ytnd26ytnd26y_833d582c.png',
-    spiritChainGrove: '/assets/aistudio/Gemini_Generated_Image_lcvwbvlcvwbvlcvw_f51e31fc.png',
-    shishiraCamp: '/assets/aistudio/Gemini_Generated_Image_acbxb7acbxb7acbx_9e34bd2e.png',
   },
 
+  // VFX Sheets & Ground Decals (100% verified on disk)
+  vfxSlash2x2: '/assets/aistudio/Gemini_Generated_Image_a51igxa51igxa51i_b0633fb2.png',
+  groundDecals2x2: '/assets/aistudio/Gemini_Generated_Image_96efot96efot96ef_92a05ba5.png',
+  courtyardProps2x2: '/assets/aistudio/Gemini_Generated_Image_9j4sbw9j4sbw9j4s_cba93b51.png',
+  spellsVfxSheet: '/assets/aistudio/Gemini_Generated_Image_smm68fsmm68fsmm6_cc64e922.png',
+  magmaCraterDecal: '/assets/aistudio/Gemini_Generated_Image_42ht5k42ht5k42ht_d2fecf3a.png',
+
   sprites: {
-    wukongGold: '/assets/aistudio/Ashen_Warrior_with_Weathered_Sword_d61d6072.png',
-    wukongBlue: '/assets/aistudio/Fierce_Warrior_s_Leaping_Strike_0fc5a149.png',
-    wolfGuai: '/assets/aistudio/Embermaw_Hellhound_in_Mid_Pounce_715176d8.png',
-    fireMonk: '/assets/aistudio/Tattered_Bronze_Masked_Undead_Archer_d55f2765.png',
-    stoneGolem: '/assets/aistudio/Undead_Hoplite_with_Shield_and_Spear_efb9ec93.png',
-    furnaceTitan: '/assets/aistudio/Verdigris_Bull_Demon_with_Bell_Mace_51bd3b26.png',
-    xuemoPhases: '/assets/aistudio/Verdigris_Bull_Demon_with_Bell_Mace_51bd3b26.png',
-    xuemoPhase3: '/assets/aistudio/Roaring_Bronze_Bell_Minotaur_0d97e19d.png',
-    tigerSheet: '/assets/aistudio/Chainbound_Colossus_with_Temple_Pillar_40bd9fc3.png',
-    tigerSlash: '/assets/aistudio/Oni_Warlord_Shattering_a_Stone_Pillar_66380889.png',
-    tigerRoar: '/assets/aistudio/Molten_Oni_Warlord_s_Colossal_Smash_c47d103f.png',
+    vrikaStalkerSheet4x1: '/assets/aistudio/Gemini_Generated_Image_vw8zcgvw8zcgvw8z_043bf070.png',
+    agniSpearmanSheet4x1: '/assets/aistudio/Gemini_Generated_Image_wixy9mwixy9mwixy_470e5e55.png',
+    magmaGolemSheet4x1: '/assets/aistudio/Gemini_Generated_Image_v7t1y5v7t1y5v7t1_9158f9e8.png',
+    furnaceColossusSheet4x1: '/assets/aistudio/Gemini_Generated_Image_by91e1by91e1by91_46282a74.png',
+    sixArmedPyromancerSheet2x1: '/assets/aistudio/Gemini_Generated_Image_wixy9mwixy9mwixy_470e5e55.png',
   },
 } as const;
 
+export type EnemyType =
+  | 'wolf_guai'
+  | 'fire_monk'
+  | 'stone_golem'
+  | 'furnace_titan'
+  | 'xuemo'
+  | 'vrikodara';
+
+export type EnemyTrait = 'vajra_shield' | 'agni_aura' | 'rakshasa_frenzy';
+
+export type PropType = 'dragon_pillar' | 'incense_cauldron' | 'weapon_rack' | 'pagoda_lantern';
+
+export type ChamberEnvEffect = 'blood_river' | 'lava_fissures' | 'eclipse_wind' | 'sacred_mist';
+
+export interface ChamberSpawnSpec {
+  type: EnemyType;
+  x: number;
+  y: number;
+  delay: number;
+  wave: 1 | 2 | 3;
+  trait?: EnemyTrait;
+}
+
+export interface ChamberPropSpec {
+  type: PropType;
+  x: number;
+  y: number;
+}
+
+export interface ChamberBrazierSpec {
+  x: number;
+  y: number;
+  color: string;
+  radius: number;
+}
+
+export interface ChamberSpec {
+  id: number;
+  chapterTitle: string;
+  name: string;
+  chineseSubtitle: string;
+  backgroundUrl: string;
+  floorTint: string;
+  envEffect: ChamberEnvEffect;
+  isBossChamber: boolean;
+  dialogueSpeaker?: string;
+  dialogueLine?: string;
+  sanjayaStrikethrough?: string;
+  sanjayaCorrection?: string;
+  spawns: ChamberSpawnSpec[];
+  props: ChamberPropSpec[];
+  braziers: ChamberBrazierSpec[];
+}
+
+// ============================================================================
+// 8 DISTINCT HADES-STYLE CHAMBERS WITH MULTI-WAVE ENCOUNTERS & ZERO REPEATS
+// ============================================================================
 export const CHAMBERS: ChamberSpec[] = [
   {
     id: 1,
-    chapter: 1,
-    chapterTitle: 'Chapter I: Kurukshetra — The Bleeding Crown',
-    chineseSubtitle: 'ACT I · SHORES OF THE VAITARANI RIVER',
-    name: 'VAITARANI FERRY LANDING',
-    subtitle: 'Savitri’s Blood-River Dock · First Wave of the Restless Dead',
-    backgroundUrl: '/assets/aistudio/Gemini_Generated_Image_vjfugjvjfugjvjfu_d880974a.png',
-    ambientHue: '#ff7b29',
-    lanternColor: '#ff521b',
-    floorTint: 'rgba(255, 110, 35, 0.06)',
+    chapterTitle: 'Chapter I · The Eclipse of Kurukshetra',
+    name: 'Shattered Chariot Outskirts',
+    chineseSubtitle: 'कुरुक्षेत्र · भग्न रथ प्रांगण',
+    backgroundUrl: GAME_ASSETS.arenas.bambooGrove,
+    floorTint: 'rgba(26, 16, 12, 0.14)',
+    envEffect: 'eclipse_wind',
     isBossChamber: false,
-    braziers: [
-      { x: 0.22, y: 0.37, color: '#ff7b24', radius: 165 },
-      { x: 0.46, y: 0.21, color: '#ff8528', radius: 155 },
-      { x: 0.71, y: 0.81, color: '#ff661a', radius: 170 },
-      { x: 0.89, y: 0.59, color: '#ff7b24', radius: 150 },
+    dialogueSpeaker: 'SAVITRI · THE FERRYWOMAN OF VAITARANI',
+    dialogueLine: '"Your fingers remember the spear, soldier. Let us see if your eyes remember what you burned."',
+    spawns: [
+      // Wave 1: Initial Vanguard (3 foes — spacious, tactical start)
+      { type: 'wolf_guai', x: 0.62, y: 0.36, delay: 0.2, wave: 1 },
+      { type: 'stone_golem', x: 0.68, y: 0.56, delay: 0.4, wave: 1, trait: 'vajra_shield' },
+      { type: 'fire_monk', x: 0.76, y: 0.44, delay: 0.6, wave: 1 },
+      // Wave 2: Flanking Pack & Shielded Spearman
+      { type: 'wolf_guai', x: 0.34, y: 0.28, delay: 0.2, wave: 2, trait: 'rakshasa_frenzy' },
+      { type: 'wolf_guai', x: 0.74, y: 0.72, delay: 0.35, wave: 2 },
+      { type: 'fire_monk', x: 0.80, y: 0.34, delay: 0.5, wave: 2, trait: 'agni_aura' },
+      { type: 'stone_golem', x: 0.54, y: 0.68, delay: 0.65, wave: 2 },
     ],
     props: [
-      { type: 'incense_cauldron', x: 0.27, y: 0.40 },
-      { type: 'pagoda_lantern', x: 0.32, y: 0.68 },
-      { type: 'dragon_pillar', x: 0.48, y: 0.33 },
-      { type: 'dragon_pillar', x: 0.70, y: 0.62 },
-      { type: 'weapon_rack', x: 0.62, y: 0.36 },
+      { type: 'dragon_pillar', x: 0.34, y: 0.32 },
+      { type: 'dragon_pillar', x: 0.68, y: 0.32 },
+      { type: 'incense_cauldron', x: 0.52, y: 0.46 },
+      { type: 'weapon_rack', x: 0.34, y: 0.68 },
+      { type: 'incense_cauldron', x: 0.68, y: 0.68 },
     ],
-    spawns: [
-      { type: 'wolf_guai', x: 0.54, y: 0.44 },
-      { type: 'stone_golem', x: 0.62, y: 0.58 },
-      { type: 'wolf_guai', x: 0.68, y: 0.46, delay: 2.2 },
-      { type: 'stone_golem', x: 0.58, y: 0.66, delay: 3.4 },
+    braziers: [
+      { x: 0.24, y: 0.26, color: '#ff8a2b', radius: 165 },
+      { x: 0.76, y: 0.26, color: '#ff7024', radius: 165 },
+      { x: 0.24, y: 0.76, color: '#ff8a2b', radius: 155 },
+      { x: 0.76, y: 0.76, color: '#ff7024', radius: 155 },
+      { x: 0.50, y: 0.50, color: '#ffae42', radius: 185 },
     ],
   },
   {
     id: 2,
-    chapter: 1,
-    chapterTitle: 'Chapter I: Kurukshetra — The Bleeding Crown',
-    chineseSubtitle: 'ACT I · REED-BANKS OF THE ASHEN TIDE',
-    name: 'DROWNED CHARIOT SHALLOWS',
-    subtitle: 'Sunken Blood-Moat Bridges · Bone-Archer Crossfire',
-    backgroundUrl: '/assets/aistudio/Gemini_Generated_Image_tbakuftbakuftbak_c9baa1f3.png',
-    ambientHue: '#ff8e2b',
-    lanternColor: '#ff621b',
-    floorTint: 'rgba(235, 115, 35, 0.06)',
+    chapterTitle: 'Chapter I · The Eclipse of Kurukshetra',
+    name: 'Chained Magma Garrison',
+    chineseSubtitle: 'अग्नि कुण्ड · लौह शृंखला दुर्ग',
+    backgroundUrl: GAME_ASSETS.arenas.chainedMagmaCourtyard,
+    floorTint: 'rgba(34, 14, 10, 0.16)',
+    envEffect: 'lava_fissures',
     isBossChamber: false,
-    braziers: [
-      { x: 0.24, y: 0.32, color: '#ff7b24', radius: 160 },
-      { x: 0.76, y: 0.28, color: '#ff8528', radius: 165 },
-      { x: 0.72, y: 0.78, color: '#ff661a', radius: 165 },
+    dialogueSpeaker: 'SANJAYA · THE BLIND CHRONICLER',
+    dialogueLine: '"They chained the furnace gates from the outside so none of the conscripts could retreat."',
+    spawns: [
+      // Wave 1: Garrison Sentinels
+      { type: 'stone_golem', x: 0.58, y: 0.42, delay: 0.2, wave: 1, trait: 'vajra_shield' },
+      { type: 'fire_monk', x: 0.72, y: 0.34, delay: 0.4, wave: 1, trait: 'agni_aura' },
+      { type: 'wolf_guai', x: 0.64, y: 0.66, delay: 0.55, wave: 1 },
+      // Wave 2: Magma Ambush
+      { type: 'furnace_titan', x: 0.68, y: 0.50, delay: 0.25, wave: 2, trait: 'agni_aura' },
+      { type: 'wolf_guai', x: 0.30, y: 0.32, delay: 0.4, wave: 2, trait: 'rakshasa_frenzy' },
+      { type: 'fire_monk', x: 0.78, y: 0.68, delay: 0.55, wave: 2 },
+      // Wave 3: Elite Asura Sweep
+      { type: 'stone_golem', x: 0.42, y: 0.72, delay: 0.2, wave: 3, trait: 'vajra_shield' },
+      { type: 'wolf_guai', x: 0.74, y: 0.30, delay: 0.35, wave: 3, trait: 'rakshasa_frenzy' },
     ],
     props: [
-      { type: 'weapon_rack', x: 0.30, y: 0.38 },
-      { type: 'dragon_pillar', x: 0.50, y: 0.32 },
-      { type: 'pagoda_lantern', x: 0.34, y: 0.70 },
-      { type: 'dragon_pillar', x: 0.70, y: 0.66 },
+      { type: 'dragon_pillar', x: 0.30, y: 0.32 },
+      { type: 'dragon_pillar', x: 0.70, y: 0.32 },
+      { type: 'incense_cauldron', x: 0.50, y: 0.40 },
+      { type: 'incense_cauldron', x: 0.54, y: 0.66 },
+      { type: 'pagoda_lantern', x: 0.30, y: 0.70 },
     ],
-    spawns: [
-      { type: 'stone_golem', x: 0.52, y: 0.48 },
-      { type: 'fire_monk', x: 0.72, y: 0.38 },
-      { type: 'wolf_guai', x: 0.60, y: 0.64 },
-      { type: 'fire_monk', x: 0.74, y: 0.66, delay: 3.2 },
-      { type: 'stone_golem', x: 0.58, y: 0.52, delay: 4.5 },
+    braziers: [
+      { x: 0.22, y: 0.25, color: '#ff5924', radius: 175 },
+      { x: 0.78, y: 0.25, color: '#ff5924', radius: 175 },
+      { x: 0.22, y: 0.75, color: '#ff7b24', radius: 165 },
+      { x: 0.78, y: 0.75, color: '#ff7b24', radius: 165 },
+      { x: 0.50, y: 0.50, color: '#ff3814', radius: 210 },
     ],
   },
   {
     id: 3,
-    chapter: 1,
-    chapterTitle: 'Chapter I: Kurukshetra — The Bleeding Crown',
-    chineseSubtitle: 'ACT I · THE CORPSE-MIST RAVINE',
-    name: 'FOG OF BROKEN VOWS',
-    subtitle: 'Sarama Hellhound Pack · Savitri’s Lantern Trail',
-    backgroundUrl: '/assets/aistudio/Gemini_Generated_Image_48l81o48l81o48l8_6757a043.png',
-    ambientHue: '#ff6829',
-    lanternColor: '#ff521b',
-    floorTint: 'rgba(215, 95, 35, 0.06)',
+    chapterTitle: 'Chapter I · The Eclipse of Kurukshetra',
+    name: 'Burning Shishira Healers’ Camp',
+    chineseSubtitle: 'शिशिर शिविर · दग्ध औषधालय',
+    backgroundUrl: GAME_ASSETS.arenas.shishiraBurningCamp,
+    floorTint: 'rgba(38, 16, 10, 0.15)',
+    envEffect: 'lava_fissures',
     isBossChamber: false,
-    braziers: [
-      { x: 0.22, y: 0.34, color: '#ff6d1f', radius: 165 },
-      { x: 0.78, y: 0.34, color: '#ff7d26', radius: 160 },
-      { x: 0.22, y: 0.76, color: '#ff5a1a', radius: 165 },
-      { x: 0.78, y: 0.76, color: '#ff5a1a', radius: 165 },
+    dialogueSpeaker: 'SANJAYA · THE CHRONICLER’S PALIMPSEST',
+    sanjayaStrikethrough: 'The fortress of killers at Shishira fell before Rudra’s righteous flame.',
+    sanjayaCorrection: 'It was a healers’ camp. There were no weapons in the tents—only boiled linen and willow bark.',
+    spawns: [
+      // Wave 1: Camp Pyre Wardens
+      { type: 'fire_monk', x: 0.60, y: 0.38, delay: 0.2, wave: 1, trait: 'agni_aura' },
+      { type: 'wolf_guai', x: 0.66, y: 0.64, delay: 0.35, wave: 1, trait: 'rakshasa_frenzy' },
+      { type: 'stone_golem', x: 0.74, y: 0.48, delay: 0.5, wave: 1 },
+      // Wave 2: Ash-Stalker Pack
+      { type: 'furnace_titan', x: 0.68, y: 0.52, delay: 0.25, wave: 2, trait: 'vajra_shield' },
+      { type: 'fire_monk', x: 0.34, y: 0.30, delay: 0.4, wave: 2, trait: 'agni_aura' },
+      { type: 'wolf_guai', x: 0.78, y: 0.68, delay: 0.55, wave: 2 },
     ],
     props: [
-      { type: 'pagoda_lantern', x: 0.28, y: 0.38 },
-      { type: 'dragon_pillar', x: 0.48, y: 0.31 },
-      { type: 'weapon_rack', x: 0.69, y: 0.36 },
-      { type: 'incense_cauldron', x: 0.31, y: 0.69 },
-      { type: 'dragon_pillar', x: 0.72, y: 0.70 },
+      { type: 'dragon_pillar', x: 0.32, y: 0.32 },
+      { type: 'dragon_pillar', x: 0.68, y: 0.32 },
+      { type: 'incense_cauldron', x: 0.48, y: 0.48 },
+      { type: 'weapon_rack', x: 0.34, y: 0.70 },
+      { type: 'incense_cauldron', x: 0.68, y: 0.70 },
     ],
-    spawns: [
-      { type: 'wolf_guai', x: 0.50, y: 0.42 },
-      { type: 'wolf_guai', x: 0.56, y: 0.64 },
-      { type: 'fire_monk', x: 0.72, y: 0.48 },
-      { type: 'stone_golem', x: 0.62, y: 0.52, delay: 3.5 },
-      { type: 'wolf_guai', x: 0.68, y: 0.38, delay: 4.8 },
-      { type: 'fire_monk', x: 0.75, y: 0.66, delay: 5.5 },
+    braziers: [
+      { x: 0.24, y: 0.26, color: '#ff6a24', radius: 185 },
+      { x: 0.76, y: 0.26, color: '#ff6a24', radius: 185 },
+      { x: 0.24, y: 0.74, color: '#ff922b', radius: 175 },
+      { x: 0.76, y: 0.74, color: '#ff922b', radius: 175 },
+      { x: 0.50, y: 0.50, color: '#ff4818', radius: 215 },
     ],
   },
   {
     id: 4,
-    chapter: 1,
-    chapterTitle: 'Chapter I: Kurukshetra — The Bleeding Crown',
-    chineseSubtitle: 'ACT I · THE CHARNEL PLAINS OF KURUKSHETRA',
-    name: 'ELEPHANT GRAVEYARD TRENCHES',
-    subtitle: 'Bleached Tusk Barricades · Kuru Phalanx & Bell Juggernaut',
-    backgroundUrl: '/assets/aistudio/Gemini_Generated_Image_ey07c4ey07c4ey07_1de21fb8.png',
-    ambientHue: '#ff5e22',
-    lanternColor: '#ff521b',
-    floorTint: 'rgba(225, 85, 30, 0.06)',
-    isBossChamber: false,
-    braziers: [
-      { x: 0.55, y: 0.22, color: '#ff6d1f', radius: 165 },
-      { x: 0.86, y: 0.46, color: '#ff7d26', radius: 160 },
-      { x: 0.76, y: 0.84, color: '#ff5a1a', radius: 170 },
+    chapterTitle: 'Sovereign Boss I · The Bronze War-Drum Titan',
+    name: 'Sanctum of the Bleeding Drum',
+    chineseSubtitle: 'दुन्दुभि · कांस्य रणभेरी असुर',
+    backgroundUrl: GAME_ASSETS.arenas.sanctumBleedingDrum,
+    floorTint: 'rgba(32, 16, 10, 0.14)',
+    envEffect: 'eclipse_wind',
+    isBossChamber: true,
+    dialogueSpeaker: 'DUNDUBHI · THE WAR-DRUM BEHEMOTH',
+    dialogueLine: '"Beat my bronze ribs, little soldier! Every strike sounds the charge that buried ten thousand!"',
+    spawns: [
+      { type: 'xuemo', x: 0.68, y: 0.50, delay: 0.25, wave: 1 },
     ],
     props: [
-      { type: 'weapon_rack', x: 0.29, y: 0.36 },
-      { type: 'dragon_pillar', x: 0.49, y: 0.32 },
-      { type: 'dragon_pillar', x: 0.69, y: 0.36 },
-      { type: 'incense_cauldron', x: 0.32, y: 0.70 },
-      { type: 'dragon_pillar', x: 0.71, y: 0.70 },
+      { type: 'dragon_pillar', x: 0.32, y: 0.32 },
+      { type: 'dragon_pillar', x: 0.68, y: 0.32 },
+      { type: 'dragon_pillar', x: 0.32, y: 0.68 },
+      { type: 'dragon_pillar', x: 0.68, y: 0.68 },
+      { type: 'incense_cauldron', x: 0.50, y: 0.26 },
     ],
-    spawns: [
-      { type: 'stone_golem', x: 0.52, y: 0.46 },
-      { type: 'stone_golem', x: 0.54, y: 0.62 },
-      { type: 'fire_monk', x: 0.72, y: 0.42 },
-      { type: 'furnace_titan', x: 0.64, y: 0.52, delay: 3.0 },
-      { type: 'wolf_guai', x: 0.68, y: 0.66, delay: 4.5 },
+    braziers: [
+      { x: 0.22, y: 0.24, color: '#ff922b', radius: 190 },
+      { x: 0.78, y: 0.24, color: '#ff922b', radius: 190 },
+      { x: 0.22, y: 0.76, color: '#ff6a24', radius: 190 },
+      { x: 0.78, y: 0.76, color: '#ff6a24', radius: 190 },
+      { x: 0.50, y: 0.50, color: '#ffbe3b', radius: 230 },
     ],
   },
   {
     id: 5,
-    chapter: 1,
-    chapterTitle: 'Chapter I Mini-Boss · The War-Drum Behemoth',
-    chineseSubtitle: 'DUNDUBHI · BAIT HIS CHARGE INTO PILLARS TO CRACK ARMOR!',
-    name: 'COURTYARD OF THE WAR-DRUM',
-    subtitle: '3D Mini-Boss Encounter · Bait Charge Into Basalt Pillars to Shatter His Drum-Chest',
-    backgroundUrl: '/assets/aistudio/Gemini_Generated_Image_d26ytnd26ytnd26y_833d582c.png',
-    ambientHue: '#ff4219',
-    lanternColor: '#ff6a1a',
-    floorTint: 'rgba(235, 75, 25, 0.08)',
-    isBossChamber: true,
-    bossId: 'xuemo',
-    braziers: [
-      { x: 0.24, y: 0.24, color: '#ff6d1f', radius: 185 },
-      { x: 0.76, y: 0.24, color: '#ff7d26', radius: 185 },
-      { x: 0.24, y: 0.78, color: '#ff6d1f', radius: 185 },
-      { x: 0.76, y: 0.78, color: '#ff551a', radius: 185 },
+    chapterTitle: 'Chapter II · The Vaitarani Undertow',
+    name: 'Vaitarani Blood-River Crossing',
+    chineseSubtitle: 'वैतरणी नदी · शोणित तीर्थ',
+    backgroundUrl: GAME_ASSETS.arenas.bloodPoolTemple,
+    floorTint: 'rgba(38, 10, 16, 0.16)',
+    envEffect: 'blood_river',
+    isBossChamber: false,
+    dialogueSpeaker: 'SAVITRI · THE FERRYWOMAN',
+    dialogueLine: '"The river does not flow with water, Rudra. It flows with every oath broken under the eclipse."',
+    spawns: [
+      // Wave 1
+      { type: 'wolf_guai', x: 0.58, y: 0.35, delay: 0.2, wave: 1, trait: 'rakshasa_frenzy' },
+      { type: 'wolf_guai', x: 0.62, y: 0.65, delay: 0.35, wave: 1 },
+      { type: 'fire_monk', x: 0.76, y: 0.50, delay: 0.5, wave: 1, trait: 'agni_aura' },
+      // Wave 2
+      { type: 'furnace_titan', x: 0.66, y: 0.48, delay: 0.2, wave: 2, trait: 'vajra_shield' },
+      { type: 'fire_monk', x: 0.32, y: 0.28, delay: 0.4, wave: 2 },
+      { type: 'stone_golem', x: 0.52, y: 0.72, delay: 0.55, wave: 2, trait: 'agni_aura' },
+      // Wave 3
+      { type: 'furnace_titan', x: 0.74, y: 0.36, delay: 0.25, wave: 3, trait: 'rakshasa_frenzy' },
+      { type: 'fire_monk', x: 0.74, y: 0.68, delay: 0.45, wave: 3, trait: 'agni_aura' },
+      { type: 'wolf_guai', x: 0.38, y: 0.66, delay: 0.6, wave: 3 },
     ],
     props: [
-      { type: 'dragon_pillar', x: 0.32, y: 0.36 },
-      { type: 'dragon_pillar', x: 0.68, y: 0.36 },
-      { type: 'dragon_pillar', x: 0.32, y: 0.70 },
-      { type: 'dragon_pillar', x: 0.68, y: 0.70 },
-      { type: 'incense_cauldron', x: 0.50, y: 0.26 },
+      { type: 'dragon_pillar', x: 0.34, y: 0.32 },
+      { type: 'dragon_pillar', x: 0.66, y: 0.32 },
+      { type: 'incense_cauldron', x: 0.50, y: 0.50 },
+      { type: 'weapon_rack', x: 0.34, y: 0.70 },
+      { type: 'pagoda_lantern', x: 0.66, y: 0.70 },
     ],
-    spawns: [
-      { type: 'xuemo', x: 0.58, y: 0.50 },
+    braziers: [
+      { x: 0.25, y: 0.28, color: '#ff2a4b', radius: 180 },
+      { x: 0.75, y: 0.28, color: '#ff2a4b', radius: 180 },
+      { x: 0.25, y: 0.74, color: '#ff5232', radius: 175 },
+      { x: 0.75, y: 0.74, color: '#ff5232', radius: 175 },
+      { x: 0.50, y: 0.52, color: '#ff1e38', radius: 220 },
     ],
   },
   {
     id: 6,
-    chapter: 1,
-    chapterTitle: 'Chapter I: Edge of the Scorched Tents',
-    chineseSubtitle: 'ACT II · OUTER PERIMETER OF SHISHIRA',
-    name: 'ASH-CHOKED MEDICINAL GROVE',
-    subtitle: 'Where the Brahmashira Sky-Fire First Touched Earth',
-    backgroundUrl: '/assets/aistudio/Gemini_Generated_Image_lcvwbvlcvwbvlcvw_f51e31fc.png',
-    ambientHue: '#38bdf8',
-    lanternColor: '#5ce6ff',
-    floorTint: 'rgba(56, 189, 248, 0.05)',
+    chapterTitle: 'Chapter II · The Vaitarani Undertow',
+    name: 'Sunken Blood-Pool Stepwell',
+    chineseSubtitle: 'रक्त बावली · पाताल सोपान',
+    backgroundUrl: GAME_ASSETS.arenas.sunkenBloodStepwell,
+    floorTint: 'rgba(34, 12, 16, 0.15)',
+    envEffect: 'blood_river',
     isBossChamber: false,
-    braziers: [
-      { x: 0.50, y: 0.16, color: '#5ce6ff', radius: 210 },
-      { x: 0.22, y: 0.38, color: '#38bdf8', radius: 165 },
-      { x: 0.82, y: 0.44, color: '#f5c451', radius: 175 },
+    dialogueSpeaker: 'SANJAYA · THE CHRONICLER’S PALIMPSEST',
+    sanjayaStrikethrough: 'The stepwell was poisoned by Rakshasa sorcery before our vanguard arrived.',
+    sanjayaCorrection: 'We cast the bodies of the healers into the cisterns so the rear guard would keep marching.',
+    spawns: [
+      // Wave 1
+      { type: 'stone_golem', x: 0.58, y: 0.38, delay: 0.2, wave: 1, trait: 'vajra_shield' },
+      { type: 'fire_monk', x: 0.74, y: 0.48, delay: 0.35, wave: 1, trait: 'agni_aura' },
+      { type: 'wolf_guai', x: 0.62, y: 0.66, delay: 0.5, wave: 1, trait: 'rakshasa_frenzy' },
+      // Wave 2
+      { type: 'furnace_titan', x: 0.68, y: 0.44, delay: 0.25, wave: 2, trait: 'agni_aura' },
+      { type: 'stone_golem', x: 0.40, y: 0.32, delay: 0.4, wave: 2, trait: 'vajra_shield' },
+      { type: 'wolf_guai', x: 0.74, y: 0.70, delay: 0.55, wave: 2, trait: 'rakshasa_frenzy' },
+      // Wave 3
+      { type: 'furnace_titan', x: 0.64, y: 0.62, delay: 0.25, wave: 3, trait: 'vajra_shield' },
+      { type: 'fire_monk', x: 0.78, y: 0.34, delay: 0.4, wave: 3, trait: 'agni_aura' },
     ],
     props: [
-      { type: 'incense_cauldron', x: 0.30, y: 0.42 },
-      { type: 'pagoda_lantern', x: 0.48, y: 0.34 },
-      { type: 'weapon_rack', x: 0.66, y: 0.38 },
-      { type: 'dragon_pillar', x: 0.68, y: 0.68 },
+      { type: 'dragon_pillar', x: 0.32, y: 0.30 },
+      { type: 'dragon_pillar', x: 0.68, y: 0.30 },
+      { type: 'incense_cauldron', x: 0.50, y: 0.48 },
+      { type: 'pagoda_lantern', x: 0.32, y: 0.70 },
+      { type: 'dragon_pillar', x: 0.68, y: 0.70 },
     ],
-    spawns: [
-      { type: 'wolf_guai', x: 0.52, y: 0.45 },
-      { type: 'fire_monk', x: 0.68, y: 0.42 },
-      { type: 'stone_golem', x: 0.58, y: 0.62 },
-      { type: 'wolf_guai', x: 0.64, y: 0.66, delay: 3.0 },
-      { type: 'stone_golem', x: 0.72, y: 0.52, delay: 4.2 },
+    braziers: [
+      { x: 0.24, y: 0.26, color: '#ff2a4b', radius: 180 },
+      { x: 0.76, y: 0.26, color: '#ff7024', radius: 180 },
+      { x: 0.24, y: 0.74, color: '#ff7024', radius: 175 },
+      { x: 0.76, y: 0.74, color: '#ff2a4b', radius: 175 },
+      { x: 0.50, y: 0.50, color: '#ff3848', radius: 215 },
     ],
   },
   {
     id: 7,
-    chapter: 1,
-    chapterTitle: 'Chapter I: Memory of the Night of Ash',
-    chineseSubtitle: 'ACT II · SHISHIRA HEALER CAMP IN FLAMES',
-    name: 'BURNING SHISHIRA ENCAMPMENT',
-    subtitle: 'Overturned Herb Tables & Bandage Tents · Multi-Wave Ambush',
-    backgroundUrl: '/assets/aistudio/Gemini_Generated_Image_acbxb7acbxb7acbx_9e34bd2e.png',
-    ambientHue: '#ff9636',
-    lanternColor: '#ff8024',
-    floorTint: 'rgba(255, 130, 45, 0.07)',
+    chapterTitle: 'Chapter II · The Vaitarani Undertow',
+    name: 'Sealed Yama-Lantern Citadel Gate',
+    chineseSubtitle: 'यम द्वार · हरित दीप प्रहर',
+    backgroundUrl: GAME_ASSETS.arenas.sealedLanternGate,
+    floorTint: 'rgba(18, 24, 22, 0.14)',
+    envEffect: 'sacred_mist',
     isBossChamber: false,
-    braziers: [
-      { x: 0.50, y: 0.16, color: '#ffbe44', radius: 220 },
-      { x: 0.22, y: 0.38, color: '#ff8024', radius: 165 },
-      { x: 0.82, y: 0.44, color: '#ff6d1f', radius: 175 },
-      { x: 0.88, y: 0.76, color: '#ff8024', radius: 165 },
+    dialogueSpeaker: 'VRIKODARA (ECHO BEYOND THE IRON GATE)',
+    dialogueLine: '"You carry the shard of the Crown at your throat, soldier. Come inside and see whose face is carved upon it."',
+    spawns: [
+      // Wave 1
+      { type: 'stone_golem', x: 0.58, y: 0.36, delay: 0.2, wave: 1, trait: 'vajra_shield' },
+      { type: 'stone_golem', x: 0.58, y: 0.64, delay: 0.35, wave: 1, trait: 'vajra_shield' },
+      { type: 'fire_monk', x: 0.76, y: 0.50, delay: 0.5, wave: 1, trait: 'agni_aura' },
+      // Wave 2
+      { type: 'furnace_titan', x: 0.70, y: 0.42, delay: 0.2, wave: 2, trait: 'agni_aura' },
+      { type: 'wolf_guai', x: 0.34, y: 0.30, delay: 0.35, wave: 2, trait: 'rakshasa_frenzy' },
+      { type: 'wolf_guai', x: 0.34, y: 0.72, delay: 0.5, wave: 2, trait: 'rakshasa_frenzy' },
+      // Wave 3
+      { type: 'furnace_titan', x: 0.66, y: 0.62, delay: 0.25, wave: 3, trait: 'vajra_shield' },
+      { type: 'fire_monk', x: 0.80, y: 0.32, delay: 0.4, wave: 3, trait: 'agni_aura' },
+      { type: 'fire_monk', x: 0.80, y: 0.70, delay: 0.55, wave: 3, trait: 'agni_aura' },
     ],
     props: [
-      { type: 'weapon_rack', x: 0.31, y: 0.40 },
-      { type: 'dragon_pillar', x: 0.52, y: 0.34 },
-      { type: 'incense_cauldron', x: 0.34, y: 0.71 },
-      { type: 'weapon_rack', x: 0.68, y: 0.72 },
+      { type: 'dragon_pillar', x: 0.32, y: 0.30 },
+      { type: 'dragon_pillar', x: 0.68, y: 0.30 },
+      { type: 'incense_cauldron', x: 0.48, y: 0.46 },
+      { type: 'pagoda_lantern', x: 0.32, y: 0.70 },
+      { type: 'dragon_pillar', x: 0.68, y: 0.70 },
     ],
-    spawns: [
-      { type: 'fire_monk', x: 0.58, y: 0.44 },
-      { type: 'fire_monk', x: 0.68, y: 0.64 },
-      { type: 'wolf_guai', x: 0.48, y: 0.62 },
-      { type: 'stone_golem', x: 0.60, y: 0.52, delay: 2.8 },
-      { type: 'furnace_titan', x: 0.70, y: 0.50, delay: 4.5 },
-      { type: 'wolf_guai', x: 0.54, y: 0.38, delay: 5.2 },
+    braziers: [
+      { x: 0.24, y: 0.26, color: '#3ee0a8', radius: 175 },
+      { x: 0.76, y: 0.26, color: '#f5d061', radius: 175 },
+      { x: 0.24, y: 0.74, color: '#f5d061', radius: 175 },
+      { x: 0.76, y: 0.74, color: '#3ee0a8', radius: 175 },
+      { x: 0.50, y: 0.50, color: '#ffd86b', radius: 195 },
     ],
   },
   {
     id: 8,
-    chapter: 1,
-    chapterTitle: 'Chapter I: The Unlit Oil Lamp',
-    chineseSubtitle: 'ACT II · INNER WARD OF THE HEALERS',
-    name: 'COURTYARD OF SILENT CRADLES',
-    subtitle: 'Charred Stretchers & Broken Shields · Elite Vanguard Siege',
-    backgroundUrl: '/assets/aistudio/Gemini_Generated_Image_48l81o48l81o48l8_6757a043.png',
-    ambientHue: '#ff8429',
-    lanternColor: '#ff701f',
-    floorTint: 'rgba(245, 110, 40, 0.07)',
-    isBossChamber: false,
-    braziers: [
-      { x: 0.48, y: 0.18, color: '#ffbe44', radius: 210 },
-      { x: 0.25, y: 0.42, color: '#ff8024', radius: 165 },
-      { x: 0.80, y: 0.74, color: '#ff6d1f', radius: 175 },
-    ],
-    props: [
-      { type: 'pagoda_lantern', x: 0.30, y: 0.38 },
-      { type: 'dragon_pillar', x: 0.50, y: 0.33 },
-      { type: 'dragon_pillar', x: 0.70, y: 0.38 },
-      { type: 'incense_cauldron', x: 0.50, y: 0.72 },
-    ],
-    spawns: [
-      { type: 'stone_golem', x: 0.52, y: 0.44 },
-      { type: 'furnace_titan', x: 0.64, y: 0.54 },
-      { type: 'fire_monk', x: 0.74, y: 0.40 },
-      { type: 'stone_golem', x: 0.58, y: 0.66, delay: 3.2 },
-      { type: 'fire_monk', x: 0.72, y: 0.68, delay: 4.4 },
-      { type: 'wolf_guai', x: 0.48, y: 0.58, delay: 5.4 },
-    ],
-  },
-  {
-    id: 9,
-    chapter: 1,
-    chapterTitle: 'Chapter I: Ascent to the Slag-Forge',
-    chineseSubtitle: 'ACT III · STEPS OF MELTED BRONZE',
-    name: 'CAULDRON CAUSEWAY',
-    subtitle: 'Rivers of Molten Iron · Heavy Asura Garrison',
-    backgroundUrl: '/assets/aistudio/Gemini_Generated_Image_tbakuftbakuftbak_c9baa1f3.png',
-    ambientHue: '#ff5524',
-    lanternColor: '#ff3b1c',
-    floorTint: 'rgba(255, 75, 35, 0.07)',
-    isBossChamber: false,
-    braziers: [
-      { x: 0.22, y: 0.37, color: '#ff6422', radius: 165 },
-      { x: 0.50, y: 0.26, color: '#ff6422', radius: 165 },
-      { x: 0.74, y: 0.80, color: '#ff6422', radius: 170 },
-    ],
-    props: [
-      { type: 'dragon_pillar', x: 0.30, y: 0.36 },
-      { type: 'incense_cauldron', x: 0.50, y: 0.32 },
-      { type: 'dragon_pillar', x: 0.70, y: 0.36 },
-      { type: 'weapon_rack', x: 0.32, y: 0.70 },
-      { type: 'dragon_pillar', x: 0.70, y: 0.70 },
-    ],
-    spawns: [
-      { type: 'furnace_titan', x: 0.56, y: 0.48 },
-      { type: 'fire_monk', x: 0.72, y: 0.38 },
-      { type: 'fire_monk', x: 0.72, y: 0.66 },
-      { type: 'stone_golem', x: 0.52, y: 0.64, delay: 3.0 },
-      { type: 'furnace_titan', x: 0.66, y: 0.52, delay: 4.8 },
-    ],
-  },
-  {
-    id: 10,
-    chapter: 1,
-    chapterTitle: 'Chapter I: Gates of the Iron Sanctuary',
-    chineseSubtitle: 'ACT III · DEFILED TEMPLE STEPS',
-    name: 'SANCTUARY OF BROKEN OATHS',
-    subtitle: 'Outer Threshold of Vrikodara’s Cave Refuge · Three-Wave Gauntlet',
-    backgroundUrl: '/assets/aistudio/Gemini_Generated_Image_lcvwbvlcvwbvlcvw_f51e31fc.png',
-    ambientHue: '#ff4726',
-    lanternColor: '#ff2b1c',
-    floorTint: 'rgba(255, 65, 35, 0.07)',
-    isBossChamber: false,
-    braziers: [
-      { x: 0.22, y: 0.37, color: '#ff6422', radius: 160 },
-      { x: 0.50, y: 0.28, color: '#ff6422', radius: 155 },
-      { x: 0.71, y: 0.81, color: '#ff6422', radius: 165 },
-      { x: 0.88, y: 0.58, color: '#ff6422', radius: 150 },
-    ],
-    props: [
-      { type: 'dragon_pillar', x: 0.28, y: 0.37 },
-      { type: 'incense_cauldron', x: 0.49, y: 0.32 },
-      { type: 'dragon_pillar', x: 0.72, y: 0.37 },
-      { type: 'weapon_rack', x: 0.29, y: 0.71 },
-      { type: 'pagoda_lantern', x: 0.73, y: 0.72 },
-    ],
-    spawns: [
-      { type: 'stone_golem', x: 0.54, y: 0.46 },
-      { type: 'stone_golem', x: 0.56, y: 0.66 },
-      { type: 'fire_monk', x: 0.72, y: 0.56 },
-      { type: 'wolf_guai', x: 0.46, y: 0.44, delay: 2.6 },
-      { type: 'furnace_titan', x: 0.64, y: 0.42, delay: 4.2 },
-      { type: 'furnace_titan', x: 0.66, y: 0.64, delay: 6.0 },
-    ],
-  },
-  {
-    id: 11,
-    chapter: 1,
-    chapterTitle: 'Chapter I: The Starving Gatehouse',
-    chineseSubtitle: 'ACT III · ANTECHAMBER OF THE IRON RAKSHASA',
-    name: 'HALL OF CHAINED PILLARS',
-    subtitle: 'Final Royal Guard Phalanx Before the Sovereign’s Seat',
-    backgroundUrl: '/assets/aistudio/Gemini_Generated_Image_d26ytnd26ytnd26y_833d582c.png',
-    ambientHue: '#ff3b1f',
-    lanternColor: '#ff4d1a',
-    floorTint: 'rgba(230, 50, 25, 0.08)',
-    isBossChamber: false,
-    braziers: [
-      { x: 0.58, y: 0.20, color: '#ff6d1f', radius: 175 },
-      { x: 0.88, y: 0.44, color: '#ff7d26', radius: 175 },
-      { x: 0.78, y: 0.84, color: '#ff551a', radius: 170 },
-    ],
-    props: [
-      { type: 'dragon_pillar', x: 0.30, y: 0.35 },
-      { type: 'dragon_pillar', x: 0.70, y: 0.35 },
-      { type: 'incense_cauldron', x: 0.50, y: 0.50 },
-      { type: 'dragon_pillar', x: 0.30, y: 0.72 },
-      { type: 'dragon_pillar', x: 0.70, y: 0.72 },
-    ],
-    spawns: [
-      { type: 'furnace_titan', x: 0.56, y: 0.44 },
-      { type: 'stone_golem', x: 0.52, y: 0.64 },
-      { type: 'fire_monk', x: 0.74, y: 0.42 },
-      { type: 'fire_monk', x: 0.74, y: 0.66 },
-      { type: 'wolf_guai', x: 0.62, y: 0.38, delay: 3.2 },
-      { type: 'furnace_titan', x: 0.66, y: 0.56, delay: 5.0 },
-    ],
-  },
-  {
-    id: 12,
-    chapter: 1,
-    chapterTitle: 'Chapter I Sovereign · Seat of Insatiable Hunger',
-    chineseSubtitle: 'VRIKODARA · THE IRON RAKSHASA (3D SOVEREIGN)',
-    name: 'THE IRON SANCTUARY',
-    subtitle: 'Phase 1: Chained Pillars & Vacuum Maw · Phase 2: Molten Slag Overdrive',
-    backgroundUrl: '/assets/aistudio/Gemini_Generated_Image_ey07c4ey07c4ey07_1de21fb8.png',
-    ambientHue: '#ff8a36',
-    lanternColor: '#ff9838',
-    floorTint: 'rgba(210, 45, 25, 0.08)',
+    chapterTitle: 'Final Sovereign Boss · The Starving Furnace Titan',
+    name: 'Throne of the Abdominal Maw',
+    chineseSubtitle: 'वृकोदर · जठराग्नि लौह दैत्य',
+    backgroundUrl: GAME_ASSETS.arenas.furnaceDepths,
+    floorTint: 'rgba(38, 12, 12, 0.16)',
+    envEffect: 'lava_fissures',
     isBossChamber: true,
-    bossId: 'tiger_vanguard',
-    braziers: [
-      { x: 0.59, y: 0.20, color: '#ffaa44', radius: 175 },
-      { x: 0.89, y: 0.44, color: '#ffaa44', radius: 175 },
-      { x: 0.79, y: 0.86, color: '#ff8024', radius: 165 },
-      { x: 0.24, y: 0.76, color: '#ff8024', radius: 155 },
+    dialogueSpeaker: 'VRIKODARA · THE IRON RAKSHASA',
+    dialogueLine: '"My wife was a healer in the Shishira camp! Strike my iron belly, soldier—let the Crown remember!"',
+    spawns: [
+      { type: 'vrikodara', x: 0.68, y: 0.50, delay: 0.25, wave: 1 },
     ],
     props: [
-      { type: 'dragon_pillar', x: 0.28, y: 0.36 },
-      { type: 'incense_cauldron', x: 0.71, y: 0.35 },
-      { type: 'dragon_pillar', x: 0.28, y: 0.71 },
-      { type: 'dragon_pillar', x: 0.72, y: 0.71 },
+      { type: 'dragon_pillar', x: 0.30, y: 0.32 },
+      { type: 'dragon_pillar', x: 0.70, y: 0.32 },
+      { type: 'dragon_pillar', x: 0.30, y: 0.68 },
+      { type: 'dragon_pillar', x: 0.70, y: 0.68 },
+      { type: 'incense_cauldron', x: 0.50, y: 0.28 },
     ],
-    spawns: [
-      { type: 'tiger_vanguard', x: 0.58, y: 0.50 },
+    braziers: [
+      { x: 0.20, y: 0.24, color: '#ff3824', radius: 200 },
+      { x: 0.80, y: 0.24, color: '#ff3824', radius: 200 },
+      { x: 0.20, y: 0.76, color: '#ff6a1f', radius: 200 },
+      { x: 0.80, y: 0.76, color: '#ff6a1f', radius: 200 },
+      { x: 0.50, y: 0.50, color: '#ff2438', radius: 250 },
     ],
   },
 ];

@@ -1,387 +1,189 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
-import { GAME_ASSETS } from '@/lib/game/assets';
+import React from 'react';
+import { GAME_ASSETS, WEAPON_CONFIGS, WeaponId } from '@/lib/game/assets';
 
 interface TitleScreenProps {
   ashenKarma: number;
+  preloadProgress?: number;
+  selectedWeapon?: WeaponId;
+  onSelectWeapon?: (weapon: WeaponId) => void;
   onStartOdyssey: () => void;
   onOpenShrine: () => void;
   onOpenStory: () => void;
 }
 
-interface EmberMote {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  size: number;
-  alpha: number;
-  phase: number;
-  color: string;
-  isPetal: boolean;
-}
-
-export default function TitleScreen({
+export function TitleScreen({
   ashenKarma,
+  preloadProgress = 100,
+  selectedWeapon = 'jingu_bang',
+  onSelectWeapon,
   onStartOdyssey,
   onOpenShrine,
   onOpenStory,
 }: TitleScreenProps) {
-  const fxCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const backdropImgRef = useRef<HTMLImageElement | null>(null);
-
-  useEffect(() => {
-    const canvas = fxCanvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    let rafId = 0;
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
-
-    const resize = () => {
-      const w = window.innerWidth || 1440;
-      const h = window.innerHeight || 900;
-      canvas.width = Math.round(w * dpr);
-      canvas.height = Math.round(h * dpr);
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    };
-    resize();
-    window.addEventListener('resize', resize);
-
-    const palette = ['#ffd86b', '#ff9436', '#ff5e24', '#fff0b8', '#e3b55a'];
-    const motes: EmberMote[] = Array.from({ length: 78 }, (_, idx) => ({
-      x: Math.random() * (window.innerWidth || 1440),
-      y: Math.random() * (window.innerHeight || 900),
-      vx: 14 + Math.random() * 28,
-      vy: -18 - Math.random() * 38,
-      size: idx % 6 === 0 ? 3.2 + Math.random() * 2.4 : 1.2 + Math.random() * 2.2,
-      alpha: 0.25 + Math.random() * 0.65,
-      phase: Math.random() * Math.PI * 2,
-      color: palette[idx % palette.length],
-      isPetal: idx % 7 === 0,
-    }));
-
-    let last = performance.now();
-    const render = (now: number) => {
-      const dt = Math.min(0.05, (now - last) / 1000);
-      last = now;
-      const w = window.innerWidth || 1440;
-      const h = window.innerHeight || 900;
-
-      ctx.clearRect(0, 0, w, h);
-
-      // Subtle breathing solar eclipse corona behind the Six-Armed Sovereign on the right third
-      ctx.save();
-      ctx.globalCompositeOperation = 'screen';
-      const pulse = 0.88 + Math.sin(now * 0.0022) * 0.12;
-      const sx = w * 0.73;
-      const sy = h * 0.24;
-      const haloGrad = ctx.createRadialGradient(sx, sy, 20, sx, sy, 260 * pulse);
-      haloGrad.addColorStop(0, 'rgba(255, 165, 60, 0.22)');
-      haloGrad.addColorStop(0.45, 'rgba(225, 85, 25, 0.11)');
-      haloGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-      ctx.fillStyle = haloGrad;
-      ctx.beginPath();
-      ctx.arc(sx, sy, 260 * pulse, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Diagonal volumetric god-rays sweeping from top-right eclipse
-      for (let r = 0; r < 3; r++) {
-        const rayAlpha = 0.035 + Math.sin(now * 0.0015 + r * 1.7) * 0.015;
-        ctx.save();
-        ctx.translate(sx, sy);
-        ctx.rotate(2.25 + r * 0.16);
-        const rGrad = ctx.createLinearGradient(0, -45, 780, 45);
-        rGrad.addColorStop(0, `rgba(255, 195, 95, ${rayAlpha})`);
-        rGrad.addColorStop(0.6, `rgba(255, 130, 45, ${rayAlpha * 0.45})`);
-        rGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-        ctx.fillStyle = rGrad;
-        ctx.beginPath();
-        ctx.moveTo(0, -28);
-        ctx.lineTo(820, -110);
-        ctx.lineTo(820, 110);
-        ctx.lineTo(0, 28);
-        ctx.closePath();
-        ctx.fill();
-        ctx.restore();
-      }
-
-      // Drifting golden embers & sacred ash petals
-      for (let i = 0; i < motes.length; i++) {
-        const m = motes[i];
-        m.phase += dt * 2.4;
-        m.x += (m.vx + Math.sin(m.phase) * 14) * dt;
-        m.y += m.vy * dt;
-
-        if (m.y < -20) {
-          m.y = h + 15;
-          m.x = Math.random() * w;
-        }
-        if (m.x > w + 20) {
-          m.x = -15;
-        }
-
-        const flickerAlpha = m.alpha * (0.65 + 0.35 * Math.sin(m.phase * 1.7));
-        ctx.save();
-        ctx.globalAlpha = flickerAlpha;
-        ctx.translate(m.x, m.y);
-        if (m.isPetal) {
-          ctx.rotate(m.phase * 0.6);
-          ctx.fillStyle = m.color;
-          ctx.shadowColor = '#ff8c24';
-          ctx.shadowBlur = 8;
-          ctx.beginPath();
-          ctx.ellipse(0, 0, m.size * 1.4, m.size * 0.65, 0, 0, Math.PI * 2);
-          ctx.fill();
-        } else {
-          ctx.fillStyle = m.color;
-          ctx.beginPath();
-          ctx.arc(0, 0, m.size * 1.6, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.fillStyle = '#fffdf2';
-          ctx.beginPath();
-          ctx.arc(0, 0, m.size * 0.65, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        ctx.restore();
-      }
-
-      ctx.restore();
-      rafId = window.requestAnimationFrame(render);
-    };
-
-    rafId = window.requestAnimationFrame(render);
-    return () => {
-      window.cancelAnimationFrame(rafId);
-      window.removeEventListener('resize', resize);
-    };
-  }, []);
+  const isReady = preloadProgress >= 100;
 
   return (
-    <div
-      onMouseMove={(e) => {
-        if (!backdropImgRef.current) return;
-        const nx = (e.clientX / (window.innerWidth || 1440) - 0.5) * 14;
-        const ny = (e.clientY / (window.innerHeight || 900) - 0.5) * 10;
-        backdropImgRef.current.style.transform = `scale(1.06) translate3d(${-nx.toFixed(2)}px, ${-ny.toFixed(2)}px, 0)`;
-      }}
-      className="fixed inset-0 z-40 flex flex-col justify-between overflow-hidden bg-[#070605]"
+    <section
+      aria-label="Title Screen"
+      className="fixed inset-0 z-30 flex flex-col justify-between p-6 md:p-11 overflow-hidden select-none bg-[#070506]"
     >
-      {/* Key-Art Illustrated Backdrop with parallax depth and measured cinematic scrim */}
-      <div className="absolute inset-0 pointer-events-none">
-        <img
-          ref={backdropImgRef}
-          src={GAME_ASSETS.titleBackdrop}
-          alt="Rudra the Ash-Bound at the Charnel Plains of Kurukshetra"
-          referrerPolicy="no-referrer"
-          style={{
-            transform: 'scale(1.06) translate3d(0px, 0px, 0)',
-          }}
-          className="w-full h-full object-cover object-center opacity-88 transition-transform duration-300 ease-out"
-        />
-        <div
-          className="absolute inset-0"
-          style={{
-            background:
-              'linear-gradient(90deg, rgba(6,5,4,0.94) 0%, rgba(7,6,5,0.72) 44%, rgba(7,6,5,0.16) 76%, rgba(6,5,4,0.68) 100%), linear-gradient(180deg, rgba(6,5,4,0.78) 0%, rgba(7,6,5,0.12) 45%, rgba(6,5,4,0.95) 100%)',
-          }}
-        />
-      </div>
-
-      {/* Live 60FPS Volumetric Ember & Solar Corona Canvas */}
-      <canvas
-        ref={fxCanvasRef}
-        className="absolute inset-0 pointer-events-none z-[5]"
+      {/* Full-Bleed Homescreen Key Art: Rudra & Solar Eclipse on Right Two-Thirds */}
+      <img
+        src={GAME_ASSETS.titleBackdrop}
+        alt="Rudra, the Ash-Bound Warrior beneath the bleeding eclipse of Kurukshetra"
+        className="absolute inset-0 w-full h-full object-cover object-right pointer-events-none select-none scale-[1.01]"
       />
 
-      {/* Top Subtle Status Row */}
-      <div className="relative z-10 flex items-center justify-between px-10 pt-7">
-        <div className="flex items-center gap-3 text-xs tracking-[0.22em] text-[#e0b456]/95 uppercase">
-          <span>CHOLA BRONZE &amp; KURUKSHETRA ASH</span>
-          <span aria-hidden="true">·</span>
-          <span>Mythological Action · Vertical Slice</span>
-        </div>
-        <div className="flex items-center gap-4 text-xs text-[#f2dfc0]/90 font-mono-num">
-          <span>HOMA SHRINE KARMA: {ashenKarma}</span>
-        </div>
-      </div>
+      {/* Left-Third Atmospheric Shadow Gradient so Menu Typography & CTAs sit cleanly in the negative space */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background:
+            'linear-gradient(90deg, rgba(6, 4, 5, 0.96) 0%, rgba(8, 5, 6, 0.88) 34%, rgba(12, 6, 7, 0.42) 62%, rgba(8, 4, 5, 0.12) 100%)',
+        }}
+      />
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background:
+            'linear-gradient(180deg, rgba(5, 4, 6, 0.72) 0%, rgba(5, 4, 6, 0.0) 22%, rgba(5, 4, 6, 0.0) 76%, rgba(5, 4, 6, 0.88) 100%)',
+        }}
+      />
 
-      {/* Main Asymmetric Left-Third Composition over Calm Negative Space */}
-      <div className="relative z-10 flex flex-col justify-center px-10 md:px-16 max-w-3xl my-auto">
-        {/* Custom Inline SVG Title Lockup & Crest */}
-        <div className="mb-6">
-          <svg
-            viewBox="0 0 680 185"
-            className="w-full max-w-[635px] h-auto drop-shadow-[0_14px_34px_rgba(0,0,0,0.98)]"
-            role="img"
-            aria-label="Kaliyuga: The Bleeding Crown — Chapter I Vertical Slice"
-          >
-            <defs>
-              <linearGradient id="goldLeaf" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stopColor="#fff8d6" />
-                <stop offset="45%" stopColor="#ebb854" />
-                <stop offset="85%" stopColor="#b57d24" />
-                <stop offset="100%" stopColor="#7a4e10" />
-              </linearGradient>
-              <linearGradient id="ivoryForge" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stopColor="#ffffff" />
-                <stop offset="65%" stopColor="#f5e8ce" />
-                <stop offset="100%" stopColor="#bda986" />
-              </linearGradient>
-              <linearGradient id="crimsonSeal" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#e63b2b" />
-                <stop offset="100%" stopColor="#7d140b" />
-              </linearGradient>
-            </defs>
-
-            {/* Ornate Khanda Sword Header Divider */}
-            <g transform="translate(4, 18)">
-              <rect x="34" y="8" width="168" height="3" fill="url(#goldLeaf)" opacity="0.9" />
-              <path
-                d="M6,9.5 L22,2 L34,9.5 L22,17 Z"
-                fill="url(#goldLeaf)"
-                stroke="#3a250a"
-                strokeWidth="1.5"
-              />
-              <circle cx="22" cy="9.5" r="3" fill="#ff5a1f" />
-              <text
-                x="216"
-                y="14"
-                fill="#ebd6a7"
-                fontSize="11"
-                fontWeight="600"
-                letterSpacing="3.2"
-                fontFamily="var(--font-cinzel), Georgia, serif"
-              >
-                CHAPTER I · KURUKSHETRA VERTICAL SLICE
-              </text>
-            </g>
-
-            {/* Red Chola Bronze Seal Stamp */}
-            <g transform="translate(6, 48)">
-              <rect
-                x="0"
-                y="0"
-                width="48"
-                height="48"
-                rx="4"
-                fill="url(#crimsonSeal)"
-                stroke="#f2c45a"
-                strokeWidth="1.5"
-              />
-              <rect
-                x="3"
-                y="3"
-                width="42"
-                height="42"
-                rx="2"
-                fill="none"
-                stroke="#f8e8c8"
-                strokeWidth="0.6"
-                opacity="0.45"
-              />
-              <path
-                d="M11 11 H37 M24 11 V37 M13 21 H35 M15 21 V34 H33 V21 M19 27 H29"
-                stroke="#fff3db"
-                strokeWidth="2.2"
-                strokeLinecap="square"
-                fill="none"
-              />
-            </g>
-
-            {/* Primary Display Title */}
-            <text
-              x="68"
-              y="88"
-              fill="url(#goldLeaf)"
-              fontSize="54"
-              fontWeight="800"
-              letterSpacing="5.5"
-              fontFamily="var(--font-cinzel), Georgia, serif"
-            >
-              KALIYUGA
-            </text>
-            <text
-              x="68"
-              y="142"
-              fill="url(#ivoryForge)"
-              fontSize="34"
-              fontWeight="700"
-              letterSpacing="5.5"
-              fontFamily="var(--font-cinzel), Georgia, serif"
-            >
-              THE BLEEDING CROWN
-            </text>
-
-            {/* Subtitle Plaque */}
-            <rect x="68" y="156" width="525" height="1.5" fill="url(#goldLeaf)" opacity="0.68" />
-            <circle cx="68" cy="156.75" r="3" fill="#ffd86b" />
-            <circle cx="593" cy="156.75" r="3" fill="#ffd86b" />
-            <text
-              x="68"
-              y="176"
-              fill="#e5ba63"
-              fontSize="13.5"
-              fontWeight="600"
-              letterSpacing="4.8"
-              fontFamily="var(--font-jakarta), sans-serif"
-            >
-              ACT I · THE CHARNEL PLAINS
-            </text>
-          </svg>
+      {/* Top Bar: Edition Tag & Stored Karma */}
+      <header className="relative z-10 flex items-center justify-between border-b border-[#c89d46]/25 pb-3.5">
+        <div className="flex items-center gap-3">
+          <span className="inline-block w-2 h-2 bg-[#e03846] rotate-45 shadow-[0_0_8px_#e03846]" />
+          <span className="font-mono-num text-[11px] tracking-[0.24em] text-[#e6be6a] uppercase">
+            KALIYUGA · KURUKSHETRA MYTHIC ACTION ROGUELIKE
+          </span>
         </div>
 
-        <p className="text-sm md:text-base text-[#e4d9c5]/95 max-w-xl leading-relaxed mb-8 drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]">
-          Rudra cannot die. Three thousand years ago he burned a camp of healers on his father&apos;s word, without walking
-          two hundred paces to look. Now a ferrywoman has pulled him from the river of the dead. Take the{' '}
-          <span className="text-[#f7cf78] font-semibold">Iron Mace</span> across Kurukshetra, break the{' '}
-          <span className="text-[#ff855e] font-semibold">Posture</span> of{' '}
-          <span className="text-[#ff855e] font-semibold">Dundubhi the Buffalo Demon</span> and{' '}
-          <span className="text-[#ff855e] font-semibold">Vrikodara</span>, and decide who is Taken and who is Released.
+        <div className="flex items-center gap-4 text-xs font-mono-num bg-[#0c090b]/85 border border-[#c89d46]/40 px-3.5 py-1.5">
+          <span className="text-[#c4b7a2]">
+            BANKED ASHEN KARMA: <strong className="text-[#f5c451]">{ashenKarma}</strong>
+          </span>
+        </div>
+      </header>
+
+      {/* Left-Aligned Hades-Style Main Menu Column */}
+      <div className="relative z-10 my-auto max-w-xl w-full text-left space-y-5 md:pl-2">
+        <div className="space-y-1.5">
+          <div className="text-xs md:text-sm font-mono-num tracking-[0.30em] text-[#f2c45a] uppercase">
+            कलियुग · रक्तमुकुट · CHAPTER I &amp; II
+          </div>
+          <h1 className="font-display text-5xl sm:text-6xl md:text-7xl font-black tracking-[0.05em] text-[#fff6e8] uppercase drop-shadow-[0_10px_32px_rgba(0,0,0,0.98)] leading-none">
+            KALIYUGA
+          </h1>
+          <p className="font-display text-base md:text-lg tracking-[0.26em] text-[#ff6642] uppercase font-bold drop-shadow-[0_4px_16px_rgba(0,0,0,0.95)]">
+            THE BLEEDING CROWN
+          </p>
+        </div>
+
+        <p className="text-xs md:text-sm text-[#d8ccb8] max-w-md leading-relaxed drop-shadow-[0_2px_8px_rgba(0,0,0,0.95)]">
+          Descend through 8 hand-painted Kurukshetra chambers. Chain 4-Action Kalaripayattu strikes,
+          lodge blazing Agneyastra Blood-Shards, forge Deva Duo Synergies, and topple the 3D Titans
+          Dundubhi and Vrikodara.
         </p>
 
-        {/* <= 3 Primary Menu Actions */}
-        <div className="flex flex-wrap items-center gap-4">
+        {/* Hades-Style Pre-Run Weapon Aspect Selector */}
+        {onSelectWeapon && (
+          <div className="space-y-2 pt-1 max-w-md">
+            <div className="text-[10px] font-mono-num tracking-[0.22em] text-[#d4a548] uppercase">
+              SELECT STARTING ASTRA WEAPON ASPECT
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {(['jingu_bang', 'twin_blades', 'dragon_glaive'] as WeaponId[]).map((wId) => {
+                const cfg = WEAPON_CONFIGS[wId];
+                const active = selectedWeapon === wId;
+                return (
+                  <button
+                    key={wId}
+                    type="button"
+                    onClick={() => onSelectWeapon(wId)}
+                    className={`p-2.5 text-left border transition-all cursor-pointer ${
+                      active
+                        ? 'bg-[#261612]/95 border-[#f5c451] shadow-[0_0_20px_rgba(245,196,81,0.28)]'
+                        : 'bg-[#0e0b0d]/85 border-[#c89d46]/30 hover:border-[#c89d46]/70'
+                    }`}
+                  >
+                    <div className="text-[10px] font-mono-num text-[#e6be6a]">
+                      [{cfg.hotkey}] {cfg.chineseName}
+                    </div>
+                    <div className="font-display text-xs font-bold text-[#fff6e8] truncate mt-0.5">
+                      {cfg.name.split(' · ')[0]}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Live 3D Models & Arena Shader Preloader Bar */}
+        <div className="max-w-md space-y-1.5 pt-1">
+          <div className="flex items-center justify-between text-[10px] font-mono-num tracking-wider uppercase">
+            <span className="text-[#f2c45a]">
+              {isReady
+                ? '3D TITAN RIGS, TRIDENT & 8 CHAMBERS READY'
+                : 'PRELOADING 3D BOSS RIGS & MUTANT COMBAT CLIPS...'}
+            </span>
+            <span className="text-[#fff6e8] font-bold">{Math.round(preloadProgress)}%</span>
+          </div>
+          <div className="w-full h-1.5 bg-[#1a1214]/90 border border-[#c89d46]/40 overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-[#c82333] via-[#ff6a2b] to-[#f5c451] transition-all duration-200"
+              style={{ width: `${Math.max(10, Math.min(100, preloadProgress))}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Primary Action CTAs */}
+        <div className="pt-2 flex flex-wrap items-center gap-3">
           <button
             type="button"
-            data-start="true"
             data-testid="start-odyssey-btn"
             onClick={onStartOdyssey}
-            className="px-8 py-4 bg-[#d9aa4c] hover:bg-[#ebbd5e] text-[#090807] font-bold tracking-[0.16em] text-sm uppercase border border-[#fff0bd] shadow-[0_0_34px_rgba(225,175,75,0.52)] transition-transform active:scale-95 cursor-pointer whitespace-nowrap shrink-0"
+            className="min-w-[225px] px-7 py-3.5 bg-gradient-to-r from-[#b81d2a] via-[#d94426] to-[#cf8c28] hover:brightness-110 text-[#fff8eb] font-display font-bold text-sm tracking-[0.16em] uppercase border border-[#f5d061]/80 shadow-[0_12px_34px_rgba(184,29,42,0.55)] transition-all cursor-pointer"
           >
-            ENTER KURUKSHETRA [ENTER]
+            ENTER KURUKSHETRA
           </button>
 
           <button
             type="button"
             data-testid="open-shrine-btn"
             onClick={onOpenShrine}
-            className="px-6 py-4 bg-[#16130f]/92 hover:bg-[#241f18] text-[#f5cc7a] font-semibold tracking-[0.12em] text-sm uppercase border border-[#d4a548]/65 shadow-[0_10px_28px_rgba(0,0,0,0.85)] transition-colors cursor-pointer whitespace-nowrap shrink-0"
+            className="px-5 py-3.5 bg-[#120d10]/92 hover:bg-[#21171c] text-[#f2c45a] font-display font-bold text-xs tracking-[0.16em] uppercase border border-[#c89d46]/55 transition-colors cursor-pointer"
           >
-            HOMA FIRE SHRINE ({ashenKarma} KARMA)
+            HOMA FIRE SHRINE
           </button>
 
           <button
             type="button"
-            data-testid="open-codex-btn"
+            data-testid="open-story-btn"
             onClick={onOpenStory}
-            className="px-6 py-4 bg-[#12100e]/88 hover:bg-[#211d18] text-[#e5dac5] font-medium tracking-[0.12em] text-sm uppercase border border-[#dfd3be]/30 shadow-[0_10px_28px_rgba(0,0,0,0.85)] transition-colors cursor-pointer whitespace-nowrap shrink-0"
+            className="px-5 py-3.5 bg-[#120d10]/92 hover:bg-[#21171c] text-[#e0d4c0] font-display font-bold text-xs tracking-[0.16em] uppercase border border-[#c89d46]/35 transition-colors cursor-pointer"
           >
-            CODEX &amp; BUILDS
+            ITIHASA CODEX
           </button>
         </div>
       </div>
 
-      {/* Single Flat Borderless Control Hint Line in Bottom Safe Margin */}
-      <div className="relative z-10 px-10 pb-6 flex flex-wrap items-center justify-between gap-4 text-xs tracking-[0.14em] text-[#cfc2ab]/85 uppercase">
-        <span>
-          WASD / Left Stick 360° Move · LMB / [X] Mace Combo · RMB / [Y] Heavy Strike · Space / [A] Phantom Step · [B]
-          Astras · Tab / [RB] Stance · PC &amp; Console Gamepad Ready
-        </span>
-        <span className="text-[#e5b95c]/90 font-mono-num">ACT I VERTICAL SLICE · DUNDUBHI &amp; VRIKODARA</span>
-      </div>
-    </div>
+      {/* Bottom Controls Strip */}
+      <footer className="relative z-10 border-t border-[#c89d46]/25 pt-3.5 flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono-num text-[#cfc2ae] bg-[#070506]/60 px-3 py-1.5">
+        <div>
+          <strong className="text-[#f2c45a]">ATTACK:</strong> LMB / [J] ·{' '}
+          <strong className="text-[#f2c45a]">SPECIAL UNLEASH:</strong> RMB / [V] ·{' '}
+          <strong className="text-[#ff6a33]">BLOOD-SHARD CAST:</strong> [Q]
+        </div>
+        <div>
+          <strong className="text-[#5ce6ff]">DASH:</strong> [SPACE] ·{' '}
+          <strong className="text-[#ffd86b]">PARRY:</strong> [T] ·{' '}
+          <strong className="text-[#3ee0a8]">EXIT DOORS:</strong> WALK INTO REWARD GATE
+        </div>
+      </footer>
+    </section>
   );
 }

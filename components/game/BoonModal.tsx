@@ -6,6 +6,7 @@ import {
   CelestialBoonSpec,
   IMMORTAL_PATRONS,
 } from '@/lib/game/boons';
+import { CHAMBERS } from '@/lib/game/assets';
 
 interface BoonModalProps {
   isOpen: boolean;
@@ -41,6 +42,11 @@ const RARITY_STYLES: Record<
     badgeBg: 'bg-[#33270d] text-[#f5c451] border-[#f5c451]/65',
     text: 'text-[#f5c451]',
   },
+  Duo: {
+    border: 'border-[#a8ff78]/85 hover:border-[#d4ffb8]',
+    badgeBg: 'bg-[#163012] text-[#a8ff78] border-[#a8ff78]/75',
+    text: 'text-[#a8ff78]',
+  },
 };
 
 export default function BoonModal({
@@ -72,7 +78,7 @@ export default function BoonModal({
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-[#c89d46]/30 pb-5 mb-6">
           <div>
             <div className="text-xs font-mono-num tracking-[0.2em] text-[#d4a548] uppercase mb-1">
-              VEDIC ALTAR OF THE DEVAS · CHAMBER {chamberId}/12
+              VEDIC ALTAR OF THE DEVAS · CHAMBER {chamberId}/{CHAMBERS.length}
             </div>
             <h2 className="font-display text-2xl md:text-3xl font-bold tracking-wider text-[#f7efe0]">
               CHOOSE YOUR VEDIC ASTRA BOON

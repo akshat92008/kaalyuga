@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { CHAMBERS, GAME_ASSETS, ChamberSpec, PropType } from '@/lib/game/assets';
+import { CHAMBERS, GAME_ASSETS, ChamberSpec, PropType, EnemyTrait } from '@/lib/game/assets';
 import {
   INITIAL_SHRINE_RANKS,
   INITIAL_ASHEN_KARMA,
@@ -31,7 +31,7 @@ import {
 } from '@/lib/game/spriteProcessor';
 import { Rudra3DRenderer } from '@/lib/game/rudra3dRenderer';
 import { Boss3DRenderer } from '@/lib/game/boss3dRenderer';
-import TitleScreen from './TitleScreen';
+import { TitleScreen } from './TitleScreen';
 import KeepersShrineModal from './KeepersShrineModal';
 import StoryCodexModal from './StoryCodexModal';
 import OutcomeModal from './OutcomeModal';
@@ -42,18 +42,32 @@ import {
   CELESTIAL_BOONS,
   IMMORTAL_PATRONS,
   computeBoonModifiers,
+  getActiveSlashPalette,
   getBoonById,
   isShadowStrikeBackstab,
   rollCelestialBoonOffer,
 } from '@/lib/game/boons';
+import {
+  ChamberTrapRuntime,
+  createChamberTrapsRuntime,
+  constrainActorToChamber,
+  getChamberGeometry,
+  renderParallaxAbyss,
+  renderIsometricChamberPlatform,
+  updateAndRenderPressureTraps,
+  renderForegroundParallaxAndWipe,
+} from '@/lib/game/chamberGeometry';
+
 
 interface EnemyEntity {
   id: number;
-  type: 'wolf_guai' | 'fire_monk' | 'stone_golem' | 'furnace_titan' | 'xuemo' | 'tiger_vanguard';
+  type: 'wolf_guai' | 'fire_monk' | 'stone_golem' | 'furnace_titan' | 'xuemo' | 'vrikodara';
+  trait?: EnemyTrait;
   name: string;
   chineseTitle: string;
   isBoss: boolean;
   armorCracked?: boolean;
+  lodgedCasts?: number;
   x: number;
   y: number;
   vx: number;
@@ -67,6 +81,8 @@ interface EnemyEntity {
   postureBrokenTimer: number;
   immobilizedTimer: number;
   hitFlashTimer: number;
+  parryStanceTimer: number;
+  growthScale: number;
   animTime: number;
   aiState: 'idle' | 'chase' | 'windup' | 'attack' | 'recover' | 'ko';
   aiTimer: number;
@@ -124,6 +140,7 @@ interface ProjectileEntity {
   color: string;
   life: number;
   deflected?: boolean;
+  isPlayerCast?: boolean;
 }
 
 interface ParticleItem {
@@ -245,22 +262,35 @@ const MAX_FLOATING_TEXTS = 24;
 const MAX_AFTERIMAGES = 32;
 const MAX_SHOCKWAVES = 14;
 const MAX_AMBIENT_MOTES = 64;
-const WORLD_SCALE = 2.85;
+const WORLD_SCALE = 3.15;
 const BASE_CAMERA_ZOOM = 0.74;
-
 
 export default function KaliyugaArena() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rudra3dRef = useRef<Rudra3DRenderer | null>(null);
   const boss3dRef = useRef<Boss3DRenderer | null>(null);
   const gamepadPrevButtonsRef = useRef<boolean[]>([]);
+  const [preloadProgress, setPreloadProgress] = useState<number>(18);
 
   // Initialize 3D Animated Rudra + Bloodforged Parashu Great-Axe & 3D Boss WebGL Renderers
   useEffect(() => {
     const r3d = new Rudra3DRenderer(384);
-    const b3d = new Boss3DRenderer(420);
+    const b3d = new Boss3DRenderer(384);
     rudra3dRef.current = r3d;
     boss3dRef.current = b3d;
+
+    let ticks = 0;
+    const preloadTimer = window.setInterval(() => {
+      ticks += 1;
+      const rProg = r3d.isReady || r3d.loadProgress >= 1 ? 100 : Math.min(95, Math.round((r3d.loadProgress || 0.45) * 100));
+      const bProg = b3d.isReady ? 100 : b3d.loadProgress || 25;
+      const timeFloor = Math.min(100, 24 + ticks * 8);
+      const combined = Math.min(100, Math.max(timeFloor, Math.round(rProg * 0.4 + bProg * 0.6)));
+      setPreloadProgress(combined);
+      if (combined >= 100) {
+        window.clearInterval(preloadTimer);
+      }
+    }, 120);
 
     // Load persisted Ashen Karma & Homa Fire Shrine upgrade ranks from localStorage
     try {
@@ -296,6 +326,7 @@ export default function KaliyugaArena() {
     }
 
     return () => {
+      window.clearInterval(preloadTimer);
       r3d.dispose();
       b3d.dispose();
       rudra3dRef.current = null;
@@ -402,6 +433,13 @@ export default function KaliyugaArena() {
     chamberIndex: 0,
     chamberBannerTimer: 3.2,
     chamberClearTimer: 0,
+    bossPhaseBanner: null as {
+      timer: number;
+      title: string;
+      speaker: string;
+      strikethrough: string;
+      correction: string;
+    } | null,
     score: 0,
     comboCount: 0,
     comboResetTimer: 0,
@@ -426,6 +464,9 @@ export default function KaliyugaArena() {
     cameraZoom: BASE_CAMERA_ZOOM,
     screenFlashAlpha: 0,
     screenFlashColor: '#ffffff',
+    gateWipeTimer: 0,
+    chasmVaultCalloutCd: 0,
+    traps: [] as ChamberTrapRuntime[],
     fps: 60,
     frameCounter: 0,
     fpsAccum: 0,
@@ -497,11 +538,30 @@ export default function KaliyugaArena() {
 
     enemies: [] as EnemyEntity[],
     props: [] as DestructiblePropEntity[],
+    currentWave: 1,
+    maxWave: 1,
+    waveQueue: [] as Array<{
+      type: EnemyEntity['type'];
+      x: number;
+      y: number;
+      delay: number;
+      wave: 1 | 2 | 3;
+      trait?: EnemyTrait;
+    }>,
+    summoningRifts: [] as Array<{
+      type: EnemyEntity['type'];
+      x: number;
+      y: number;
+      timer: number;
+      maxTimer: number;
+      trait?: EnemyTrait;
+    }>,
     pendingSpawns: [] as Array<{
       type: EnemyEntity['type'];
       x: number;
       y: number;
       timer: number;
+      trait?: EnemyTrait;
     }>,
     clones: [] as CloneEntity[],
     craters: [] as CraterDecal[],
@@ -728,7 +788,8 @@ export default function KaliyugaArena() {
       normX: number,
       normY: number,
       canvasW: number,
-      canvasH: number
+      canvasH: number,
+      trait?: EnemyTrait
     ): EnemyEntity => {
       const id = Math.floor(Math.random() * 1e9);
       const x = normX * canvasW;
@@ -747,26 +808,28 @@ export default function KaliyugaArena() {
           vx: 0,
           vy: 0,
           facing: -1,
-          hp: 1950,
-          maxHp: 1950,
-          displayHp: 1950,
-          posture: 1850,
-          maxPosture: 1850,
+          hp: 2150,
+          maxHp: 2150,
+          displayHp: 2150,
+          posture: 1950,
+          maxPosture: 1950,
           postureBrokenTimer: 0,
           immobilizedTimer: 0,
           hitFlashTimer: 0,
+          parryStanceTimer: 0,
+          growthScale: 1.0,
           animTime: 0,
           aiState: 'idle',
-          aiTimer: 0.9,
-          windupDuration: 0.72,
+          aiTimer: 0.75,
+          windupDuration: 0.68,
           attackPattern: 0,
           attackKind: 'cone',
           aimAngle: Math.PI,
-          corridorEndX: x - 240,
+          corridorEndX: x - 260,
           corridorEndY: y,
           comboHitsRemaining: 0,
           slashArcAlpha: 0,
-          telegraphRadius: 165,
+          telegraphRadius: 170,
           telegraphX: x,
           telegraphY: y,
           scaleX: 1,
@@ -778,12 +841,12 @@ export default function KaliyugaArena() {
         };
       }
 
-      if (type === 'tiger_vanguard') {
+      if (type === 'vrikodara') {
         return {
           id,
           type,
           name: 'VRIKODARA, THE IRON RAKSHASA',
-          chineseTitle: '3D SOVEREIGN · SEAT OF INSATIABLE HUNGER',
+          chineseTitle: '3D SOVEREIGN · WIELDER OF THE BLOODFORGED TRIDENT',
           isBoss: true,
           armorCracked: true,
           x,
@@ -791,26 +854,28 @@ export default function KaliyugaArena() {
           vx: 0,
           vy: 0,
           facing: -1,
-          hp: 2550,
-          maxHp: 2550,
-          displayHp: 2550,
-          posture: 2450,
-          maxPosture: 2450,
+          hp: 2750,
+          maxHp: 2750,
+          displayHp: 2750,
+          posture: 2550,
+          maxPosture: 2550,
           postureBrokenTimer: 0,
           immobilizedTimer: 0,
           hitFlashTimer: 0,
+          parryStanceTimer: 0,
+          growthScale: 1.0,
           animTime: 0,
           aiState: 'idle',
-          aiTimer: 0.85,
-          windupDuration: 0.68,
+          aiTimer: 0.7,
+          windupDuration: 0.62,
           attackPattern: 0,
           attackKind: 'cone',
           aimAngle: Math.PI,
-          corridorEndX: x - 280,
+          corridorEndX: x - 290,
           corridorEndY: y,
           comboHitsRemaining: 0,
           slashArcAlpha: 0,
-          telegraphRadius: 190,
+          telegraphRadius: 192,
           telegraphX: x,
           telegraphY: y,
           scaleX: 1,
@@ -827,40 +892,53 @@ export default function KaliyugaArena() {
         { name: string; zh: string; hp: number; posture: number; radius: number }
       > = {
         wolf_guai: {
-          name: 'Charnel Pyre-Hound',
-          zh: 'DHARMA-ROT WAR-BEAST',
-          hp: 210,
-          posture: 220,
-          radius: 105,
+          name: 'Vrika Stalker',
+          zh: 'FLANKING PACK ASSASSIN',
+          hp: 230,
+          posture: 230,
+          radius: 112,
         },
         fire_monk: {
-          name: 'Dharma-Rot Bowman',
-          zh: 'EMBER-ARROW ARCHER',
-          hp: 240,
-          posture: 240,
-          radius: 125,
+          name: 'Agni Spearman',
+          zh: 'BLAZING JAVELIN ZEALOT',
+          hp: 260,
+          posture: 250,
+          radius: 132,
         },
         stone_golem: {
-          name: 'Kuru Ash-Infantry',
-          zh: 'UNDEAD BRONZE HOPLITE',
-          hp: 360,
-          posture: 340,
-          radius: 145,
+          name: 'Magma Shield-Golem',
+          zh: 'PARRYING OBSIDIAN GUARD',
+          hp: 390,
+          posture: 360,
+          radius: 148,
         },
         furnace_titan: {
-          name: 'Bronze Bell-Vanguard',
-          zh: 'ASHEN TEMPLE JUGGERNAUT',
-          hp: 440,
-          posture: 390,
-          radius: 160,
+          name: 'Furnace Colossus',
+          zh: 'MOLTEN SIEGE JUGGERNAUT',
+          hp: 490,
+          posture: 420,
+          radius: 168,
         },
       };
 
       const cfg = configs[type];
+      const traitPrefix =
+        trait === 'vajra_shield'
+          ? '[SHIELDED] '
+          : trait === 'agni_aura'
+          ? '[AGNI-BORN] '
+          : trait === 'rakshasa_frenzy'
+          ? '[FRENZIED] '
+          : '';
+      const hpMult = trait ? 1.24 : 1.0;
+      const finalHp = Math.round(cfg.hp * hpMult);
+      const finalPosture = Math.round(cfg.posture * hpMult);
+
       return {
         id,
         type,
-        name: cfg.name,
+        trait,
+        name: `${traitPrefix}${cfg.name}`,
         chineseTitle: cfg.zh,
         isBoss: false,
         x,
@@ -868,18 +946,20 @@ export default function KaliyugaArena() {
         vx: 0,
         vy: 0,
         facing: -1,
-        hp: cfg.hp,
-        maxHp: cfg.hp,
-        displayHp: cfg.hp,
-        posture: cfg.posture,
-        maxPosture: cfg.posture,
+        hp: finalHp,
+        maxHp: finalHp,
+        displayHp: finalHp,
+        posture: finalPosture,
+        maxPosture: finalPosture,
         postureBrokenTimer: 0,
         immobilizedTimer: 0,
         hitFlashTimer: 0,
+        parryStanceTimer: trait === 'vajra_shield' || type === 'stone_golem' ? 1.8 : 0,
+        growthScale: 1.0,
         animTime: Math.random() * 5,
         aiState: 'chase',
-        aiTimer: 1.2 + Math.random() * 0.75,
-        windupDuration: 0.62,
+        aiTimer: 0.85 + Math.random() * 0.55,
+        windupDuration: trait === 'rakshasa_frenzy' ? 0.48 : 0.58,
         attackPattern: 0,
         attackKind: type === 'stone_golem' || type === 'furnace_titan' ? 'shockwave' : 'cone',
         aimAngle: Math.PI,
@@ -901,7 +981,7 @@ export default function KaliyugaArena() {
     []
   );
 
-  // Helper to damage or shatter destructible 2.5D courtyard props
+  // Helper to damage or shatter destructible 2.5D courtyard props (includes Hades environmental traps!)
   const damagePropsNearPoint = useCallback(
     (originX: number, originY: number, radius: number, damage: number) => {
       const sim = simRef.current;
@@ -926,20 +1006,64 @@ export default function KaliyugaArena() {
 
           if (prop.hp <= 0) {
             prop.destroyed = true;
-            sim.cameraShakeTrauma = Math.min(1, sim.cameraShakeTrauma + 0.24);
+            sim.cameraShakeTrauma = Math.min(1, sim.cameraShakeTrauma + 0.34);
             soundEngine.playHit('heavy');
-            spawnShockwave(prop.x, prop.y, 76, sparkColor, 0.32);
-            spawnParticles(prop.x, prop.y - 32, 26, sparkColor, 210, 4.6, 170);
-            spawnParticles(prop.x, prop.y - 20, 14, '#7a6f62', 160, 4.2, 190);
+            const blastRadius =
+              prop.type === 'dragon_pillar'
+                ? 175
+                : prop.type === 'incense_cauldron'
+                ? 160
+                : 92;
+            spawnShockwave(prop.x, prop.y, blastRadius, sparkColor, 0.42);
+            spawnParticles(prop.x, prop.y - 32, 34, sparkColor, 240, 5.2, 170);
+            spawnParticles(prop.x, prop.y - 20, 18, '#7a6f62', 180, 4.4, 190);
             sim.craters.push({
               x: prop.x,
               y: prop.y + 4,
-              radius: 46,
-              alpha: 0.78,
+              radius: prop.type === 'incense_cauldron' ? 76 : 56,
+              alpha: 0.88,
               decalFrame: prop.type === 'incense_cauldron' ? 3 : 2,
               angle: (Math.random() - 0.5) * 0.6,
             });
-            if (sim.craters.length > 10) sim.craters.shift();
+            if (sim.craters.length > 12) sim.craters.shift();
+
+            // Hades-Style Tactical Environmental Trap Damage:
+            // Toppling a Kurukshetra Pillar or exploding a Homa Oil Cauldron crushes/scorches nearby foes!
+            if (prop.type === 'dragon_pillar' || prop.type === 'incense_cauldron') {
+              const envDmg = prop.type === 'dragon_pillar' ? 155 : 135;
+              const envPosDmg = prop.type === 'dragon_pillar' ? 190 : 140;
+              sim.enemies.forEach((foe) => {
+                if (foe.aiState === 'ko') return;
+                if (Math.hypot(foe.x - prop.x, foe.y - prop.y) <= blastRadius) {
+                  foe.hp = Math.max(0, foe.hp - envDmg);
+                  foe.hitFlashTimer = 0.14;
+                  if (prop.type === 'incense_cauldron') {
+                    foe.scorchTimer = Math.max(foe.scorchTimer, 4.5);
+                  }
+                  const posRes = applyPostureDamage({
+                    currentPosture: foe.posture,
+                    maxPosture: foe.maxPosture,
+                    postureDamage: envPosDmg,
+                    alreadyBroken: foe.postureBrokenTimer > 0,
+                  });
+                  foe.posture = posRes.nextPosture;
+                  if (posRes.triggeredBreak) {
+                    foe.postureBrokenTimer = 4.5;
+                    foe.aiState = 'recover';
+                    foe.aiTimer = 4.5;
+                  }
+                  spawnFloatingText(
+                    foe.x,
+                    foe.y - 74,
+                    prop.type === 'dragon_pillar'
+                      ? `PILLAR CRUSH! -${envDmg}`
+                      : `AGNI OIL BLAST! -${envDmg}`,
+                    '#ff9233',
+                    1.18
+                  );
+                }
+              });
+            }
 
             sim.ashenKarma += 15;
             sim.karmaRunDelta += 15;
@@ -952,9 +1076,13 @@ export default function KaliyugaArena() {
             spawnFloatingText(
               prop.x,
               prop.y - 64,
-              'SHATTERED! +15 KARMA',
+              prop.type === 'dragon_pillar'
+                ? 'PILLAR TOPPLED! +15 KARMA'
+                : prop.type === 'incense_cauldron'
+                ? 'CAULDRON DETONATED! +15 KARMA'
+                : 'SHATTERED! +15 KARMA',
               '#ffd86b',
-              0.96,
+              0.98,
               '+25% FOCUS CHARGE'
             );
           }
@@ -980,10 +1108,14 @@ export default function KaliyugaArena() {
       sim.worldW = worldW;
       sim.worldH = worldH;
       sim.chamberIndex = clampedIdx;
-      sim.chamberBannerTimer = 1.85;
+      sim.chamberBannerTimer = 3.8;
       sim.chamberClearTimer = 0;
+      sim.bossPhaseBanner = null;
       sim.cameraZoom = BASE_CAMERA_ZOOM + 0.03;
       sim.slowMoTimer = 0;
+      sim.gateWipeTimer = 0.44;
+      sim.chasmVaultCalloutCd = 0;
+      sim.traps = createChamberTrapsRuntime(clampedIdx, worldW, worldH);
       sim.craters = [];
       sim.clones = [];
       sim.decoy.active = false;
@@ -1098,17 +1230,34 @@ export default function KaliyugaArena() {
 
       sim.enemies = [];
       sim.pendingSpawns = [];
+      sim.summoningRifts = [];
+      sim.currentWave = 1;
+      sim.maxWave = Math.max(1, ...spec.spawns.map((s) => s.wave || 1));
+      sim.waveQueue = [];
 
       spec.spawns.forEach((s) => {
-        if (s.delay && s.delay > 0) {
-          sim.pendingSpawns.push({
+        const waveNum = s.wave || 1;
+        if (waveNum === 1) {
+          if (s.delay && s.delay > 0) {
+            sim.pendingSpawns.push({
+              type: s.type,
+              x: s.x,
+              y: s.y,
+              timer: s.delay,
+              trait: s.trait,
+            });
+          } else {
+            sim.enemies.push(createEnemyFromSpec(s.type, s.x, s.y, worldW, worldH, s.trait));
+          }
+        } else {
+          sim.waveQueue.push({
             type: s.type,
             x: s.x,
             y: s.y,
-            timer: s.delay,
+            delay: s.delay || 0.2,
+            wave: waveNum,
+            trait: s.trait,
           });
-        } else {
-          sim.enemies.push(createEnemyFromSpec(s.type, s.x, s.y, worldW, worldH));
         }
       });
 
@@ -1291,6 +1440,23 @@ export default function KaliyugaArena() {
       });
     });
 
+    // Preload 4-Frame Multi-Pose Enemy Sprite Sheets (Vrika Stalker, Agni Spearman, Magma Golem, Furnace Colossus)
+    const fourFrameEnemySheets: string[] = [
+      GAME_ASSETS.enemySheets.vrikaStalkerSheet4x1,
+      GAME_ASSETS.enemySheets.agniSpearmanSheet4x1,
+      GAME_ASSETS.enemySheets.magmaGolemSheet4x1,
+      GAME_ASSETS.enemySheets.furnaceColossusSheet4x1,
+    ];
+    fourFrameEnemySheets.forEach((url) => {
+      loadAndProcessSprite(url, {
+        removeBlackBg: true,
+        stripCornerWatermark: true,
+        frameCount: 4,
+        mode: 'character',
+        gridLayout: '1xN',
+      });
+    });
+
     // Load ground decals & VFX sheets
     loadAndProcessSprite(GAME_ASSETS.groundDecals2x2, {
       removeBlackBg: true,
@@ -1299,22 +1465,16 @@ export default function KaliyugaArena() {
       mode: 'vfx',
       gridLayout: '2x2',
     });
-
-    loadAndProcessSprite(GAME_ASSETS.fireSlashVfx, {
-      removeBlackBg: true,
-      stripCornerWatermark: true,
-      frameCount: 1,
-      mode: 'vfx',
-    });
-    loadAndProcessSprite(GAME_ASSETS.spellsVfxSheet, {
+    loadAndProcessSprite(GAME_ASSETS.vfxSlash2x2, {
       removeBlackBg: true,
       stripCornerWatermark: true,
       frameCount: 4,
       mode: 'vfx',
+      gridLayout: '2x2',
     });
 
     // Expose frozen read-only diagnostic hook when not in strict production lock
-    if (typeof window !== 'undefined' && process.env.NODE_ENV !== 'production') {
+    if (typeof window !== 'undefined' && import.meta.env.DEV) {
       (
         window as unknown as {
           __KALIYUGA_TEST__?: {
@@ -1408,34 +1568,71 @@ export default function KaliyugaArena() {
     const p = sim.player;
     if (sim.state !== 'playing' || p.immobilizeCd > 0) return;
     const boonMods = computeBoonModifiers(sim.activeBoons);
-    p.immobilizeCd = Number((9.0 * boonMods.spellCooldownMultiplier).toFixed(2));
+    p.immobilizeCd = Number((7.5 * boonMods.spellCooldownMultiplier).toFixed(2));
     p.action = 'astra';
-    p.actionTimer = 0.48;
-    p.actionDuration = 0.48;
+    p.actionTimer = 0.42;
+    p.actionDuration = 0.42;
     soundEngine.playSpell('immobilize');
-    spawnShockwave(p.x, p.y, 210, '#ff8e2b', 0.44);
+    spawnShockwave(p.x, p.y, 195, '#ff5e36', 0.40);
+
+    // Fire Hades-Style Agneyastra Blood-Shard Cast Projectile toward cursor or nearest enemy!
+    let aimX = sim.input.pointerX;
+    let aimY = sim.input.pointerY;
+    let nearestDist = 9999;
+    sim.enemies.forEach((e) => {
+      if (e.aiState === 'ko') return;
+      const d = Math.hypot(e.x - p.x, e.y - p.y);
+      if (d < nearestDist && d < 520) {
+        nearestDist = d;
+        aimX = e.x;
+        aimY = e.y - 20;
+      }
+    });
+    const castAngle = Math.atan2(aimY - p.y, aimX - p.x);
+    p.facing = Math.cos(castAngle) >= 0 ? 1 : -1;
+    const stats = computeDerivedPlayerStats(sim.ranks);
+
+    const castProj = sim.projectiles.find((pr) => !pr.active);
+    if (castProj) {
+      castProj.active = true;
+      castProj.x = p.x + Math.cos(castAngle) * 28;
+      castProj.y = p.y - 24 + Math.sin(castAngle) * 18;
+      castProj.vx = Math.cos(castAngle) * 640;
+      castProj.vy = Math.sin(castAngle) * 640;
+      castProj.radius = 15;
+      castProj.damage = Math.round(92 * stats.damageMultiplier * boonMods.damageMultiplier);
+      castProj.color = '#ff2a4b';
+      castProj.life = 1.8;
+      castProj.deflected = true;
+      castProj.isPlayerCast = true;
+    }
 
     let hitCount = 0;
-    const stats = computeDerivedPlayerStats(sim.ranks);
     sim.enemies.forEach((e) => {
       if (e.aiState === 'ko') return;
       const dist = Math.hypot(e.x - p.x, e.y - p.y);
-      if (dist <= 420) {
-        p.facing = e.x >= p.x ? 1 : -1;
-        const astraDmg = Math.round(78 * stats.damageMultiplier);
+      if (dist <= 390) {
+        const astraDmg = Math.round(78 * stats.damageMultiplier * boonMods.damageMultiplier);
         e.hp = Math.max(0, e.hp - astraDmg);
         e.immobilizedTimer = e.isBoss ? 3.2 : 4.2;
         e.scorchTimer = Math.max(e.scorchTimer, 3.5);
+        e.lodgedCasts = Math.min(3, (e.lodgedCasts || 0) + 1);
         e.hitFlashTimer = 0.10;
         hitCount++;
-        spawnShockwave(e.x, e.y, 96, '#ff7b24', 0.38);
-        spawnParticles(e.x, e.y - 40, 24, '#ff7b24', 165, 4.8, 20);
-        spawnFloatingText(e.x, e.y - 85, `AGNEYASTRA BOW -${astraDmg} · BOUND!`, '#ffd45e', 1.15);
+        spawnShockwave(e.x, e.y, 96, '#ff2a4b', 0.38);
+        spawnParticles(e.x, e.y - 40, 24, '#ff5e36', 165, 4.8, 20);
+        spawnFloatingText(
+          e.x,
+          e.y - 85,
+          `BLOOD-SHARD LODGED -${astraDmg}! (+${Math.round(boonMods.castLodgedDamageBonus * 100)}% DMG TAKEN)`,
+          '#ffd45e',
+          1.12
+        );
       }
     });
 
     if (hitCount === 0) {
-      spawnFloatingText(p.x, p.y - 75, 'AGNEYASTRA · CELESTIAL FIRE BOW', '#ffd45e', 0.95);
+      spawnFloatingText(p.x, p.y - 75, 'AGNEYASTRA · BLOOD-SHARD CAST!', '#ff5e36', 0.98);
     }
   }, [spawnFloatingText, spawnParticles, spawnShockwave]);
 
@@ -1739,13 +1936,19 @@ export default function KaliyugaArena() {
         const backstabMult = backstab ? boonMods.backstabMultiplier : 1.0;
         const dundubhiArmorMult =
           e.type === 'xuemo' && !e.armorCracked ? 0.55 : 1.0;
+        const lodgedCastMult = 1 + (e.lodgedCasts || 0) * boonMods.castLodgedDamageBonus;
         const mult =
           (p.transformTimer > 0 ? 1.3 : 1.0) *
           boonMods.heavyBonusMultiplier *
           backstabMult *
-          dundubhiArmorMult;
+          dundubhiArmorMult *
+          lodgedCastMult;
         const hpLoss = Math.round(dmg.hpDamage * mult * (1 + boonMods.echoStrikeRatio));
         const posLoss = Math.round(dmg.postureDamage * mult * boonMods.postureDamageMultiplier);
+
+        // Heavy Unleash shatters active Enemy Guard / Vajra Shields!
+        const brokeGuard = e.parryStanceTimer > 0 || e.trait === 'vajra_shield';
+        e.parryStanceTimer = 0;
 
         e.hp = Math.max(0, e.hp - hpLoss);
         e.hitFlashTimer = 0.09;
@@ -1765,7 +1968,7 @@ export default function KaliyugaArena() {
         const posResult = applyPostureDamage({
           currentPosture: e.posture,
           maxPosture: e.maxPosture,
-          postureDamage: posLoss,
+          postureDamage: brokeGuard ? Math.round(posLoss * 1.45) : posLoss,
           alreadyBroken: e.postureBrokenTimer > 0,
         });
         e.posture = posResult.nextPosture;
@@ -1787,7 +1990,7 @@ export default function KaliyugaArena() {
         spawnFloatingText(
           e.x,
           e.y - 58,
-          isResolute ? `COUNTER ${hpLoss}!` : `${hpLoss}!`,
+          isResolute ? `COUNTER ${hpLoss}!` : brokeGuard ? `GUARD CRUSH ${hpLoss}!` : `${hpLoss}!`,
           '#ffd86b',
           1.18,
           e.type === 'xuemo' && !e.armorCracked ? 'BRONZE ARMOR! BAIT INTO PILLAR' : undefined
@@ -1920,19 +2123,65 @@ export default function KaliyugaArena() {
           enemyX: e.x,
           enemyFacing: e.facing,
         });
+
+        // Smart Enemy & Boss Frontal Parry / Shield Deflection Mechanic!
+        const canEnemyParry =
+          !backstab &&
+          !isDashStrike &&
+          p.comboStep < 4 &&
+          e.postureBrokenTimer <= 0 &&
+          e.immobilizedTimer <= 0 &&
+          (e.parryStanceTimer > 0 ||
+            (e.trait === 'vajra_shield' && e.aiState === 'chase') ||
+            (e.isBoss && e.aiState === 'chase' && Math.random() < 0.24));
+
+        if (canEnemyParry) {
+          soundEngine.playSpell('parry');
+          e.parryStanceTimer = 0.55;
+          e.hitFlashTimer = 0.08;
+          const recoilAngle = Math.atan2(p.y - e.y, p.x - e.x);
+          p.vx += Math.cos(recoilAngle) * 190;
+          p.vy += Math.sin(recoilAngle) * 150;
+          sim.hitstopTimer = 0.05;
+          sim.cameraShakeTrauma = Math.min(1, sim.cameraShakeTrauma + 0.3);
+          spawnShockwave((p.x + e.x) * 0.5, (p.y + e.y) * 0.5, 86, '#ffd86b', 0.28);
+          spawnParticles((p.x + e.x) * 0.5, (p.y + e.y) * 0.5 - 24, 20, '#ffd86b', 210, 4.2, 90);
+          spawnFloatingText(
+            e.x,
+            e.y - 72,
+            e.isBoss ? 'BOSS PARRIED! · COUNTER INCOMING!' : 'GUARD PARRIED! · DASH BEHIND OR HEAVY [RMB]',
+            '#ffd86b',
+            1.08
+          );
+          if (e.aiState === 'chase' || e.aiState === 'idle') {
+            e.aiState = 'windup';
+            e.windupDuration = e.isBoss ? 0.42 : 0.46;
+            e.aiTimer = e.windupDuration;
+            e.telegraphX = e.x;
+            e.telegraphY = e.y;
+            e.aimAngle = Math.atan2(p.y - e.y, p.x - e.x);
+            e.facing = p.x >= e.x ? 1 : -1;
+            e.attackKind = 'cone';
+            e.telegraphRadius = e.isBoss ? 175 : 132;
+          }
+          return;
+        }
+
         const isCrit =
           p.comboStep === 4 ||
           isDashStrike ||
           (boonMods.critChance > 0 && Math.random() < boonMods.critChance);
         const dundubhiArmorMult =
           e.type === 'xuemo' && !e.armorCracked ? 0.55 : 1.0;
+        const lodgedCastMult = 1 + (e.lodgedCasts || 0) * boonMods.castLodgedDamageBonus;
         const mult =
           (p.transformTimer > 0 ? 1.3 : 1.0) *
           (isDashStrike ? boonMods.dashStrikeMultiplier : 1.0) *
           (backstab ? boonMods.backstabMultiplier : 1.0) *
           (isCrit && p.comboStep !== 4 ? boonMods.critMultiplier : 1.0) *
           (1 + boonMods.echoStrikeRatio) *
-          dundubhiArmorMult;
+          dundubhiArmorMult *
+          lodgedCastMult;
         const hpLoss = Math.round(dmg.hpDamage * mult);
         const posLoss = Math.round(dmg.postureDamage * mult * boonMods.postureDamageMultiplier);
 
@@ -2427,26 +2676,6 @@ export default function KaliyugaArena() {
     ctx.restore();
 
     if (!asset || asset.frames.length === 0) {
-      if (_unusedWidth <= 0) return;
-      // Procedural dark-mythology fallback silhouette while sprite sheet is decoding
-      ctx.save();
-      ctx.translate(worldX, worldY - elevationY);
-      ctx.scale(facing * scaleX, scaleY);
-      const sh = targetHeight * 0.85;
-      const sw = sh * 0.52;
-      ctx.fillStyle = hitFlash ? '#fff2d6' : '#1b1518';
-      ctx.strokeStyle = rimTint === 'jade' ? '#3ee0a8' : '#e0a84c';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.roundRect(-sw * 0.5, -sh, sw, sh, 8);
-      ctx.fill();
-      ctx.stroke();
-      // Glowing ember eyes / core
-      ctx.fillStyle = '#ff6a2b';
-      ctx.beginPath();
-      ctx.arc(sw * 0.14, -sh * 0.78, 3, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
       return;
     }
 
@@ -2591,6 +2820,12 @@ export default function KaliyugaArena() {
       if (sim.screenFlashAlpha > 0) {
         sim.screenFlashAlpha = Math.max(0, sim.screenFlashAlpha - dt * 2.4);
       }
+      if (sim.gateWipeTimer > 0) {
+        sim.gateWipeTimer = Math.max(0, sim.gateWipeTimer - dt);
+      }
+      if (sim.chasmVaultCalloutCd > 0) {
+        sim.chasmVaultCalloutCd = Math.max(0, sim.chasmVaultCalloutCd - dt);
+      }
       // Dynamic 16% Camera Zoom-Out & Shared Framing during Sovereign Boss / Mini-Boss Encounters!
       const activeBoss = sim.enemies.find((e) => e.isBoss && e.aiState !== 'ko' && e.hp > 0);
       const targetBaseZoom =
@@ -2639,16 +2874,33 @@ export default function KaliyugaArena() {
         if (sim.chamberBannerTimer > 0) {
           sim.chamberBannerTimer = Math.max(0, sim.chamberBannerTimer - simDt);
         }
+        if (sim.bossPhaseBanner && sim.bossPhaseBanner.timer > 0) {
+          sim.bossPhaseBanner.timer = Math.max(0, sim.bossPhaseBanner.timer - simDt);
+          if (sim.bossPhaseBanner.timer <= 0) {
+            sim.bossPhaseBanner = null;
+          }
+        }
 
-        // Delayed enemy wave spawns in world coordinates
+        // Delayed enemy wave spawns & glowing summoning rifts in world coordinates
         for (let i = sim.pendingSpawns.length - 1; i >= 0; i--) {
           sim.pendingSpawns[i].timer -= simDt;
           if (sim.pendingSpawns[i].timer <= 0) {
             const sp = sim.pendingSpawns[i];
-            sim.enemies.push(createEnemyFromSpec(sp.type, sp.x, sp.y, worldW, worldH));
+            sim.enemies.push(createEnemyFromSpec(sp.type, sp.x, sp.y, worldW, worldH, sp.trait));
             spawnParticles(sp.x * worldW, sp.y * worldH, 18, '#ff7b29', 130, 4, 50);
             spawnShockwave(sp.x * worldW, sp.y * worldH, 68, '#ff9d42', 0.34);
             sim.pendingSpawns.splice(i, 1);
+          }
+        }
+        for (let i = sim.summoningRifts.length - 1; i >= 0; i--) {
+          sim.summoningRifts[i].timer -= simDt;
+          if (sim.summoningRifts[i].timer <= 0) {
+            const rift = sim.summoningRifts[i];
+            sim.enemies.push(createEnemyFromSpec(rift.type, rift.x / worldW, rift.y / worldH, worldW, worldH, rift.trait));
+            spawnParticles(rift.x, rift.y - 16, 26, '#ff4d29', 165, 4.5, 70);
+            spawnShockwave(rift.x, rift.y, 92, '#ffd86b', 0.38);
+            soundEngine.playTelegraph();
+            sim.summoningRifts.splice(i, 1);
           }
         }
 
@@ -2922,9 +3174,28 @@ export default function KaliyugaArena() {
           spawnParticles(p.x - p.facing * 10, p.y + 3, 3, '#c8b89e', 42, 3.2, -18);
         }
 
-        // Clamp player to isometric playable courtyard bounds
-        p.x = Math.max(minX, Math.min(maxX, p.x));
-        p.y = Math.max(minY, Math.min(maxY, p.y));
+        // Constrain Rudra to 2:1 Isometric Chamber Platform Polygon & Interior Chasm Channels
+        const playerConstraint = constrainActorToChamber(
+          p.x,
+          p.y,
+          p.vx,
+          p.vy,
+          worldW,
+          worldH,
+          sim.chamberIndex,
+          p.action === 'dodge' || p.elevationY > 12,
+          false,
+          20
+        );
+        p.x = playerConstraint.x;
+        p.y = playerConstraint.y;
+        p.vx = playerConstraint.vx;
+        p.vy = playerConstraint.vy;
+        if (playerConstraint.vaultedChasm && sim.chasmVaultCalloutCd <= 0) {
+          sim.chasmVaultCalloutCd = 1.2;
+          spawnParticles(p.x, p.y - 10, 10, '#52ffd8', 110, 3.4, -20);
+          spawnFloatingText(p.x, p.y - 72, 'CHASM VAULT!', '#52ffd8', 0.96);
+        }
 
         // Cloud Step Decoy update & explosion
         if (sim.decoy.active) {
@@ -3024,15 +3295,29 @@ export default function KaliyugaArena() {
           }
 
           if (proj.deflected) {
-            // Deflected projectiles strike enemies!
+            // Deflected projectiles & Player Agneyastra Blood-Shard Casts strike enemies!
             for (const e of sim.enemies) {
               if (e.aiState === 'ko') continue;
-              if (Math.hypot(proj.x - e.x, proj.y - (e.y - 24)) <= proj.radius + 28) {
+              if (Math.hypot(proj.x - e.x, proj.y - (e.y - 24)) <= proj.radius + 32) {
                 proj.active = false;
                 e.hp = Math.max(0, e.hp - proj.damage);
-                e.hitFlashTimer = 0.08;
-                spawnParticles(e.x, e.y - 24, 14, '#3ee0a8', 150, 4, 80);
-                spawnFloatingText(e.x, e.y - 62, `REFLECTED -${proj.damage}`, '#3ee0a8', 1.05);
+                e.hitFlashTimer = 0.09;
+                if (proj.isPlayerCast) {
+                  e.lodgedCasts = Math.min(3, (e.lodgedCasts || 0) + 1);
+                  e.scorchTimer = Math.max(e.scorchTimer, 3.0);
+                  spawnShockwave(e.x, e.y, 82, '#ff2a4b', 0.32);
+                  spawnParticles(e.x, e.y - 24, 18, '#ff2a4b', 175, 4.4, 80);
+                  spawnFloatingText(
+                    e.x,
+                    e.y - 66,
+                    `BLOOD-SHARD LODGED -${proj.damage}!`,
+                    '#ff6a42',
+                    1.1
+                  );
+                } else {
+                  spawnParticles(e.x, e.y - 24, 14, '#3ee0a8', 150, 4, 80);
+                  spawnFloatingText(e.x, e.y - 62, `REFLECTED -${proj.damage}`, '#3ee0a8', 1.05);
+                }
                 break;
               }
             }
@@ -3072,6 +3357,9 @@ export default function KaliyugaArena() {
           e.animTime += simDt;
           e.hitFlashTimer = Math.max(0, e.hitFlashTimer - simDt);
           e.slashArcAlpha = Math.max(0, e.slashArcAlpha - simDt * 3.8);
+          e.parryStanceTimer = Math.max(0, (e.parryStanceTimer || 0) - simDt);
+          const targetGrowth = e.isBoss ? (e.phase === 3 ? 1.42 : e.phase === 2 ? 1.25 : 1.0) : 1.0;
+          e.growthScale = (e.growthScale || 1.0) + (targetGrowth - (e.growthScale || 1.0)) * (1 - Math.exp(-3.5 * simDt));
           e.scaleX += (1 - e.scaleX) * dampFactor;
           e.scaleY += (1 - e.scaleY) * dampFactor;
           e.displayHp += (e.hp - e.displayHp) * (1 - Math.exp(-8 * simDt));
@@ -3093,17 +3381,33 @@ export default function KaliyugaArena() {
 
           const nextEx = e.x + e.vx * simDt;
           const nextEy = e.y + e.vy * simDt;
+          const enemySpeedBeforeClamp = Math.hypot(e.vx, e.vy);
 
-          // Hades-Style Wall / Courtyard Pillar Slam Stagger when knocked into perimeter!
-          const hitWallX = nextEx <= minX + 3 || nextEx >= maxX - 3;
-          const hitWallY = nextEy <= minY + 3 || nextEy >= maxY - 3;
-          if ((hitWallX || hitWallY) && Math.hypot(e.vx, e.vy) > 90 && e.hitFlashTimer > 0) {
-            const slamDmg = e.isBoss ? 52 : 38;
+          const enemyConstraint = constrainActorToChamber(
+            nextEx,
+            nextEy,
+            e.vx,
+            e.vy,
+            worldW,
+            worldH,
+            sim.chamberIndex,
+            false,
+            e.isBoss,
+            e.isBoss ? 28 : 20
+          );
+
+          // Hades-Style Isometric Wall / Chasm-Ledge Slam Stagger when knocked into perimeter!
+          if (
+            (enemyConstraint.hitOuterWall || enemyConstraint.hitChasmEdge) &&
+            enemySpeedBeforeClamp > 85 &&
+            e.hitFlashTimer > 0
+          ) {
+            const slamDmg = e.isBoss ? 55 : 45;
             e.hp = Math.max(0, e.hp - slamDmg);
             const posRes = applyPostureDamage({
               currentPosture: e.posture,
               maxPosture: e.maxPosture,
-              postureDamage: 72,
+              postureDamage: 82,
               alreadyBroken: e.postureBrokenTimer > 0,
             });
             e.posture = posRes.nextPosture;
@@ -3112,16 +3416,25 @@ export default function KaliyugaArena() {
               e.aiState = 'recover';
               e.aiTimer = 4.5;
             }
-            e.vx *= -0.35;
-            e.vy *= -0.35;
-            sim.cameraShakeTrauma = Math.min(1, sim.cameraShakeTrauma + 0.34);
-            spawnShockwave(e.x, e.y, 82, '#ffd86b', 0.32);
-            spawnParticles(e.x, e.y - 20, 18, '#ffd86b', 165, 4.2, 130);
-            spawnFloatingText(e.x, e.y - 68, `POBI · WALL SLAM! -${slamDmg}`, '#ffd86b', 1.15);
+            e.vx = enemyConstraint.normalX * 65;
+            e.vy = enemyConstraint.normalY * 65;
+            sim.cameraShakeTrauma = Math.min(1, sim.cameraShakeTrauma + 0.36);
+            spawnShockwave(enemyConstraint.x, enemyConstraint.y, 88, '#ffd86b', 0.34);
+            spawnParticles(enemyConstraint.x, enemyConstraint.y - 20, 20, '#ffd86b', 175, 4.4, 130);
+            spawnFloatingText(
+              enemyConstraint.x,
+              enemyConstraint.y - 68,
+              `POBI · WALL SLAM! -${slamDmg}`,
+              '#ffd86b',
+              1.18
+            );
+          } else {
+            e.vx = enemyConstraint.vx;
+            e.vy = enemyConstraint.vy;
           }
 
-          e.x = Math.max(minX, Math.min(maxX, nextEx));
-          e.y = Math.max(minY, Math.min(maxY, nextEy));
+          e.x = enemyConstraint.x;
+          e.y = enemyConstraint.y;
 
           // Check Death -> KO transition
           if (e.hp <= 0 && e.aiState !== 'ko') {
@@ -3189,16 +3502,56 @@ export default function KaliyugaArena() {
               spawnFloatingText(
                 e.x,
                 e.y - 95,
-                e.type === 'tiger_vanguard' && e.phase === 2
-                  ? 'IRON ARMOR SHATTERED · UNMASKED GIANT AWAKENED!'
+                e.type === 'vrikodara' && e.phase === 2
+                  ? 'IRON ARMOR SHATTERED · COLOSSAL STATURE UNSEALED (1.25x)!'
+                  : e.phase === 3
+                  ? 'PHASE 3/3 · APOCALYPTIC TITAN TRANSFORMATION (1.42x)!'
                   : `PHASE ${e.phase}/3 · RAKSHASA WRATH AWAKENED!`,
                 '#ff6a33',
-                1.3
+                1.32
               );
+              sim.bossPhaseBanner =
+                e.type === 'vrikodara'
+                  ? e.phase === 2
+                    ? {
+                        timer: 4.0,
+                        title: 'VRIKODARA · PHASE II AWAKENING (1.25x STATURE)',
+                        speaker: 'SANJAYA · PALIMPSEST OF KURUKSHETRA',
+                        strikethrough: '“The righteous general fought with noble restraint...”',
+                        correction:
+                          'VRIKODARA: “MY IRON SHELL CRACKS! FEED THE ABDOMINAL FURNACE WITH ASH AND BONE!”',
+                      }
+                    : {
+                        timer: 4.2,
+                        title: 'VRIKODARA · PHASE III APOCALYPSE (1.42x TITAN)',
+                        speaker: 'VRIKODARA · SOVEREIGN OF THE INFERNAL MAW',
+                        strikethrough: '“And heaven blessed the victors of the eighteen days...”',
+                        correction:
+                          '“DRINK THE VAITARANI, RUDRA! TEN THOUSAND CHARIOTS BURN INSIDE MY RIBS!”',
+                      }
+                  : e.phase === 2
+                  ? {
+                      timer: 3.8,
+                      title: 'DUNDUBHI · PHASE II BLOOD-DRUM RESONANCE (1.25x)',
+                      speaker: 'DUNDUBHI · CHOLA BRONZE WAR-DEMON',
+                      strikethrough: '“The temple bells rang in peaceful devotion...”',
+                      correction:
+                        '“BEAT THE RIBS OF THE SLAIN! BAIT MY HORNS INTO THESE PILLARS IF YOU DARE!”',
+                    }
+                  : {
+                      timer: 4.0,
+                      title: 'DUNDUBHI · PHASE III CATACLYSMIC STAMPEDE (1.42x)',
+                      speaker: 'DUNDUBHI · WRATH OF THE BLEEDING CROWN',
+                      strikethrough: '“The bull of dharma knelt before the altar...”',
+                      correction:
+                        '“NO PILLAR CAN HOLD ME NOW! EVERY STEP SHATTERS THE MANDALA!”',
+                    };
             }
           }
 
           if (e.postureBrokenTimer > 0) {
+            e.vx = 0;
+            e.vy = 0;
             e.postureBrokenTimer -= simDt;
             if (e.postureBrokenTimer <= 0) {
               e.posture = Math.round(e.maxPosture * 0.65);
@@ -3208,6 +3561,8 @@ export default function KaliyugaArena() {
           }
 
           if (e.immobilizedTimer > 0) {
+            e.vx = 0;
+            e.vy = 0;
             e.immobilizedTimer -= simDt;
             continue;
           }
@@ -3220,10 +3575,18 @@ export default function KaliyugaArena() {
           const dist = Math.hypot(dx, dy) || 1;
           if (e.aiState !== 'windup' && e.aiState !== 'attack') {
             e.facing = dx >= 0 ? 1 : -1;
+            // Smooth 360-degree yaw tracking toward Rudra during idle, chase, and recover so 3D bosses never snap or face stale directions
+            const desiredAngle = Math.atan2(dy, dx);
+            let angleDiff = desiredAngle - e.aimAngle;
+            while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+            while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+            e.aimAngle += angleDiff * Math.min(1, (e.isBoss ? 7.5 : 6.0) * simDt);
           }
 
           if (e.aiState === 'idle' || e.aiState === 'chase') {
             e.aiTimer -= simDt;
+            const prevEx = e.x;
+            const prevEy = e.y;
 
             // Distinct movement policies per enemy archetype
             if (e.type === 'wolf_guai') {
@@ -3250,85 +3613,130 @@ export default function KaliyugaArena() {
                 e.y += (dy / dist) * moveSpd * 0.82 * simDt;
               }
             } else if (e.isBoss) {
-              const bossSpd = (e.type === 'tiger_vanguard' ? 158 : 132) * (1 + (e.phase - 1) * 0.15);
+              const bossSpd = (e.type === 'vrikodara' ? 168 : 142) * (1 + (e.phase - 1) * 0.16);
               if (dist > 118) {
                 e.x += (dx / dist) * bossSpd * simDt;
                 e.y += (dy / dist) * bossSpd * 0.82 * simDt;
               }
             }
 
+            if (simDt > 0.0001) {
+              e.vx = (e.x - prevEx) / simDt;
+              e.vy = (e.y - prevEy) / simDt;
+            } else {
+              e.vx = 0;
+              e.vy = 0;
+            }
+            const movedSpeed = Math.hypot(e.vx, e.vy);
+            e.aiState = movedSpeed > 14 ? 'chase' : 'idle';
+
+            // Active Parry / Guard Stance: Armored enemies & bosses raise their guard when Rudra approaches or attacks!
+            const canGuard = e.isBoss || e.type === 'stone_golem' || e.type === 'furnace_titan' || e.trait === 'vajra_shield';
+            if (canGuard && dist < 175 && p.action === 'light_attack' && e.parryStanceTimer <= 0 && Math.random() < (e.isBoss ? 0.08 : 0.045)) {
+              e.parryStanceTimer = e.isBoss ? 1.15 : 0.95;
+              spawnFloatingText(e.x, e.y - 78, 'IRON GUARD RAISED!', '#ffd86b', 0.95);
+            }
+
             const triggerDist =
-              e.type === 'fire_monk' ? 245 : e.isBoss ? 235 : e.type === 'wolf_guai' ? 155 : 140;
+              e.type === 'fire_monk' ? 285 : e.isBoss ? 265 : e.type === 'wolf_guai' ? 175 : 155;
 
             if (e.aiTimer <= 0 && dist <= triggerDist && (activeAttackers < 2 || e.isBoss)) {
               activeAttackers++;
               e.aiState = 'windup';
-              e.attackPattern = (e.attackPattern + 1) % 3;
+              e.parryStanceTimer = 0;
+              // 6 distinct attack patterns for Bosses so they never spam 2-3 moves!
+              e.attackPattern = (e.attackPattern + 1) % (e.isBoss ? 6 : 3);
               const windupDur = e.isBoss
-                ? Math.max(0.42, 0.68 - (e.phase - 1) * 0.08)
+                ? Math.max(0.38, 0.64 - (e.phase - 1) * 0.08)
                 : e.type === 'wolf_guai'
-                ? 0.54
-                : 0.64;
+                ? 0.48
+                : 0.58;
               e.aiTimer = windupDur;
               e.windupDuration = windupDur;
               e.telegraphX = e.x;
               e.telegraphY = e.y;
-              e.aimAngle = Math.atan2(dy, dx);
-              e.facing = dx >= 0 ? 1 : -1;
+              // Predictive velocity-lead targeting so enemies aim where Rudra is moving!
+              const leadX = targetX + p.vx * 0.22;
+              const leadY = targetY + p.vy * 0.22;
+              e.aimAngle = Math.atan2(leadY - e.y, leadX - e.x);
+              e.facing = leadX - e.x >= 0 ? 1 : -1;
 
-              // Assign Hades-Style Geometric Telegraph Shapes & Boss Multi-Hit Combos
+              // Assign Hades-Style Geometric Telegraph Shapes & Boss 6-Move Combos
               if (e.type === 'wolf_guai') {
-                if (e.attackPattern === 1 && dist > 85) {
+                if (e.attackPattern === 1 && dist > 75) {
                   e.attackKind = 'corridor';
-                  const cLen = 210;
+                  const cLen = 235;
                   e.corridorEndX = Math.max(minX, Math.min(maxX, e.x + Math.cos(e.aimAngle) * cLen));
                   e.corridorEndY = Math.max(minY, Math.min(maxY, e.y + Math.sin(e.aimAngle) * cLen));
                 } else {
                   e.attackKind = 'cone';
-                  e.telegraphRadius = 112;
+                  e.telegraphRadius = 118;
                 }
-                e.comboHitsRemaining = 0;
+                e.comboHitsRemaining = e.trait === 'rakshasa_frenzy' ? 1 : 0;
               } else if (e.type === 'fire_monk') {
                 e.attackKind = 'cone';
-                e.telegraphRadius = 128;
+                e.telegraphRadius = 135;
                 e.comboHitsRemaining = 0;
               } else if (e.type === 'stone_golem' || e.type === 'furnace_titan') {
                 if (e.attackPattern === 2) {
                   e.attackKind = 'shockwave';
-                  e.telegraphRadius = e.type === 'furnace_titan' ? 160 : 142;
+                  e.telegraphRadius = e.type === 'furnace_titan' ? 175 : 150;
                 } else {
                   e.attackKind = 'cone';
-                  e.telegraphRadius = e.type === 'furnace_titan' ? 145 : 130;
+                  e.telegraphRadius = e.type === 'furnace_titan' ? 155 : 138;
                 }
-                e.comboHitsRemaining = 0;
+                e.comboHitsRemaining = e.type === 'furnace_titan' ? 1 : 0;
               } else if (e.isBoss) {
-                if (e.attackPattern === 0) {
+                const scaleMult = e.growthScale || 1;
+                if (e.attackPattern === 0 || e.attackPattern === 3) {
                   e.attackKind = 'cone';
-                  e.telegraphRadius = e.type === 'tiger_vanguard' ? 172 : 165;
+                  e.telegraphRadius = Math.round((e.type === 'vrikodara' ? 185 : 175) * scaleMult);
                   e.comboHitsRemaining = e.phase >= 3 ? 2 : e.phase === 2 ? 1 : 0;
-                } else if (e.attackPattern === 1) {
+                } else if (e.attackPattern === 1 || e.attackPattern === 4) {
                   e.attackKind = 'corridor';
-                  const cLen = e.type === 'tiger_vanguard' ? 310 : 275;
+                  const cLen = Math.round((e.type === 'vrikodara' ? 340 : 300) * scaleMult);
                   e.corridorEndX = Math.max(minX, Math.min(maxX, e.x + Math.cos(e.aimAngle) * cLen));
                   e.corridorEndY = Math.max(minY, Math.min(maxY, e.y + Math.sin(e.aimAngle) * cLen));
                   e.comboHitsRemaining = e.phase >= 2 ? 1 : 0;
                 } else {
                   e.attackKind = 'shockwave';
-                  e.telegraphRadius = e.type === 'tiger_vanguard' ? 195 : 185;
-                  e.comboHitsRemaining = 0;
+                  e.telegraphRadius = Math.round((e.type === 'vrikodara' ? 210 : 195) * scaleMult);
+                  e.comboHitsRemaining = e.attackPattern === 5 && e.phase >= 2 ? 1 : 0;
                 }
               }
 
               soundEngine.playTelegraph();
             }
           } else if (e.aiState === 'windup') {
+            e.vx = 0;
+            e.vy = 0;
             e.aiTimer -= simDt;
             e.scaleX = 1.04;
             e.scaleY = 0.95;
 
+            // Continuous Predictive Player Tracking during the first 68% of windup!
+            // Enemies are no longer blind: they actively pivot toward Rudra's movement until the final lock-in!
+            const windupElapsedRatio = 1 - e.aiTimer / Math.max(0.05, e.windupDuration);
+            if (windupElapsedRatio < 0.68) {
+              const leadX = targetX + p.vx * 0.24;
+              const leadY = targetY + p.vy * 0.24;
+              const desiredAngle = Math.atan2(leadY - e.y, leadX - e.x);
+              let angleDiff = desiredAngle - e.aimAngle;
+              while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+              while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+              const trackSpeed = e.isBoss ? 5.8 : 4.6;
+              e.aimAngle += angleDiff * Math.min(1, trackSpeed * simDt);
+              e.facing = Math.cos(e.aimAngle) >= 0 ? 1 : -1;
+              if (e.attackKind === 'corridor') {
+                const cLen = e.isBoss ? 320 * (e.growthScale || 1) : 230;
+                e.corridorEndX = Math.max(minX, Math.min(maxX, e.telegraphX + Math.cos(e.aimAngle) * cLen));
+                e.corridorEndY = Math.max(minY, Math.min(maxY, e.telegraphY + Math.sin(e.aimAngle) * cLen));
+              }
+            }
+
             // Vrikodara Abdominal Furnace Vacuum Maw: pulls Rudra inward during shockwave windup!
-            if (e.type === 'tiger_vanguard' && e.attackKind === 'shockwave' && dist > 48 && dist < 340) {
-              const pullStrength = (e.phase >= 2 ? 128 : 95) * simDt;
+            if (e.type === 'vrikodara' && e.attackKind === 'shockwave' && dist > 48 && dist < 360) {
+              const pullStrength = (e.phase >= 2 ? 138 : 98) * simDt;
               const invD = 1 / Math.max(1, dist);
               p.x = Math.max(minX, Math.min(maxX, p.x + (e.x - p.x) * invD * pullStrength));
               p.y = Math.max(minY, Math.min(maxY, p.y + (e.y - p.y) * invD * pullStrength));
@@ -3339,42 +3747,65 @@ export default function KaliyugaArena() {
 
             if (e.aiTimer <= 0) {
               e.aiState = 'attack';
-              e.aiTimer = 0.22;
+              e.aiTimer = e.isBoss ? 0.40 : 0.24;
               e.scaleX = 1.14;
               e.scaleY = 0.88;
               e.slashArcAlpha = 1.0;
 
-              // Execute Enemy/Boss Attack!
-              if (e.type === 'fire_monk' && dist > 125) {
-                const proj = sim.projectiles.find((pr) => !pr.active);
-                if (proj) {
-                  proj.active = true;
-                  proj.x = e.x;
-                  proj.y = e.y - 22;
-                  proj.vx = Math.cos(e.aimAngle) * 305;
-                  proj.vy = Math.sin(e.aimAngle) * 305;
-                  proj.radius = 9.5;
-                  proj.damage = 22;
-                  proj.color = '#ff7b24';
-                  proj.life = 2.4;
-                  proj.deflected = false;
+              // Execute Enemy/Boss Attack with distinct multi-projectile patterns!
+              if (e.type === 'fire_monk' && dist > 110) {
+                const spreadCount = e.trait === 'agni_aura' ? 3 : 1;
+                for (let s = 0; s < spreadCount; s++) {
+                  const proj = sim.projectiles.find((pr) => !pr.active);
+                  if (proj) {
+                    const spreadAngle = e.aimAngle + (s - Math.floor(spreadCount / 2)) * 0.22;
+                    proj.active = true;
+                    proj.x = e.x;
+                    proj.y = e.y - 24;
+                    proj.vx = Math.cos(spreadAngle) * 340;
+                    proj.vy = Math.sin(spreadAngle) * 340;
+                    proj.radius = 10.5;
+                    proj.damage = 24;
+                    proj.color = '#ff5224';
+                    proj.life = 2.6;
+                    proj.deflected = false;
+                  }
                 }
-              } else if (e.type === 'xuemo' && e.attackPattern === 1) {
-                // Dundubhi spawns ring of 6-8 Bronze Sonic Orbs
-                const orbCount = e.phase >= 2 ? 8 : 6;
+              } else if (e.type === 'xuemo' && (e.attackPattern === 1 || e.attackPattern === 4)) {
+                // Dundubhi spawns ring of Sonic War-Drum Crescent Waves
+                const orbCount = e.phase >= 2 ? 10 : 7;
                 for (let k = 0; k < orbCount; k++) {
                   const pr = sim.projectiles.find((item) => !item.active);
                   if (pr) {
                     const ang = (k / orbCount) * Math.PI * 2 + e.animTime;
                     pr.active = true;
-                    pr.x = e.x + Math.cos(ang) * 42;
-                    pr.y = e.y - 22 + Math.sin(ang) * 32;
-                    pr.vx = Math.cos(ang) * 205;
-                    pr.vy = Math.sin(ang) * 175;
-                    pr.radius = 11;
-                    pr.damage = 26;
+                    pr.x = e.x + Math.cos(ang) * 44;
+                    pr.y = e.y - 24 + Math.sin(ang) * 32;
+                    pr.vx = Math.cos(ang) * 235;
+                    pr.vy = Math.sin(ang) * 195;
+                    pr.radius = 12;
+                    pr.damage = 28;
                     pr.color = '#ffbe3b';
                     pr.life = 3.2;
+                    pr.deflected = false;
+                  }
+                }
+              } else if (e.type === 'vrikodara' && e.phase >= 2 && (e.attackPattern === 2 || e.attackPattern === 5)) {
+                // Vrikodara Phase 2/3 unleashes a 5-way Trident Fire-Lance Fan!
+                const fanCount = e.phase === 3 ? 7 : 5;
+                for (let k = 0; k < fanCount; k++) {
+                  const pr = sim.projectiles.find((item) => !item.active);
+                  if (pr) {
+                    const ang = e.aimAngle + (k - Math.floor(fanCount / 2)) * 0.24;
+                    pr.active = true;
+                    pr.x = e.x + Math.cos(ang) * 48;
+                    pr.y = e.y - 28 + Math.sin(ang) * 32;
+                    pr.vx = Math.cos(ang) * 310;
+                    pr.vy = Math.sin(ang) * 280;
+                    pr.radius = 12.5;
+                    pr.damage = 32;
+                    pr.color = '#ff3824';
+                    pr.life = 2.8;
                     pr.deflected = false;
                   }
                 }
@@ -3522,7 +3953,7 @@ export default function KaliyugaArena() {
                     y: e.y + Math.sin(e.aimAngle) * 34 + 6,
                     radius: e.isBoss ? 84 : 64,
                     alpha: 0.86,
-                    decalFrame: e.type === 'tiger_vanguard' ? 3 : 1,
+                    decalFrame: e.type === 'vrikodara' ? 3 : 1,
                     angle: e.aimAngle,
                   });
                   if (sim.craters.length > 10) sim.craters.shift();
@@ -3591,6 +4022,8 @@ export default function KaliyugaArena() {
               }
             }
           } else if (e.aiState === 'attack') {
+            e.vx = 0;
+            e.vy = 0;
             e.aiTimer -= simDt;
             if (e.aiTimer <= 0) {
               // Boss Multi-Hit Combo Chain in Phase 2 & Phase 3!
@@ -3613,6 +4046,8 @@ export default function KaliyugaArena() {
               }
             }
           } else if (e.aiState === 'recover') {
+            e.vx = 0;
+            e.vy = 0;
             e.aiTimer -= simDt;
             if (e.aiTimer <= 0) {
               e.aiState = 'chase';
@@ -3693,8 +4128,34 @@ export default function KaliyugaArena() {
           }
         }
 
-        // Check Chamber Clear & Progression
-        const totalRemaining = sim.enemies.length + sim.pendingSpawns.length;
+        // Check Multi-Wave Summoning Rifts & Chamber Clear Progression
+        const activeInWave = sim.enemies.filter((e) => e.aiState !== 'ko').length + sim.pendingSpawns.length + sim.summoningRifts.length;
+        if (activeInWave === 0 && sim.waveQueue.length > 0 && sim.state === 'playing') {
+          sim.currentWave += 1;
+          const nextWaveSpecs = sim.waveQueue.filter((w) => w.wave === sim.currentWave);
+          sim.waveQueue = sim.waveQueue.filter((w) => w.wave !== sim.currentWave);
+          for (const sp of nextWaveSpecs) {
+            sim.summoningRifts.push({
+              x: sp.x * worldW,
+              y: sp.y * worldH,
+              timer: 1.15 + sp.delay,
+              maxTimer: 1.15 + sp.delay,
+              type: sp.type,
+              trait: sp.trait,
+            });
+          }
+          soundEngine.playGong('chamber');
+          spawnFloatingText(
+            p.x,
+            p.y - 95,
+            `WAVE ${sim.currentWave}/${sim.maxWave} · ASURA REINFORCEMENTS SUMMONED!`,
+            '#ff7b29',
+            1.22
+          );
+        }
+
+        const totalRemaining =
+          sim.enemies.length + sim.pendingSpawns.length + sim.summoningRifts.length + sim.waveQueue.length;
         if (totalRemaining === 0 && sim.state === 'playing') {
           if (sim.chamberClearTimer === 0) {
             sim.chamberClearTimer = 0.01;
@@ -3716,14 +4177,14 @@ export default function KaliyugaArena() {
               setBoonReadyCount(sim.boonReadyCount);
             }
 
-            if (sim.chamberIndex === 4) {
+            if (sim.chamberIndex === 3) {
               spawnFloatingText(
                 p.x,
                 p.y - 105,
                 'DUNDUBHI VANQUISHED · WAR-DRUM SILENCED!',
                 '#ffd86b',
                 1.35,
-                'CELESTIAL BOON UNSEALED · DESCEND DEEPER INTO KURUKSHETRA'
+                'CHOOSE YOUR REWARD EXIT GATE AT THE TOP OF THE SANCTUM'
               );
             } else if (sim.chamberIndex < CHAMBERS.length - 1) {
               spawnFloatingText(
@@ -3732,12 +4193,19 @@ export default function KaliyugaArena() {
                 `CHAMBER ${sim.chamberIndex + 1}/${CHAMBERS.length} CLEARED! +${clearBonus} KARMA`,
                 '#3ee0a8',
                 1.25,
-                'CELESTIAL BOON ALTAR UNSEALED · CLAIM BLESSING [B]'
+                'WALK INTO LEFT GATE (DEVA BOON) OR RIGHT GATE (AMRITA + MAX HP)'
               );
             }
           } else {
             sim.chamberClearTimer += simDt;
-            const nearExitGate = p.x > worldW * 0.64 && p.y < worldH * 0.42;
+            const chGeom = getChamberGeometry(sim.chamberIndex);
+            const leftGateX = worldW * chGeom.leftGate.x;
+            const leftGateY = worldH * chGeom.leftGate.y;
+            const rightGateX = worldW * chGeom.rightGate.x;
+            const rightGateY = worldH * chGeom.rightGate.y;
+            const enteredLeftGate = Math.hypot(p.x - leftGateX, p.y - leftGateY) < 104;
+            const enteredRightGate = Math.hypot(p.x - rightGateX, p.y - rightGateY) < 104;
+
             if (sim.chamberIndex === CHAMBERS.length - 1) {
               if (sim.chamberClearTimer >= 1.1) {
                 sim.state = 'gameover';
@@ -3747,11 +4215,23 @@ export default function KaliyugaArena() {
                 setOutcomeMode('victory');
                 soundEngine.playGong('victory');
               }
+            } else if (enteredRightGate) {
+              // Player chose Right Gate: Amrita Kalasha Max HP +30 & +95 Karma Cache!
+              p.maxHp += 30;
+              p.hp = Math.min(p.maxHp, p.hp + 90);
+              p.displayHp = p.hp;
+              sim.ashenKarma += 95;
+              sim.karmaRunDelta += 95;
+              setAshenKarma(sim.ashenKarma);
+              sim.boonReadyCount = 0;
+              setBoonReadyCount(0);
+              soundEngine.playSpell('gourd');
+              loadChamber(sim.chamberIndex + 1, false);
             } else if (
               sim.boonReadyCount > 0 &&
-              (sim.chamberClearTimer >= 0.95 || nearExitGate)
+              (enteredLeftGate || sim.chamberClearTimer >= 3.2)
             ) {
-              // Automatically present Hades Celestial Boon Altar between chambers before advancing!
+              // Player chose Left Gate (or timer elapsed): Present Hades Celestial Boon Altar!
               const offer = rollCelestialBoonOffer(sim.activeBoons);
               if (offer.length > 0) {
                 setBoonChoices(offer);
@@ -3762,7 +4242,7 @@ export default function KaliyugaArena() {
                 setBoonReadyCount(0);
                 loadChamber(sim.chamberIndex + 1, false);
               }
-            } else if (sim.chamberClearTimer >= 2.2 || nearExitGate) {
+            } else if (sim.chamberClearTimer >= 4.2) {
               loadChamber(sim.chamberIndex + 1, false);
             }
           }
@@ -3839,8 +4319,8 @@ export default function KaliyugaArena() {
       // RENDER 2.5D ISOMETRIC WORLD & ACTORS (AAA HADES-GRADE CAMERA PIPELINE)
       // ========================================================================
       ctx.save();
-      ctx.fillStyle = '#070606';
-      ctx.fillRect(0, 0, cw, ch);
+      // Step 1: Render Deep Parallax Underworld Abyss (0.38x camera parallax lava/blood chasm & sunken pillars)
+      renderParallaxAbyss(ctx, cw, ch, sim.camX, sim.camY, now, sim.chamberIndex);
 
       // Apply dynamic camera zoom & decaying trauma^2 camera shake around viewport center
       ctx.translate(cw * 0.5, ch * 0.5);
@@ -3859,134 +4339,352 @@ export default function KaliyugaArena() {
       ctx.save();
       ctx.translate(-sim.camX, -sim.camY);
 
-      // 1. Draw Spacious Isometric Chamber Backdrop across full World Arena (worldW x worldH)
       const bgImg = bgImagesRef.current.get(chamberSpec.backgroundUrl);
-      if (bgImg && bgImg.complete && bgImg.naturalWidth > 0) {
-        const scale = Math.max(worldW / bgImg.naturalWidth, worldH / bgImg.naturalHeight);
-        const dw = bgImg.naturalWidth * scale;
-        const dh = bgImg.naturalHeight * scale;
-        ctx.drawImage(bgImg, (worldW - dw) * 0.5, (worldH - dh) * 0.5, dw, dh);
-      }
-
-      // Subtle atmospheric lighting tint
-      ctx.fillStyle = chamberSpec.floorTint;
-      ctx.fillRect(0, 0, worldW, worldH);
-
-      // 1.5. AAA Hades-Style Atmospheric Chamber Vignette & Sacred Sanctum Mandala
-      // (Preserves 100% clarity of the hand-painted isometric chamber artwork without wireframe grid clutter)
-      ctx.save();
-      const chamberGrade = ctx.createRadialGradient(
-        worldW * 0.5,
-        worldH * 0.52,
-        worldW * 0.14,
-        worldW * 0.5,
-        worldH * 0.52,
-        worldW * 0.58
-      );
-      chamberGrade.addColorStop(0, 'rgba(14, 10, 9, 0.06)');
-      chamberGrade.addColorStop(0.68, 'rgba(8, 6, 7, 0.28)');
-      chamberGrade.addColorStop(1, 'rgba(3, 2, 4, 0.72)');
-      ctx.fillStyle = chamberGrade;
-      ctx.fillRect(0, 0, worldW, worldH);
-
-      // Subtle Chola Bronze Sanctum Inlay Ring at Chamber Center
-      ctx.save();
-      ctx.translate(worldW * 0.5, worldH * 0.52);
-      ctx.scale(1, 0.52);
-      ctx.strokeStyle = 'rgba(235, 180, 98, 0.14)';
-      ctx.lineWidth = 2.0;
-      ctx.beginPath();
-      ctx.arc(0, 0, worldW * 0.19, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.restore();
-
-      // Perimeter Eternal Agni Brazier Warm Floor Pools
-      const brazierSpots = [
-        [worldW * 0.14, worldH * 0.22],
-        [worldW * 0.86, worldH * 0.22],
-        [worldW * 0.14, worldH * 0.80],
-        [worldW * 0.86, worldH * 0.80],
-        [worldW * 0.50, worldH * 0.17],
-        [worldW * 0.50, worldH * 0.85],
-      ];
-      const brazierFlicker = 0.88 + Math.sin(now * 0.007) * 0.12;
-      for (const [bx, by] of brazierSpots) {
-        const bGlow = ctx.createRadialGradient(bx, by, 6, bx, by, 210 * brazierFlicker);
-        bGlow.addColorStop(0, 'rgba(255, 150, 55, 0.20)');
-        bGlow.addColorStop(0.45, 'rgba(255, 82, 24, 0.08)');
-        bGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
-        ctx.fillStyle = bGlow;
-        ctx.beginPath();
-        ctx.arc(bx, by, 210 * brazierFlicker, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.restore();
-
-      // 1.8. Draw Persistent Hand-Painted Ground Impact Decals & Blood-Lotus Runes (groundDecals2x2)
       const decalsAsset = getProcessedSpriteSync(GAME_ASSETS.groundDecals2x2);
-      for (let i = 0; i < sim.craters.length; i++) {
-        const cr = sim.craters[i];
-        ctx.save();
-        ctx.translate(cr.x, cr.y);
-        ctx.scale(1, 0.54);
-        ctx.rotate(cr.angle || 0);
-        ctx.globalAlpha = cr.alpha;
-
-        if (decalsAsset && decalsAsset.frames.length > 0) {
-          const dIdx = Math.max(0, Math.min(decalsAsset.frames.length - 1, cr.decalFrame));
-          const dFrame = decalsAsset.frames[dIdx];
-          const drawSize = cr.radius * 2.15;
-          ctx.drawImage(
-            decalsAsset.cleanCanvas,
-            dFrame.sx,
-            dFrame.sy,
-            dFrame.sw,
-            dFrame.sh,
-            -drawSize * 0.5,
-            -drawSize * 0.5,
-            drawSize,
-            drawSize
-          );
-        } else {
-          const cGrad = ctx.createRadialGradient(0, 0, cr.radius * 0.1, 0, 0, cr.radius);
-          cGrad.addColorStop(0, 'rgba(255, 115, 28, 0.55)');
-          cGrad.addColorStop(0.45, 'rgba(32, 18, 12, 0.72)');
-          cGrad.addColorStop(0.82, 'rgba(12, 8, 6, 0.45)');
-          cGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-          ctx.fillStyle = cGrad;
-          ctx.beginPath();
-          ctx.arc(0, 0, cr.radius, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        ctx.restore();
-      }
-
-      // 2. Dynamic Flickering Brazier, Sanctum Medallion & Blood Pool Specular Glows
       const flicker = 0.88 + Math.sin(now * 0.008) * 0.08 + Math.cos(now * 0.019) * 0.04;
       const primaryLightX = (chamberSpec.braziers[0]?.x ?? 0.5) * worldW;
+      const isChamberCleared =
+        sim.chamberClearTimer > 0 &&
+        sim.enemies.length === 0 &&
+        sim.pendingSpawns.length === 0 &&
+        sim.waveQueue.length === 0 &&
+        sim.summoningRifts.length === 0;
+      const nextSpec = CHAMBERS[sim.chamberIndex + 1];
+
+      // Step 2: Render 3D-Extruded Isometric Stone Platform, Interior Chasm Channels, Raised Temple Walls & Exit Archways
+      renderIsometricChamberPlatform(
+        ctx,
+        worldW,
+        worldH,
+        bgImg,
+        chamberSpec.floorTint,
+        sim.chamberIndex,
+        now,
+        isChamberCleared,
+        Boolean(nextSpec?.isBossChamber),
+        () => {
+          // 1.5. AAA Hades-Style Atmospheric Chamber Vignette & Sacred Sanctum Mandala
+          ctx.save();
+          const chamberGrade = ctx.createRadialGradient(
+            worldW * 0.5,
+            worldH * 0.52,
+            worldW * 0.14,
+            worldW * 0.5,
+            worldH * 0.52,
+            worldW * 0.58
+          );
+          chamberGrade.addColorStop(0, 'rgba(14, 10, 9, 0.06)');
+          chamberGrade.addColorStop(0.68, 'rgba(8, 6, 7, 0.28)');
+          chamberGrade.addColorStop(1, 'rgba(3, 2, 4, 0.72)');
+          ctx.fillStyle = chamberGrade;
+          ctx.fillRect(0, 0, worldW, worldH);
+
+          // Boss Sanctum Sacred Mandala / Jatharagni Obsidian Furnace Floor Yantra at Chamber Center
+          ctx.save();
+          ctx.translate(worldW * 0.5, worldH * 0.52);
+          ctx.scale(1, 0.52);
+          if (sim.chamberIndex === 7) {
+            const furnacePulse = 0.82 + Math.sin(now * 0.004) * 0.18;
+            const innerGlow = ctx.createRadialGradient(0, 0, 18, 0, 0, worldW * 0.28);
+            innerGlow.addColorStop(0, `rgba(255, 84, 24, ${0.24 * furnacePulse})`);
+            innerGlow.addColorStop(0.55, `rgba(185, 28, 18, ${0.14 * furnacePulse})`);
+            innerGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            ctx.fillStyle = innerGlow;
+            ctx.beginPath();
+            ctx.arc(0, 0, worldW * 0.28, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.strokeStyle = `rgba(255, 118, 36, ${0.34 * furnacePulse})`;
+            ctx.lineWidth = 3.0;
+            ctx.beginPath();
+            ctx.arc(0, 0, worldW * 0.24, 0, Math.PI * 2);
+            ctx.stroke();
+
+            ctx.strokeStyle = `rgba(255, 196, 82, ${0.26 * furnacePulse})`;
+            ctx.lineWidth = 2.0;
+            ctx.beginPath();
+            ctx.arc(0, 0, worldW * 0.16, 0, Math.PI * 2);
+            ctx.stroke();
+
+            for (let sp = 0; sp < 12; sp++) {
+              const ang = (sp / 12) * Math.PI * 2 + now * 0.00025;
+              ctx.beginPath();
+              ctx.moveTo(Math.cos(ang) * (worldW * 0.07), Math.sin(ang) * (worldW * 0.07));
+              ctx.lineTo(Math.cos(ang) * (worldW * 0.24), Math.sin(ang) * (worldW * 0.24));
+              ctx.stroke();
+            }
+          } else if (sim.chamberIndex === 3) {
+            const drumPulse = 0.85 + Math.sin(now * 0.005) * 0.15;
+            ctx.strokeStyle = `rgba(245, 186, 82, ${0.28 * drumPulse})`;
+            ctx.lineWidth = 2.6;
+            ctx.beginPath();
+            ctx.arc(0, 0, worldW * 0.22, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(0, 0, worldW * 0.13, 0, Math.PI * 2);
+            ctx.stroke();
+            for (let sp = 0; sp < 8; sp++) {
+              const ang = (sp / 8) * Math.PI * 2;
+              ctx.beginPath();
+              ctx.moveTo(Math.cos(ang) * (worldW * 0.06), Math.sin(ang) * (worldW * 0.06));
+              ctx.lineTo(Math.cos(ang) * (worldW * 0.22), Math.sin(ang) * (worldW * 0.22));
+              ctx.stroke();
+            }
+          } else {
+            ctx.strokeStyle = 'rgba(235, 180, 98, 0.14)';
+            ctx.lineWidth = 2.0;
+            ctx.beginPath();
+            ctx.arc(0, 0, worldW * 0.19, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+          ctx.restore();
+
+          // Perimeter Eternal Agni Brazier Warm Floor Pools
+          const brazierSpots = [
+            [worldW * 0.14, worldH * 0.22],
+            [worldW * 0.86, worldH * 0.22],
+            [worldW * 0.14, worldH * 0.80],
+            [worldW * 0.86, worldH * 0.80],
+            [worldW * 0.50, worldH * 0.17],
+            [worldW * 0.50, worldH * 0.85],
+          ];
+          const brazierFlicker = 0.88 + Math.sin(now * 0.007) * 0.12;
+          for (const [bx, by] of brazierSpots) {
+            const bGlow = ctx.createRadialGradient(bx, by, 6, bx, by, 210 * brazierFlicker);
+            bGlow.addColorStop(0, 'rgba(255, 150, 55, 0.20)');
+            bGlow.addColorStop(0.45, 'rgba(255, 82, 24, 0.08)');
+            bGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            ctx.fillStyle = bGlow;
+            ctx.beginPath();
+            ctx.arc(bx, by, 210 * brazierFlicker, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.restore();
+
+          // 1.8. Draw Persistent Hand-Painted Ground Impact Decals & Blood-Lotus Runes (groundDecals2x2)
+          for (let i = 0; i < sim.craters.length; i++) {
+            const cr = sim.craters[i];
+            ctx.save();
+            ctx.translate(cr.x, cr.y);
+            ctx.scale(1, 0.54);
+            ctx.rotate(cr.angle || 0);
+            ctx.globalAlpha = cr.alpha;
+
+            if (decalsAsset && decalsAsset.frames.length > 0) {
+              const dIdx = Math.max(0, Math.min(decalsAsset.frames.length - 1, cr.decalFrame));
+              const dFrame = decalsAsset.frames[dIdx];
+              const drawSize = cr.radius * 2.15;
+              ctx.drawImage(
+                decalsAsset.cleanCanvas,
+                dFrame.sx,
+                dFrame.sy,
+                dFrame.sw,
+                dFrame.sh,
+                -drawSize * 0.5,
+                -drawSize * 0.5,
+                drawSize,
+                drawSize
+              );
+            } else {
+              const cGrad = ctx.createRadialGradient(0, 0, cr.radius * 0.1, 0, 0, cr.radius);
+              cGrad.addColorStop(0, 'rgba(255, 115, 28, 0.55)');
+              cGrad.addColorStop(0.45, 'rgba(32, 18, 12, 0.72)');
+              cGrad.addColorStop(0.82, 'rgba(12, 8, 6, 0.45)');
+              cGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+              ctx.fillStyle = cGrad;
+              ctx.beginPath();
+              ctx.arc(0, 0, cr.radius, 0, Math.PI * 2);
+              ctx.fill();
+            }
+            ctx.restore();
+          }
+        }
+      );
+
+      // Step 2.2: Interactive Hades-Style Floor Pressure-Plate Traps (Agni Flame Vents & Chakram Blades)
+      updateAndRenderPressureTraps(
+        ctx,
+        sim.traps,
+        simDt,
+        now,
+        sim.player,
+        sim.enemies,
+        {
+          onTrapTriggered: (tx, ty) => {
+            soundEngine.playTelegraph();
+            spawnParticles(tx, ty - 8, 8, '#ffe14d', 90, 3.2, -30);
+          },
+          onTrapErupt: (trap, hitPlayer, enemiesHitCount) => {
+            soundEngine.playHit('heavy');
+            sim.cameraShakeTrauma = Math.min(1, sim.cameraShakeTrauma + 0.32);
+            const trapColor = trap.kind === 'agni_vent' ? '#ff6a18' : '#38e8ff';
+            spawnShockwave(trap.x, trap.y, 112, trapColor, 0.36);
+            spawnParticles(trap.x, trap.y - 24, 26, trapColor, 210, 4.6, 120);
+            if (enemiesHitCount > 0) {
+              spawnFloatingText(
+                trap.x,
+                trap.y - 72,
+                trap.kind === 'agni_vent'
+                  ? 'AGNI VENT TRAP! -145'
+                  : 'CHAKRAM BLADE TRAP! -145',
+                '#ffd86b',
+                1.18
+              );
+            } else if (hitPlayer) {
+              spawnFloatingText(sim.player.x, sim.player.y - 68, 'TRAP ERUPTION -24', '#ff5252', 1.05);
+            }
+          },
+        }
+      );
+
+      // 2. Dynamic Flickering Brazier Fire Plumes, Living Rivers, Lava Fissures & Summoning Rifts
       ctx.save();
       ctx.globalCompositeOperation = 'screen';
-      chamberSpec.braziers.forEach((b) => {
+
+      // Hades-Style Living Background Lighting: Pulsing Lava/River Glow Pools & Rising Ember Streams
+      if (chamberSpec.envEffect === 'blood_river' || chamberSpec.envEffect === 'lava_fissures') {
+        const isLava = chamberSpec.envEffect === 'lava_fissures';
+        const poolSpots = [
+          [worldW * 0.18, worldH * 0.30, 260],
+          [worldW * 0.82, worldH * 0.32, 260],
+          [worldW * 0.22, worldH * 0.76, 280],
+          [worldW * 0.78, worldH * 0.74, 280],
+          [worldW * 0.50, worldH * 0.20, 240],
+          [worldW * 0.50, worldH * 0.82, 240],
+        ];
+        for (let pIdx = 0; pIdx < poolSpots.length; pIdx++) {
+          const [px, py, baseR] = poolSpots[pIdx];
+          const pulse = 0.84 + Math.sin(now * 0.0035 + pIdx * 1.4) * 0.16;
+          const rad = baseR * pulse;
+          const lGrad = ctx.createRadialGradient(px, py, 8, px, py, rad);
+          if (isLava) {
+            lGrad.addColorStop(0, 'rgba(255, 165, 42, 0.28)');
+            lGrad.addColorStop(0.45, 'rgba(255, 68, 18, 0.14)');
+            lGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          } else {
+            lGrad.addColorStop(0, 'rgba(255, 42, 68, 0.26)');
+            lGrad.addColorStop(0.48, 'rgba(180, 16, 38, 0.12)');
+            lGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          }
+          ctx.fillStyle = lGrad;
+          ctx.beginPath();
+          ctx.arc(px, py, rad, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        // Rising glowing river/magma sparks drifting upward across the chamber
+        for (let sIdx = 0; sIdx < 18; sIdx++) {
+          const seed = sIdx * 97.3;
+          const cycle = ((now * 0.045 + seed) % 140) / 140;
+          const sx = ((seed * 13.7) % (worldW * 0.84)) + worldW * 0.08 + Math.sin(now * 0.003 + sIdx) * 18;
+          const sy = worldH * (0.18 + ((seed * 7.1) % 0.68)) - cycle * 65;
+          const sparkAlpha = Math.sin(cycle * Math.PI) * 0.75;
+          ctx.fillStyle = sIdx % 3 === 0 ? '#ffe14d' : isLava ? '#ff6a18' : '#ff2a4b';
+          ctx.globalAlpha = sparkAlpha;
+          ctx.beginPath();
+          ctx.arc(sx, sy, 2.2 + (sIdx % 3) * 0.9, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      } else if (chamberSpec.envEffect === 'sacred_mist' || chamberSpec.envEffect === 'eclipse_wind') {
+        const isMist = chamberSpec.envEffect === 'sacred_mist';
+        for (let mIdx = 0; mIdx < 5; mIdx++) {
+          const mx = worldW * (0.18 + mIdx * 0.16) + Math.sin(now * 0.0012 + mIdx) * 75;
+          const my = worldH * (0.28 + (mIdx % 2) * 0.38);
+          const mGrad = ctx.createRadialGradient(mx, my, 12, mx, my, 250);
+          mGrad.addColorStop(0, isMist ? 'rgba(56, 232, 255, 0.16)' : 'rgba(255, 148, 48, 0.14)');
+          mGrad.addColorStop(0.55, isMist ? 'rgba(255, 216, 107, 0.07)' : 'rgba(255, 62, 36, 0.06)');
+          mGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          ctx.fillStyle = mGrad;
+          ctx.beginPath();
+          ctx.arc(mx, my, 250, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      chamberSpec.braziers.forEach((b, bIdx) => {
         const bx = b.x * worldW;
         const by = b.y * worldH;
-        const r = b.radius * 1.38 * flicker;
+        const r = b.radius * 1.45 * flicker;
         const grad = ctx.createRadialGradient(bx, by, 4, bx, by, r);
-        grad.addColorStop(0, b.color + '80');
-        grad.addColorStop(0.45, b.color + '30');
+        grad.addColorStop(0, b.color + '90');
+        grad.addColorStop(0.45, b.color + '38');
         grad.addColorStop(1, 'rgba(0,0,0,0)');
         ctx.fillStyle = grad;
         ctx.beginPath();
         ctx.arc(bx, by, r, 0, Math.PI * 2);
         ctx.fill();
+
+        // Animated Dancing Volumetric Flame Tongues rising from every Brazier!
+        for (let f = 0; f < 3; f++) {
+          const flamePhase = now * 0.012 + bIdx * 1.7 + f * 2.1;
+          const swayX = Math.sin(flamePhase) * (8 + f * 4);
+          const flameH = 28 + Math.cos(flamePhase * 1.3) * 10;
+          ctx.fillStyle = f === 0 ? '#fff5c0' : f === 1 ? '#ff9d2e' : b.color;
+          ctx.globalAlpha = 0.65 - f * 0.15;
+          ctx.beginPath();
+          ctx.moveTo(bx - 10 + f * 2, by);
+          ctx.quadraticCurveTo(bx + swayX, by - flameH * 0.6, bx + swayX * 1.2, by - flameH);
+          ctx.quadraticCurveTo(bx - swayX * 0.5, by - flameH * 0.5, bx + 10 - f * 2, by);
+          ctx.closePath();
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
       });
+
+      // Draw Active Hades-Style Multi-Wave Summoning Sigils on the Chamber Floor (Zero Rectangular Boxes!)
+      for (const rift of sim.summoningRifts) {
+        const prog = 1 - Math.max(0, rift.timer / Math.max(0.1, rift.maxTimer));
+        const riftR = 48 * (0.45 + prog * 0.65);
+        ctx.save();
+        ctx.translate(rift.x, rift.y);
+        ctx.scale(1, 0.54);
+
+        const rGlow = ctx.createRadialGradient(0, 0, 4, 0, 0, riftR * 1.45);
+        rGlow.addColorStop(0, 'rgba(255, 225, 77, 0.55)');
+        rGlow.addColorStop(0.5, 'rgba(255, 42, 58, 0.35)');
+        rGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = rGlow;
+        ctx.beginPath();
+        ctx.arc(0, 0, riftR * 1.45, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.rotate(now * 0.004);
+        ctx.strokeStyle = '#ff2a3a';
+        ctx.shadowColor = '#ff2a3a';
+        ctx.shadowBlur = 16;
+        ctx.lineWidth = 3.2;
+        ctx.beginPath();
+        ctx.arc(0, 0, riftR, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.strokeStyle = '#ffe14d';
+        ctx.lineWidth = 2.2;
+        ctx.setLineDash([8, 6]);
+        ctx.beginPath();
+        ctx.arc(0, 0, riftR * 0.70, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        ctx.strokeStyle = '#38e8ff';
+        ctx.lineWidth = 1.8;
+        for (let k = 0; k < 6; k++) {
+          const a = (k * Math.PI) / 3;
+          ctx.beginPath();
+          ctx.moveTo(Math.cos(a) * (riftR * 0.35), Math.sin(a) * (riftR * 0.35));
+          ctx.lineTo(Math.cos(a) * (riftR * 0.95), Math.sin(a) * (riftR * 0.95));
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+      // Note: Physical 3D Isometric Exit Gate Archways & Reward Previews are rendered by renderIsometricChamberPlatform above!
 
       // Central courtyard dragon medallion / blood pool ambient reflection
       const centerGlowColor =
         sim.chamberIndex === 5
-          ? 'rgba(220, 38, 48, 0.16)'
+          ? 'rgba(220, 38, 48, 0.18)'
           : sim.chamberIndex === 2
-          ? 'rgba(235, 68, 44, 0.14)'
-          : 'rgba(235, 175, 68, 0.10)';
+          ? 'rgba(235, 68, 44, 0.16)'
+          : 'rgba(235, 175, 68, 0.12)';
       const cGrad = ctx.createRadialGradient(
         worldW * 0.5,
         worldH * 0.54,
@@ -4461,10 +5159,11 @@ export default function KaliyugaArena() {
             ctx.restore();
           }
 
-          if (e.type === 'xuemo' || e.type === 'tiger_vanguard') {
-            // REAL-TIME 60FPS 3D BOSS RENDERER FOR DUNDUBHI & VRIKODARA!
+          if (e.type === 'xuemo' || e.type === 'vrikodara') {
+            // REAL-TIME 60FPS 3D BOSS RENDERER FOR DUNDUBHI & VRIKODARA (with Phase Height Growth & 11 Animations)!
             const boss3d = boss3dRef.current;
             const bossType = e.type === 'xuemo' ? 'dundubhi' : 'vrikodara';
+            const growthMult = e.growthScale || 1.0;
             const renderedBoss3D =
               boss3d &&
               boss3d.updateAndRender({
@@ -4476,6 +5175,7 @@ export default function KaliyugaArena() {
                 aimAngle: e.aimAngle,
                 aiState: e.aiState,
                 attackKind: e.attackKind,
+                attackPattern: e.attackPattern,
                 windupProgress:
                   e.aiState === 'windup'
                     ? Math.min(1, Math.max(0, 1 - e.aiTimer / Math.max(0.01, e.windupDuration)))
@@ -4484,6 +5184,7 @@ export default function KaliyugaArena() {
                 armorCracked: Boolean(e.armorCracked),
                 isPostureBroken: e.postureBrokenTimer > 0,
                 isHitFlash: isFlash,
+                isParrying: e.parryStanceTimer > 0,
               });
 
             // Dundubhi Bronze War-Drum Armor Ring indicator on the arena floor
@@ -4497,7 +5198,7 @@ export default function KaliyugaArena() {
                 ctx.setLineDash([8, 6]);
               }
               ctx.beginPath();
-              ctx.arc(0, 0, 56, 0, Math.PI * 2);
+              ctx.arc(0, 0, 56 * growthMult, 0, Math.PI * 2);
               ctx.stroke();
               ctx.restore();
             }
@@ -4510,63 +5211,30 @@ export default function KaliyugaArena() {
                 1,
                 e.x,
                 e.y,
-                148,
+                148 * growthMult,
                 0,
                 e.facing,
                 e.scaleX,
                 e.scaleY,
                 false,
                 bob,
-                46
+                46 * growthMult
               );
 
-              const drawSize = e.type === 'tiger_vanguard' ? 215 : 198;
+              const baseSize = e.type === 'vrikodara' ? 244 : 224;
+              const drawSize = Math.round(baseSize * growthMult);
               const anchorX = -drawSize * 0.5;
-              const anchorY = -drawSize * 0.76;
+              const anchorY = -drawSize * 0.78;
 
               ctx.save();
-              ctx.translate(e.x, e.y - bob);
-              if (Math.abs(enemySkewX) > 0.001) {
-                ctx.transform(1, 0, enemySkewX, 1, 0, 0);
-              }
-              ctx.scale(e.scaleX, e.scaleY);
-
-              // 1. Crisp Mignola Sumi-Ink Silhouette Outline
-              ctx.save();
-              ctx.shadowColor = '#070508';
-              ctx.shadowBlur = 4;
-              const inkOffsets = [
-                [-2.2, 0],
-                [2.2, 0],
-                [0, -2.2],
-                [0, 2.2],
-              ];
-              for (const [ox, oy] of inkOffsets) {
-                ctx.drawImage(boss3d.canvas, anchorX + ox, anchorY + oy, drawSize, drawSize);
-              }
-              ctx.restore();
-
-              // 2. Main 3D Boss Mesh Pass with Phase / Telegraph Rim Glow
-              ctx.save();
-              ctx.shadowColor =
-                e.aiState === 'windup'
-                  ? 'rgba(255, 72, 42, 0.85)'
-                  : e.type === 'xuemo' && !e.armorCracked
-                  ? 'rgba(212, 165, 72, 0.65)'
-                  : 'rgba(255, 115, 35, 0.65)';
-              ctx.shadowBlur = e.aiState === 'windup' || e.phase >= 2 ? 16 : 8;
+              // Render 3D WebGL Boss Canvas at true ground coordinates without 2D bob, shear, or squash-and-stretch distortion
+              ctx.translate(e.x, e.y);
               ctx.drawImage(boss3d.canvas, anchorX, anchorY, drawSize, drawSize);
-              ctx.restore();
-
-              // 3. Hit-Flash / Phase Overdrive Additive Pass
-              if (isFlash || e.aiState === 'attack') {
-                ctx.save();
-                ctx.globalCompositeOperation = 'screen';
-                ctx.globalAlpha = isFlash ? 0.68 : 0.28;
+              if (isFlash) {
+                ctx.globalCompositeOperation = 'lighter';
+                ctx.globalAlpha = 0.38;
                 ctx.drawImage(boss3d.canvas, anchorX, anchorY, drawSize, drawSize);
-                ctx.restore();
               }
-
               ctx.restore();
             } else if (e.type === 'xuemo') {
               const dundubhiUrl =
@@ -4583,14 +5251,14 @@ export default function KaliyugaArena() {
                 1,
                 e.x,
                 e.y,
-                148,
-                148,
+                Math.round(154 * growthMult),
+                Math.round(154 * growthMult),
                 e.facing,
                 e.scaleX,
                 e.scaleY,
                 isFlash,
                 bob,
-                44,
+                44 * growthMult,
                 bossRim,
                 enemySkewX,
                 primaryLightX
@@ -4622,54 +5290,71 @@ export default function KaliyugaArena() {
                 1,
                 e.x,
                 e.y,
-                156,
-                156,
+                Math.round(164 * growthMult),
+                Math.round(164 * growthMult),
                 e.facing,
                 e.scaleX,
                 e.scaleY,
                 isFlash,
                 bob,
-                46,
+                46 * growthMult,
                 bossRim,
                 enemySkewX,
                 primaryLightX
               );
             }
           } else {
-            // Chapter 1 Regular Enemies (Kuru Ash-Infantry, Dharma-Rot Bowman, Charnel Pyre-Hound, Bronze Bell-Vanguard)
-            let enemyPoseUrl: string = GAME_ASSETS.enemies.ashSoldierIdle;
-            if (e.type === 'stone_golem') {
-              enemyPoseUrl =
-                e.aiState === 'windup' || e.aiState === 'attack'
-                  ? GAME_ASSETS.enemies.ashSoldierAttack
-                  : GAME_ASSETS.enemies.ashSoldierIdle;
-            } else if (e.type === 'fire_monk') {
-              enemyPoseUrl =
-                e.aiState === 'windup' || e.aiState === 'attack'
-                  ? GAME_ASSETS.enemies.ashArcherDraw
-                  : GAME_ASSETS.enemies.ashArcherIdle;
-            } else if (e.type === 'wolf_guai') {
-              enemyPoseUrl = GAME_ASSETS.enemies.pyreHoundLeap;
-            } else if (e.type === 'furnace_titan') {
-              enemyPoseUrl =
-                e.aiState === 'windup' || e.aiState === 'attack'
-                  ? GAME_ASSETS.dundubhi.charge
-                  : GAME_ASSETS.dundubhi.idle;
-            }
-            const spriteAsset = getProcessedSpriteSync(enemyPoseUrl);
+            // Animated 4-Frame Multi-Sheet Regular Enemies (Vrika Stalker, Agni Spearman, Magma Golem, Furnace Colossus)!
+            const sheetUrl =
+              e.type === 'wolf_guai'
+                ? GAME_ASSETS.enemySheets.vrikaStalkerSheet4x1
+                : e.type === 'fire_monk'
+                ? GAME_ASSETS.enemySheets.agniSpearmanSheet4x1
+                : e.type === 'furnace_titan'
+                ? GAME_ASSETS.enemySheets.furnaceColossusSheet4x1
+                : GAME_ASSETS.enemySheets.magmaGolemSheet4x1;
+
+            const sheetAsset = getProcessedSpriteSync(sheetUrl);
+            const animFrame =
+              e.aiState === 'attack'
+                ? 3
+                : e.aiState === 'windup'
+                ? 2
+                : Math.floor(e.animTime * 6.5) % 4;
+
             const targetH =
               e.type === 'furnace_titan'
-                ? 110
+                ? 118
                 : e.type === 'stone_golem'
-                ? 92
+                ? 96
                 : e.type === 'fire_monk'
-                ? 86
-                : 74;
+                ? 90
+                : 82;
+
+            // Elite Trait Floor Aura Ring (Vajra Shield / Agni Aura / Rakshasa Frenzy)
+            if (e.trait && e.aiState !== 'ko') {
+              ctx.save();
+              ctx.translate(e.x, e.y);
+              ctx.scale(1, 0.5);
+              ctx.strokeStyle =
+                e.trait === 'vajra_shield'
+                  ? '#5ce6ff'
+                  : e.trait === 'agni_aura'
+                  ? '#ff6a2b'
+                  : '#d946ef';
+              ctx.lineWidth = 2.4;
+              ctx.setLineDash([6, 4]);
+              ctx.beginPath();
+              ctx.arc(0, 0, 36, 0, Math.PI * 2);
+              ctx.stroke();
+              ctx.restore();
+            }
+
             drawSpriteFrame(
               ctx,
-              spriteAsset,
-              0,
-              1,
+              sheetAsset,
+              animFrame,
+              4,
               e.x,
               e.y,
               targetH,
@@ -4680,25 +5365,82 @@ export default function KaliyugaArena() {
               isFlash,
               bob,
               targetH * 0.28,
-              'none',
+              e.trait === 'vajra_shield' ? 'jade' : e.trait === 'agni_aura' ? 'gold' : 'none',
               enemySkewX,
               primaryLightX
             );
           }
 
-          // Enemy Attack Slash Crescent Arc when striking
+          // Active Frontal Parry / Guard Shield Arc when enemy is ready to deflect frontal spam!
+          if (e.parryStanceTimer > 0 && e.aiState !== 'ko') {
+            ctx.save();
+            ctx.globalCompositeOperation = 'screen';
+            ctx.translate(e.x + e.facing * 24, e.y - (e.isBoss ? 58 : 38));
+            ctx.strokeStyle = '#ffd86b';
+            ctx.shadowColor = '#ffaa00';
+            ctx.shadowBlur = 14;
+            ctx.lineWidth = 3.6;
+            ctx.beginPath();
+            const gAng = e.facing >= 0 ? 0 : Math.PI;
+            ctx.arc(0, 0, e.isBoss ? 44 : 28, gAng - 0.95, gAng + 0.95);
+            ctx.stroke();
+            ctx.restore();
+          }
+
+          // Hades-Style Lodged Agneyastra Blood-Shard Crystals orbiting struck enemy!
+          if ((e.lodgedCasts || 0) > 0 && e.aiState !== 'ko') {
+            const count = e.lodgedCasts || 0;
+            ctx.save();
+            ctx.globalCompositeOperation = 'screen';
+            for (let cIdx = 0; cIdx < count; cIdx++) {
+              const orbitAng = now * 0.0055 + (cIdx * Math.PI * 2) / count;
+              const ox = e.x + Math.cos(orbitAng) * (e.isBoss ? 42 : 28);
+              const oy = e.y - (e.isBoss ? 56 : 38) + Math.sin(orbitAng) * 14;
+              ctx.fillStyle = '#ff2a4b';
+              ctx.strokeStyle = '#ffe14d';
+              ctx.lineWidth = 1.6;
+              ctx.beginPath();
+              ctx.moveTo(ox, oy - 9);
+              ctx.lineTo(ox + 6, oy);
+              ctx.lineTo(ox, oy + 9);
+              ctx.lineTo(ox - 6, oy);
+              ctx.closePath();
+              ctx.fill();
+              ctx.stroke();
+            }
+            ctx.restore();
+          }
+
+          // Enemy Multi-Color Hades Attack Slash Crescent Arc (Crimson Red + Lightning Gold + Electric Cyan Core)
           if (e.slashArcAlpha > 0.05 && e.attackKind === 'cone') {
             ctx.save();
             ctx.globalCompositeOperation = 'screen';
-            ctx.globalAlpha = e.slashArcAlpha * 0.85;
+            ctx.globalAlpha = e.slashArcAlpha * 0.92;
             ctx.translate(e.x, e.y - 36);
             ctx.scale(1, 0.65);
-            ctx.strokeStyle = e.isBoss ? '#ff4a3d' : '#ff9838';
-            ctx.lineWidth = e.isBoss ? 12 : 8;
-            ctx.shadowColor = '#ff2a1a';
-            ctx.shadowBlur = 14;
+            const arcR = e.telegraphRadius * 0.75;
+
+            // Outer Crimson-Red Wave
+            ctx.strokeStyle = '#ff2a3a';
+            ctx.lineWidth = e.isBoss ? 16 : 11;
+            ctx.shadowColor = '#ff2a3a';
+            ctx.shadowBlur = 16;
             ctx.beginPath();
-            ctx.arc(0, 0, e.telegraphRadius * 0.72, e.aimAngle - 1.05, e.aimAngle + 1.05);
+            ctx.arc(0, 0, arcR, e.aimAngle - 1.08, e.aimAngle + 1.08);
+            ctx.stroke();
+
+            // Mid Lightning-Yellow Core
+            ctx.strokeStyle = '#ffe14d';
+            ctx.lineWidth = e.isBoss ? 8 : 5.5;
+            ctx.beginPath();
+            ctx.arc(0, 0, arcR * 0.96, e.aimAngle - 0.95, e.aimAngle + 0.95);
+            ctx.stroke();
+
+            // Inner Electric-Blue / White Edge
+            ctx.strokeStyle = e.trait === 'vajra_shield' ? '#38e8ff' : '#ffffff';
+            ctx.lineWidth = 2.6;
+            ctx.beginPath();
+            ctx.arc(0, 0, arcR * 0.92, e.aimAngle - 0.82, e.aimAngle + 0.82);
             ctx.stroke();
             ctx.restore();
           }
@@ -4814,35 +5556,59 @@ export default function KaliyugaArena() {
           // 2.5D Velocity Lean / Shear so Wukong physically leans into sprints, lunges & attacks
           const velocitySkewX = Math.max(-0.22, Math.min(0.22, (p.vx / 285) * 0.16));
 
-          // 1. Cloud Step Jade-Gold Lightning Warp Streak connecting dashStart -> current position
+          // 1. Hades Zagreus Tri-Color (Crimson Red + Electric Blue + Lightning Yellow) Dash Warp Streak
           if (p.dashStreakAlpha > 0.02) {
             ctx.save();
             ctx.globalCompositeOperation = 'screen';
-            ctx.globalAlpha = p.dashStreakAlpha * 0.85;
-            const sGrad = ctx.createLinearGradient(
-              p.dashStartX,
-              p.dashStartY - 36,
-              p.x,
-              p.y - 36
-            );
-            sGrad.addColorStop(0, 'rgba(92, 230, 255, 0)');
-            sGrad.addColorStop(0.45, 'rgba(92, 230, 255, 0.72)');
-            sGrad.addColorStop(1, 'rgba(255, 224, 120, 0.95)');
-            ctx.strokeStyle = sGrad;
-            ctx.lineWidth = 14 * p.dashStreakAlpha;
+            ctx.globalAlpha = p.dashStreakAlpha * 0.95;
+            const sx = p.dashStartX;
+            const sy = p.dashStartY - 34;
+            const ex = p.x;
+            const ey = p.y - 34;
+
+            // Layer 1: Wide Crimson-Red Blood-Flame Wake
+            const redGrad = ctx.createLinearGradient(sx, sy, ex, ey);
+            redGrad.addColorStop(0, 'rgba(255, 42, 58, 0)');
+            redGrad.addColorStop(0.35, 'rgba(255, 42, 58, 0.75)');
+            redGrad.addColorStop(1, 'rgba(255, 120, 36, 0.95)');
+            ctx.strokeStyle = redGrad;
+            ctx.lineWidth = 22 * p.dashStreakAlpha;
             ctx.lineCap = 'round';
-            ctx.shadowColor = '#5ce6ff';
-            ctx.shadowBlur = 16;
+            ctx.shadowColor = '#ff2a3a';
+            ctx.shadowBlur = 18;
             ctx.beginPath();
-            ctx.moveTo(p.dashStartX, p.dashStartY - 36);
-            ctx.lineTo(p.x, p.y - 36);
+            ctx.moveTo(sx, sy);
+            ctx.lineTo(ex, ey);
             ctx.stroke();
 
-            ctx.strokeStyle = '#ffffff';
-            ctx.lineWidth = 3.2 * p.dashStreakAlpha;
+            // Layer 2: Electric Cyan-Blue Core Ribbon
+            const blueGrad = ctx.createLinearGradient(sx, sy, ex, ey);
+            blueGrad.addColorStop(0, 'rgba(56, 232, 255, 0)');
+            blueGrad.addColorStop(0.45, 'rgba(56, 232, 255, 0.90)');
+            blueGrad.addColorStop(1, 'rgba(255, 225, 77, 1)');
+            ctx.strokeStyle = blueGrad;
+            ctx.lineWidth = 10 * p.dashStreakAlpha;
             ctx.beginPath();
-            ctx.moveTo(p.dashStartX, p.dashStartY - 36);
-            ctx.lineTo(p.x, p.y - 36);
+            ctx.moveTo(sx, sy);
+            ctx.lineTo(ex, ey);
+            ctx.stroke();
+
+            // Layer 3: Crackling Lightning-Yellow Zig-Zag Bolt along the Dash Path
+            ctx.strokeStyle = '#ffe14d';
+            ctx.shadowColor = '#ffe14d';
+            ctx.shadowBlur = 12;
+            ctx.lineWidth = 3.0 * p.dashStreakAlpha;
+            ctx.beginPath();
+            ctx.moveTo(sx, sy);
+            const segs = 5;
+            const perpX = -(ey - sy) * 0.12;
+            const perpY = (ex - sx) * 0.12;
+            for (let k = 1; k < segs; k++) {
+              const t = k / segs;
+              const jx = (k % 2 === 0 ? 1 : -1) * Math.sin(now * 0.05 + k) * 0.65;
+              ctx.lineTo(sx + (ex - sx) * t + perpX * jx, sy + (ey - sy) * t + perpY * jx);
+            }
+            ctx.lineTo(ex, ey);
             ctx.stroke();
             ctx.restore();
           }
@@ -5017,40 +5783,13 @@ export default function KaliyugaArena() {
             ctx.translate(p.x, p.y - p.elevationY);
             ctx.scale(p.scaleX, p.scaleY);
 
-            // 1. Mignola / Hades Crisp Sumi-Ink Silhouette Outline + Stance Rim Glow
-            ctx.save();
-            ctx.shadowColor = '#070508';
-            ctx.shadowBlur = 3;
-            const inkOffsets = [
-              [-1.8, 0],
-              [1.8, 0],
-              [0, -1.8],
-              [0, 1.8],
-            ];
-            for (const [ox, oy] of inkOffsets) {
-              ctx.drawImage(rudra3d.canvas, anchorX + ox, anchorY + oy, drawSize, drawSize);
-            }
-            ctx.restore();
-
-            // 2. Main High-Contrast 3D Animated Rudra + 3D Parashu Great-Axe Pass
-            ctx.save();
-            ctx.shadowColor =
-              p.action === 'dodge'
-                ? 'rgba(82, 255, 216, 0.75)'
-                : p.stance === 'pillar'
-                ? 'rgba(62, 224, 168, 0.55)'
-                : p.stance === 'thrust'
-                ? 'rgba(255, 59, 92, 0.55)'
-                : 'rgba(255, 168, 56, 0.55)';
-            ctx.shadowBlur = p.action !== 'idle' ? 14 : 7;
+            // Single-pass direct WebGL canvas composite for locked 60FPS performance
             ctx.drawImage(rudra3d.canvas, anchorX, anchorY, drawSize, drawSize);
-            ctx.restore();
 
-            // 3. Additive Highlight Pass on Hit-Flash, Perfect Dodge, or Heavy Unleash
-            if (p.hitFlashTimer > 0 || p.action === 'dodge' || p.action === 'heavy_unleash') {
+            if (p.hitFlashTimer > 0 || p.action === 'dodge') {
               ctx.save();
               ctx.globalCompositeOperation = 'screen';
-              ctx.globalAlpha = p.hitFlashTimer > 0 ? 0.65 : 0.32;
+              ctx.globalAlpha = p.hitFlashTimer > 0 ? 0.45 : 0.22;
               ctx.drawImage(rudra3d.canvas, anchorX, anchorY, drawSize, drawSize);
               ctx.restore();
             }
@@ -5247,23 +5986,11 @@ export default function KaliyugaArena() {
               p.slashAngle + startOffset + totalSweepSpan * Math.max(0, tailProg) * swingDir;
             const headAngle = p.slashAngle + startOffset + totalSweepSpan * headProg * swingDir;
 
-            const outerEdgeColor =
-              p.transformTimer > 0
-                ? 'rgba(255, 38, 12, 0.92)'
-                : p.stance === 'pillar'
-                ? 'rgba(14, 165, 233, 0.88)'
-                : p.stance === 'thrust'
-                ? 'rgba(192, 38, 211, 0.88)'
-                : 'rgba(195, 18, 28, 0.92)';
-
-            const midEnergyColor =
-              p.transformTimer > 0
-                ? 'rgba(255, 122, 28, 0.95)'
-                : p.stance === 'pillar'
-                ? 'rgba(92, 230, 255, 0.94)'
-                : p.stance === 'thrust'
-                ? 'rgba(244, 114, 182, 0.94)'
-                : 'rgba(255, 168, 52, 0.95)';
+            // Dynamic Patron Boon & Stance Multi-Color Palette (Agni Vermilion, Indra Vajra Cyan, Ashvin Jade, Varuna Tidal Blue, or Zagreus Crimson)
+            const slashPalette = getActiveSlashPalette(sim.activeBoons, p.stance);
+            const outerEdgeColor = slashPalette.outerEdge;
+            const midEnergyColor = slashPalette.midCore;
+            const cyanElectricColor = slashPalette.innerRibbon;
 
             ctx.save();
             ctx.translate(p.x, p.y - 28 - p.elevationY);
@@ -5301,68 +6028,79 @@ export default function KaliyugaArena() {
             };
 
             // Layer 1: Sumi-Ink Obsidian Outer Back-Plate (Hades graphic novel contrast)
-            ctx.globalAlpha = p.slashArcAlpha * 0.80;
-            ctx.fillStyle = 'rgba(8, 4, 6, 0.90)';
-            traceTaperedCrescent(baseRadius * 1.05, isFinisher ? 36 : 26, tailAngle, headAngle);
+            ctx.globalAlpha = p.slashArcAlpha * 0.84;
+            ctx.fillStyle = 'rgba(8, 4, 6, 0.92)';
+            traceTaperedCrescent(baseRadius * 1.06, isFinisher ? 38 : 28, tailAngle, headAngle);
             ctx.fill();
 
-            // Layer 2: Bloodforged Crimson / Stance Outer Cleave Smear
-            ctx.globalAlpha = p.slashArcAlpha * 0.95;
+            // Layer 2: Patron / Zagreus Outer Cleave Smear
+            ctx.globalAlpha = p.slashArcAlpha * 0.96;
             ctx.fillStyle = outerEdgeColor;
-            traceTaperedCrescent(baseRadius, isFinisher ? 29 : 21, tailAngle, headAngle);
+            ctx.shadowColor = slashPalette.boltPrimary;
+            ctx.shadowBlur = 16;
+            traceTaperedCrescent(baseRadius * 1.01, isFinisher ? 31 : 22, tailAngle, headAngle);
             ctx.fill();
 
-            // Layer 3: Burnished Chola-Gold / Prana Mid-Blade Core (screen/lighter glow)
+            // Layer 3: Lightning Yellow-Gold Mid-Blade Energy Core + Electric Inner Ribbon
             ctx.save();
             ctx.globalCompositeOperation = 'lighter';
-            ctx.globalAlpha = p.slashArcAlpha * 0.92;
+            ctx.globalAlpha = p.slashArcAlpha * 0.95;
             ctx.fillStyle = midEnergyColor;
-            const midTail = tailAngle + (headAngle - tailAngle) * 0.16;
-            traceTaperedCrescent(baseRadius * 0.97, isFinisher ? 18 : 12, midTail, headAngle);
+            const midTail = tailAngle + (headAngle - tailAngle) * 0.14;
+            traceTaperedCrescent(baseRadius * 0.97, isFinisher ? 19 : 13, midTail, headAngle);
             ctx.fill();
 
-            // Layer 4: Razor-Hot Ivory Leading Edge & Kinetic Speed-Spikes
-            ctx.fillStyle = '#fffdf7';
-            const leadTail = tailAngle + (headAngle - tailAngle) * 0.36;
-            traceTaperedCrescent(baseRadius * 0.94, isFinisher ? 8 : 5.5, leadTail, headAngle);
+            // Layer 3.5: Patron Inner Ribbon
+            ctx.fillStyle = cyanElectricColor;
+            const blueTail = tailAngle + (headAngle - tailAngle) * 0.24;
+            traceTaperedCrescent(baseRadius * 0.90, isFinisher ? 12 : 8, blueTail, headAngle);
             ctx.fill();
 
-            // Tangential Speed-Line Serrations along the outer arc
-            ctx.strokeStyle = 'rgba(255, 248, 225, 0.85)';
-            ctx.lineWidth = 1.5;
-            for (let s = 0; s < 5; s++) {
-              const frac = 0.35 + (s / 4) * 0.58;
-              const sa = tailAngle + (headAngle - tailAngle) * frac;
-              const sr = baseRadius * (0.90 + (s % 2) * 0.08);
-              const tangent = sa + (Math.PI * 0.5) * swingDir;
-              const sx = Math.cos(sa) * sr;
-              const sy = Math.sin(sa) * sr;
+            // Layer 4: Razor-Hot Pure White Leading Edge
+            ctx.fillStyle = '#ffffff';
+            const leadTail = tailAngle + (headAngle - tailAngle) * 0.38;
+            traceTaperedCrescent(baseRadius * 0.95, isFinisher ? 8 : 5.5, leadTail, headAngle);
+            ctx.fill();
+
+            // Layer 5: Crackling Patron Lightning Bolts dancing along the swing arc!
+            for (let b = 0; b < 2; b++) {
+              ctx.strokeStyle = b === 0 ? slashPalette.boltPrimary : slashPalette.boltSecondary;
+              ctx.shadowColor = b === 0 ? slashPalette.boltPrimary : slashPalette.boltSecondary;
+              ctx.shadowBlur = 12;
+              ctx.lineWidth = b === 0 ? 2.6 : 2.0;
               ctx.beginPath();
-              ctx.moveTo(sx, sy);
-              ctx.lineTo(
-                sx - Math.cos(tangent) * (14 + s * 3.5),
-                sy - Math.sin(tangent) * (14 + s * 3.5)
-              );
+              const boltSteps = 8;
+              for (let s = 0; s <= boltSteps; s++) {
+                const frac = 0.18 + (s / boltSteps) * 0.80;
+                const ba = tailAngle + (headAngle - tailAngle) * frac;
+                const jitter = ((s + b) % 2 === 0 ? 1 : -1) * (4 + (s % 3) * 2.5);
+                const br = baseRadius * (b === 0 ? 0.96 : 0.86) + jitter;
+                const bx = Math.cos(ba) * br;
+                const by = Math.sin(ba) * br;
+                if (s === 0) ctx.moveTo(bx, by);
+                else ctx.lineTo(bx, by);
+              }
               ctx.stroke();
             }
 
-            // Leading Axe-Head Impact Flash Star at the tip of the cleave
-            const tipX = Math.cos(headAngle) * (baseRadius * 0.95);
-            const tipY = Math.sin(headAngle) * (baseRadius * 0.95);
+            // Leading Axe-Head Tri-Color Impact Starburst at the tip of the cleave
+            const tipX = Math.cos(headAngle) * (baseRadius * 0.96);
+            const tipY = Math.sin(headAngle) * (baseRadius * 0.96);
             const tipGrad = ctx.createRadialGradient(
               tipX,
               tipY,
               1,
               tipX,
               tipY,
-              isFinisher ? 24 : 15
+              isFinisher ? 28 : 18
             );
-            tipGrad.addColorStop(0, 'rgba(255, 255, 245, 0.95)');
-            tipGrad.addColorStop(0.45, midEnergyColor);
-            tipGrad.addColorStop(1, 'rgba(255, 80, 20, 0)');
+            tipGrad.addColorStop(0, 'rgba(255, 255, 255, 1)');
+            tipGrad.addColorStop(0.35, 'rgba(255, 225, 77, 0.95)');
+            tipGrad.addColorStop(0.7, 'rgba(56, 232, 255, 0.75)');
+            tipGrad.addColorStop(1, 'rgba(255, 42, 58, 0)');
             ctx.fillStyle = tipGrad;
             ctx.beginPath();
-            ctx.arc(tipX, tipY, isFinisher ? 24 : 15, 0, Math.PI * 2);
+            ctx.arc(tipX, tipY, isFinisher ? 28 : 18, 0, Math.PI * 2);
             ctx.fill();
 
             ctx.restore();
@@ -5418,27 +6156,56 @@ export default function KaliyugaArena() {
         }
       }
 
-      // 7. Draw Projectiles with Floor Point-Light & Additive Core
+      // 7. Draw Directional Hades-Style Multi-Color Astra Spear & Blood-Crescent Wave Projectiles
       sim.projectiles.forEach((pr) => {
         if (!pr.active) return;
+        const pAngle = Math.atan2(pr.vy, pr.vx);
         ctx.save();
         ctx.globalCompositeOperation = 'screen';
-        // Floor glow under flying fireball/orb
-        ctx.fillStyle = pr.color + '44';
+        // Floor glow under flying spear/crescent
+        const floorGlow = ctx.createRadialGradient(pr.x, pr.y + 18, 2, pr.x, pr.y + 18, pr.radius * 2.8);
+        floorGlow.addColorStop(0, pr.deflected ? 'rgba(56, 232, 255, 0.55)' : 'rgba(255, 42, 58, 0.55)');
+        floorGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = floorGlow;
         ctx.beginPath();
-        ctx.ellipse(pr.x, pr.y + 18, pr.radius * 2.1, pr.radius * 1.0, 0, 0, Math.PI * 2);
+        ctx.ellipse(pr.x, pr.y + 18, pr.radius * 2.8, pr.radius * 1.3, 0, 0, Math.PI * 2);
         ctx.fill();
 
-        ctx.fillStyle = pr.color;
-        ctx.shadowColor = pr.color;
+        ctx.translate(pr.x, pr.y);
+        ctx.rotate(pAngle);
+
+        // Multi-color trailing comet wake (Crimson Red -> Lightning Gold -> White-Hot Tip)
+        const tailGrad = ctx.createLinearGradient(-pr.radius * 4.6, 0, pr.radius * 2.0, 0);
+        tailGrad.addColorStop(0, 'rgba(255, 42, 58, 0)');
+        tailGrad.addColorStop(0.45, pr.deflected ? '#38e8ff' : '#ff2a3a');
+        tailGrad.addColorStop(0.8, '#ffe14d');
+        tailGrad.addColorStop(1, '#ffffff');
+        ctx.fillStyle = tailGrad;
+        ctx.shadowColor = pr.deflected ? '#38e8ff' : '#ff2a3a';
         ctx.shadowBlur = 18;
+
+        // Blazing Astra Spear / Crescent Bolt silhouette
         ctx.beginPath();
-        ctx.arc(pr.x, pr.y, pr.radius * 1.15, 0, Math.PI * 2);
+        ctx.moveTo(pr.radius * 2.3, 0);
+        ctx.lineTo(-pr.radius * 0.7, -pr.radius * 1.05);
+        ctx.lineTo(-pr.radius * 4.2, 0);
+        ctx.lineTo(-pr.radius * 0.7, pr.radius * 1.05);
+        ctx.closePath();
         ctx.fill();
-        ctx.fillStyle = '#fffbe8';
+
+        // Outer Crimson/Cyan Crescent Energy Wing
+        ctx.strokeStyle = pr.deflected ? '#38e8ff' : '#ff2a3a';
+        ctx.lineWidth = 3.6;
         ctx.beginPath();
-        ctx.arc(pr.x, pr.y, pr.radius * 0.52, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.arc(0, 0, pr.radius * 1.55, -Math.PI * 0.48, Math.PI * 0.48);
+        ctx.stroke();
+
+        // Inner Lightning-Yellow & White Crescent Wing Arc
+        ctx.strokeStyle = '#ffe14d';
+        ctx.lineWidth = 2.0;
+        ctx.beginPath();
+        ctx.arc(pr.radius * 0.2, 0, pr.radius * 1.25, -Math.PI * 0.38, Math.PI * 0.38);
+        ctx.stroke();
         ctx.restore();
       });
 
@@ -5519,6 +6286,16 @@ export default function KaliyugaArena() {
       // ======================================================================
       ctx.save();
 
+      // 9.7. Foreground 1.24x Parallax Temple Overhangs & Hades Diamond Chamber Wipe Transition
+      renderForegroundParallaxAndWipe(
+        ctx,
+        cw,
+        ch,
+        sim.camX,
+        sim.camY,
+        sim.gateWipeTimer > 0 ? 1 - sim.gateWipeTimer / 0.44 : 0
+      );
+
       // 9.8. Atmospheric Diagonal Volumetric God-Rays & Chamber Weather Motes
       ctx.save();
       ctx.globalCompositeOperation = 'screen';
@@ -5553,12 +6330,12 @@ export default function KaliyugaArena() {
       }
       ctx.restore();
 
-      // 10. Sleek Borderless Top-Center Cinematic Chamber Inscription (ZERO RECTANGLE BOX!)
+      // 10. Sleek Borderless Top-Center Cinematic Chamber Inscription & Sanjaya Palimpsest Dialogue (ZERO RECTANGLE BOX!)
       if (sim.chamberBannerTimer > 0 && sim.state === 'playing') {
-        const bannerAlpha = Math.min(1, sim.chamberBannerTimer * 1.4);
+        const bannerAlpha = Math.min(1, sim.chamberBannerTimer * 1.2);
         ctx.save();
         ctx.globalAlpha = bannerAlpha;
-        const by = ch * 0.11;
+        const by = ch * 0.10;
 
         ctx.textAlign = 'center';
         ctx.shadowColor = 'rgba(0, 0, 0, 0.95)';
@@ -5577,20 +6354,84 @@ export default function KaliyugaArena() {
         ctx.fillText(
           chamberSpec.isBossChamber ? chamberSpec.chineseSubtitle : chamberSpec.name,
           cw * 0.5,
-          by + 28
+          by + 26
         );
 
         // Tapered golden calligraphy brush-divider (no box!)
-        const lineGrad = ctx.createLinearGradient(cw * 0.35, 0, cw * 0.65, 0);
+        const lineGrad = ctx.createLinearGradient(cw * 0.34, 0, cw * 0.66, 0);
         lineGrad.addColorStop(0, 'rgba(212, 165, 72, 0)');
-        lineGrad.addColorStop(0.5, 'rgba(242, 196, 90, 0.75)');
+        lineGrad.addColorStop(0.5, 'rgba(242, 196, 90, 0.78)');
         lineGrad.addColorStop(1, 'rgba(212, 165, 72, 0)');
         ctx.strokeStyle = lineGrad;
         ctx.lineWidth = 1.5;
         ctx.beginPath();
-        ctx.moveTo(cw * 0.35, by + 38);
-        ctx.lineTo(cw * 0.65, by + 38);
+        ctx.moveTo(cw * 0.34, by + 35);
+        ctx.lineTo(cw * 0.66, by + 35);
         ctx.stroke();
+
+        // Narrative Voice / Sanjaya Strikethrough Palimpsest Subtitle
+        if (chamberSpec.dialogueSpeaker) {
+          ctx.font = "bold 10px 'Plus Jakarta Sans', sans-serif";
+          ctx.fillStyle = '#ff8a66';
+          ctx.fillText(chamberSpec.dialogueSpeaker, cw * 0.5, by + 52);
+
+          if (chamberSpec.sanjayaStrikethrough && chamberSpec.sanjayaCorrection) {
+            ctx.font = "italic 12px 'Plus Jakarta Sans', sans-serif";
+            ctx.fillStyle = '#9c8f80';
+            const strikeText = chamberSpec.sanjayaStrikethrough;
+            ctx.fillText(strikeText, cw * 0.5, by + 69);
+            const tw = ctx.measureText(strikeText).width;
+            ctx.strokeStyle = '#ff3848';
+            ctx.lineWidth = 1.8;
+            ctx.beginPath();
+            ctx.moveTo(cw * 0.5 - tw * 0.52, by + 65);
+            ctx.lineTo(cw * 0.5 + tw * 0.52, by + 65);
+            ctx.stroke();
+
+            ctx.font = "600 12.5px 'Plus Jakarta Sans', sans-serif";
+            ctx.fillStyle = '#ffd86b';
+            ctx.fillText(chamberSpec.sanjayaCorrection, cw * 0.5, by + 87);
+          } else if (chamberSpec.dialogueLine) {
+            ctx.font = "italic 12.5px 'Plus Jakarta Sans', sans-serif";
+            ctx.fillStyle = '#f2e8d5';
+            ctx.fillText(chamberSpec.dialogueLine, cw * 0.5, by + 70);
+          }
+        }
+
+        ctx.restore();
+      } else if (sim.bossPhaseBanner && sim.bossPhaseBanner.timer > 0 && sim.state === 'playing') {
+        const bp = sim.bossPhaseBanner;
+        const bpAlpha = Math.min(1, bp.timer * 1.25);
+        ctx.save();
+        ctx.globalAlpha = bpAlpha;
+        const by = ch * 0.11;
+
+        ctx.textAlign = 'center';
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.96)';
+        ctx.shadowBlur = 16;
+
+        ctx.fillStyle = '#ff6a33';
+        ctx.font = "bold 11px 'Cinzel', Georgia, serif";
+        ctx.fillText(bp.speaker, cw * 0.5, by);
+
+        ctx.fillStyle = '#ffd86b';
+        ctx.font = "bold 20px 'Cinzel', Georgia, serif";
+        ctx.fillText(bp.title, cw * 0.5, by + 23);
+
+        ctx.font = "italic 12px 'Plus Jakarta Sans', sans-serif";
+        ctx.fillStyle = '#a69888';
+        ctx.fillText(bp.strikethrough, cw * 0.5, by + 44);
+        const stw = ctx.measureText(bp.strikethrough).width;
+        ctx.strokeStyle = '#ff3848';
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        ctx.moveTo(cw * 0.5 - stw * 0.52, by + 40);
+        ctx.lineTo(cw * 0.5 + stw * 0.52, by + 40);
+        ctx.stroke();
+
+        ctx.font = "bold 13px 'Plus Jakarta Sans', sans-serif";
+        ctx.fillStyle = '#fff0d4';
+        ctx.fillText(bp.correction, cw * 0.5, by + 64);
 
         ctx.restore();
       }
@@ -5637,7 +6478,11 @@ export default function KaliyugaArena() {
         setHud({
           chamberId: chamberSpec.id,
           chamberName: chamberSpec.name,
-          foesRemaining: sim.enemies.filter((e) => e.aiState !== 'ko').length + sim.pendingSpawns.length,
+          foesRemaining:
+            sim.enemies.filter((e) => e.aiState !== 'ko').length +
+            sim.pendingSpawns.length +
+            sim.summoningRifts.length +
+            sim.waveQueue.length,
           score: sim.score,
           comboCount: sim.comboCount,
           ashenKarma: sim.ashenKarma,
@@ -5794,6 +6639,12 @@ export default function KaliyugaArena() {
       {gameState === 'title' && (
         <TitleScreen
           ashenKarma={ashenKarma}
+          preloadProgress={preloadProgress}
+          selectedWeapon={hud.weapon}
+          onSelectWeapon={(w) => {
+            triggerSwitchWeapon(w);
+            setHud((prev) => ({ ...prev, weapon: w }));
+          }}
           onStartOdyssey={() => startGameAtChamber(0)}
           onOpenShrine={() => setShrineOpen(true)}
           onOpenStory={() => setStoryOpen(true)}
@@ -5875,6 +6726,48 @@ export default function KaliyugaArena() {
                     [B] CLAIM ASTRA ({boonReadyCount})
                   </div>
                 </button>
+              )}
+
+              {/* Hades-Style Dual Reward Exit Gate Selector when Chamber is Cleared */}
+              {hud.foesRemaining === 0 && hud.chamberId < CHAMBERS.length && !boonModalOpen && (
+                <div className="pointer-events-auto flex items-center gap-1.5 bg-[#120e0a]/95 border border-[#f2c45a]/80 px-2.5 py-1 shadow-[0_0_28px_rgba(242,196,90,0.35)] shrink-0">
+                  <span className="text-[9px] font-display font-bold tracking-wider text-[#ffd86b] uppercase mr-1">
+                    CHOOSE EXIT GATE:
+                  </span>
+                  <button
+                    type="button"
+                    data-testid="exit-gate-left-btn"
+                    onClick={(e) => {
+                      e.currentTarget.blur();
+                      openBoonAltar();
+                    }}
+                    className="px-2 py-1 bg-[#261a0b] hover:bg-[#38260f] border border-[#f2c45a] text-[10px] font-bold text-[#ffd86b] cursor-pointer transition-colors"
+                  >
+                    ⬅ LEFT GATE: DEVA BOON
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="exit-gate-right-btn"
+                    onClick={(e) => {
+                      e.currentTarget.blur();
+                      const sim = simRef.current;
+                      const p = sim.player;
+                      p.maxHp += 30;
+                      p.hp = Math.min(p.maxHp, p.hp + 90);
+                      p.displayHp = p.hp;
+                      sim.ashenKarma += 95;
+                      sim.karmaRunDelta += 95;
+                      setAshenKarma(sim.ashenKarma);
+                      sim.boonReadyCount = 0;
+                      setBoonReadyCount(0);
+                      soundEngine.playSpell('gourd');
+                      loadChamber(sim.chamberIndex + 1, false);
+                    }}
+                    className="px-2 py-1 bg-[#0e241d] hover:bg-[#15362b] border border-[#3ee0a8] text-[10px] font-bold text-[#3ee0a8] cursor-pointer transition-colors"
+                  >
+                    ➡ RIGHT GATE: +30 MAX HP &amp; +95 KARMA
+                  </button>
+                </div>
               )}
 
               {ownedBoons.length > 0 && (

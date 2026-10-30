@@ -50,6 +50,7 @@ export class Rudra3DRenderer {
   public isReady = false;
   public loadError: string | null = null;
   public loadProgress = 0;
+  private disposed = false;
 
   private renderer: THREE.WebGLRenderer | null = null;
   private scene: THREE.Scene;
@@ -271,6 +272,8 @@ export class Rudra3DRenderer {
         loadTex(`${wepBase}/Meshy_AI_Bloodforged_Trident_A_1025041928_texture_metallic.png`, false),
       ]);
 
+      if (this.disposed) return;
+
       // 1. Configure Character PBR Material
       const charMat = new THREE.MeshStandardMaterial({
         map: charAlbedo,
@@ -403,6 +406,7 @@ export class Rudra3DRenderer {
       this.isReady = true;
     } catch (err) {
       this.loadError = err instanceof Error ? err.message : 'Failed to load 3D assets';
+      this.loadProgress = 1;
     }
   }
 
@@ -897,6 +901,7 @@ export class Rudra3DRenderer {
   }
 
   public dispose() {
+    this.disposed = true;
     this.trailGeometry.dispose();
     this.trailMaterial.dispose();
     for (const m of this.charMaterials) m.dispose();

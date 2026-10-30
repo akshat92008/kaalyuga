@@ -229,7 +229,7 @@ export function loadAndProcessSprite(
               // White/near-white studio backdrop flood-fill: stops immediately at dark Mignola sumi-ink outlines or colored pixels
               return (minC >= 218 && sat <= 24) || (luma >= 224 && sat <= 28) || (colorDist < 42 && luma > 212);
             }
-            return (maxC < 34 && luma < 28) || (colorDist < 38 && luma < 32);
+            return (maxC < 46 && luma < 40) || (colorDist < 48 && luma < 42);
           };
 
           // 2. Border-Seeded 8-Connected BFS Floodfill so ONLY exterior background is removed
@@ -270,11 +270,21 @@ export function loadAndProcessSprite(
             for (let y = 0; y < h; y++) {
               enqueueIfCandidate(midX, y);
             }
+          } else if (expectedFrames > 1) {
+            // For 1x4 or 1xN horizontal sprite sheets, seed the vertical split seams between frames
+            for (let k = 1; k < expectedFrames; k++) {
+              const seamX = Math.floor((k * w) / expectedFrames);
+              for (let y = 0; y < h; y++) {
+                enqueueIfCandidate(seamX, y);
+                if (seamX > 0) enqueueIfCandidate(seamX - 1, y);
+                if (seamX < w - 1) enqueueIfCandidate(seamX + 1, y);
+              }
+            }
           }
           // Seed bottom-right corner watermark region unconditionally
           if (stripCorner) {
-            const startX = Math.floor(w * 0.89);
-            const startY = Math.floor(h * 0.87);
+            const startX = Math.floor(w * 0.88);
+            const startY = Math.floor(h * 0.84);
             for (let y = startY; y < h; y++) {
               for (let x = startX; x < w; x++) {
                 enqueueIfCandidate(x, y, true);
@@ -409,7 +419,7 @@ export function loadAndProcessSprite(
 
         // 4. Build final character pixels (100% solid interior + Hades dark bronze contour + hit/rim/shadow silhouettes)
         for (let y = 0; y < h; y++) {
-          const isBottomCornerY = stripCorner && y > h * 0.87;
+          const isBottomCornerY = stripCorner && y > h * 0.84;
           const rowOff = y * w;
           for (let x = 0; x < w; x++) {
             const p = rowOff + x;
@@ -419,7 +429,7 @@ export function loadAndProcessSprite(
             let b = data[idx + 2];
             let a = data[idx + 3];
 
-            if (isBottomCornerY && x > w * 0.89) {
+            if (isBottomCornerY && x > w * 0.88) {
               data[idx + 3] = 0;
               continue;
             }

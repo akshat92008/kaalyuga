@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { CHAMBERS } from '@/lib/game/assets';
 
 interface OutcomeModalProps {
   mode: 'none' | 'paused' | 'victory' | 'defeat';
@@ -52,7 +53,7 @@ export default function OutcomeModal({
               KURUKSHETRA PAUSED
             </h2>
             <p className="text-xs text-[#b5a995] mb-6">
-              Chamber {chamberId}/12 · {chamberName}
+              Chamber {chamberId}/{CHAMBERS.length} · {chamberName}
             </p>
 
             <div className="grid grid-cols-3 gap-3 p-4 mb-7 bg-[#14131a] border border-[#c89d46]/25">
@@ -61,7 +62,7 @@ export default function OutcomeModal({
                   CHAMBER
                 </div>
                 <div className="text-lg font-bold font-mono-num text-[#f5ebd6]">
-                  {chamberId}/12
+                  {chamberId}/{CHAMBERS.length}
                 </div>
               </div>
               <div>
@@ -127,7 +128,7 @@ export default function OutcomeModal({
             </h2>
             <p className="text-sm text-[#c7bba6] max-w-md mx-auto leading-relaxed mb-7">
               Both Dundubhi the Bronze Buffalo Demon and Vrikodara the Iron Rakshasa have fallen
-              before your Ash-Forged Khanda. You have conquered the Chapter I Vertical Slice!
+              before your Bloodforged Parashu. You have conquered the 8-Chamber Kurukshetra Odyssey!
             </p>
 
             <div className="grid grid-cols-3 gap-4 py-4 px-5 mb-7 bg-[#14131a] border border-[#c89d46]/25">
@@ -186,7 +187,7 @@ export default function OutcomeModal({
               RETURNED TO THE HOMA SHRINE
             </h2>
             <p className="text-sm text-[#c7bba6] max-w-md mx-auto leading-relaxed mb-7">
-              You fell in Chamber {chamberId}/12 ({chamberName}). Your banked Ashen Karma endures—visit
+              You fell in Chamber {chamberId}/{CHAMBERS.length} ({chamberName}). Your banked Ashen Karma endures—visit
               the Homa Fire Shrine to temper your Vajra Prana, Kavacha armor, and Amrita Kalasha draughts.
             </p>
 
@@ -196,7 +197,7 @@ export default function OutcomeModal({
                   CHAMBER REACHED
                 </div>
                 <div className="text-xl font-bold font-mono-num text-[#f7efe0]">
-                  {chamberId}/12
+                  {chamberId}/{CHAMBERS.length}
                 </div>
               </div>
               <div>

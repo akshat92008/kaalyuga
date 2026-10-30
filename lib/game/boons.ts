@@ -6,7 +6,7 @@ export type ImmortalPatronId =
   | 'subhuti'
   | 'greatsage';
 
-export type BoonRarity = 'Rare' | 'Epic' | 'Heroic' | 'Legendary';
+export type BoonRarity = 'Rare' | 'Epic' | 'Heroic' | 'Legendary' | 'Duo';
 
 export type CelestialBoonId =
   | 'nezha_scorch_strike'
@@ -20,7 +20,10 @@ export type CelestialBoonId =
   | 'subhuti_astral_qi'
   | 'subhuti_spell_mastery'
   | 'sage_phantom_echo'
-  | 'sage_sovereign_breaker';
+  | 'sage_sovereign_breaker'
+  | 'duo_agni_indra_cataclysm'
+  | 'duo_varuna_rudra_riptide'
+  | 'duo_ashvin_indra_mirage';
 
 export interface ImmortalPatronSpec {
   id: ImmortalPatronId;
@@ -35,6 +38,7 @@ export interface ImmortalPatronSpec {
 export interface CelestialBoonSpec {
   id: CelestialBoonId;
   patronId: ImmortalPatronId;
+  secondaryPatronId?: ImmortalPatronId;
   name: string;
   chineseName: string;
   slotLabel: string;
@@ -65,6 +69,7 @@ export interface BoonCombatModifiers {
   echoStrikeRatio: number;
   heavyVortexPull: boolean;
   heavyBonusMultiplier: number;
+  castLodgedDamageBonus: number;
 }
 
 export const IMMORTAL_PATRONS: Record<ImmortalPatronId, ImmortalPatronSpec> = {
@@ -132,7 +137,7 @@ export const CELESTIAL_BOONS: CelestialBoonSpec[] = [
     chineseName: 'AGNI JVALA · CREMATION FLAME',
     slotLabel: 'STRIKE ASTRA',
     rarity: 'Epic',
-    summary: 'Your Khanda Strikes and Dash-Strikes ignite foes with Agneyastra Cremation Flame, dealing searing burn damage over 3.0 seconds.',
+    summary: 'Your Parashu Strikes and Dash-Strikes ignite foes with Agneyastra Cremation Flame, dealing searing burn damage over 3.0 seconds.',
     statCallout: '+32 Scorch DoT / sec · +12% Strike Damage',
     accentColor: '#ff5e36',
   },
@@ -154,7 +159,7 @@ export const CELESTIAL_BOONS: CelestialBoonSpec[] = [
     chineseName: 'INDRA VAJRA · THUNDERBOLT ARC',
     slotLabel: 'THUNDER ASTRA',
     rarity: 'Heroic',
-    summary: 'Every Khanda strike unleashes jagged Vajra Chain Lightning that arcs across up to 3 nearby enemies.',
+    summary: 'Every Parashu strike unleashes jagged Vajra Chain Lightning that arcs across up to 3 nearby enemies.',
     statCallout: '48 Chain Lightning Damage (3 bounces)',
     accentColor: '#5ce6ff',
   },
@@ -231,8 +236,8 @@ export const CELESTIAL_BOONS: CelestialBoonSpec[] = [
     chineseName: 'ASTRA SIDDHI · SACRED VERSE',
     slotLabel: 'MANTRA ASTRA',
     rarity: 'Heroic',
-    summary: 'Reduces cooldowns of Agneyastra Bow, Kalaripayattu Parry, Ash-Mirage Phantoms, and Rudra Tandava by 32%.',
-    statCallout: '-32% All Vedic Astra Cooldowns',
+    summary: 'Reduces cooldowns of Agneyastra Blood-Shard Cast, Kalaripayattu Parry, Maya Phantoms, and Rudra Tandava by 32%.',
+    statCallout: '-32% All Vedic Astra Cooldowns · +20% Cast Lodged Amp',
     accentColor: '#e08cff',
   },
   {
@@ -242,7 +247,7 @@ export const CELESTIAL_BOONS: CelestialBoonSpec[] = [
     chineseName: 'KALA BHAIRAVA · SHADOW CLEAVE',
     slotLabel: 'HAVOC ASTRA',
     rarity: 'Legendary',
-    summary: 'Increases Attack Speed by +20% and causes every Khanda swing to conjure a blazing bronze afterimage for 35% bonus damage.',
+    summary: 'Increases Attack Speed by +20% and causes every Parashu swing to conjure a blazing bronze afterimage for 35% bonus damage.',
     statCallout: '+20% Attack Speed · +35% Phantom Echo Hit',
     accentColor: '#f5c451',
   },
@@ -256,6 +261,43 @@ export const CELESTIAL_BOONS: CelestialBoonSpec[] = [
     summary: 'Shatters enemy and Sovereign Rakshasa Posture 45% faster and increases all damage by +15%.',
     statCallout: '+45% Posture Damage · +15% All Damage',
     accentColor: '#f5c451',
+  },
+  // HADES-STYLE DUO BOONS (Unlocked when holding blessings from two distinct Devas)
+  {
+    id: 'duo_agni_indra_cataclysm',
+    patronId: 'nezha',
+    secondaryPatronId: 'erlang',
+    name: 'Vajra-Agni Storm Pyre',
+    chineseName: 'DUO ASTRA · AGNI × INDRA SYNERGY',
+    slotLabel: 'DUO SYNERGY',
+    rarity: 'Duo',
+    summary: 'Foes ignited by Agneyastra Scorch are struck by doubly lethal Sky-Splitting Vajra Lightning on every swing and Dash.',
+    statCallout: '+45 Chain Lightning · +28 Scorch DPS · +20% Crit Mult',
+    accentColor: '#a8ff78',
+  },
+  {
+    id: 'duo_varuna_rudra_riptide',
+    patronId: 'aoguang',
+    secondaryPatronId: 'greatsage',
+    name: 'Vaitarani Crown-Shatter',
+    chineseName: 'DUO ASTRA · VARUNA × RUDRA SYNERGY',
+    slotLabel: 'DUO SYNERGY',
+    rarity: 'Duo',
+    summary: 'Heavy Unleash Vortex Pull and Lodged Blood-Shard Casts crush enemy Posture and amplify all strike damage by +30%.',
+    statCallout: '+30% All Damage · +40% Posture Shatter · Vortex Pull',
+    accentColor: '#a8ff78',
+  },
+  {
+    id: 'duo_ashvin_indra_mirage',
+    patronId: 'guanyin',
+    secondaryPatronId: 'erlang',
+    name: 'Sahasraksha Mirror-Step',
+    chineseName: 'DUO ASTRA · ASHVINS × INDRA SYNERGY',
+    slotLabel: 'DUO SYNERGY',
+    rarity: 'Duo',
+    summary: 'Phantom Step Dash automatically deflects projectiles, restores +18 HP on Perfect Dodge, and guarantees Critical Dash-Strikes.',
+    statCallout: '+35% Dash-Strike · Auto-Deflect · +18 HP Perfect Dodge',
+    accentColor: '#a8ff78',
   },
 ];
 
@@ -273,7 +315,7 @@ export function computeBoonModifiers(activeBoons: CelestialBoonId[]): BoonCombat
   let damageMultiplier = 1.0;
   let attackSpeedMultiplier = 1.0;
   let critChance = 0.06; // Base 6% critical chance
-  const critMultiplier = 1.75;
+  let critMultiplier = 1.75;
   let backstabMultiplier = 1.35; // Base +35% Hades Shadow Strike when attacking from behind
   let dashStrikeMultiplier = 1.35; // Base 1.35x Hades Dash-Strike lunge multiplier
   let postureDamageMultiplier = 1.0;
@@ -290,6 +332,7 @@ export function computeBoonModifiers(activeBoons: CelestialBoonId[]): BoonCombat
   let echoStrikeRatio = 0;
   let heavyVortexPull = false;
   let heavyBonusMultiplier = 1.0;
+  let castLodgedDamageBonus = 0.25; // Base +25% damage per lodged Agni Blood-Shard Cast
 
   if (set.has('nezha_scorch_strike')) {
     damageMultiplier += 0.12;
@@ -326,6 +369,7 @@ export function computeBoonModifiers(activeBoons: CelestialBoonId[]): BoonCombat
   }
   if (set.has('subhuti_spell_mastery')) {
     spellCooldownMultiplier = 0.68;
+    castLodgedDamageBonus += 0.20;
   }
   if (set.has('sage_phantom_echo')) {
     attackSpeedMultiplier += 0.2;
@@ -336,11 +380,30 @@ export function computeBoonModifiers(activeBoons: CelestialBoonId[]): BoonCombat
     damageMultiplier += 0.15;
   }
 
+  // Duo Boon Synergies
+  if (set.has('duo_agni_indra_cataclysm')) {
+    chainLightningDamage += 45;
+    scorchDps += 28;
+    critMultiplier += 0.2;
+  }
+  if (set.has('duo_varuna_rudra_riptide')) {
+    damageMultiplier += 0.3;
+    postureDamageMultiplier += 0.4;
+    heavyVortexPull = true;
+    castLodgedDamageBonus += 0.15;
+  }
+  if (set.has('duo_ashvin_indra_mirage')) {
+    deflectProjectilesOnDash = true;
+    perfectDodgeHeal += 18;
+    dashStrikeMultiplier += 0.35;
+    critChance += 0.15;
+  }
+
   return {
     damageMultiplier: Number(damageMultiplier.toFixed(2)),
     attackSpeedMultiplier: Number(attackSpeedMultiplier.toFixed(2)),
     critChance: Number(critChance.toFixed(2)),
-    critMultiplier,
+    critMultiplier: Number(critMultiplier.toFixed(2)),
     backstabMultiplier: Number(backstabMultiplier.toFixed(2)),
     dashStrikeMultiplier: Number(dashStrikeMultiplier.toFixed(2)),
     postureDamageMultiplier: Number(postureDamageMultiplier.toFixed(2)),
@@ -357,6 +420,78 @@ export function computeBoonModifiers(activeBoons: CelestialBoonId[]): BoonCombat
     echoStrikeRatio,
     heavyVortexPull,
     heavyBonusMultiplier: Number(heavyBonusMultiplier.toFixed(2)),
+    castLodgedDamageBonus: Number(castLodgedDamageBonus.toFixed(2)),
+  };
+}
+
+/**
+ * Computes dynamic Hades-style weapon slash & dash colors based on equipped Patron Boons.
+ */
+export function getActiveSlashPalette(
+  activeBoons: CelestialBoonId[],
+  stance: 'smash' | 'pillar' | 'thrust'
+): {
+  outerEdge: string;
+  midCore: string;
+  innerRibbon: string;
+  boltPrimary: string;
+  boltSecondary: string;
+} {
+  const hasPatron = (p: ImmortalPatronId) =>
+    activeBoons.some((id) => {
+      const b = CELESTIAL_BOONS.find((item) => item.id === id);
+      return b?.patronId === p || b?.secondaryPatronId === p;
+    });
+
+  if (hasPatron('nezha') && hasPatron('erlang')) {
+    return {
+      outerEdge: 'rgba(255, 78, 36, 0.96)',
+      midCore: 'rgba(255, 232, 92, 0.98)',
+      innerRibbon: 'rgba(92, 230, 255, 0.96)',
+      boltPrimary: '#ffe85c',
+      boltSecondary: '#5ce6ff',
+    };
+  }
+  if (hasPatron('erlang')) {
+    return {
+      outerEdge: 'rgba(56, 232, 255, 0.95)',
+      midCore: 'rgba(255, 238, 115, 0.98)',
+      innerRibbon: 'rgba(185, 248, 255, 0.96)',
+      boltPrimary: '#5ce6ff',
+      boltSecondary: '#ffee73',
+    };
+  }
+  if (hasPatron('guanyin')) {
+    return {
+      outerEdge: 'rgba(62, 224, 168, 0.95)',
+      midCore: 'rgba(255, 230, 128, 0.96)',
+      innerRibbon: 'rgba(168, 255, 223, 0.95)',
+      boltPrimary: '#3ee0a8',
+      boltSecondary: '#ffe680',
+    };
+  }
+  if (hasPatron('aoguang')) {
+    return {
+      outerEdge: 'rgba(56, 152, 255, 0.95)',
+      midCore: 'rgba(92, 230, 255, 0.96)',
+      innerRibbon: 'rgba(255, 225, 110, 0.95)',
+      boltPrimary: '#4da6ff',
+      boltSecondary: '#5ce6ff',
+    };
+  }
+
+  // Default Zagreus / Rudra Stance Palette (Blood-Crimson, Lightning Gold, Electric Cyan)
+  return {
+    outerEdge:
+      stance === 'pillar'
+        ? 'rgba(56, 232, 255, 0.94)'
+        : stance === 'thrust'
+        ? 'rgba(232, 62, 255, 0.94)'
+        : 'rgba(255, 42, 58, 0.95)',
+    midCore: 'rgba(255, 225, 77, 0.96)',
+    innerRibbon: 'rgba(56, 232, 255, 0.95)',
+    boltPrimary: '#ffe14d',
+    boltSecondary: '#38e8ff',
   };
 }
 
@@ -376,16 +511,42 @@ export function isShadowStrikeBackstab(input: {
 
 /**
  * Rolls 3 distinct Celestial Boons not yet owned by the player.
+ * Unlocks Duo Boons automatically when the player holds blessings from at least 2 Patrons!
  */
 export function rollCelestialBoonOffer(
   ownedBoons: CelestialBoonId[],
   rng: () => number = Math.random
 ): CelestialBoonSpec[] {
   const ownedSet = new Set(ownedBoons);
-  const pool = CELESTIAL_BOONS.filter((b) => !ownedSet.has(b.id));
+  const ownedPatrons = new Set<ImmortalPatronId>();
+  ownedBoons.forEach((id) => {
+    const found = CELESTIAL_BOONS.find((b) => b.id === id);
+    if (found) ownedPatrons.add(found.patronId);
+  });
+
+  const pool = CELESTIAL_BOONS.filter((b) => {
+    if (ownedSet.has(b.id)) return false;
+    if (b.rarity === 'Duo' && b.secondaryPatronId) {
+      // Unlock Duo Boon if the player has at least 1 blessing from either patron (or 2+ total boons)
+      return (
+        (ownedPatrons.has(b.patronId) && ownedPatrons.has(b.secondaryPatronId)) ||
+        (ownedBoons.length >= 2 && (ownedPatrons.has(b.patronId) || ownedPatrons.has(b.secondaryPatronId)))
+      );
+    }
+    return true;
+  });
   const source = [...pool];
 
   const picked: CelestialBoonSpec[] = [];
+  // If a Duo Boon is eligible, give it a high chance to appear in slot 1!
+  const eligibleDuos = source.filter((b) => b.rarity === 'Duo');
+  if (eligibleDuos.length > 0 && rng() < 0.65) {
+    const duoPick = eligibleDuos[Math.floor(rng() * eligibleDuos.length)];
+    picked.push(duoPick);
+    const removeIdx = source.findIndex((s) => s.id === duoPick.id);
+    if (removeIdx >= 0) source.splice(removeIdx, 1);
+  }
+
   while (picked.length < 3 && source.length > 0) {
     const idx = Math.min(source.length - 1, Math.floor(rng() * source.length));
     picked.push(source[idx]);
