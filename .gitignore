@@ -27,8 +27,8 @@ dist/
 
 # Large Archives & Binaries
 *.zip
-!*Infernal_Maw_biped*.zip
-!untitled.zip*
+!Meshy_AI_*.zip
+!untitled*.zip
 *.tar.gz
 *.dmg
 *.iso
