@@ -31,11 +31,39 @@ import {
 } from '@/lib/game/spriteProcessor';
 import { Rudra3DRenderer } from '@/lib/game/rudra3dRenderer';
 import { Boss3DRenderer } from '@/lib/game/boss3dRenderer';
+import { Enemy3DRenderer } from '@/lib/game/enemy3dRenderer';
 import { TitleScreen } from './TitleScreen';
 import KeepersShrineModal from './KeepersShrineModal';
 import StoryCodexModal from './StoryCodexModal';
 import OutcomeModal from './OutcomeModal';
 import BoonModal from './BoonModal';
+import { NarrativeOverlay } from './NarrativeOverlay';
+import {
+  getLanternLightState,
+  INITIAL_STORY_FLAGS,
+  loadStoryMemoryFlags,
+  LookObjectSpec,
+  saveStoryMemoryFlags,
+  SliceStageId,
+  StoryMemoryFlags,
+} from '@/engine/v7StoryEngine';
+import {
+  MoltenSlagFissure,
+  renderAndFindChamberLookObject,
+  renderBossMythicMechanics,
+  renderLanternAtmosphereAndAshStorm,
+} from '@/engine/lanternShaderEngine';
+import {
+  DEFAULT_UE5_GRAPHICS_SETTINGS,
+  loadMeruGraphicsSettings,
+  LumenLightEmitter,
+  MeruGraphicsSettings,
+  MeruQualityTier,
+  presetForQualityTier,
+  renderUE5PostProcessingPass,
+  renderWorldSpaceLumenGI,
+  saveMeruGraphicsSettings,
+} from '@/engine/ue5GraphicsEngine';
 import {
   CelestialBoonId,
   CelestialBoonSpec,
@@ -67,6 +95,8 @@ interface EnemyEntity {
   chineseTitle: string;
   isBoss: boolean;
   armorCracked?: boolean;
+  tuskLodgedTimer?: number;
+  vacuumActiveTimer?: number;
   lodgedCasts?: number;
   x: number;
   y: number;
@@ -269,15 +299,18 @@ export default function KaliyugaArena() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rudra3dRef = useRef<Rudra3DRenderer | null>(null);
   const boss3dRef = useRef<Boss3DRenderer | null>(null);
+  const enemy3dRef = useRef<Enemy3DRenderer | null>(null);
   const gamepadPrevButtonsRef = useRef<boolean[]>([]);
   const [preloadProgress, setPreloadProgress] = useState<number>(18);
 
-  // Initialize 3D Animated Rudra + Bloodforged Parashu Great-Axe & 3D Boss WebGL Renderers
+  // Initialize 3D Animated Rudra, 3D Bosses & 3D Enemy Squadron WebGL Renderers
   useEffect(() => {
-    const r3d = new Rudra3DRenderer(384);
-    const b3d = new Boss3DRenderer(384);
+    const r3d = new Rudra3DRenderer(512);
+    const b3d = new Boss3DRenderer(512);
+    const e3d = new Enemy3DRenderer(288);
     rudra3dRef.current = r3d;
     boss3dRef.current = b3d;
+    enemy3dRef.current = e3d;
 
     let ticks = 0;
     const preloadTimer = window.setInterval(() => {
@@ -329,8 +362,10 @@ export default function KaliyugaArena() {
       window.clearInterval(preloadTimer);
       r3d.dispose();
       b3d.dispose();
+      e3d.dispose();
       rudra3dRef.current = null;
       boss3dRef.current = null;
+      enemy3dRef.current = null;
     };
   }, []);
 
@@ -374,6 +409,12 @@ export default function KaliyugaArena() {
 
   const [gameState, setGameState] = useState<'title' | 'playing' | 'paused' | 'gameover'>('title');
   const [outcomeMode, setOutcomeMode] = useState<'none' | 'paused' | 'victory' | 'defeat'>('none');
+  const [sliceStage, setSliceStage] = useState<SliceStageId>('combat_arena');
+  const [storyFlags, setStoryFlags] = useState<StoryMemoryFlags>(() => loadStoryMemoryFlags());
+  const [activeLookModal, setActiveLookModal] = useState<LookObjectSpec | null>(null);
+  const [graphicsSettings, setGraphicsSettings] = useState<MeruGraphicsSettings>(() =>
+    loadMeruGraphicsSettings()
+  );
   const [shrineOpen, setShrineOpen] = useState(false);
   const [storyOpen, setStoryOpen] = useState(false);
   const [controlsOpen, setControlsOpen] = useState(false);
@@ -386,6 +427,26 @@ export default function KaliyugaArena() {
   const [musicOn, setMusicOn] = useState(true);
   const [shrineRanks, setShrineRanks] = useState<ShrineRanks>(INITIAL_SHRINE_RANKS);
   const [ashenKarma, setAshenKarma] = useState<number>(INITIAL_ASHEN_KARMA);
+
+  const cycleGraphicsTier = useCallback(() => {
+    setGraphicsSettings((prev) => {
+      const order: MeruQualityTier[] = ['ultra', 'high', 'balanced'];
+      const nextTier = order[(order.indexOf(prev.tier) + 1) % order.length];
+      const next = presetForQualityTier(nextTier);
+      simRef.current.graphicsSettings = next;
+      saveMeruGraphicsSettings(next);
+      return next;
+    });
+  }, []);
+
+  const updateStoryFlags = useCallback((patch: Partial<StoryMemoryFlags>) => {
+    setStoryFlags((prev) => {
+      const next: StoryMemoryFlags = { ...prev, ...patch };
+      simRef.current.storyFlags = next;
+      saveStoryMemoryFlags(next);
+      return next;
+    });
+  }, []);
 
   const [hud, setHud] = useState<HudSnapshot>(() => {
     const derived = computeDerivedPlayerStats(INITIAL_SHRINE_RANKS);
@@ -423,6 +484,11 @@ export default function KaliyugaArena() {
   const simRef = useRef({
     state: 'title' as 'title' | 'playing' | 'paused' | 'gameover',
     modalPaused: false,
+    storyFlags: { ...INITIAL_STORY_FLAGS } as StoryMemoryFlags,
+    graphicsSettings: { ...DEFAULT_UE5_GRAPHICS_SETTINGS } as MeruGraphicsSettings,
+    nearestLookObject: null as LookObjectSpec | null,
+    activeLookObject: null as LookObjectSpec | null,
+    slagFissures: [] as MoltenSlagFissure[],
     viewportW: 1440,
     viewportH: 900,
     worldW: Math.round(1440 * WORLD_SCALE),
@@ -452,8 +518,8 @@ export default function KaliyugaArena() {
     lightningArcs: [] as Array<{
       x1: number;
       y1: number;
-      x2: number;
       y2: number;
+      x2: number;
       color: string;
       life: number;
       maxLife: number;
@@ -1152,6 +1218,10 @@ export default function KaliyugaArena() {
       sim.player.lastFootstepDist = 0;
       sim.player.dashStrikeWindowTimer = 0;
       sim.lightningArcs = [];
+      sim.slagFissures = [];
+      sim.nearestLookObject = null;
+      sim.activeLookObject = null;
+      setActiveLookModal(null);
 
       // Center tracking camera smoothly on Wukong's starting sanctuary position
       const halfVisW = (cw * 0.5) / BASE_CAMERA_ZOOM;
@@ -1278,6 +1348,8 @@ export default function KaliyugaArena() {
       setStoryOpen(false);
       setControlsOpen(false);
       setBoonModalOpen(false);
+      setSliceStage('combat_arena');
+      sim.storyFlags = loadStoryMemoryFlags();
       sim.input.keysHeld.clear();
       sim.input.justPressed.clear();
       if (document.activeElement instanceof HTMLElement) {
@@ -1409,9 +1481,15 @@ export default function KaliyugaArena() {
 
     CHAMBERS.forEach((c) => {
       loadBgWithRetry(c.backgroundUrl);
+      if (c.unlockedBackgroundUrl) {
+        loadBgWithRetry(c.unlockedBackgroundUrl);
+      }
+      if (c.phase2BackgroundUrl) {
+        loadBgWithRetry(c.phase2BackgroundUrl);
+      }
     });
 
-    // Preload bespoke Kaliyuga single-pose character, boss, and enemy sprites (white-background flood-fill)
+    // Preload bespoke Kaliyuga single-pose character, boss, and enemy sprites
     const kaliyugaSingleSprites: string[] = [
       ...Object.values(GAME_ASSETS.rudra),
       ...Object.values(GAME_ASSETS.enemies),
@@ -1440,8 +1518,11 @@ export default function KaliyugaArena() {
       });
     });
 
-    // Preload 4-Frame Multi-Pose Enemy Sprite Sheets (Vrika Stalker, Agni Spearman, Magma Golem, Furnace Colossus)
+    // Preload 4-Frame 4x1 Enemy Sprite Sheets (Combining Previous + Newly Uploaded 4x1 Sheets!)
     const fourFrameEnemySheets: string[] = [
+      GAME_ASSETS.enemySheets.sharabhaHoundSheet4x1,
+      GAME_ASSETS.enemySheets.pretaBowmanSheet4x1,
+      GAME_ASSETS.enemySheets.rakshasaMaceSheet4x1,
       GAME_ASSETS.enemySheets.vrikaStalkerSheet4x1,
       GAME_ASSETS.enemySheets.agniSpearmanSheet4x1,
       GAME_ASSETS.enemySheets.magmaGolemSheet4x1,
@@ -1457,7 +1538,25 @@ export default function KaliyugaArena() {
       });
     });
 
-    // Load ground decals & VFX sheets
+    // Preload 2x2 Kaliyuga Cosmic 4-Armed Avatar Sheet
+    loadAndProcessSprite(GAME_ASSETS.enemySheets.kaliyugaAvatarSheet2x2, {
+      removeBlackBg: true,
+      stripCornerWatermark: true,
+      frameCount: 4,
+      mode: 'character',
+      gridLayout: '2x2',
+    });
+
+    // Preload 4x1 Animated Roaring Agni Brazier Flame Flipbook
+    loadAndProcessSprite(GAME_ASSETS.brazierFlame4x1, {
+      removeBlackBg: true,
+      stripCornerWatermark: true,
+      frameCount: 4,
+      mode: 'vfx',
+      gridLayout: '1xN',
+    });
+
+    // Load ground telegraphs, weapon slashes, combat impacts, floor traps, exit gates, orbs & overhangs
     loadAndProcessSprite(GAME_ASSETS.groundDecals2x2, {
       removeBlackBg: true,
       stripCornerWatermark: true,
@@ -1470,6 +1569,55 @@ export default function KaliyugaArena() {
       stripCornerWatermark: true,
       frameCount: 4,
       mode: 'vfx',
+      gridLayout: '2x2',
+    });
+    loadAndProcessSprite(GAME_ASSETS.combatImpacts2x2, {
+      removeBlackBg: true,
+      stripCornerWatermark: true,
+      frameCount: 4,
+      mode: 'vfx',
+      gridLayout: '2x2',
+    });
+    loadAndProcessSprite(GAME_ASSETS.floorTraps2x2, {
+      removeBlackBg: true,
+      stripCornerWatermark: true,
+      frameCount: 4,
+      mode: 'prop',
+      gridLayout: '2x2',
+    });
+    loadAndProcessSprite(GAME_ASSETS.exitGateArchways2x1, {
+      removeBlackBg: true,
+      stripCornerWatermark: true,
+      frameCount: 2,
+      mode: 'prop',
+      gridLayout: '1xN',
+    });
+    loadAndProcessSprite(GAME_ASSETS.gateOverlays2x2, {
+      removeBlackBg: true,
+      stripCornerWatermark: true,
+      frameCount: 4,
+      mode: 'vfx',
+      gridLayout: '2x2',
+    });
+    loadAndProcessSprite(GAME_ASSETS.rewardOrbs2x2, {
+      removeBlackBg: true,
+      stripCornerWatermark: true,
+      frameCount: 4,
+      mode: 'vfx',
+      gridLayout: '2x2',
+    });
+    loadAndProcessSprite(GAME_ASSETS.foregroundOverhangsA2x2, {
+      removeBlackBg: true,
+      stripCornerWatermark: true,
+      frameCount: 4,
+      mode: 'prop',
+      gridLayout: '2x2',
+    });
+    loadAndProcessSprite(GAME_ASSETS.foregroundOverhangsB2x2, {
+      removeBlackBg: true,
+      stripCornerWatermark: true,
+      frameCount: 4,
+      mode: 'prop',
       gridLayout: '2x2',
     });
 
@@ -1692,6 +1840,60 @@ export default function KaliyugaArena() {
     spawnFloatingText(p.x, p.y - 82, 'MAYA ASTRA · ASHEN PHANTOMS!', '#ffcf66', 1.15);
   }, [spawnAfterimage, spawnFloatingText, spawnParticles, spawnShockwave]);
 
+  // v7 Section 5 & 31: One-Button [E] Look System (pauses nothing in combat; cuts music to room tone; awards Ashen Karma; records Look flag)
+  const triggerLookOrMirage = useCallback(() => {
+    const sim = simRef.current;
+    if (sim.state !== 'playing') return;
+
+    if (sim.activeLookObject) {
+      sim.activeLookObject = null;
+      setActiveLookModal(null);
+      return;
+    }
+
+    if (sim.nearestLookObject) {
+      const lookObj = sim.nearestLookObject;
+      sim.activeLookObject = lookObj;
+      setActiveLookModal(lookObj);
+      soundEngine.playLookRoomTone();
+      soundEngine.playSuvarnaLullaby();
+
+      const alreadyInspected = sim.storyFlags.looks.includes(lookObj.id);
+      if (!alreadyInspected) {
+        const nextLooks = [...sim.storyFlags.looks, lookObj.id];
+        updateStoryFlags({ looks: nextLooks });
+        sim.ashenKarma += lookObj.karmaReward;
+        sim.karmaRunDelta += lookObj.karmaReward;
+        setAshenKarma(sim.ashenKarma);
+        try {
+          window.localStorage.setItem(
+            'kaliyuga_save_v1',
+            JSON.stringify({ ashenKarma: sim.ashenKarma, ranks: sim.ranks })
+          );
+        } catch {}
+        spawnFloatingText(
+          sim.player.x,
+          sim.player.y - 92,
+          `[LOOK] ${lookObj.title.toUpperCase()} (+${lookObj.karmaReward} KARMA)`,
+          '#ffd86b',
+          1.18,
+          `LOOKS RECORDED: ${nextLooks.length}/6`
+        );
+      } else {
+        spawnFloatingText(
+          sim.player.x,
+          sim.player.y - 88,
+          `[LOOK] ${lookObj.title.toUpperCase()}`,
+          '#f3e5ab',
+          1.05
+        );
+      }
+      return;
+    }
+
+    triggerPluckOfManyClones();
+  }, [spawnFloatingText, triggerPluckOfManyClones, updateStoryFlags]);
+
   const triggerRedTidesTransform = useCallback(() => {
     const sim = simRef.current;
     const p = sim.player;
@@ -1702,11 +1904,13 @@ export default function KaliyugaArena() {
     p.invulnTimer = Math.max(p.invulnTimer, 0.8);
     sim.cameraShakeTrauma = Math.min(1, sim.cameraShakeTrauma + 0.45);
     sim.cameraZoom = BASE_CAMERA_ZOOM + 0.06;
+    // v7 Section 13 & 27: Using Rudra-Kopa Rage dims Savitri's Lantern on the boat
+    updateStoryFlags({ rageUses: sim.storyFlags.rageUses + 1 });
     soundEngine.playSpell('transform');
     spawnShockwave(p.x, p.y, 195, '#ff5924', 0.45);
     spawnParticles(p.x, p.y - 30, 32, '#ff5924', 210, 5.5, 60);
-    spawnFloatingText(p.x, p.y - 88, 'RUDRA TANDAVA AWAKENED!', '#ff6a33', 1.15);
-  }, [spawnFloatingText, spawnParticles, spawnShockwave]);
+    spawnFloatingText(p.x, p.y - 88, 'RUDRA-KOPA AWAKENED! · LANTERN FLAME FLICKERS', '#ff6a33', 1.15);
+  }, [spawnFloatingText, spawnParticles, spawnShockwave, updateStoryFlags]);
 
   const triggerExecuteBrokenTarget = useCallback(() => {
     const sim = simRef.current;
@@ -1916,6 +2120,20 @@ export default function KaliyugaArena() {
       angle: p.slashAngle,
     });
     if (sim.craters.length > 10) sim.craters.shift();
+
+    // v7 Section 9 & 29: Rakshasa Crushing Stance (Smash Stance heavy attacks send a forward line of molten slag fissures!)
+    if (p.stance === 'smash') {
+      const fissureLen = sim.storyFlags.rakshasaStanceUnlocked ? 250 : 175;
+      sim.slagFissures.push({
+        x1: p.x + Math.cos(p.slashAngle) * 28,
+        y1: p.y + Math.sin(p.slashAngle) * 20,
+        x2: p.x + Math.cos(p.slashAngle) * fissureLen,
+        y2: p.y + Math.sin(p.slashAngle) * fissureLen * 0.78,
+        width: sim.storyFlags.rakshasaStanceUnlocked ? 34 : 24,
+        life: 3.5,
+        maxLife: 3.5,
+      });
+    }
 
     // Shatter destructible courtyard props in heavy stance range
     damagePropsNearPoint(p.x + p.facing * 36, p.y, stanceCfg.rangePx, 120);
@@ -2553,6 +2771,11 @@ export default function KaliyugaArena() {
         return;
       }
 
+      if (e.code === 'KeyG') {
+        cycleGraphicsTier();
+        return;
+      }
+
       if (sim.state !== 'playing') return;
 
       if (!sim.input.keysHeld.has(e.code)) {
@@ -2583,7 +2806,7 @@ export default function KaliyugaArena() {
       } else if (e.code === 'KeyT') {
         triggerRockSolidParry();
       } else if (e.code === 'KeyE') {
-        triggerPluckOfManyClones();
+        triggerLookOrMirage();
       } else if (e.code === 'KeyZ') {
         triggerRedTidesTransform();
       } else if (
@@ -2619,6 +2842,7 @@ export default function KaliyugaArena() {
   }, [
     boonModalOpen,
     boonChoices,
+    cycleGraphicsTier,
     handleSelectBoon,
     handleRerollBoons,
     openBoonAltar,
@@ -2632,7 +2856,7 @@ export default function KaliyugaArena() {
     triggerExecuteBrokenTarget,
     triggerImmobilizeSpell,
     triggerRockSolidParry,
-    triggerPluckOfManyClones,
+    triggerLookOrMirage,
     triggerRedTidesTransform,
     triggerCloudStepDodge,
     triggerLightAttack,
@@ -3546,7 +3770,25 @@ export default function KaliyugaArena() {
                       correction:
                         '“NO PILLAR CAN HOLD ME NOW! EVERY STEP SHATTERS THE MANDALA!”',
                     };
+              if (e.type === 'vrikodara' && e.phase >= 2) {
+                sim.slagFissures.push({
+                  x1: e.x - 240,
+                  y1: e.y - 70,
+                  x2: e.x + 240,
+                  y2: e.y + 70,
+                  width: 38,
+                  life: 7.5,
+                  maxLife: 7.5,
+                });
+              }
             }
+          }
+
+          if (e.tuskLodgedTimer && e.tuskLodgedTimer > 0) {
+            e.tuskLodgedTimer = Math.max(0, e.tuskLodgedTimer - simDt);
+          }
+          if (e.vacuumActiveTimer && e.vacuumActiveTimer > 0) {
+            e.vacuumActiveTimer = Math.max(0, e.vacuumActiveTimer - simDt);
           }
 
           if (e.postureBrokenTimer > 0) {
@@ -3736,6 +3978,7 @@ export default function KaliyugaArena() {
 
             // Vrikodara Abdominal Furnace Vacuum Maw: pulls Rudra inward during shockwave windup!
             if (e.type === 'vrikodara' && e.attackKind === 'shockwave' && dist > 48 && dist < 360) {
+              e.vacuumActiveTimer = 0.25;
               const pullStrength = (e.phase >= 2 ? 138 : 98) * simDt;
               const invD = 1 / Math.max(1, dist);
               p.x = Math.max(minX, Math.min(maxX, p.x + (e.x - p.x) * invD * pullStrength));
@@ -3772,7 +4015,8 @@ export default function KaliyugaArena() {
                   }
                 }
               } else if (e.type === 'xuemo' && (e.attackPattern === 1 || e.attackPattern === 4)) {
-                // Dundubhi spawns ring of Sonic War-Drum Crescent Waves
+                // Dundubhi beats his bronze war-drum chest and spawns ring of Sonic War-Drum Crescent Waves
+                soundEngine.playDundubhiWarDrum();
                 const orbCount = e.phase >= 2 ? 10 : 7;
                 for (let k = 0; k < orbCount; k++) {
                   const pr = sim.projectiles.find((item) => !item.active);
@@ -3833,7 +4077,7 @@ export default function KaliyugaArena() {
                 e.x = Math.max(minX, Math.min(maxX, e.corridorEndX));
                 e.y = Math.max(minY, Math.min(maxY, e.corridorEndY));
 
-                // Check Dundubhi Pillar-Baiting Armor Crack Mechanic!
+                // Check Dundubhi Pillar-Baiting Tusk-Lodge & Armor Crack Mechanic (v7 Section 9)!
                 if (e.type === 'xuemo') {
                   let hitPillar = false;
                   for (const pr of sim.props) {
@@ -3868,10 +4112,11 @@ export default function KaliyugaArena() {
                     const pillarDmg = 280;
                     e.hp = Math.max(1, e.hp - pillarDmg);
                     e.posture = 0;
-                    e.postureBrokenTimer = 5.0;
+                    e.tuskLodgedTimer = 3.0;
+                    e.postureBrokenTimer = 3.0;
                     e.comboHitsRemaining = 0;
                     e.aiState = 'recover';
-                    e.aiTimer = 5.0;
+                    e.aiTimer = 3.0;
                     e.hitFlashTimer = 0.3;
                     sim.hitstopTimer = 0.11;
                     sim.cameraShakeTrauma = 1.0;
@@ -3881,10 +4126,10 @@ export default function KaliyugaArena() {
                     spawnFloatingText(
                       e.x,
                       e.y - 96,
-                      `PILLAR SHATTERED! WAR-DRUM ARMOR CRACKED (-${pillarDmg})`,
+                      `TUSKS LODGED FOR 3.0s! WAR-DRUM ARMOR CRACKED (-${pillarDmg})`,
                       '#ffd86b',
                       1.38,
-                      'POSTURE BROKEN! PRESS [F] TO EXECUTE'
+                      'STRIKE THE BRONZE DRUM OR PRESS [F] TO EXECUTE'
                     );
                   }
                 }
@@ -3917,6 +4162,18 @@ export default function KaliyugaArena() {
                   e.type === 'xuemo' ? '#ff384c' : '#ff9233',
                   0.42
                 );
+                // v7 Section 9: Vrikodara Phase 2 vomits molten slag that cools into glowing fissures splitting the arena!
+                if (e.type === 'vrikodara' && e.phase >= 2) {
+                  sim.slagFissures.push({
+                    x1: e.x,
+                    y1: e.y,
+                    x2: e.x + Math.cos(e.aimAngle) * 280,
+                    y2: e.y + Math.sin(e.aimAngle) * 210,
+                    width: 34,
+                    life: 6.5,
+                    maxLife: 6.5,
+                  });
+                }
                 sim.craters.push({
                   x: e.x,
                   y: e.y + 6,
@@ -4113,8 +4370,15 @@ export default function KaliyugaArena() {
               1.3
             );
           } else {
-            sim.state = 'gameover';
-            document.body.dataset.state = 'gameover';
+            // v7 Section 5 & 28: On death, Rudra wakes on the boards of Savitri's Boat with her dimmer lantern
+            const nextDeaths = sim.storyFlags.deaths + 1;
+            const nextFlags: StoryMemoryFlags = {
+              ...sim.storyFlags,
+              deaths: nextDeaths,
+            };
+            sim.storyFlags = nextFlags;
+            saveStoryMemoryFlags(nextFlags);
+            setStoryFlags(nextFlags);
             setAshenKarma(sim.ashenKarma);
             try {
               window.localStorage.setItem(
@@ -4122,9 +4386,8 @@ export default function KaliyugaArena() {
                 JSON.stringify({ ashenKarma: sim.ashenKarma, ranks: sim.ranks })
               );
             } catch {}
-            setGameState('gameover');
-            setOutcomeMode('defeat');
             soundEngine.playGong('defeat');
+            setSliceStage('vaitarani_hub');
           }
         }
 
@@ -4184,8 +4447,11 @@ export default function KaliyugaArena() {
                 'DUNDUBHI VANQUISHED · WAR-DRUM SILENCED!',
                 '#ffd86b',
                 1.35,
-                'CHOOSE YOUR REWARD EXIT GATE AT THE TOP OF THE SANCTUM'
+                'SAVITRI KNEELS BY THE BRONZE DRUM SKIN...'
               );
+              if (!sim.storyFlags.dundubhiCleared) {
+                setSliceStage('dundubhi_aftermath');
+              }
             } else if (sim.chamberIndex < CHAMBERS.length - 1) {
               spawnFloatingText(
                 p.x,
@@ -4193,7 +4459,7 @@ export default function KaliyugaArena() {
                 `CHAMBER ${sim.chamberIndex + 1}/${CHAMBERS.length} CLEARED! +${clearBonus} KARMA`,
                 '#3ee0a8',
                 1.25,
-                'WALK INTO LEFT GATE (DEVA BOON) OR RIGHT GATE (AMRITA + MAX HP)'
+                'WALK INTO LEFT GATE (ASURA BOON) OR RIGHT GATE (AMRITA + MAX HP)'
               );
             }
           } else {
@@ -4208,12 +4474,9 @@ export default function KaliyugaArena() {
 
             if (sim.chamberIndex === CHAMBERS.length - 1) {
               if (sim.chamberClearTimer >= 1.1) {
-                sim.state = 'gameover';
-                document.body.dataset.state = 'gameover';
                 setAshenKarma(sim.ashenKarma);
-                setGameState('gameover');
-                setOutcomeMode('victory');
                 soundEngine.playGong('victory');
+                setSliceStage('shard1_memory');
               }
             } else if (enteredRightGate) {
               // Player chose Right Gate: Amrita Kalasha Max HP +30 & +95 Karma Cache!
@@ -4315,6 +4578,14 @@ export default function KaliyugaArena() {
         if (ft.life <= 0) ft.active = false;
       }
 
+      // Decay Molten Slag Fissures (Vrikodara Phase 2 & Rakshasa Crushing Stance)
+      for (let i = sim.slagFissures.length - 1; i >= 0; i--) {
+        sim.slagFissures[i].life -= dt;
+        if (sim.slagFissures[i].life <= 0) {
+          sim.slagFissures.splice(i, 1);
+        }
+      }
+
       // ========================================================================
       // RENDER 2.5D ISOMETRIC WORLD & ACTORS (AAA HADES-GRADE CAMERA PIPELINE)
       // ========================================================================
@@ -4339,10 +4610,6 @@ export default function KaliyugaArena() {
       ctx.save();
       ctx.translate(-sim.camX, -sim.camY);
 
-      const bgImg = bgImagesRef.current.get(chamberSpec.backgroundUrl);
-      const decalsAsset = getProcessedSpriteSync(GAME_ASSETS.groundDecals2x2);
-      const flicker = 0.88 + Math.sin(now * 0.008) * 0.08 + Math.cos(now * 0.019) * 0.04;
-      const primaryLightX = (chamberSpec.braziers[0]?.x ?? 0.5) * worldW;
       const isChamberCleared =
         sim.chamberClearTimer > 0 &&
         sim.enemies.length === 0 &&
@@ -4351,7 +4618,30 @@ export default function KaliyugaArena() {
         sim.summoningRifts.length === 0;
       const nextSpec = CHAMBERS[sim.chamberIndex + 1];
 
-      // Step 2: Render 3D-Extruded Isometric Stone Platform, Interior Chasm Channels, Raised Temple Walls & Exit Archways
+      // Dynamic Chamber Background State Swap:
+      // 1) Chamber VII swaps from Locked (u58tfju58tfju58t...) -> Unlocked (8jz0rn8jz0rn8jz0...) on clear!
+      // 2) Final Boss Chamber VIII swaps from Naga Sanctum (25mxvb...) -> Cosmic Blood-Eclipse (9sbc7m...) in Phase 2/3!
+      let activeBgUrl = chamberSpec.backgroundUrl;
+      if (isChamberCleared && chamberSpec.unlockedBackgroundUrl) {
+        activeBgUrl = chamberSpec.unlockedBackgroundUrl;
+      } else if (
+        activeBoss &&
+        activeBoss.type === 'vrikodara' &&
+        activeBoss.phase >= 2 &&
+        chamberSpec.phase2BackgroundUrl
+      ) {
+        activeBgUrl = chamberSpec.phase2BackgroundUrl;
+      }
+      const bgImg =
+        bgImagesRef.current.get(activeBgUrl) || bgImagesRef.current.get(chamberSpec.backgroundUrl);
+
+      const decalsAsset = getProcessedSpriteSync(GAME_ASSETS.groundDecals2x2);
+      const impactsAsset = getProcessedSpriteSync(GAME_ASSETS.combatImpacts2x2);
+      const brazierFlameAsset = getProcessedSpriteSync(GAME_ASSETS.brazierFlame4x1);
+      const flicker = 0.88 + Math.sin(now * 0.008) * 0.08 + Math.cos(now * 0.019) * 0.04;
+      const primaryLightX = (chamberSpec.braziers[0]?.x ?? 0.5) * worldW;
+
+      // Step 2: Render Hand-Painted 16:9 Isometric Arena, Exit Gate Archways, Reward Orbs & Surface Craters
       renderIsometricChamberPlatform(
         ctx,
         worldW,
@@ -4363,145 +4653,53 @@ export default function KaliyugaArena() {
         isChamberCleared,
         Boolean(nextSpec?.isBossChamber),
         () => {
-          // 1.5. AAA Hades-Style Atmospheric Chamber Vignette & Sacred Sanctum Mandala
+          // Subtle Atmospheric Edge Vignette to frame the hand-painted chamber
           ctx.save();
           const chamberGrade = ctx.createRadialGradient(
             worldW * 0.5,
             worldH * 0.52,
-            worldW * 0.14,
+            worldW * 0.22,
             worldW * 0.5,
             worldH * 0.52,
-            worldW * 0.58
+            worldW * 0.62
           );
-          chamberGrade.addColorStop(0, 'rgba(14, 10, 9, 0.06)');
-          chamberGrade.addColorStop(0.68, 'rgba(8, 6, 7, 0.28)');
-          chamberGrade.addColorStop(1, 'rgba(3, 2, 4, 0.72)');
+          chamberGrade.addColorStop(0, 'rgba(0, 0, 0, 0)');
+          chamberGrade.addColorStop(0.75, 'rgba(6, 4, 5, 0.18)');
+          chamberGrade.addColorStop(1, 'rgba(3, 2, 4, 0.58)');
           ctx.fillStyle = chamberGrade;
           ctx.fillRect(0, 0, worldW, worldH);
-
-          // Boss Sanctum Sacred Mandala / Jatharagni Obsidian Furnace Floor Yantra at Chamber Center
-          ctx.save();
-          ctx.translate(worldW * 0.5, worldH * 0.52);
-          ctx.scale(1, 0.52);
-          if (sim.chamberIndex === 7) {
-            const furnacePulse = 0.82 + Math.sin(now * 0.004) * 0.18;
-            const innerGlow = ctx.createRadialGradient(0, 0, 18, 0, 0, worldW * 0.28);
-            innerGlow.addColorStop(0, `rgba(255, 84, 24, ${0.24 * furnacePulse})`);
-            innerGlow.addColorStop(0.55, `rgba(185, 28, 18, ${0.14 * furnacePulse})`);
-            innerGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
-            ctx.fillStyle = innerGlow;
-            ctx.beginPath();
-            ctx.arc(0, 0, worldW * 0.28, 0, Math.PI * 2);
-            ctx.fill();
-
-            ctx.strokeStyle = `rgba(255, 118, 36, ${0.34 * furnacePulse})`;
-            ctx.lineWidth = 3.0;
-            ctx.beginPath();
-            ctx.arc(0, 0, worldW * 0.24, 0, Math.PI * 2);
-            ctx.stroke();
-
-            ctx.strokeStyle = `rgba(255, 196, 82, ${0.26 * furnacePulse})`;
-            ctx.lineWidth = 2.0;
-            ctx.beginPath();
-            ctx.arc(0, 0, worldW * 0.16, 0, Math.PI * 2);
-            ctx.stroke();
-
-            for (let sp = 0; sp < 12; sp++) {
-              const ang = (sp / 12) * Math.PI * 2 + now * 0.00025;
-              ctx.beginPath();
-              ctx.moveTo(Math.cos(ang) * (worldW * 0.07), Math.sin(ang) * (worldW * 0.07));
-              ctx.lineTo(Math.cos(ang) * (worldW * 0.24), Math.sin(ang) * (worldW * 0.24));
-              ctx.stroke();
-            }
-          } else if (sim.chamberIndex === 3) {
-            const drumPulse = 0.85 + Math.sin(now * 0.005) * 0.15;
-            ctx.strokeStyle = `rgba(245, 186, 82, ${0.28 * drumPulse})`;
-            ctx.lineWidth = 2.6;
-            ctx.beginPath();
-            ctx.arc(0, 0, worldW * 0.22, 0, Math.PI * 2);
-            ctx.stroke();
-            ctx.beginPath();
-            ctx.arc(0, 0, worldW * 0.13, 0, Math.PI * 2);
-            ctx.stroke();
-            for (let sp = 0; sp < 8; sp++) {
-              const ang = (sp / 8) * Math.PI * 2;
-              ctx.beginPath();
-              ctx.moveTo(Math.cos(ang) * (worldW * 0.06), Math.sin(ang) * (worldW * 0.06));
-              ctx.lineTo(Math.cos(ang) * (worldW * 0.22), Math.sin(ang) * (worldW * 0.22));
-              ctx.stroke();
-            }
-          } else {
-            ctx.strokeStyle = 'rgba(235, 180, 98, 0.14)';
-            ctx.lineWidth = 2.0;
-            ctx.beginPath();
-            ctx.arc(0, 0, worldW * 0.19, 0, Math.PI * 2);
-            ctx.stroke();
-          }
           ctx.restore();
 
-          // Perimeter Eternal Agni Brazier Warm Floor Pools
-          const brazierSpots = [
-            [worldW * 0.14, worldH * 0.22],
-            [worldW * 0.86, worldH * 0.22],
-            [worldW * 0.14, worldH * 0.80],
-            [worldW * 0.86, worldH * 0.80],
-            [worldW * 0.50, worldH * 0.17],
-            [worldW * 0.50, worldH * 0.85],
-          ];
-          const brazierFlicker = 0.88 + Math.sin(now * 0.007) * 0.12;
-          for (const [bx, by] of brazierSpots) {
-            const bGlow = ctx.createRadialGradient(bx, by, 6, bx, by, 210 * brazierFlicker);
-            bGlow.addColorStop(0, 'rgba(255, 150, 55, 0.20)');
-            bGlow.addColorStop(0.45, 'rgba(255, 82, 24, 0.08)');
-            bGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
-            ctx.fillStyle = bGlow;
-            ctx.beginPath();
-            ctx.arc(bx, by, 210 * brazierFlicker, 0, Math.PI * 2);
-            ctx.fill();
-          }
-          ctx.restore();
-
-          // 1.8. Draw Persistent Hand-Painted Ground Impact Decals & Blood-Lotus Runes (groundDecals2x2)
+          // 1.8. Draw Persistent Hand-Painted Shattered Molten Lava Craters (Frame 3 of combatImpacts2x2)
           for (let i = 0; i < sim.craters.length; i++) {
             const cr = sim.craters[i];
             ctx.save();
             ctx.translate(cr.x, cr.y);
-            ctx.scale(1, 0.54);
+            ctx.scale(1, 0.62);
             ctx.rotate(cr.angle || 0);
             ctx.globalAlpha = cr.alpha;
 
-            if (decalsAsset && decalsAsset.frames.length > 0) {
-              const dIdx = Math.max(0, Math.min(decalsAsset.frames.length - 1, cr.decalFrame));
-              const dFrame = decalsAsset.frames[dIdx];
-              const drawSize = cr.radius * 2.15;
+            if (impactsAsset && impactsAsset.frames.length >= 4) {
+              const craterFrame = impactsAsset.frames[3]; // Bottom-Right: Shattered Obsidian Molten Lava Crater
+              const drawSize = cr.radius * 2.35;
               ctx.drawImage(
-                decalsAsset.cleanCanvas,
-                dFrame.sx,
-                dFrame.sy,
-                dFrame.sw,
-                dFrame.sh,
+                impactsAsset.cleanCanvas,
+                craterFrame.sx,
+                craterFrame.sy,
+                craterFrame.sw,
+                craterFrame.sh,
                 -drawSize * 0.5,
                 -drawSize * 0.5,
                 drawSize,
                 drawSize
               );
-            } else {
-              const cGrad = ctx.createRadialGradient(0, 0, cr.radius * 0.1, 0, 0, cr.radius);
-              cGrad.addColorStop(0, 'rgba(255, 115, 28, 0.55)');
-              cGrad.addColorStop(0.45, 'rgba(32, 18, 12, 0.72)');
-              cGrad.addColorStop(0.82, 'rgba(12, 8, 6, 0.45)');
-              cGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-              ctx.fillStyle = cGrad;
-              ctx.beginPath();
-              ctx.arc(0, 0, cr.radius, 0, Math.PI * 2);
-              ctx.fill();
             }
             ctx.restore();
           }
         }
       );
 
-      // Step 2.2: Interactive Hades-Style Floor Pressure-Plate Traps (Agni Flame Vents & Chakram Blades)
+      // Step 2.2: Interactive Hand-Painted 4-Stage Floor Traps (zhy8c6zhy8c6zhy8_5d2df495.png)
       updateAndRenderPressureTraps(
         ctx,
         sim.traps,
@@ -4525,8 +4723,8 @@ export default function KaliyugaArena() {
                 trap.x,
                 trap.y - 72,
                 trap.kind === 'agni_vent'
-                  ? 'AGNI VENT TRAP! -145'
-                  : 'CHAKRAM BLADE TRAP! -145',
+                  ? 'AGNI LOTUS VENT! -145'
+                  : 'IRON SPIKE TRAP! -145',
                 '#ffd86b',
                 1.18
               );
@@ -4537,168 +4735,139 @@ export default function KaliyugaArena() {
         }
       );
 
-      // 2. Dynamic Flickering Brazier Fire Plumes, Living Rivers, Lava Fissures & Summoning Rifts
-      ctx.save();
-      ctx.globalCompositeOperation = 'screen';
+      // Step 2.3: Render v7 Act I [E] Look Artifact & Boss Mythic Mechanics (Molten Slag Fissures, Tusk Lodge, Furnace Vacuum)
+      sim.nearestLookObject = renderAndFindChamberLookObject(
+        ctx,
+        chamberSpec.id,
+        sim.player.x,
+        sim.player.y,
+        now * 0.001,
+        sim.storyFlags.looks,
+        false
+      );
+      renderBossMythicMechanics(
+        ctx,
+        now * 0.001,
+        activeBoss
+          ? {
+              type: activeBoss.type,
+              x: activeBoss.x,
+              y: activeBoss.y,
+              phase: activeBoss.phase,
+              tuskLodgedTimer: activeBoss.tuskLodgedTimer,
+              vacuumActiveTimer: activeBoss.vacuumActiveTimer,
+            }
+          : null,
+        sim.slagFissures
+      );
 
-      // Hades-Style Living Background Lighting: Pulsing Lava/River Glow Pools & Rising Ember Streams
-      if (chamberSpec.envEffect === 'blood_river' || chamberSpec.envEffect === 'lava_fissures') {
-        const isLava = chamberSpec.envEffect === 'lava_fissures';
-        const poolSpots = [
-          [worldW * 0.18, worldH * 0.30, 260],
-          [worldW * 0.82, worldH * 0.32, 260],
-          [worldW * 0.22, worldH * 0.76, 280],
-          [worldW * 0.78, worldH * 0.74, 280],
-          [worldW * 0.50, worldH * 0.20, 240],
-          [worldW * 0.50, worldH * 0.82, 240],
-        ];
-        for (let pIdx = 0; pIdx < poolSpots.length; pIdx++) {
-          const [px, py, baseR] = poolSpots[pIdx];
-          const pulse = 0.84 + Math.sin(now * 0.0035 + pIdx * 1.4) * 0.16;
-          const rad = baseR * pulse;
-          const lGrad = ctx.createRadialGradient(px, py, 8, px, py, rad);
-          if (isLava) {
-            lGrad.addColorStop(0, 'rgba(255, 165, 42, 0.28)');
-            lGrad.addColorStop(0.45, 'rgba(255, 68, 18, 0.14)');
-            lGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-          } else {
-            lGrad.addColorStop(0, 'rgba(255, 42, 68, 0.26)');
-            lGrad.addColorStop(0.48, 'rgba(180, 16, 38, 0.12)');
-            lGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-          }
-          ctx.fillStyle = lGrad;
-          ctx.beginPath();
-          ctx.arc(px, py, rad, 0, Math.PI * 2);
-          ctx.fill();
+      // Step 2.4: Meru Engine v2.0 UE5 Lumen Global Illumination (GI) Ground Bounce Pass
+      if (sim.graphicsSettings.lumenGiBounce) {
+        const giEmitters: LumenLightEmitter[] = [];
+        for (let bIdx = 0; bIdx < chamberSpec.braziers.length; bIdx++) {
+          const b = chamberSpec.braziers[bIdx];
+          giEmitters.push({
+            x: b.x * worldW,
+            y: b.y * worldH + 14,
+            radius: b.radius * 1.45,
+            color: b.color,
+            intensity: 0.55,
+          });
         }
-        // Rising glowing river/magma sparks drifting upward across the chamber
-        for (let sIdx = 0; sIdx < 18; sIdx++) {
-          const seed = sIdx * 97.3;
-          const cycle = ((now * 0.045 + seed) % 140) / 140;
-          const sx = ((seed * 13.7) % (worldW * 0.84)) + worldW * 0.08 + Math.sin(now * 0.003 + sIdx) * 18;
-          const sy = worldH * (0.18 + ((seed * 7.1) % 0.68)) - cycle * 65;
-          const sparkAlpha = Math.sin(cycle * Math.PI) * 0.75;
-          ctx.fillStyle = sIdx % 3 === 0 ? '#ffe14d' : isLava ? '#ff6a18' : '#ff2a4b';
-          ctx.globalAlpha = sparkAlpha;
-          ctx.beginPath();
-          ctx.arc(sx, sy, 2.2 + (sIdx % 3) * 0.9, 0, Math.PI * 2);
-          ctx.fill();
+        // Player Savitri Lantern & Focus Aura GI bounce
+        const lanternCfg = getLanternLightState(sim.storyFlags);
+        giEmitters.push({
+          x: sim.player.x,
+          y: sim.player.y + 8,
+          radius: sim.player.transformTimer > 0 ? 195 : 135,
+          color: sim.player.transformTimer > 0 ? '#ff5924' : lanternCfg.hex || '#ffaa44',
+          intensity: sim.player.transformTimer > 0 ? 0.72 : 0.42,
+        });
+        // Active Boss Abdominal Furnace / Bronze Drum GI bounce
+        if (activeBoss) {
+          giEmitters.push({
+            x: activeBoss.x,
+            y: activeBoss.y + 12,
+            radius: activeBoss.phase >= 2 ? 220 : 165,
+            color: activeBoss.type === 'vrikodara' ? '#ff4a1c' : '#ffb838',
+            intensity: activeBoss.phase >= 2 ? 0.68 : 0.48,
+          });
         }
-        ctx.globalAlpha = 1;
-      } else if (chamberSpec.envEffect === 'sacred_mist' || chamberSpec.envEffect === 'eclipse_wind') {
-        const isMist = chamberSpec.envEffect === 'sacred_mist';
-        for (let mIdx = 0; mIdx < 5; mIdx++) {
-          const mx = worldW * (0.18 + mIdx * 0.16) + Math.sin(now * 0.0012 + mIdx) * 75;
-          const my = worldH * (0.28 + (mIdx % 2) * 0.38);
-          const mGrad = ctx.createRadialGradient(mx, my, 12, mx, my, 250);
-          mGrad.addColorStop(0, isMist ? 'rgba(56, 232, 255, 0.16)' : 'rgba(255, 148, 48, 0.14)');
-          mGrad.addColorStop(0.55, isMist ? 'rgba(255, 216, 107, 0.07)' : 'rgba(255, 62, 36, 0.06)');
-          mGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-          ctx.fillStyle = mGrad;
-          ctx.beginPath();
-          ctx.arc(mx, my, 250, 0, Math.PI * 2);
-          ctx.fill();
-        }
+        renderWorldSpaceLumenGI(ctx, sim.graphicsSettings, giEmitters, now * 0.001);
       }
 
+      // 2. Living Background Animation: 4-Frame Hand-Painted Roaring Agni Brazier Flame Flipbook (vqynauvqynauvqyn_da9af05e.png)
+      ctx.save();
       chamberSpec.braziers.forEach((b, bIdx) => {
         const bx = b.x * worldW;
         const by = b.y * worldH;
-        const r = b.radius * 1.45 * flicker;
+        const r = b.radius * 1.35 * flicker;
+
+        // Warm additive floor light pool around each brazier
+        ctx.save();
+        ctx.globalCompositeOperation = 'screen';
         const grad = ctx.createRadialGradient(bx, by, 4, bx, by, r);
-        grad.addColorStop(0, b.color + '90');
-        grad.addColorStop(0.45, b.color + '38');
+        grad.addColorStop(0, b.color + '78');
+        grad.addColorStop(0.45, b.color + '28');
         grad.addColorStop(1, 'rgba(0,0,0,0)');
         ctx.fillStyle = grad;
         ctx.beginPath();
         ctx.arc(bx, by, r, 0, Math.PI * 2);
         ctx.fill();
+        ctx.restore();
 
-        // Animated Dancing Volumetric Flame Tongues rising from every Brazier!
-        for (let f = 0; f < 3; f++) {
-          const flamePhase = now * 0.012 + bIdx * 1.7 + f * 2.1;
-          const swayX = Math.sin(flamePhase) * (8 + f * 4);
-          const flameH = 28 + Math.cos(flamePhase * 1.3) * 10;
-          ctx.fillStyle = f === 0 ? '#fff5c0' : f === 1 ? '#ff9d2e' : b.color;
-          ctx.globalAlpha = 0.65 - f * 0.15;
-          ctx.beginPath();
-          ctx.moveTo(bx - 10 + f * 2, by);
-          ctx.quadraticCurveTo(bx + swayX, by - flameH * 0.6, bx + swayX * 1.2, by - flameH);
-          ctx.quadraticCurveTo(bx - swayX * 0.5, by - flameH * 0.5, bx + 10 - f * 2, by);
-          ctx.closePath();
-          ctx.fill();
+        // 12 FPS 4-Frame Hand-Painted Roaring Agni Flame Flipbook
+        if (brazierFlameAsset && brazierFlameAsset.frames.length > 0) {
+          const flameIdx =
+            (Math.floor(now * 0.012) + bIdx) % brazierFlameAsset.frames.length;
+          const ff = brazierFlameAsset.frames[flameIdx];
+          const flameH = 128 * (0.94 + Math.sin(now * 0.015 + bIdx) * 0.06);
+          const flameW = (ff.sw / Math.max(1, ff.sh)) * flameH;
+          ctx.save();
+          ctx.globalCompositeOperation = 'screen';
+          ctx.translate(bx, by);
+          ctx.drawImage(
+            brazierFlameAsset.cleanCanvas,
+            ff.sx,
+            ff.sy,
+            ff.sw,
+            ff.sh,
+            -flameW * 0.5,
+            -flameH * 0.84,
+            flameW,
+            flameH
+          );
+          ctx.restore();
         }
-        ctx.globalAlpha = 1;
       });
 
-      // Draw Active Hades-Style Multi-Wave Summoning Sigils on the Chamber Floor (Zero Rectangular Boxes!)
+      // Draw Active Hades Multi-Wave Summoning Pentagram Rifts using Hand-Painted Ground Decal Frame 3 (o86abro86abro86a_6a82a5ae.png)
       for (const rift of sim.summoningRifts) {
         const prog = 1 - Math.max(0, rift.timer / Math.max(0.1, rift.maxTimer));
-        const riftR = 48 * (0.45 + prog * 0.65);
+        const riftSize = 148 * (0.45 + prog * 0.65);
         ctx.save();
+        ctx.globalCompositeOperation = 'screen';
         ctx.translate(rift.x, rift.y);
-        ctx.scale(1, 0.54);
+        ctx.scale(1, 0.58);
+        ctx.rotate(now * 0.0035);
+        ctx.globalAlpha = Math.min(1, 0.35 + prog * 0.65);
 
-        const rGlow = ctx.createRadialGradient(0, 0, 4, 0, 0, riftR * 1.45);
-        rGlow.addColorStop(0, 'rgba(255, 225, 77, 0.55)');
-        rGlow.addColorStop(0.5, 'rgba(255, 42, 58, 0.35)');
-        rGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
-        ctx.fillStyle = rGlow;
-        ctx.beginPath();
-        ctx.arc(0, 0, riftR * 1.45, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.rotate(now * 0.004);
-        ctx.strokeStyle = '#ff2a3a';
-        ctx.shadowColor = '#ff2a3a';
-        ctx.shadowBlur = 16;
-        ctx.lineWidth = 3.2;
-        ctx.beginPath();
-        ctx.arc(0, 0, riftR, 0, Math.PI * 2);
-        ctx.stroke();
-
-        ctx.strokeStyle = '#ffe14d';
-        ctx.lineWidth = 2.2;
-        ctx.setLineDash([8, 6]);
-        ctx.beginPath();
-        ctx.arc(0, 0, riftR * 0.70, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.setLineDash([]);
-
-        ctx.strokeStyle = '#38e8ff';
-        ctx.lineWidth = 1.8;
-        for (let k = 0; k < 6; k++) {
-          const a = (k * Math.PI) / 3;
-          ctx.beginPath();
-          ctx.moveTo(Math.cos(a) * (riftR * 0.35), Math.sin(a) * (riftR * 0.35));
-          ctx.lineTo(Math.cos(a) * (riftR * 0.95), Math.sin(a) * (riftR * 0.95));
-          ctx.stroke();
+        if (decalsAsset && decalsAsset.frames.length >= 4) {
+          const rf = decalsAsset.frames[3]; // Bottom-Right: Swirling Magenta-Crimson Summoning Pentagram Rift
+          ctx.drawImage(
+            decalsAsset.cleanCanvas,
+            rf.sx,
+            rf.sy,
+            rf.sw,
+            rf.sh,
+            -riftSize * 0.5,
+            -riftSize * 0.5,
+            riftSize,
+            riftSize
+          );
         }
         ctx.restore();
       }
-      // Note: Physical 3D Isometric Exit Gate Archways & Reward Previews are rendered by renderIsometricChamberPlatform above!
-
-      // Central courtyard dragon medallion / blood pool ambient reflection
-      const centerGlowColor =
-        sim.chamberIndex === 5
-          ? 'rgba(220, 38, 48, 0.18)'
-          : sim.chamberIndex === 2
-          ? 'rgba(235, 68, 44, 0.16)'
-          : 'rgba(235, 175, 68, 0.12)';
-      const cGrad = ctx.createRadialGradient(
-        worldW * 0.5,
-        worldH * 0.54,
-        16,
-        worldW * 0.5,
-        worldH * 0.54,
-        worldW * 0.28
-      );
-      cGrad.addColorStop(0, centerGlowColor);
-      cGrad.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = cGrad;
-      ctx.beginPath();
-      ctx.ellipse(worldW * 0.5, worldH * 0.54, worldW * 0.28, worldH * 0.17, 0, 0, Math.PI * 2);
-      ctx.fill();
       ctx.restore();
 
       // 2.5. Draw Expanding Ground Shockwave Rings (Isometric Perspective)
@@ -4719,205 +4888,76 @@ export default function KaliyugaArena() {
         ctx.restore();
       }
 
-      // 3. Draw Organic Dark-Mythology Calligraphic Ground Telegraphs (ZERO RECTANGULAR BOXES!)
+      // 3. Draw 100% Hand-Painted Isometric Ground Telegraph Runes (o86abro86abro86a_6a82a5ae.png 2x2 Sheet)
+      // Frame 0 (Top-Left): Circular Sri Yantra Shockwave Mandala
+      // Frame 1 (Top-Right): Wide Crescent Fan Cleave Telegraph Rune
+      // Frame 2 (Bottom-Left): Tapered Vermilion-Gold Spear-Charge Chevron Lane
       sim.enemies.forEach((e) => {
-        if (e.aiState === 'windup') {
+        if (e.aiState === 'windup' && decalsAsset && decalsAsset.frames.length >= 3) {
           const totalDur = Math.max(0.15, e.windupDuration || 0.6);
           const progress = Math.max(0, Math.min(1, 1 - e.aiTimer / totalDur));
           const isImminent = e.aiTimer <= 0.22;
-          const coreColor = isImminent
-            ? '#ffe680'
-            : e.isBoss
-            ? '#ff4d62'
-            : '#ff8e44';
 
           ctx.save();
           ctx.globalCompositeOperation = 'screen';
+          ctx.globalAlpha = Math.min(1, 0.45 + progress * 0.55);
 
           if (e.attackKind === 'corridor') {
-            // Organic Tapered Blood-Ink & Molten-Ember Spear-Thrust Brushstroke (NO RECTANGLE!)
-            ctx.translate(e.telegraphX, e.telegraphY);
-            ctx.rotate(e.aimAngle);
+            // Frame 2 (Bottom-Left): Tapered Vermilion-Gold Spear-Charge Chevron Lane
+            const laneFrame = decalsAsset.frames[2];
             const len =
               Math.hypot(e.corridorEndX - e.telegraphX, e.corridorEndY - e.telegraphY) || 240;
-            const maxHalfW = e.isBoss ? 36 : 26;
+            const laneWidth = (e.isBoss ? 128 : 92) * (0.82 + progress * 0.22);
 
-            // 1. Soft tapered flame-ink aura along the floor
-            const spearGrad = ctx.createLinearGradient(0, 0, len, 0);
-            spearGrad.addColorStop(0, 'rgba(255, 68, 42, 0.05)');
-            spearGrad.addColorStop(0.5, e.isBoss ? 'rgba(235, 38, 62, 0.28)' : 'rgba(255, 110, 38, 0.24)');
-            spearGrad.addColorStop(0.92, isImminent ? 'rgba(255, 230, 128, 0.55)' : 'rgba(255, 92, 52, 0.42)');
-            spearGrad.addColorStop(1, 'rgba(255, 240, 180, 0)');
-
-            ctx.fillStyle = spearGrad;
-            ctx.beginPath();
-            ctx.moveTo(0, 0);
-            ctx.quadraticCurveTo(len * 0.42, -maxHalfW, len * 0.86, -maxHalfW * 0.28);
-            ctx.lineTo(len + 14, 0);
-            ctx.lineTo(len * 0.86, maxHalfW * 0.28);
-            ctx.quadraticCurveTo(len * 0.42, maxHalfW, 0, 0);
-            ctx.closePath();
-            ctx.fill();
-
-            // 2. Charging Molten Spear-Vein shooting from origin -> tip * progress
-            const chargeLen = len * progress;
-            const cHalfW = maxHalfW * (0.35 + progress * 0.45);
-            ctx.fillStyle = isImminent ? 'rgba(255, 230, 128, 0.48)' : 'rgba(255, 82, 52, 0.36)';
-            ctx.beginPath();
-            ctx.moveTo(0, 0);
-            ctx.quadraticCurveTo(chargeLen * 0.5, -cHalfW, chargeLen, 0);
-            ctx.quadraticCurveTo(chargeLen * 0.5, cHalfW, 0, 0);
-            ctx.closePath();
-            ctx.fill();
-
-            // 3. Razor-sharp central Dragon-Spear spine & feathered flank curves
-            ctx.strokeStyle = coreColor;
-            ctx.shadowColor = coreColor;
-            ctx.shadowBlur = 12;
-            ctx.lineWidth = isImminent ? 3.0 : 2.0;
-            ctx.beginPath();
-            ctx.moveTo(10, 0);
-            ctx.lineTo(len * (0.25 + progress * 0.75), 0);
-            ctx.stroke();
-
-            // Feathered flank wind-wisps (curved, non-boxy)
-            ctx.lineWidth = 1.4;
-            ctx.globalAlpha = 0.68;
-            ctx.beginPath();
-            ctx.moveTo(len * 0.15, -maxHalfW * 0.35);
-            ctx.quadraticCurveTo(len * 0.52, -maxHalfW * 0.88, len * 0.94, 0);
-            ctx.moveTo(len * 0.15, maxHalfW * 0.35);
-            ctx.quadraticCurveTo(len * 0.52, maxHalfW * 0.88, len * 0.94, 0);
-            ctx.stroke();
-
-            // 4. Rotating Target Lotus Impact Sigil at the spear tip
-            ctx.save();
-            ctx.translate(len, 0);
-            ctx.scale(1, 0.58);
-            ctx.rotate(now * 0.004);
-            ctx.strokeStyle = isImminent ? '#fff6b8' : coreColor;
-            ctx.lineWidth = 1.8;
-            const sigilR = (e.isBoss ? 26 : 19) * (0.7 + progress * 0.3);
-            ctx.beginPath();
-            ctx.arc(0, 0, sigilR, 0, Math.PI * 2);
-            ctx.stroke();
-            for (let pIdx = 0; pIdx < 4; pIdx++) {
-              const a = (pIdx * Math.PI) / 2;
-              ctx.beginPath();
-              ctx.moveTo(Math.cos(a) * (sigilR * 0.45), Math.sin(a) * (sigilR * 0.45));
-              ctx.lineTo(Math.cos(a) * (sigilR * 1.32), Math.sin(a) * (sigilR * 1.32));
-              ctx.stroke();
-            }
-            ctx.restore();
+            ctx.translate(e.telegraphX, e.telegraphY);
+            ctx.rotate(e.aimAngle);
+            ctx.drawImage(
+              isImminent ? decalsAsset.goldCanvas : decalsAsset.cleanCanvas,
+              laneFrame.sx,
+              laneFrame.sy,
+              laneFrame.sw,
+              laneFrame.sh,
+              0,
+              -laneWidth * 0.5,
+              len * (0.35 + progress * 0.65),
+              laneWidth
+            );
           } else if (e.attackKind === 'shockwave') {
-            // Organic Ground Quake Mandala + Radial Magma Fissure Veins
-            ctx.translate(e.x, e.y);
-            ctx.scale(1, 0.54);
-            const r = e.telegraphRadius;
-
-            if (decalsAsset && decalsAsset.frames.length > 0) {
-              const runeIdx = e.type === 'xuemo' ? 0 : 2;
-              const rFrame = decalsAsset.frames[runeIdx] || decalsAsset.frames[0];
-              ctx.save();
-              ctx.rotate(now * 0.0015);
-              ctx.globalAlpha = 0.28 + progress * 0.50;
-              ctx.drawImage(
-                decalsAsset.cleanCanvas,
-                rFrame.sx,
-                rFrame.sy,
-                rFrame.sw,
-                rFrame.sh,
-                -r,
-                -r,
-                r * 2,
-                r * 2
-              );
-              ctx.restore();
-            }
-
-            // Soft radial magma pulse gradient (no hard dashed circle!)
-            const qGrad = ctx.createRadialGradient(0, 0, r * 0.08, 0, 0, r);
-            qGrad.addColorStop(0, 'rgba(255, 120, 40, 0.05)');
-            qGrad.addColorStop(Math.max(0.15, progress * 0.85), e.isBoss ? 'rgba(235, 38, 62, 0.32)' : 'rgba(255, 110, 38, 0.25)');
-            qGrad.addColorStop(0.95, isImminent ? 'rgba(255, 230, 128, 0.62)' : 'rgba(255, 96, 48, 0.42)');
-            qGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-            ctx.fillStyle = qGrad;
-            ctx.beginPath();
-            ctx.arc(0, 0, r, 0, Math.PI * 2);
-            ctx.fill();
-
-            // 6 organic jagged fissure veins radiating outward with progress
-            ctx.strokeStyle = coreColor;
-            ctx.lineWidth = isImminent ? 2.4 : 1.6;
-            for (let v = 0; v < 6; v++) {
-              const va = (v / 6) * Math.PI * 2 + 0.3;
-              const vLen = r * (0.28 + progress * 0.70);
-              ctx.beginPath();
-              ctx.moveTo(Math.cos(va) * 16, Math.sin(va) * 16);
-              ctx.quadraticCurveTo(
-                Math.cos(va + 0.14) * (vLen * 0.55),
-                Math.sin(va + 0.14) * (vLen * 0.55),
-                Math.cos(va) * vLen,
-                Math.sin(va) * vLen
-              );
-              ctx.stroke();
-            }
-          } else {
-            // Organic Feathered Crescent Blade-Wind Swath ('cone' - NO straight triangle radial lines!)
+            // Frame 0 (Top-Left): Circular Crimson-Gold Sri Yantra Shockwave Mandala
+            const mandalaFrame = decalsAsset.frames[0];
+            const r = e.telegraphRadius * (0.45 + progress * 0.60);
             ctx.translate(e.x, e.y);
             ctx.scale(1, 0.58);
-            const r = e.telegraphRadius;
-            const halfArc = e.isBoss ? Math.PI * 0.42 : Math.PI * 0.36;
-            const startA = e.aimAngle - halfArc;
-            const endA = e.aimAngle + halfArc;
-            const innerR = r * 0.26;
-            const curOuterR = innerR + (r - innerR) * (0.35 + progress * 0.65);
-            const steps = 18;
-
-            // Build a tapered crescent polygon (hollowed center so it looks like a sweeping blade wind, not a pie chart!)
-            ctx.beginPath();
-            for (let s = 0; s <= steps; s++) {
-              const t = s / steps;
-              const a = startA + (endA - startA) * t;
-              const swell = Math.sin(t * Math.PI);
-              const rad = innerR + (curOuterR - innerR) * (0.25 + 0.75 * swell);
-              const px = Math.cos(a) * rad;
-              const py = Math.sin(a) * rad;
-              if (s === 0) ctx.moveTo(px, py);
-              else ctx.lineTo(px, py);
-            }
-            for (let s = steps; s >= 0; s--) {
-              const t = s / steps;
-              const a = startA + (endA - startA) * t;
-              const rad = innerR + (1 - Math.sin(t * Math.PI)) * (curOuterR - innerR) * 0.22;
-              ctx.lineTo(Math.cos(a) * rad, Math.sin(a) * rad);
-            }
-            ctx.closePath();
-
-            const cGrad = ctx.createRadialGradient(0, 0, innerR, 0, 0, r);
-            cGrad.addColorStop(0, 'rgba(255, 90, 40, 0)');
-            cGrad.addColorStop(0.65, e.isBoss ? 'rgba(235, 38, 62, 0.28)' : 'rgba(255, 115, 42, 0.22)');
-            cGrad.addColorStop(1, isImminent ? 'rgba(255, 230, 128, 0.62)' : 'rgba(255, 110, 48, 0.45)');
-            ctx.fillStyle = cGrad;
-            ctx.fill();
-
-            // Glowing outer crescent blade edge (only along the curved outer arc, never straight lines to 0,0!)
-            ctx.strokeStyle = coreColor;
-            ctx.shadowColor = coreColor;
-            ctx.shadowBlur = 10;
-            ctx.lineWidth = isImminent ? 3.0 : 2.0;
-            ctx.beginPath();
-            for (let s = 1; s <= steps - 1; s++) {
-              const t = s / steps;
-              const a = startA + (endA - startA) * t;
-              const swell = Math.sin(t * Math.PI);
-              const rad = innerR + (r - innerR) * (0.25 + 0.75 * swell);
-              const px = Math.cos(a) * rad;
-              const py = Math.sin(a) * rad;
-              if (s === 1) ctx.moveTo(px, py);
-              else ctx.lineTo(px, py);
-            }
-            ctx.stroke();
+            ctx.rotate(now * 0.0018);
+            ctx.drawImage(
+              isImminent ? decalsAsset.goldCanvas : decalsAsset.cleanCanvas,
+              mandalaFrame.sx,
+              mandalaFrame.sy,
+              mandalaFrame.sw,
+              mandalaFrame.sh,
+              -r,
+              -r,
+              r * 2,
+              r * 2
+            );
+          } else {
+            // Frame 1 (Top-Right): Wide Crescent Fan Cleave Telegraph Rune
+            const coneFrame = decalsAsset.frames[1];
+            const coneSize = e.telegraphRadius * 1.65 * (0.55 + progress * 0.45);
+            ctx.translate(e.x, e.y);
+            ctx.scale(1, 0.62);
+            ctx.rotate(e.aimAngle);
+            ctx.drawImage(
+              isImminent ? decalsAsset.goldCanvas : decalsAsset.cleanCanvas,
+              coneFrame.sx,
+              coneFrame.sy,
+              coneFrame.sw,
+              coneFrame.sh,
+              -coneSize * 0.18,
+              -coneSize * 0.5,
+              coneSize,
+              coneSize
+            );
           }
           ctx.restore();
         }
@@ -5304,15 +5344,29 @@ export default function KaliyugaArena() {
               );
             }
           } else {
-            // Animated 4-Frame Multi-Sheet Regular Enemies (Vrika Stalker, Agni Spearman, Magma Golem, Furnace Colossus)!
-            const sheetUrl =
-              e.type === 'wolf_guai'
-                ? GAME_ASSETS.enemySheets.vrikaStalkerSheet4x1
-                : e.type === 'fire_monk'
-                ? GAME_ASSETS.enemySheets.agniSpearmanSheet4x1
-                : e.type === 'furnace_titan'
-                ? GAME_ASSETS.enemySheets.furnaceColossusSheet4x1
-                : GAME_ASSETS.enemySheets.magmaGolemSheet4x1;
+            // Combined 7-Sheet Enemy Roster (Both Previous Fan-Favorite 4x1 Sheets + Newly Uploaded 4x1 & 2x2 Sheets!)
+            let sheetUrl: string = GAME_ASSETS.enemySheets.magmaGolemSheet4x1;
+            if (e.type === 'wolf_guai') {
+              sheetUrl =
+                e.id % 2 === 0 || e.trait === 'rakshasa_frenzy'
+                  ? GAME_ASSETS.enemySheets.sharabhaHoundSheet4x1
+                  : GAME_ASSETS.enemySheets.vrikaStalkerSheet4x1;
+            } else if (e.type === 'fire_monk') {
+              sheetUrl =
+                e.id % 2 === 0 || sim.chamberIndex >= 1
+                  ? GAME_ASSETS.enemySheets.pretaBowmanSheet4x1
+                  : GAME_ASSETS.enemySheets.agniSpearmanSheet4x1;
+            } else if (e.type === 'furnace_titan') {
+              sheetUrl =
+                sim.chamberIndex >= 4 && e.trait === 'vajra_shield'
+                  ? GAME_ASSETS.enemySheets.kaliyugaAvatarSheet2x2
+                  : GAME_ASSETS.enemySheets.rakshasaMaceSheet4x1;
+            } else {
+              sheetUrl =
+                e.id % 2 === 0
+                  ? GAME_ASSETS.enemySheets.magmaGolemSheet4x1
+                  : GAME_ASSETS.enemySheets.rakshasaMaceSheet4x1;
+            }
 
             const sheetAsset = getProcessedSpriteSync(sheetUrl);
             const animFrame =
@@ -5324,12 +5378,12 @@ export default function KaliyugaArena() {
 
             const targetH =
               e.type === 'furnace_titan'
-                ? 118
+                ? 124
                 : e.type === 'stone_golem'
-                ? 96
+                ? 104
                 : e.type === 'fire_monk'
-                ? 90
-                : 82;
+                ? 96
+                : 88;
 
             // Elite Trait Floor Aura Ring (Vajra Shield / Agni Aura / Rakshasa Frenzy)
             if (e.trait && e.aiState !== 'ko') {
@@ -5350,25 +5404,89 @@ export default function KaliyugaArena() {
               ctx.restore();
             }
 
-            drawSpriteFrame(
-              ctx,
-              sheetAsset,
-              animFrame,
-              4,
-              e.x,
-              e.y,
-              targetH,
-              targetH,
-              e.facing,
-              e.scaleX,
-              e.scaleY,
-              isFlash,
-              bob,
-              targetH * 0.28,
-              e.trait === 'vajra_shield' ? 'jade' : e.trait === 'agni_aura' ? 'gold' : 'none',
-              enemySkewX,
-              primaryLightX
-            );
+            // REAL-TIME 60FPS 3D ENEMY SQUADRON RENDERER (Ash-Stalker, Dhanur-Preta, Vetala Guard, Furnace Colossus)
+            const enemy3d = enemy3dRef.current;
+            const renderedEnemy3D =
+              enemy3d &&
+              enemy3d.renderEnemy({
+                id: e.id,
+                kind: e.type,
+                trait: e.trait,
+                animTime: e.animTime,
+                vx: e.vx,
+                vy: e.vy,
+                facing: e.facing,
+                aimAngle: e.aimAngle,
+                aiState: e.aiState,
+                windupProgress:
+                  e.aiState === 'windup'
+                    ? Math.min(1, Math.max(0, 1 - e.aiTimer / Math.max(0.01, e.windupDuration)))
+                    : 0,
+                isPostureBroken: e.postureBrokenTimer > 0,
+                isHitFlash: isFlash,
+                isParrying: e.parryStanceTimer > 0,
+              });
+
+            if (renderedEnemy3D && enemy3d) {
+              // Draw ground contact shadow first
+              drawSpriteFrame(
+                ctx,
+                undefined,
+                0,
+                1,
+                e.x,
+                e.y,
+                targetH,
+                0,
+                e.facing,
+                e.scaleX,
+                e.scaleY,
+                false,
+                bob,
+                targetH * 0.3
+              );
+
+              const drawSize =
+                e.type === 'furnace_titan'
+                  ? 196
+                  : e.type === 'stone_golem'
+                  ? 172
+                  : e.type === 'fire_monk'
+                  ? 158
+                  : 150;
+              const anchorX = -drawSize * 0.5;
+              const anchorY = -drawSize * 0.78;
+
+              ctx.save();
+              ctx.translate(e.x, e.y);
+              ctx.drawImage(enemy3d.canvas, anchorX, anchorY, drawSize, drawSize);
+              if (isFlash) {
+                ctx.globalCompositeOperation = 'lighter';
+                ctx.globalAlpha = 0.42;
+                ctx.drawImage(enemy3d.canvas, anchorX, anchorY, drawSize, drawSize);
+              }
+              ctx.restore();
+            } else {
+              drawSpriteFrame(
+                ctx,
+                sheetAsset,
+                animFrame,
+                4,
+                e.x,
+                e.y,
+                targetH,
+                targetH,
+                e.facing,
+                e.scaleX,
+                e.scaleY,
+                isFlash,
+                bob,
+                targetH * 0.28,
+                e.trait === 'vajra_shield' ? 'jade' : e.trait === 'agni_aura' ? 'gold' : 'none',
+                enemySkewX,
+                primaryLightX
+              );
+            }
           }
 
           // Active Frontal Parry / Guard Shield Arc when enemy is ready to deflect frontal spam!
@@ -5411,91 +5529,82 @@ export default function KaliyugaArena() {
             ctx.restore();
           }
 
-          // Enemy Multi-Color Hades Attack Slash Crescent Arc (Crimson Red + Lightning Gold + Electric Cyan Core)
-          if (e.slashArcAlpha > 0.05 && e.attackKind === 'cone') {
+          // Hand-Painted Enemy Attack Slash Smear (kwhb8qkwhb8qkwhb_adfa1bcf.png Frame 0)
+          const slashVfxAsset = getProcessedSpriteSync(GAME_ASSETS.vfxSlash2x2);
+          if (
+            e.slashArcAlpha > 0.05 &&
+            e.attackKind === 'cone' &&
+            slashVfxAsset &&
+            slashVfxAsset.frames.length > 0
+          ) {
+            const sf = slashVfxAsset.frames[0];
+            const slashSize = e.telegraphRadius * 1.45;
             ctx.save();
             ctx.globalCompositeOperation = 'screen';
             ctx.globalAlpha = e.slashArcAlpha * 0.92;
             ctx.translate(e.x, e.y - 36);
-            ctx.scale(1, 0.65);
-            const arcR = e.telegraphRadius * 0.75;
-
-            // Outer Crimson-Red Wave
-            ctx.strokeStyle = '#ff2a3a';
-            ctx.lineWidth = e.isBoss ? 16 : 11;
-            ctx.shadowColor = '#ff2a3a';
-            ctx.shadowBlur = 16;
-            ctx.beginPath();
-            ctx.arc(0, 0, arcR, e.aimAngle - 1.08, e.aimAngle + 1.08);
-            ctx.stroke();
-
-            // Mid Lightning-Yellow Core
-            ctx.strokeStyle = '#ffe14d';
-            ctx.lineWidth = e.isBoss ? 8 : 5.5;
-            ctx.beginPath();
-            ctx.arc(0, 0, arcR * 0.96, e.aimAngle - 0.95, e.aimAngle + 0.95);
-            ctx.stroke();
-
-            // Inner Electric-Blue / White Edge
-            ctx.strokeStyle = e.trait === 'vajra_shield' ? '#38e8ff' : '#ffffff';
-            ctx.lineWidth = 2.6;
-            ctx.beginPath();
-            ctx.arc(0, 0, arcR * 0.92, e.aimAngle - 0.82, e.aimAngle + 0.82);
-            ctx.stroke();
+            ctx.scale(1, 0.68);
+            ctx.rotate(e.aimAngle);
+            ctx.drawImage(
+              slashVfxAsset.cleanCanvas,
+              sf.sx,
+              sf.sy,
+              sf.sw,
+              sf.sh,
+              -slashSize * 0.25,
+              -slashSize * 0.5,
+              slashSize,
+              slashSize
+            );
             ctx.restore();
           }
 
-          // Hades/Sekiro-Style Golden Parry/Dodge Starburst Glint (⚡) in final 0.24s of windup!
-          if (e.aiState === 'windup' && e.aiTimer <= 0.24) {
+          // Hand-Painted Starburst Glint (combatImpacts2x2 Frame 1) in final 0.24s of windup!
+          if (
+            e.aiState === 'windup' &&
+            e.aiTimer <= 0.24 &&
+            impactsAsset &&
+            impactsAsset.frames.length >= 2
+          ) {
+            const sf = impactsAsset.frames[1];
             const gx = e.x + e.facing * 22;
             const gy = e.y - (e.isBoss ? 72 : 48);
-            const glintScale = 1 + Math.sin(now * 0.05) * 0.25;
+            const glintSize = (e.isBoss ? 68 : 48) * (0.9 + Math.sin(now * 0.05) * 0.2);
             ctx.save();
             ctx.globalCompositeOperation = 'screen';
             ctx.translate(gx, gy);
-            ctx.scale(glintScale, glintScale);
-            ctx.strokeStyle = '#fff8cc';
-            ctx.fillStyle = '#ffd86b';
-            ctx.shadowColor = '#ffaa00';
-            ctx.shadowBlur = 16;
-            ctx.lineWidth = 2.4;
-            // 4-point starburst cross
-            ctx.beginPath();
-            ctx.moveTo(-18, 0);
-            ctx.lineTo(18, 0);
-            ctx.moveTo(0, -18);
-            ctx.lineTo(0, 18);
-            ctx.stroke();
-            ctx.beginPath();
-            ctx.arc(0, 0, 5.5, 0, Math.PI * 2);
-            ctx.fill();
+            ctx.drawImage(
+              impactsAsset.cleanCanvas,
+              sf.sx,
+              sf.sy,
+              sf.sw,
+              sf.sh,
+              -glintSize * 0.5,
+              -glintSize * 0.5,
+              glintSize,
+              glintSize
+            );
             ctx.restore();
           }
 
           // Agneyastra Golden Mandala Bind Ring
-          if (e.immobilizedTimer > 0) {
+          if (e.immobilizedTimer > 0 && decalsAsset && decalsAsset.frames.length > 0) {
+            const mf = decalsAsset.frames[0];
             ctx.save();
-            ctx.translate(e.x, e.y - 40);
-            ctx.strokeStyle = '#ffd86b';
-            ctx.shadowColor = '#ffaa2b';
-            ctx.shadowBlur = 14;
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.arc(0, 0, 32, 0, Math.PI * 2);
-            ctx.stroke();
-
-            ctx.save();
-            ctx.rotate(now * 0.0025);
-            ctx.setLineDash([6, 5]);
-            ctx.beginPath();
-            ctx.arc(0, 0, 26, 0, Math.PI * 2);
-            ctx.stroke();
-            ctx.restore();
-
-            ctx.fillStyle = '#fff3be';
-            ctx.font = "bold 11px 'Cinzel', Georgia, serif";
-            ctx.textAlign = 'center';
-            ctx.fillText('AGNI', 0, 4);
+            ctx.globalCompositeOperation = 'screen';
+            ctx.translate(e.x, e.y - 36);
+            ctx.rotate(now * 0.003);
+            ctx.drawImage(
+              decalsAsset.goldCanvas,
+              mf.sx,
+              mf.sy,
+              mf.sw,
+              mf.sh,
+              -36,
+              -36,
+              72,
+              72
+            );
             ctx.restore();
           }
 
@@ -5556,60 +5665,60 @@ export default function KaliyugaArena() {
           // 2.5D Velocity Lean / Shear so Wukong physically leans into sprints, lunges & attacks
           const velocitySkewX = Math.max(-0.22, Math.min(0.22, (p.vx / 285) * 0.16));
 
-          // 1. Hades Zagreus Tri-Color (Crimson Red + Electric Blue + Lightning Yellow) Dash Warp Streak
-          if (p.dashStreakAlpha > 0.02) {
+          // 1. Hand-Painted Cyan Soul-Fire & Crimson Blood-Smoke Dash Burst (2n0p172n0p172n0p_4fba9427.png Frame 0)
+          if (
+            p.dashStreakAlpha > 0.02 &&
+            impactsAsset &&
+            impactsAsset.frames.length > 0
+          ) {
+            const dashFrame = impactsAsset.frames[0]; // Top-Left: Cyan Soul-Fire & Crimson Blood-Smoke Dash Burst
+            const sx = p.dashStartX;
+            const sy = p.dashStartY - 28;
+            const ex = p.x;
+            const ey = p.y - 28;
+            const dashAng = Math.atan2(ey - sy, ex - sx);
+            const dashLen = Math.hypot(ex - sx, ey - sy);
+
             ctx.save();
             ctx.globalCompositeOperation = 'screen';
             ctx.globalAlpha = p.dashStreakAlpha * 0.95;
-            const sx = p.dashStartX;
-            const sy = p.dashStartY - 34;
-            const ex = p.x;
-            const ey = p.y - 34;
 
-            // Layer 1: Wide Crimson-Red Blood-Flame Wake
-            const redGrad = ctx.createLinearGradient(sx, sy, ex, ey);
-            redGrad.addColorStop(0, 'rgba(255, 42, 58, 0)');
-            redGrad.addColorStop(0.35, 'rgba(255, 42, 58, 0.75)');
-            redGrad.addColorStop(1, 'rgba(255, 120, 36, 0.95)');
-            ctx.strokeStyle = redGrad;
-            ctx.lineWidth = 22 * p.dashStreakAlpha;
-            ctx.lineCap = 'round';
-            ctx.shadowColor = '#ff2a3a';
-            ctx.shadowBlur = 18;
-            ctx.beginPath();
-            ctx.moveTo(sx, sy);
-            ctx.lineTo(ex, ey);
-            ctx.stroke();
+            // Origin burst cloud
+            const burstSize = 115 * (0.65 + p.dashStreakAlpha * 0.45);
+            ctx.save();
+            ctx.translate(sx, sy);
+            ctx.rotate(dashAng);
+            ctx.drawImage(
+              impactsAsset.cleanCanvas,
+              dashFrame.sx,
+              dashFrame.sy,
+              dashFrame.sw,
+              dashFrame.sh,
+              -burstSize * 0.5,
+              -burstSize * 0.5,
+              burstSize,
+              burstSize
+            );
+            ctx.restore();
 
-            // Layer 2: Electric Cyan-Blue Core Ribbon
-            const blueGrad = ctx.createLinearGradient(sx, sy, ex, ey);
-            blueGrad.addColorStop(0, 'rgba(56, 232, 255, 0)');
-            blueGrad.addColorStop(0.45, 'rgba(56, 232, 255, 0.90)');
-            blueGrad.addColorStop(1, 'rgba(255, 225, 77, 1)');
-            ctx.strokeStyle = blueGrad;
-            ctx.lineWidth = 10 * p.dashStreakAlpha;
-            ctx.beginPath();
-            ctx.moveTo(sx, sy);
-            ctx.lineTo(ex, ey);
-            ctx.stroke();
-
-            // Layer 3: Crackling Lightning-Yellow Zig-Zag Bolt along the Dash Path
-            ctx.strokeStyle = '#ffe14d';
-            ctx.shadowColor = '#ffe14d';
-            ctx.shadowBlur = 12;
-            ctx.lineWidth = 3.0 * p.dashStreakAlpha;
-            ctx.beginPath();
-            ctx.moveTo(sx, sy);
-            const segs = 5;
-            const perpX = -(ey - sy) * 0.12;
-            const perpY = (ex - sx) * 0.12;
-            for (let k = 1; k < segs; k++) {
-              const t = k / segs;
-              const jx = (k % 2 === 0 ? 1 : -1) * Math.sin(now * 0.05 + k) * 0.65;
-              ctx.lineTo(sx + (ex - sx) * t + perpX * jx, sy + (ey - sy) * t + perpY * jx);
+            // Mid-path stretched soul-fire wake
+            if (dashLen > 24) {
+              ctx.save();
+              ctx.translate((sx + ex) * 0.5, (sy + ey) * 0.5);
+              ctx.rotate(dashAng);
+              ctx.drawImage(
+                impactsAsset.cleanCanvas,
+                dashFrame.sx,
+                dashFrame.sy,
+                dashFrame.sw,
+                dashFrame.sh,
+                -dashLen * 0.6,
+                -46,
+                dashLen * 1.2,
+                92
+              );
+              ctx.restore();
             }
-            ctx.lineTo(ex, ey);
-            ctx.stroke();
             ctx.restore();
           }
 
@@ -5915,195 +6024,62 @@ export default function KaliyugaArena() {
             );
           }
 
-          // 5.8. Trishula Lunge Stance 210px Golden Thrust Spear Beam (when in thrust stance heavy unleash)
-          const weaponColor = WEAPON_CONFIGS[p.weapon].accentColor;
-          if (p.weaponSwingProgress < 0.98) {
-            const isThrustBeam =
-              p.stance === 'thrust' &&
-              (p.action === 'heavy_unleash' || (p.action === 'light_attack' && p.comboStep === 4));
-
-            if (isThrustBeam) {
-              ctx.save();
-              const handX = p.x + p.facing * 12;
-              const handY = p.y - 40 - p.elevationY - walkBob;
-              ctx.translate(handX, handY);
-              ctx.rotate(p.slashAngle);
-              const extLen = 195 * Math.sin(p.weaponSwingProgress * Math.PI);
-              ctx.strokeStyle = '#ffd86b';
-              ctx.lineWidth = 7;
-              ctx.shadowColor = '#ff8800';
-              ctx.shadowBlur = 18;
-              ctx.beginPath();
-              ctx.moveTo(-18, 0);
-              ctx.lineTo(extLen, 0);
-              ctx.stroke();
-
-              ctx.strokeStyle = '#ffffff';
-              ctx.lineWidth = 2.6;
-              ctx.beginPath();
-              ctx.moveTo(0, 0);
-              ctx.lineTo(extLen + 10, 0);
-              ctx.stroke();
-              ctx.restore();
-            }
-          }
-
-          // 7. AAA Supergiant Hades-Style Multi-Layered Isometric Sweeping Blade-Smear Slash Engine
-          if (p.slashArcAlpha > 0.01) {
+          // 7. 100% Hand-Painted Weapon Slash Smear Engine (kwhb8qkwhb8qkwhb_adfa1bcf.png 2x2 Sheet)
+          // Frame 0 (Top-Left): Wide Crescent Fire Cleave
+          // Frame 1 (Top-Right): Crackling Golden Lightning Backhand Slash
+          // Frame 2 (Bottom-Left): 360° Circular Whirlwind Fire Cyclone Ring
+          // Frame 3 (Bottom-Right): Heavy Guillotine Slam Wave with Molten Rock Burst
+          const slashSheet = getProcessedSpriteSync(GAME_ASSETS.vfxSlash2x2);
+          if (p.slashArcAlpha > 0.01 && slashSheet && slashSheet.frames.length >= 4) {
             const isHeavy = p.action === 'heavy_unleash' || p.action === 'execute';
             const isSpin = !isHeavy && p.comboStep === 3;
             const isFinisher = isHeavy || p.comboStep === 4;
 
-            // Swing direction alternates cleanly per combo step:
-            // Step 1: Forehand cleave (+1), Step 2: Backhand rip (-1), Step 3: 360° Whirlwind (+1), Step 4 / Heavy: Overhead Guillotine Cleave (+1)
-            const swingDir = !isHeavy && p.comboStep === 2 ? -1 : 1;
-
-            const baseRadius = isHeavy
-              ? p.stance === 'thrust'
-                ? 118
-                : 102
-              : p.comboStep === 4
-              ? 92
-              : isSpin
-              ? 82
-              : 72;
-
-            const totalSweepSpan = isSpin
-              ? Math.PI * 1.92
-              : isFinisher
-              ? Math.PI * 1.32
-              : Math.PI * 1.12;
-
-            // Smooth ease-out curve for the axe blade's leading edge across weaponSwingProgress (0 -> 1)
-            const rawProg = Math.max(0.10, Math.min(1, p.weaponSwingProgress));
-            const headProg = 1 - Math.pow(1 - rawProg, 2.5);
-            // Trailing edge follows behind and pinches toward the tip as slashArcAlpha fades
-            const fadeTail = Math.max(0, 1 - p.slashArcAlpha);
-            const tailProg = Math.min(headProg - 0.20, fadeTail * 0.65);
-
-            const startOffset = -totalSweepSpan * 0.52 * swingDir;
-            const tailAngle =
-              p.slashAngle + startOffset + totalSweepSpan * Math.max(0, tailProg) * swingDir;
-            const headAngle = p.slashAngle + startOffset + totalSweepSpan * headProg * swingDir;
-
-            // Dynamic Patron Boon & Stance Multi-Color Palette (Agni Vermilion, Indra Vajra Cyan, Ashvin Jade, Varuna Tidal Blue, or Zagreus Crimson)
-            const slashPalette = getActiveSlashPalette(sim.activeBoons, p.stance);
-            const outerEdgeColor = slashPalette.outerEdge;
-            const midEnergyColor = slashPalette.midCore;
-            const cyanElectricColor = slashPalette.innerRibbon;
+            const slashFrameIdx = isFinisher ? 3 : isSpin ? 2 : p.comboStep === 2 ? 1 : 0;
+            const sf = slashSheet.frames[slashFrameIdx] || slashSheet.frames[0];
+            const smearRadius = isHeavy ? 225 : isFinisher ? 198 : isSpin ? 188 : 168;
 
             ctx.save();
+            ctx.globalCompositeOperation = 'screen';
+            ctx.globalAlpha = Math.min(1, p.slashArcAlpha * 1.05);
             ctx.translate(p.x, p.y - 28 - p.elevationY);
-            // Isometric perspective squash matching the 30-degree Hades chamber camera
-            ctx.scale(1, 0.66);
-
-            const traceTaperedCrescent = (
-              outerR: number,
-              maxThickness: number,
-              angStart: number,
-              angEnd: number
-            ) => {
-              const steps = 22;
-              ctx.beginPath();
-              for (let i = 0; i <= steps; i++) {
-                const t = i / steps;
-                const a = angStart + (angEnd - angStart) * t;
-                const r = outerR * (0.86 + 0.16 * Math.sin(t * Math.PI * 0.88));
-                const x = Math.cos(a) * r;
-                const y = Math.sin(a) * r;
-                if (i === 0) ctx.moveTo(x, y);
-                else ctx.lineTo(x, y);
-              }
-              for (let i = steps; i >= 0; i--) {
-                const t = i / steps;
-                const a = angStart + (angEnd - angStart) * t;
-                const outerAtT = outerR * (0.86 + 0.16 * Math.sin(t * Math.PI * 0.88));
-                const profile = Math.sin(Math.pow(t, 0.78) * Math.PI);
-                const r = Math.max(8, outerAtT - maxThickness * profile);
-                const x = Math.cos(a) * r;
-                const y = Math.sin(a) * r;
-                ctx.lineTo(x, y);
-              }
-              ctx.closePath();
-            };
-
-            // Layer 1: Sumi-Ink Obsidian Outer Back-Plate (Hades graphic novel contrast)
-            ctx.globalAlpha = p.slashArcAlpha * 0.84;
-            ctx.fillStyle = 'rgba(8, 4, 6, 0.92)';
-            traceTaperedCrescent(baseRadius * 1.06, isFinisher ? 38 : 28, tailAngle, headAngle);
-            ctx.fill();
-
-            // Layer 2: Patron / Zagreus Outer Cleave Smear
-            ctx.globalAlpha = p.slashArcAlpha * 0.96;
-            ctx.fillStyle = outerEdgeColor;
-            ctx.shadowColor = slashPalette.boltPrimary;
-            ctx.shadowBlur = 16;
-            traceTaperedCrescent(baseRadius * 1.01, isFinisher ? 31 : 22, tailAngle, headAngle);
-            ctx.fill();
-
-            // Layer 3: Lightning Yellow-Gold Mid-Blade Energy Core + Electric Inner Ribbon
-            ctx.save();
-            ctx.globalCompositeOperation = 'lighter';
-            ctx.globalAlpha = p.slashArcAlpha * 0.95;
-            ctx.fillStyle = midEnergyColor;
-            const midTail = tailAngle + (headAngle - tailAngle) * 0.14;
-            traceTaperedCrescent(baseRadius * 0.97, isFinisher ? 19 : 13, midTail, headAngle);
-            ctx.fill();
-
-            // Layer 3.5: Patron Inner Ribbon
-            ctx.fillStyle = cyanElectricColor;
-            const blueTail = tailAngle + (headAngle - tailAngle) * 0.24;
-            traceTaperedCrescent(baseRadius * 0.90, isFinisher ? 12 : 8, blueTail, headAngle);
-            ctx.fill();
-
-            // Layer 4: Razor-Hot Pure White Leading Edge
-            ctx.fillStyle = '#ffffff';
-            const leadTail = tailAngle + (headAngle - tailAngle) * 0.38;
-            traceTaperedCrescent(baseRadius * 0.95, isFinisher ? 8 : 5.5, leadTail, headAngle);
-            ctx.fill();
-
-            // Layer 5: Crackling Patron Lightning Bolts dancing along the swing arc!
-            for (let b = 0; b < 2; b++) {
-              ctx.strokeStyle = b === 0 ? slashPalette.boltPrimary : slashPalette.boltSecondary;
-              ctx.shadowColor = b === 0 ? slashPalette.boltPrimary : slashPalette.boltSecondary;
-              ctx.shadowBlur = 12;
-              ctx.lineWidth = b === 0 ? 2.6 : 2.0;
-              ctx.beginPath();
-              const boltSteps = 8;
-              for (let s = 0; s <= boltSteps; s++) {
-                const frac = 0.18 + (s / boltSteps) * 0.80;
-                const ba = tailAngle + (headAngle - tailAngle) * frac;
-                const jitter = ((s + b) % 2 === 0 ? 1 : -1) * (4 + (s % 3) * 2.5);
-                const br = baseRadius * (b === 0 ? 0.96 : 0.86) + jitter;
-                const bx = Math.cos(ba) * br;
-                const by = Math.sin(ba) * br;
-                if (s === 0) ctx.moveTo(bx, by);
-                else ctx.lineTo(bx, by);
-              }
-              ctx.stroke();
+            ctx.scale(1, 0.68);
+            ctx.rotate(
+              p.slashAngle + (isSpin ? p.weaponSwingProgress * Math.PI * 1.6 : 0)
+            );
+            if (!isHeavy && p.comboStep === 2) {
+              ctx.scale(1, -1);
             }
 
-            // Leading Axe-Head Tri-Color Impact Starburst at the tip of the cleave
-            const tipX = Math.cos(headAngle) * (baseRadius * 0.96);
-            const tipY = Math.sin(headAngle) * (baseRadius * 0.96);
-            const tipGrad = ctx.createRadialGradient(
-              tipX,
-              tipY,
-              1,
-              tipX,
-              tipY,
-              isFinisher ? 28 : 18
+            ctx.drawImage(
+              slashSheet.cleanCanvas,
+              sf.sx,
+              sf.sy,
+              sf.sw,
+              sf.sh,
+              isSpin ? -smearRadius * 0.5 : -smearRadius * 0.28,
+              -smearRadius * 0.5,
+              smearRadius,
+              smearRadius
             );
-            tipGrad.addColorStop(0, 'rgba(255, 255, 255, 1)');
-            tipGrad.addColorStop(0.35, 'rgba(255, 225, 77, 0.95)');
-            tipGrad.addColorStop(0.7, 'rgba(56, 232, 255, 0.75)');
-            tipGrad.addColorStop(1, 'rgba(255, 42, 58, 0)');
-            ctx.fillStyle = tipGrad;
-            ctx.beginPath();
-            ctx.arc(tipX, tipY, isFinisher ? 28 : 18, 0, Math.PI * 2);
-            ctx.fill();
 
-            ctx.restore();
+            // Hand-Painted Starburst Weapon Hit-Spark (combatImpacts2x2 Frame 1) at the leading tip of the cleave
+            if (impactsAsset && impactsAsset.frames.length >= 2) {
+              const sparkFrame = impactsAsset.frames[1];
+              const sparkSize = isFinisher ? 84 : 62;
+              const tipX = smearRadius * 0.46;
+              ctx.drawImage(
+                impactsAsset.cleanCanvas,
+                sparkFrame.sx,
+                sparkFrame.sy,
+                sparkFrame.sw,
+                sparkFrame.sh,
+                tipX - sparkSize * 0.5,
+                -sparkSize * 0.5,
+                sparkSize,
+                sparkSize
+              );
+            }
             ctx.restore();
           }
         }
@@ -6156,15 +6132,26 @@ export default function KaliyugaArena() {
         }
       }
 
-      // 7. Draw Directional Hades-Style Multi-Color Astra Spear & Blood-Crescent Wave Projectiles
+      // 7. Draw 100% Hand-Painted Blazing Agni-Trishula Comet Projectiles (2n0p172n0p172n0p_4fba9427.png Frame 2)
       sim.projectiles.forEach((pr) => {
         if (!pr.active) return;
         const pAngle = Math.atan2(pr.vy, pr.vx);
         ctx.save();
         ctx.globalCompositeOperation = 'screen';
-        // Floor glow under flying spear/crescent
-        const floorGlow = ctx.createRadialGradient(pr.x, pr.y + 18, 2, pr.x, pr.y + 18, pr.radius * 2.8);
-        floorGlow.addColorStop(0, pr.deflected ? 'rgba(56, 232, 255, 0.55)' : 'rgba(255, 42, 58, 0.55)');
+
+        // Floor glow under flying Agni-Trishula comet
+        const floorGlow = ctx.createRadialGradient(
+          pr.x,
+          pr.y + 18,
+          2,
+          pr.x,
+          pr.y + 18,
+          pr.radius * 2.8
+        );
+        floorGlow.addColorStop(
+          0,
+          pr.deflected ? 'rgba(56, 232, 255, 0.55)' : 'rgba(255, 68, 36, 0.55)'
+        );
         floorGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
         ctx.fillStyle = floorGlow;
         ctx.beginPath();
@@ -6174,38 +6161,22 @@ export default function KaliyugaArena() {
         ctx.translate(pr.x, pr.y);
         ctx.rotate(pAngle);
 
-        // Multi-color trailing comet wake (Crimson Red -> Lightning Gold -> White-Hot Tip)
-        const tailGrad = ctx.createLinearGradient(-pr.radius * 4.6, 0, pr.radius * 2.0, 0);
-        tailGrad.addColorStop(0, 'rgba(255, 42, 58, 0)');
-        tailGrad.addColorStop(0.45, pr.deflected ? '#38e8ff' : '#ff2a3a');
-        tailGrad.addColorStop(0.8, '#ffe14d');
-        tailGrad.addColorStop(1, '#ffffff');
-        ctx.fillStyle = tailGrad;
-        ctx.shadowColor = pr.deflected ? '#38e8ff' : '#ff2a3a';
-        ctx.shadowBlur = 18;
-
-        // Blazing Astra Spear / Crescent Bolt silhouette
-        ctx.beginPath();
-        ctx.moveTo(pr.radius * 2.3, 0);
-        ctx.lineTo(-pr.radius * 0.7, -pr.radius * 1.05);
-        ctx.lineTo(-pr.radius * 4.2, 0);
-        ctx.lineTo(-pr.radius * 0.7, pr.radius * 1.05);
-        ctx.closePath();
-        ctx.fill();
-
-        // Outer Crimson/Cyan Crescent Energy Wing
-        ctx.strokeStyle = pr.deflected ? '#38e8ff' : '#ff2a3a';
-        ctx.lineWidth = 3.6;
-        ctx.beginPath();
-        ctx.arc(0, 0, pr.radius * 1.55, -Math.PI * 0.48, Math.PI * 0.48);
-        ctx.stroke();
-
-        // Inner Lightning-Yellow & White Crescent Wing Arc
-        ctx.strokeStyle = '#ffe14d';
-        ctx.lineWidth = 2.0;
-        ctx.beginPath();
-        ctx.arc(pr.radius * 0.2, 0, pr.radius * 1.25, -Math.PI * 0.38, Math.PI * 0.38);
-        ctx.stroke();
+        if (impactsAsset && impactsAsset.frames.length >= 3) {
+          const projFrame = impactsAsset.frames[2]; // Bottom-Left: Blazing Agni-Trishula Comet Projectile
+          const projW = pr.radius * 7.2;
+          const projH = pr.radius * 4.2;
+          ctx.drawImage(
+            pr.deflected ? impactsAsset.jadeCanvas : impactsAsset.cleanCanvas,
+            projFrame.sx,
+            projFrame.sy,
+            projFrame.sw,
+            projFrame.sh,
+            -projW * 0.55,
+            -projH * 0.5,
+            projW,
+            projH
+          );
+        }
         ctx.restore();
       });
 
@@ -6296,6 +6267,34 @@ export default function KaliyugaArena() {
         sim.gateWipeTimer > 0 ? 1 - sim.gateWipeTimer / 0.44 : 0
       );
 
+      // 9.75. Savitri's 3-State Lantern Lighting & Kurukshetra Ash Storm Shader (Meru Engine)
+      const lanternState = getLanternLightState(sim.storyFlags).state;
+      renderLanternAtmosphereAndAshStorm(
+        ctx,
+        cw,
+        ch,
+        now * 0.001,
+        lanternState,
+        cw * 0.5,
+        ch * 0.5,
+        false,
+        sim.activeLookObject,
+        chamberSpec.id <= 4 ? 0.45 : 0.22
+      );
+
+      // 9.78. Meru Engine v2.0 UE5 Post-Processing Stack (Volumetric Height Fog, HDR Bloom, Impact Chromatic Aberration, 35mm Film Grain)
+      renderUE5PostProcessingPass(
+        ctx,
+        cw,
+        ch,
+        now * 0.001,
+        sim.graphicsSettings,
+        lanternState,
+        sim.cameraShakeTrauma,
+        sim.player.transformTimer > 0,
+        Boolean(activeBoss && activeBoss.phase >= 2)
+      );
+
       // 9.8. Atmospheric Diagonal Volumetric God-Rays & Chamber Weather Motes
       ctx.save();
       ctx.globalCompositeOperation = 'screen';
@@ -6370,17 +6369,22 @@ export default function KaliyugaArena() {
         ctx.stroke();
 
         // Narrative Voice / Sanjaya Strikethrough Palimpsest Subtitle
-        if (chamberSpec.dialogueSpeaker) {
+        const strikeTxt = chamberSpec.sanjayaStrikethrough || chamberSpec.strikethroughLie;
+        const corrTxt = chamberSpec.sanjayaCorrection || chamberSpec.sanjayaQuote;
+        if (chamberSpec.dialogueSpeaker || strikeTxt || corrTxt) {
           ctx.font = "bold 10px 'Plus Jakarta Sans', sans-serif";
           ctx.fillStyle = '#ff8a66';
-          ctx.fillText(chamberSpec.dialogueSpeaker, cw * 0.5, by + 52);
+          ctx.fillText(
+            chamberSpec.dialogueSpeaker || 'SANJAYA · PALIMPSEST OF KURUKSHETRA',
+            cw * 0.5,
+            by + 52
+          );
 
-          if (chamberSpec.sanjayaStrikethrough && chamberSpec.sanjayaCorrection) {
+          if (strikeTxt && corrTxt) {
             ctx.font = "italic 12px 'Plus Jakarta Sans', sans-serif";
             ctx.fillStyle = '#9c8f80';
-            const strikeText = chamberSpec.sanjayaStrikethrough;
-            ctx.fillText(strikeText, cw * 0.5, by + 69);
-            const tw = ctx.measureText(strikeText).width;
+            ctx.fillText(strikeTxt, cw * 0.5, by + 69);
+            const tw = ctx.measureText(strikeTxt).width;
             ctx.strokeStyle = '#ff3848';
             ctx.lineWidth = 1.8;
             ctx.beginPath();
@@ -6390,11 +6394,11 @@ export default function KaliyugaArena() {
 
             ctx.font = "600 12.5px 'Plus Jakarta Sans', sans-serif";
             ctx.fillStyle = '#ffd86b';
-            ctx.fillText(chamberSpec.sanjayaCorrection, cw * 0.5, by + 87);
-          } else if (chamberSpec.dialogueLine) {
+            ctx.fillText(corrTxt, cw * 0.5, by + 87);
+          } else if (chamberSpec.dialogueLine || corrTxt) {
             ctx.font = "italic 12.5px 'Plus Jakarta Sans', sans-serif";
             ctx.fillStyle = '#f2e8d5';
-            ctx.fillText(chamberSpec.dialogueLine, cw * 0.5, by + 70);
+            ctx.fillText((chamberSpec.dialogueLine || corrTxt)!, cw * 0.5, by + 70);
           }
         }
 
@@ -6553,10 +6557,11 @@ export default function KaliyugaArena() {
     triggerSwitchWeapon,
   ]);
 
-  // Sync modalPaused ref so opening Shrine, Story Codex, Boon Altar, or Controls popover freezes active combat
+  // Sync modalPaused ref so opening Shrine, Story Codex, Boon Altar, Controls popover, or v7 Narrative Overlay freezes active combat
   useEffect(() => {
-    simRef.current.modalPaused = shrineOpen || storyOpen || controlsOpen || boonModalOpen;
-  }, [shrineOpen, storyOpen, controlsOpen, boonModalOpen]);
+    simRef.current.modalPaused =
+      shrineOpen || storyOpen || controlsOpen || boonModalOpen || sliceStage !== 'combat_arena';
+  }, [shrineOpen, storyOpen, controlsOpen, boonModalOpen, sliceStage]);
 
   // Handle purchasing Keeper's Shrine Upgrades (applies stat deltas without granting free full-heal exploit on unrelated upgrades)
   const handlePurchaseUpgrade = useCallback((id: UpgradeId) => {
@@ -6648,6 +6653,12 @@ export default function KaliyugaArena() {
           onStartOdyssey={() => startGameAtChamber(0)}
           onOpenShrine={() => setShrineOpen(true)}
           onOpenStory={() => setStoryOpen(true)}
+          onOpenPrologue={() => {
+            simRef.current.state = 'playing';
+            document.body.dataset.state = 'playing';
+            setGameState('playing');
+            setSliceStage('prologue_scrolls');
+          }}
         />
       )}
 
@@ -6688,6 +6699,40 @@ export default function KaliyugaArena() {
                   )}
                 </div>
               </div>
+
+              {/* Savitri's Boat Hub & 3-State Lantern Status Button */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.currentTarget.blur();
+                  setSliceStage('vaitarani_hub');
+                }}
+                className="pointer-events-auto text-left bg-[#0d0c10]/92 hover:bg-[#191720] border border-[#c89d46]/45 px-2.5 py-1.5 transition-colors cursor-pointer shadow-[0_8px_24px_rgba(0,0,0,0.85)] shrink-0"
+              >
+                <div className="text-[8px] tracking-[0.14em] text-[#d4a548] uppercase">
+                  SAVITRI’S BOAT · LANTERN: {getLanternLightState(storyFlags).state.toUpperCase()}
+                </div>
+                <div className="text-[10px] font-mono-num text-[#f7efe0]">
+                  LOOKS: <strong className="text-[#f2c45a]">{storyFlags.looks.length}/6</strong> · SHARDS: <strong className="text-[#3ee0a8]">{storyFlags.shardsRecovered}/7</strong>
+                </div>
+              </button>
+
+              {/* Meru Engine v2.0 UE5 Lumen & Post-Processing Quality Tier Button */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.currentTarget.blur();
+                  cycleGraphicsTier();
+                }}
+                className="pointer-events-auto text-left bg-[#0d0c10]/92 hover:bg-[#191720] border border-[#3ee0a8]/45 px-2.5 py-1.5 transition-colors cursor-pointer shadow-[0_8px_24px_rgba(0,0,0,0.85)] shrink-0"
+              >
+                <div className="text-[8px] tracking-[0.14em] text-[#3ee0a8] uppercase">
+                  [G] MERU UE5 ENGINE · {graphicsSettings.tier.toUpperCase()}
+                </div>
+                <div className="text-[10px] font-mono-num text-[#f7efe0]">
+                  LUMEN GI: <strong className="text-[#f2c45a]">{graphicsSettings.lumenGiBounce ? 'ON' : 'OFF'}</strong> · IBL + BLOOM · <strong className="text-[#3ee0a8]">{hud.fps} FPS</strong>
+                </div>
+              </button>
 
               {/* Homa Fire Shrine Button */}
               <button
@@ -7288,13 +7333,13 @@ export default function KaliyugaArena() {
                 </div>
               </button>
 
-              {/* [E] Maya Phantoms */}
+              {/* [E] Look / Maya Phantoms */}
               <button
                 type="button"
                 tabIndex={-1}
                 onClick={(e) => {
                   e.currentTarget.blur();
-                  triggerPluckOfManyClones();
+                  triggerLookOrMirage();
                 }}
                 className={`px-1.5 xl:px-2.5 py-1 xl:py-1.5 text-left border transition-colors cursor-pointer min-w-[52px] xl:min-w-[64px] ${
                   hud.clonesCd <= 0
@@ -7302,8 +7347,8 @@ export default function KaliyugaArena() {
                     : 'bg-[#0d0c10]/90 border-[#2f2b36] text-[#6e6659]'
                 }`}
               >
-                <div className="text-[9px] xl:text-[10px] font-mono-num text-[#d4a548]">[E] MAYA</div>
-                <div className="text-[9px] xl:text-[10px] text-[#c89d46]">MIRAGE</div>
+                <div className="text-[9px] xl:text-[10px] font-mono-num text-[#d4a548]">[E] LOOK</div>
+                <div className="text-[9px] xl:text-[10px] text-[#c89d46]">OR MAYA</div>
                 <div className="text-[10px] xl:text-[11px] font-bold font-mono-num mt-0.5">
                   {hud.clonesCd <= 0 ? 'READY' : `${hud.clonesCd.toFixed(1)}s`}
                 </div>
@@ -7339,6 +7384,34 @@ export default function KaliyugaArena() {
           </div>
         </div>
       )}
+
+      {/* v7 Story & Game Design Document Narrative Overlay (Prologue, Ash Hill, Savitri's Boat Hub, [E] Look, Shard #1, Ferry I, Endings) */}
+      <NarrativeOverlay
+        stage={sliceStage}
+        storyFlags={storyFlags}
+        activeLookModal={activeLookModal}
+        onCloseLookModal={() => {
+          simRef.current.activeLookObject = null;
+          setActiveLookModal(null);
+        }}
+        onAdvanceStage={(nextStage, updatedFlags) => {
+          if (updatedFlags) {
+            updateStoryFlags(updatedFlags);
+            if (updatedFlags.looks && !storyFlags.looks.includes('lantern_ledger_page') && updatedFlags.looks.includes('lantern_ledger_page')) {
+              soundEngine.playLookRoomTone();
+              soundEngine.playSuvarnaLullaby();
+              simRef.current.ashenKarma += 65;
+              setAshenKarma(simRef.current.ashenKarma);
+            }
+          }
+          setSliceStage(nextStage);
+        }}
+        onOpenShrine={() => setShrineOpen(true)}
+        onStartAct1Run={(startChamberIndex = 0) => {
+          setSliceStage('combat_arena');
+          startGameAtChamber(startChamberIndex);
+        }}
+      />
 
       {/* Hades-Style Celestial Boon Selection Modal */}
       <BoonModal

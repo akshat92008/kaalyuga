@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { IS_SOFTWARE_WEBGL } from '../../engine/ue5GraphicsEngine';
 import type { StaffStance } from './rules';
 
 export type RudraAnimState =
@@ -180,18 +182,117 @@ export class Rudra3DRenderer {
       this.renderer = new THREE.WebGLRenderer({
         canvas: this.canvas,
         alpha: true,
-        antialias: true,
+        antialias: !IS_SOFTWARE_WEBGL,
         powerPreference: 'high-performance',
       });
       this.renderer.setSize(size, size, false);
       this.renderer.setPixelRatio(1);
       this.renderer.outputColorSpace = THREE.SRGBColorSpace;
       this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-      this.renderer.toneMappingExposure = 1.05;
+      this.renderer.toneMappingExposure = 1.12;
+      this.renderer.shadowMap.enabled = !IS_SOFTWARE_WEBGL;
+      this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+      // UE5 Lumen-Style Studio IBL Environment Map for Metallic Armor & Broken Gada Reflections
+      const pmremGenerator = new THREE.PMREMGenerator(this.renderer);
+      this.scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
+      pmremGenerator.dispose();
+
       this.loadAssets();
     } catch (err) {
       this.loadError = err instanceof Error ? err.message : 'WebGL initialization failed';
     }
+  }
+
+  /**
+   * Builds a composite 8-part 3D Broken Gada (v7 Section 5 & 29: heavy cracked iron mace
+   * stamped with the spiral mark of Suvarna's forge and glowing molten slag fissures).
+   */
+  private buildProceduralBrokenGadaGroup(
+    ironMat: THREE.MeshStandardMaterial
+  ): THREE.Group {
+    const gadaGroup = new THREE.Group();
+    gadaGroup.name = 'BrokenGada3DGroup';
+
+    const forgedIronMat = ironMat.clone();
+    forgedIronMat.roughness = 0.42;
+    forgedIronMat.metalness = 0.86;
+    forgedIronMat.envMapIntensity = 1.55;
+    this.wepMaterials.push(forgedIronMat);
+
+    const brassSpiralMat = new THREE.MeshStandardMaterial({
+      color: 0xe6b85c,
+      roughness: 0.28,
+      metalness: 0.92,
+      envMapIntensity: 1.65,
+      emissive: new THREE.Color(0x3a2005),
+      emissiveIntensity: 0.18,
+    });
+    this.wepMaterials.push(brassSpiralMat);
+
+    const moltenCrackMat = new THREE.MeshStandardMaterial({
+      color: 0xff5a1f,
+      roughness: 0.2,
+      metalness: 0.15,
+      emissive: new THREE.Color(0xff4518),
+      emissiveIntensity: 1.6,
+    });
+    this.wepMaterials.push(moltenCrackMat);
+
+    // 1. Primary Silhouette: Heavy Fluted Iron Gada Bulb (aligned along +Z shaft at z = 0.62)
+    const bulbGeo = new THREE.SphereGeometry(0.19, 16, 14);
+    bulbGeo.scale(1.0, 1.0, 1.18);
+    const bulbMesh = new THREE.Mesh(bulbGeo, forgedIronMat);
+    bulbMesh.position.set(0, 0, 0.62);
+    gadaGroup.add(bulbMesh);
+
+    // 2. Primary Fracture: Glowing Molten Slag Core inside the Cracked Crown
+    const coreGeo = new THREE.DodecahedronGeometry(0.145, 0);
+    const coreMesh = new THREE.Mesh(coreGeo, moltenCrackMat);
+    coreMesh.position.set(0.02, 0.01, 0.68);
+    gadaGroup.add(coreMesh);
+
+    // 3. Accent Detail: 6 Radial Armor-Crushing Iron Flanges around the Gada Bulb
+    const flangeGeo = new THREE.BoxGeometry(0.036, 0.41, 0.22);
+    for (let i = 0; i < 6; i++) {
+      const flange = new THREE.Mesh(flangeGeo, i % 2 === 0 ? forgedIronMat : brassSpiralMat);
+      flange.position.set(0, 0, 0.62);
+      flange.rotation.z = (i * Math.PI) / 6;
+      gadaGroup.add(flange);
+    }
+
+    // 4. Secondary Read: Reinforced Chola-Iron Shaft (along local Z axis from -0.45 to +0.52)
+    const shaftGeo = new THREE.CylinderGeometry(0.032, 0.042, 1.02, 12);
+    shaftGeo.rotateX(Math.PI / 2);
+    const shaftMesh = new THREE.Mesh(shaftGeo, forgedIronMat);
+    shaftMesh.position.set(0, 0, 0.04);
+    gadaGroup.add(shaftMesh);
+
+    // 5. Secondary Read: Upper & Lower Brass Lotus Collars framing the Gada Head
+    const collarGeo = new THREE.TorusGeometry(0.068, 0.018, 10, 18);
+    const lowerCollar = new THREE.Mesh(collarGeo, brassSpiralMat);
+    lowerCollar.position.set(0, 0, 0.44);
+    gadaGroup.add(lowerCollar);
+
+    const crownSpikeGeo = new THREE.ConeGeometry(0.065, 0.14, 8);
+    crownSpikeGeo.rotateX(Math.PI / 2);
+    const crownSpike = new THREE.Mesh(crownSpikeGeo, brassSpiralMat);
+    crownSpike.position.set(0, 0, 0.86);
+    gadaGroup.add(crownSpike);
+
+    // 6. Accent Detail: Suvarna's Spiral Forge-Mark Ring above the Grip
+    const spiralRingGeo = new THREE.TorusGeometry(0.048, 0.012, 8, 20);
+    const spiralRing = new THREE.Mesh(spiralRingGeo, brassSpiralMat);
+    spiralRing.position.set(0, 0, 0.24);
+    gadaGroup.add(spiralRing);
+
+    // 7. Accent Detail: Heavy Pommel Counterweight Ring at -0.44
+    const pommelGeo = new THREE.TorusGeometry(0.055, 0.016, 10, 16);
+    const pommel = new THREE.Mesh(pommelGeo, brassSpiralMat);
+    pommel.position.set(0, 0, -0.44);
+    gadaGroup.add(pommel);
+
+    return gadaGroup;
   }
 
   private async loadAssets() {
@@ -274,15 +375,16 @@ export class Rudra3DRenderer {
 
       if (this.disposed) return;
 
-      // 1. Configure Character PBR Material
+      // 1. Configure Character PBR Material with UE5 IBL Reflections
       const charMat = new THREE.MeshStandardMaterial({
         map: charAlbedo,
         normalMap: charNormal,
-        normalScale: new THREE.Vector2(1.15, 1.15),
+        normalScale: new THREE.Vector2(1.25, 1.25),
         roughnessMap: charRough,
         metalnessMap: charMetal,
-        roughness: 0.68,
-        metalness: 0.42,
+        roughness: 0.62,
+        metalness: 0.48,
+        envMapIntensity: 1.45,
         emissive: new THREE.Color(0x0c0608),
         emissiveIntensity: 0.08,
       });
@@ -292,6 +394,8 @@ export class Rudra3DRenderer {
         if ((child as THREE.Mesh).isMesh) {
           const mesh = child as THREE.Mesh;
           mesh.material = charMat;
+          mesh.castShadow = !IS_SOFTWARE_WEBGL;
+          mesh.receiveShadow = !IS_SOFTWARE_WEBGL;
           mesh.frustumCulled = false;
         }
       });
@@ -309,17 +413,18 @@ export class Rudra3DRenderer {
         charObj.getObjectByName('RightHand') ||
         null;
 
-      // 2. Configure 3D Bloodforged Parashu Great-Axe & Attach to Right Hand Fist
+      // 2. Configure 3D Weapon Material & Socket the Composite 3D Broken Gada + Bloodforged Parashu
       const wepMat = new THREE.MeshStandardMaterial({
         map: wepAlbedo,
         normalMap: wepNormal,
-        normalScale: new THREE.Vector2(1.3, 1.3),
+        normalScale: new THREE.Vector2(1.35, 1.35),
         roughnessMap: wepRough,
         metalnessMap: wepMetal,
-        roughness: 0.45,
-        metalness: 0.78,
+        roughness: 0.38,
+        metalness: 0.85,
+        envMapIntensity: 1.6,
         emissive: new THREE.Color(0x280408),
-        emissiveIntensity: 0.08,
+        emissiveIntensity: 0.1,
       });
       this.wepMaterials.push(wepMat);
 
@@ -330,34 +435,32 @@ export class Rudra3DRenderer {
         }
       });
 
-      if (weaponMesh && this.rightHandBone) {
-        const mesh = weaponMesh as THREE.Mesh;
-        mesh.material = wepMat;
-        mesh.frustumCulled = false;
-
-        // Verified FBX Geometry of Mesh_0:
-        // - Shaft axis is local Z: pommel at z = -0.95, wide Parashu Axe Head at z = +0.50..+0.95.
-        // - Wide blade edge spans local X (x = -0.40..+0.40); flat blade thickness is local Y.
-        // Verified Mixamo mixamorigRightHand axes:
-        // - Wrist is at (0,0,0), knuckles at (0, +0.082, 0).
-        // - In locomotion & combat poses, local +X (tilted slightly toward +Y) points UP and FORWARD out of the top/thumb side of the closed fist!
-        // - Rotating weaponHolder by (0, +Math.PI/2, +0.28) aligns the +Z shaft of Mesh_0 with the +X/+Y top-of-fist vector so the Axe Head is held high and forward in front of Rudra, while the pommel extends below his pinky!
-        // - Rotating mesh by (0, 0, -Math.PI/2) around its Z shaft aligns the wide X blade edge into the forward-downward chopping plane!
+      if (this.rightHandBone) {
         const weaponHolder = new THREE.Group();
-        weaponHolder.name = 'ParashuWeaponHolder';
+        weaponHolder.name = 'BrokenGadaWeaponHolder';
 
-        const axeScale = 0.48;
-        mesh.scale.set(axeScale, axeScale, axeScale);
-        mesh.rotation.set(0, 0, -Math.PI / 2);
-        // Shift +0.18 along holder's shaft axis (+Z before holder rotation) so Rudra grips the lower-middle shaft
-        mesh.position.set(0, 0, 0.18);
+        // Attach the composite 8-part 3D Broken Gada (with Suvarna's spiral forge-mark & molten core)
+        const brokenGadaGroup = this.buildProceduralBrokenGadaGroup(wepMat);
+        brokenGadaGroup.scale.set(0.52, 0.52, 0.52);
+        brokenGadaGroup.position.set(0, 0, 0.12);
+        weaponHolder.add(brokenGadaGroup);
 
-        this.weaponTipNode.position.set(0, 0, 0.92);
-        this.weaponBaseNode.position.set(0, 0, 0.34);
-        mesh.add(this.weaponTipNode);
-        mesh.add(this.weaponBaseNode);
+        if (weaponMesh) {
+          const mesh = weaponMesh as THREE.Mesh;
+          mesh.material = wepMat;
+          mesh.frustumCulled = false;
+          const axeScale = 0.46;
+          mesh.scale.set(axeScale, axeScale, axeScale);
+          mesh.rotation.set(0, 0, -Math.PI / 2);
+          mesh.position.set(0, 0, 0.18);
+          weaponHolder.add(mesh);
+        }
 
-        weaponHolder.add(mesh);
+        this.weaponTipNode.position.set(0, 0, 0.56);
+        this.weaponBaseNode.position.set(0, 0, 0.18);
+        weaponHolder.add(this.weaponTipNode);
+        weaponHolder.add(this.weaponBaseNode);
+
         weaponHolder.position.set(0.0, 0.076, 0.01);
         weaponHolder.rotation.set(0.0, Math.PI / 2, 0.28);
 

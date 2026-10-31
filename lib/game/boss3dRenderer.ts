@@ -12,6 +12,8 @@
 
 import * as THREE from 'three';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { IS_SOFTWARE_WEBGL } from '../../engine/ue5GraphicsEngine';
 import { GAME_ASSETS } from './assets';
 
 export type Boss3DKind = 'dundubhi' | 'vrikodara';
@@ -317,14 +319,22 @@ export class Boss3DRenderer {
       this.renderer = new THREE.WebGLRenderer({
         canvas: this.canvas,
         alpha: true,
-        antialias: true,
+        antialias: !IS_SOFTWARE_WEBGL,
         powerPreference: 'high-performance',
       });
       this.renderer.setSize(size, size, false);
       this.renderer.setPixelRatio(1);
       this.renderer.outputColorSpace = THREE.SRGBColorSpace;
       this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-      this.renderer.toneMappingExposure = 1.08;
+      this.renderer.toneMappingExposure = 1.14;
+      this.renderer.shadowMap.enabled = !IS_SOFTWARE_WEBGL;
+      this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+      // UE5 Lumen-Style Studio IBL Environment Map for Chola Bronze & Iron Rakshasa Armor
+      const pmremGenerator = new THREE.PMREMGenerator(this.renderer);
+      this.scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
+      pmremGenerator.dispose();
+
       this.loadAllBossAssets();
     } catch {
       this.renderer = null;
@@ -418,10 +428,11 @@ export class Boss3DRenderer {
           normalMap: wepNormTex,
           roughnessMap: wepRoughTex,
           metalnessMap: wepMetTex,
-          roughness: 0.42,
-          metalness: 0.78,
+          roughness: 0.36,
+          metalness: 0.86,
+          envMapIntensity: 1.65,
           emissive: new THREE.Color(0x280608),
-          emissiveIntensity: 0.08,
+          emissiveIntensity: 0.1,
         });
 
       const registerNativeClip = (
@@ -464,15 +475,19 @@ export class Boss3DRenderer {
         if ((obj as THREE.Mesh).isMesh) {
           const mesh = obj as THREE.Mesh;
           mesh.frustumCulled = false;
+          mesh.castShadow = !IS_SOFTWARE_WEBGL;
+          mesh.receiveShadow = !IS_SOFTWARE_WEBGL;
           const mat = new THREE.MeshStandardMaterial({
             map: dunBase,
             normalMap: dunNorm,
+            normalScale: new THREE.Vector2(1.3, 1.3),
             roughnessMap: dunRough,
             metalnessMap: dunMet,
-            roughness: 0.52,
-            metalness: 0.58,
+            roughness: 0.46,
+            metalness: 0.68,
+            envMapIntensity: 1.55,
             emissive: new THREE.Color(0x120a04),
-            emissiveIntensity: 0.06,
+            emissiveIntensity: 0.08,
           });
           mesh.material = mat;
           dundubhiMaterials.push(mat);
@@ -574,15 +589,19 @@ export class Boss3DRenderer {
         if ((obj as THREE.Mesh).isMesh) {
           const mesh = obj as THREE.Mesh;
           mesh.frustumCulled = false;
+          mesh.castShadow = !IS_SOFTWARE_WEBGL;
+          mesh.receiveShadow = !IS_SOFTWARE_WEBGL;
           const mat = new THREE.MeshStandardMaterial({
             map: vrikBase,
             metalnessMap: vrikMet,
             normalMap: vrikNorm,
+            normalScale: new THREE.Vector2(1.35, 1.35),
             roughnessMap: vrikRough,
-            roughness: 0.48,
-            metalness: 0.64,
-            emissive: new THREE.Color(0x160804),
-            emissiveIntensity: 0.08,
+            roughness: 0.42,
+            metalness: 0.74,
+            envMapIntensity: 1.6,
+            emissive: new THREE.Color(0x1a0804),
+            emissiveIntensity: 0.1,
           });
           mesh.material = mat;
           vrikMaterials.push(mat);
@@ -825,10 +844,13 @@ export class Boss3DRenderer {
     const speed = Math.hypot(params.vx, params.vy);
     const phaseBoost = 1 + (params.phase - 1) * 0.12;
 
-    // Unseal Vrikodara's second off-hand Bloodforged Trident in Phase 2 & Phase 3
+    // Unseal Vrikodara's second off-hand Bloodforged weapon & grow in Phase 2 & Phase 3 (Section 9)
     if (rig.leftWeaponSocket) {
       rig.leftWeaponSocket.visible = params.phase >= 2;
     }
+    const targetScale = params.kind === 'vrikodara' && params.phase >= 2 ? 1.24 : 1.0;
+    const currentScale = rig.root.scale.x || 1.0;
+    rig.root.scale.setScalar(currentScale + (targetScale - currentScale) * Math.min(1, dt * 6));
 
     const desiredClip = this.selectDesiredClip(params);
     const stateJustChanged = params.aiState !== this.lastAiState;

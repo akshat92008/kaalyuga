@@ -308,6 +308,76 @@ class SoundEngine {
       this.musicTimer = null;
     }
   }
+
+  /**
+   * Section 35: "The lullaby. Suvarna's tune. Solo female voice or sarangi.
+   * It appears in the Mani's hum, in Ila's humming, and in the final walk."
+   */
+  public playSuvarnaLullaby() {
+    const ctx = this.getContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    // Gentle Bhairavi-inspired 5-note sarangi/vocal phrase
+    const motif = [293.66, 311.13, 392.0, 349.23, 293.66];
+    motif.forEach((freq, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      const t0 = now + idx * 0.34;
+      osc.frequency.setValueAtTime(freq, t0);
+      gain.gain.setValueAtTime(0.001, t0);
+      gain.gain.linearRampToValueAtTime(0.085, t0 + 0.08);
+      gain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.48);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t0);
+      osc.stop(t0 + 0.5);
+    });
+  }
+
+  /**
+   * Section 35: "The drum. Dundubhi's war-drum is the first thing the player hears
+   * and the last thing the Council used to call the families."
+   */
+  public playDundubhiWarDrum() {
+    const ctx = this.getContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    [0, 0.24].forEach((offset, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      const start = now + offset;
+      osc.frequency.setValueAtTime(idx === 0 ? 92 : 116, start);
+      osc.frequency.exponentialRampToValueAtTime(42, start + 0.32);
+      gain.gain.setValueAtTime(0.24, start);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + 0.36);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(start);
+      osc.stop(start + 0.38);
+    });
+  }
+
+  /**
+   * Section 35: "Look moments. No music. Only room tone and the object."
+   */
+  public playLookRoomTone() {
+    this.stopMusic();
+    const ctx = this.getContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(146.83, now);
+    gain.gain.setValueAtTime(0.04, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.9);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.95);
+  }
 }
 
 export const soundEngine = new SoundEngine();
