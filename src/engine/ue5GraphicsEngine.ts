@@ -42,6 +42,9 @@ const GRAPHICS_STORAGE_KEY = 'kaliyuga_meru_ue5_graphics_v2';
 export const IS_SOFTWARE_WEBGL: boolean = (() => {
   if (typeof document === 'undefined') return false;
   try {
+    if (typeof navigator !== 'undefined' && navigator.webdriver) {
+      return true;
+    }
     const canvas = document.createElement('canvas');
     const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
     if (!gl) return true;
@@ -49,7 +52,7 @@ export const IS_SOFTWARE_WEBGL: boolean = (() => {
     const param = ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER;
     const gpu = String(gl.getParameter(param));
     gl.getExtension('WEBGL_lose_context')?.loseContext();
-    return /SwiftShader|llvmpipe|softpipe|Software|Basic Render/i.test(gpu);
+    return /SwiftShader|Subzero|llvmpipe|softpipe|Software|Basic Render/i.test(gpu);
   } catch {
     return false;
   }
@@ -138,7 +141,7 @@ export function renderWorldSpaceLumenGI(
   ctx.save();
   ctx.globalCompositeOperation = 'screen';
 
-  const pulse = 0.94 + Math.sin(timeSec * 5.2) * 0.06;
+  const pulse = 0.93 + Math.sin(timeSec * 5.6) * 0.07;
 
   for (let i = 0; i < emitters.length; i++) {
     const em = emitters[i];
@@ -146,15 +149,16 @@ export function renderWorldSpaceLumenGI(
     const safeColor = em.color || '#ffaa44';
 
     const r = em.radius * pulse;
-    const grad = ctx.createRadialGradient(em.x, em.y, r * 0.04, em.x, em.y, r);
-    grad.addColorStop(0, safeColor);
-    grad.addColorStop(0.45, safeColor);
+    const grad = ctx.createRadialGradient(em.x, em.y, r * 0.03, em.x, em.y, r);
+    grad.addColorStop(0, '#fff7e6');
+    grad.addColorStop(0.18, safeColor);
+    grad.addColorStop(0.55, safeColor);
     grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
 
-    ctx.globalAlpha = Math.min(0.65, em.intensity * (IS_SOFTWARE_WEBGL ? 0.28 : 0.42));
+    ctx.globalAlpha = Math.min(0.75, em.intensity * (IS_SOFTWARE_WEBGL ? 0.34 : 0.52));
     ctx.save();
     ctx.translate(em.x, em.y);
-    ctx.scale(1, 0.58); // Isometric ground plane projection
+    ctx.scale(1, 0.52); // True 2:1 Hades dimetric ground plane projection
     ctx.translate(-em.x, -em.y);
     ctx.fillStyle = grad;
     ctx.beginPath();
@@ -192,43 +196,43 @@ export function renderUE5PostProcessingPass(
     ctx.globalCompositeOperation = 'screen';
 
     const fogColorTop = isBossPhase2Plus
-      ? 'rgba(215, 58, 28, 0.085)'
+      ? 'rgba(225, 62, 32, 0.095)'
       : lanternState === 'cool'
-      ? 'rgba(115, 155, 195, 0.07)'
-      : 'rgba(225, 155, 75, 0.075)';
+      ? 'rgba(115, 175, 225, 0.08)'
+      : 'rgba(235, 165, 82, 0.085)';
 
-    const topFog = ctx.createLinearGradient(0, 0, 0, ch * 0.38);
+    const topFog = ctx.createLinearGradient(0, 0, 0, ch * 0.36);
     topFog.addColorStop(0, fogColorTop);
     topFog.addColorStop(1, 'rgba(0, 0, 0, 0)');
     ctx.fillStyle = topFog;
-    ctx.fillRect(0, 0, cw, ch * 0.38);
+    ctx.fillRect(0, 0, cw, ch * 0.36);
 
     // Drifting ground-hugging ash mist bands at bottom of viewport
     const drift = Math.sin(timeSec * 0.45) * 0.02;
-    const bottomFog = ctx.createLinearGradient(0, ch * (0.72 + drift), 0, ch);
+    const bottomFog = ctx.createLinearGradient(0, ch * (0.74 + drift), 0, ch);
     bottomFog.addColorStop(0, 'rgba(0, 0, 0, 0)');
     bottomFog.addColorStop(
       1,
-      isBossPhase2Plus ? 'rgba(165, 32, 18, 0.14)' : 'rgba(38, 30, 26, 0.18)'
+      isBossPhase2Plus ? 'rgba(175, 36, 20, 0.15)' : 'rgba(42, 32, 28, 0.16)'
     );
     ctx.fillStyle = bottomFog;
-    ctx.fillRect(0, ch * 0.68, cw, ch * 0.32);
+    ctx.fillRect(0, ch * 0.7, cw, ch * 0.3);
     ctx.restore();
   }
 
-  // 2. Physically-Based HDR Emissive Bloom & Specular Highlight Halo
+  // 2. Physically-Based HDR Emissive Bloom & Hades-Style Isometric Contrast Vignette
   if (settings.hdrBloom) {
     ctx.save();
     ctx.globalCompositeOperation = 'screen';
     const bloomIntensity = isTransformActive
-      ? 0.14
+      ? 0.18
       : isBossPhase2Plus
-      ? 0.11
-      : 0.075;
+      ? 0.145
+      : 0.095;
     const bloomGrad = ctx.createRadialGradient(
       cw * 0.5,
       ch * 0.48,
-      cw * 0.05,
+      cw * 0.04,
       cw * 0.5,
       ch * 0.48,
       cw * 0.58
@@ -236,14 +240,30 @@ export function renderUE5PostProcessingPass(
     bloomGrad.addColorStop(
       0,
       isTransformActive
-        ? `rgba(255, 108, 45, ${bloomIntensity})`
+        ? `rgba(255, 118, 48, ${bloomIntensity})`
         : lanternState === 'cool'
-        ? `rgba(135, 185, 225, ${bloomIntensity * 0.85})`
-        : `rgba(255, 188, 92, ${bloomIntensity})`
+        ? `rgba(125, 205, 255, ${bloomIntensity * 0.92})`
+        : `rgba(255, 202, 102, ${bloomIntensity})`
     );
-    bloomGrad.addColorStop(0.55, 'rgba(255, 120, 48, 0.025)');
+    bloomGrad.addColorStop(0.55, 'rgba(255, 132, 58, 0.038)');
     bloomGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
     ctx.fillStyle = bloomGrad;
+    ctx.fillRect(0, 0, cw, ch);
+    ctx.restore();
+
+    // Subtle Hades-style peripheral obsidian vignette (keeps center wide open so chamber never feels boxed)
+    ctx.save();
+    const vigGrad = ctx.createRadialGradient(
+      cw * 0.5,
+      ch * 0.5,
+      cw * 0.44,
+      cw * 0.5,
+      ch * 0.5,
+      cw * 0.78
+    );
+    vigGrad.addColorStop(0, 'rgba(0, 0, 0, 0)');
+    vigGrad.addColorStop(1, 'rgba(5, 3, 7, 0.32)');
+    ctx.fillStyle = vigGrad;
     ctx.fillRect(0, 0, cw, ch);
     ctx.restore();
   }

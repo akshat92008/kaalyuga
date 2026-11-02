@@ -13,6 +13,7 @@ import {
   StoryMemoryFlags,
   VRIKODARA_DIALOGUE,
 } from '@/engine/v7StoryEngine';
+import { GAME_ASSETS } from '@/lib/game/assets';
 
 interface NarrativeOverlayProps {
   stage: SliceStageId;
@@ -66,9 +67,16 @@ export function NarrativeOverlay({
           </p>
 
           {activeLookModal.savitriComment && (
-            <div className="p-3 bg-[#161214] border-l-2 border-[#f5b952] text-xs text-[#f5dca0]">
-              <strong className="text-[#f5b952] tracking-wider uppercase mr-2">SAVITRI:</strong>
-              {activeLookModal.savitriComment}
+            <div className="p-3 bg-[#161214] border-l-2 border-[#f5b952] text-xs text-[#f5dca0] flex items-center gap-3">
+              <img
+                src={GAME_ASSETS.portraits.savitri}
+                alt="Savitri"
+                className="w-11 h-11 object-cover border border-[#f5b952]/60 shrink-0"
+              />
+              <div>
+                <strong className="text-[#f5b952] tracking-wider uppercase mr-2">SAVITRI:</strong>
+                {activeLookModal.savitriComment}
+              </div>
             </div>
           )}
 
@@ -152,11 +160,18 @@ export function NarrativeOverlay({
               </h2>
             </div>
 
-            <div className="p-4 bg-[#141012] border-l-2 border-[#d4a548] text-sm md:text-base text-[#f2e6d0] leading-relaxed">
-              <div className="text-[10px] font-mono-num tracking-[0.22em] text-[#d4a548] uppercase mb-1">
-                SANJAYA (THE BLIND CHRONICLER)
+            <div className="p-4 bg-[#141012] border-l-2 border-[#d4a548] text-sm md:text-base text-[#f2e6d0] leading-relaxed flex items-start gap-3.5">
+              <img
+                src={GAME_ASSETS.portraits.sanjaya}
+                alt="Sanjaya the Blind Chronicler"
+                className="w-14 h-14 object-cover border border-[#d4a548]/65 shrink-0 mt-0.5"
+              />
+              <div>
+                <div className="text-[10px] font-mono-num tracking-[0.22em] text-[#d4a548] uppercase mb-1">
+                  SANJAYA (THE BLIND CHRONICLER)
+                </div>
+                {scroll.sanjayaNarration}
               </div>
-              {scroll.sanjayaNarration}
             </div>
 
             <div className="space-y-3">
@@ -330,8 +345,15 @@ export function NarrativeOverlay({
                 Behind you, Time is held for one breath. Kaala-Chakra whispers “Run” and falls to
                 the ground <strong>before</strong> the Preserver’s hand even moves.
               </div>
-              <div>
-                <strong className="text-[#5ce6ff]">THE PRESERVER:</strong> “Rudra. Go and look.”
+              <div className="flex items-center gap-3 py-1">
+                <img
+                  src={GAME_ASSETS.portraits.preserver}
+                  alt="The Preserver"
+                  className="w-12 h-12 object-cover border border-[#5ce6ff]/60 shrink-0"
+                />
+                <div>
+                  <strong className="text-[#5ce6ff]">THE PRESERVER:</strong> “Rudra. Go and look.”
+                </div>
               </div>
               <div className="text-[#d4a548]">
                 You do not hear him. You lunge. The Preserver reaches to your brow, tears the Mani
@@ -405,26 +427,33 @@ export function NarrativeOverlay({
           {/* Boat Visual & Lantern Glow */}
           <div className="lg:col-span-6 relative border border-[#c89d46]/50 bg-[#0c0a0e] overflow-hidden shadow-[0_24px_80px_rgba(0,0,0,0.95)]">
             <img
-              src="/assets/aistudio/Gemini_Generated_Image_c0fyyc0fyyc0fyyc_4d7dcd20.png"
+              src={GAME_ASSETS.portraits.savitri}
               alt="Savitri's Boat on the Vaitarani River"
-              className="w-full h-72 md:h-96 object-cover"
+              className="w-full h-72 md:h-96 object-cover object-top"
             />
             <div
               className="absolute inset-0 pointer-events-none"
               style={{
-                background: `radial-gradient(circle at 38% 58%, ${lantern.glowColor} 0%, rgba(6,6,10,0.86) 78%)`,
+                background: `radial-gradient(circle at 38% 58%, ${lantern.glowColor} 0%, rgba(6,6,10,0.82) 78%)`,
               }}
             />
-            <div className="absolute bottom-4 left-4 right-4 p-4 bg-[#0b090d]/92 border border-[#c89d46]/40 space-y-1.5">
-              <div className="text-[10px] font-mono-num tracking-[0.24em] text-[#d4a548] uppercase">
-                SAVITRI · LAST FERRYWOMAN OF THE VAITARANI ({lantern.savitriVoiceTone})
+            <div className="absolute bottom-4 left-4 right-4 p-4 bg-[#0b090d]/92 border border-[#c89d46]/40 flex items-start gap-3.5">
+              <img
+                src={GAME_ASSETS.portraits.savitri}
+                alt="Savitri"
+                className="w-14 h-14 object-cover border border-[#f5b952]/70 shrink-0"
+              />
+              <div className="space-y-1">
+                <div className="text-[10px] font-mono-num tracking-[0.24em] text-[#d4a548] uppercase">
+                  SAVITRI · LAST FERRYWOMAN OF THE VAITARANI ({lantern.savitriVoiceTone})
+                </div>
+                <p className="text-xs md:text-sm text-[#fff6e8] leading-relaxed">
+                  {lantern.savitriWakeLine}
+                </p>
+                <p className="text-xs text-[#d4a548] italic">
+                  “At the end, you answer one question. Will you still be here?”
+                </p>
               </div>
-              <p className="text-xs md:text-sm text-[#fff6e8] leading-relaxed">
-                {lantern.savitriWakeLine}
-              </p>
-              <p className="text-xs text-[#d4a548] italic">
-                “At the end, you answer one question. Will you still be here?”
-              </p>
             </div>
           </div>
 
@@ -445,26 +474,33 @@ export function NarrativeOverlay({
             </div>
 
             {/* Sanjaya's Chronicle Status (Shows Strikethrough Correction #1 once Vrikodara's Shard is taken!) */}
-            <div className="p-4 bg-[#120f15] border border-[#c89d46]/35 space-y-1.5">
-              <div className="text-[10px] font-mono-num tracking-[0.22em] text-[#e6be6a] uppercase">
-                SANJAYA’S COURT CHRONICLE · LIVE RECORD
+            <div className="p-4 bg-[#120f15] border border-[#c89d46]/35 flex items-start gap-3.5">
+              <img
+                src={GAME_ASSETS.portraits.sanjaya}
+                alt="Sanjaya"
+                className="w-12 h-12 object-cover border border-[#d4a548]/60 shrink-0"
+              />
+              <div className="space-y-1">
+                <div className="text-[10px] font-mono-num tracking-[0.22em] text-[#e6be6a] uppercase">
+                  SANJAYA’S COURT CHRONICLE · LIVE RECORD
+                </div>
+                <p className="text-xs md:text-sm text-[#e5dac5]">
+                  “On the Eighteenth Night, Rudra turned the Brahmashira upon{' '}
+                  {storyFlags.shardsCollected >= 1 || storyFlags.shardsRecovered >= 1 ? (
+                    <>
+                      <span className="line-through text-[#ff5e6c] mr-2">
+                        the fortress of killers
+                      </span>
+                      <strong className="text-[#f5c451] underline decoration-[#f5c451]">
+                        a camp
+                      </strong>
+                    </>
+                  ) : (
+                    <span className="text-[#d4a548]">the fortress of killers</span>
+                  )}
+                  .”
+                </p>
               </div>
-              <p className="text-xs md:text-sm text-[#e5dac5]">
-                “On the Eighteenth Night, Rudra turned the Brahmashira upon{' '}
-                {storyFlags.shardsCollected >= 1 ? (
-                  <>
-                    <span className="line-through text-[#ff5e6c] mr-2">
-                      the fortress of killers
-                    </span>
-                    <strong className="text-[#f5c451] underline decoration-[#f5c451]">
-                      a camp
-                    </strong>
-                  </>
-                ) : (
-                  <span className="text-[#d4a548]">the fortress of killers</span>
-                )}
-                .”
-              </p>
             </div>
 
             {/* Boat [E] Look Object: The Folded Ledger Page in the Base of the Lantern */}
@@ -561,28 +597,101 @@ export function NarrativeOverlay({
   }
 
   // ==========================================================================
-  // STAGE 4: DUNDUBHI POST-FIGHT AFTERMATH (Section 9)
+  // STAGE 4: DUNDUBHI INTRO, AFTERMATH & VRIKODARA INTRO (Section 9)
   // ==========================================================================
+  if (stage === 'dundubhi_intro') {
+    return (
+      <div className="fixed inset-0 z-50 bg-black/88 flex items-center justify-center p-6">
+        <div className="max-w-2xl w-full bg-[#0e0b0f] border-2 border-[#d4a548] p-7 space-y-5 shadow-[0_24px_80px_rgba(0,0,0,0.96)]">
+          <div className="flex items-center gap-4 border-b border-[#c89d46]/30 pb-4">
+            <img
+              src={GAME_ASSETS.portraits.dundubhi}
+              alt="Dundubhi the Bronze War-Drum"
+              className="w-20 h-20 object-cover border-2 border-[#d4a548] shrink-0"
+            />
+            <div>
+              <div className="text-xs font-mono-num tracking-[0.25em] text-[#ff8a94] uppercase">
+                ACT I MINI-BOSS · MANDAPA OF THE WAR-DRUM
+              </div>
+              <h3 className="font-display text-2xl font-bold text-[#fff6e8]">
+                Dundubhi, The Bronze Buffalo Demon
+              </h3>
+            </div>
+          </div>
+          <div className="space-y-3">
+            {DUNDUBHI_DIALOGUE.preFight.map((line, i) => (
+              <div
+                key={i}
+                className="p-3.5 bg-[#161218] border-l-2 border-[#f5b952] text-sm text-[#f2e6d0] flex items-center gap-3"
+              >
+                <img
+                  src={
+                    line.speaker.includes('SAVITRI')
+                      ? GAME_ASSETS.portraits.savitri
+                      : GAME_ASSETS.portraits.sanjaya
+                  }
+                  alt={line.speaker}
+                  className="w-11 h-11 object-cover border border-[#c89d46]/60 shrink-0"
+                />
+                <div>
+                  <strong className="text-[#f5b952] font-mono-num uppercase mr-2">
+                    {line.speaker}:
+                  </strong>
+                  {line.text}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => onAdvanceStage('combat_arena')}
+              className="px-6 py-2.5 bg-[#d4a548] hover:bg-[#e5b95c] text-[#090807] font-bold text-xs tracking-wider uppercase cursor-pointer"
+            >
+              ENGAGE DUNDUBHI →
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (stage === 'dundubhi_aftermath') {
     return (
       <div className="fixed inset-0 z-50 bg-black/88 flex items-center justify-center p-6">
         <div className="max-w-2xl w-full bg-[#0e0b0f] border-2 border-[#d4a548] p-7 space-y-5 shadow-[0_24px_80px_rgba(0,0,0,0.96)]">
-          <div className="text-xs font-mono-num tracking-[0.25em] text-[#e6be6a] uppercase">
-            ACT I MINI-BOSS VANQUISHED · DUNDUBHI’S BRONZE WAR-DRUM
+          <div className="flex items-center gap-4 border-b border-[#c89d46]/30 pb-4">
+            <img
+              src={GAME_ASSETS.portraits.dundubhi}
+              alt="Dundubhi Vanquished"
+              className="w-16 h-16 object-cover border border-[#d4a548]/70 shrink-0 grayscale-[0.3]"
+            />
+            <div>
+              <div className="text-xs font-mono-num tracking-[0.25em] text-[#e6be6a] uppercase">
+                ACT I MINI-BOSS VANQUISHED · DUNDUBHI’S BRONZE WAR-DRUM
+              </div>
+              <h3 className="font-display text-2xl font-bold text-[#fff6e8]">
+                The Spiral on the Drum Skin
+              </h3>
+            </div>
           </div>
-          <h3 className="font-display text-2xl font-bold text-[#fff6e8]">
-            The Spiral on the Drum Skin
-          </h3>
           <div className="space-y-3">
             {DUNDUBHI_DIALOGUE.postFight.map((line, i) => (
               <div
                 key={i}
-                className="p-3.5 bg-[#161218] border-l-2 border-[#f5b952] text-sm text-[#f2e6d0]"
+                className="p-3.5 bg-[#161218] border-l-2 border-[#f5b952] text-sm text-[#f2e6d0] flex items-center gap-3"
               >
-                <strong className="text-[#f5b952] font-mono-num uppercase mr-2">
-                  {line.speaker}:
-                </strong>
-                {line.text}
+                <img
+                  src={GAME_ASSETS.portraits.savitri}
+                  alt="Savitri"
+                  className="w-11 h-11 object-cover border border-[#f5b952]/60 shrink-0"
+                />
+                <div>
+                  <strong className="text-[#f5b952] font-mono-num uppercase mr-2">
+                    {line.speaker}:
+                  </strong>
+                  {line.text}
+                </div>
               </div>
             ))}
           </div>
@@ -593,10 +702,67 @@ export function NarrativeOverlay({
           <div className="flex justify-end">
             <button
               type="button"
-              onClick={() => onAdvanceStage('combat_arena')}
+              onClick={() => onAdvanceStage('combat_arena', { dundubhiCleared: true })}
               className="px-6 py-2.5 bg-[#d4a548] hover:bg-[#e5b95c] text-[#090807] font-bold text-xs tracking-wider uppercase cursor-pointer"
             >
               CONTINUE TOWARD VRIKODARA’S SANCTUM →
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (stage === 'vrikodara_intro') {
+    return (
+      <div className="fixed inset-0 z-50 bg-black/88 flex items-center justify-center p-6">
+        <div className="max-w-2xl w-full bg-[#0e0b0f] border-2 border-[#ff7b54] p-7 space-y-5 shadow-[0_24px_80px_rgba(0,0,0,0.96)]">
+          <div className="flex items-center gap-4 border-b border-[#c89d46]/30 pb-4">
+            <img
+              src={GAME_ASSETS.portraits.vrikodara}
+              alt="Vrikodara the Blood-Brother"
+              className="w-20 h-20 object-cover border-2 border-[#ff7b54] shrink-0"
+            />
+            <div>
+              <div className="text-xs font-mono-num tracking-[0.25em] text-[#ff7b54] uppercase">
+                ACT I WARDEN · SHARD #1 OF THE BLEEDING CROWN
+              </div>
+              <h3 className="font-display text-2xl font-bold text-[#fff6e8]">
+                Vrikodara, The Starving Furnace
+              </h3>
+            </div>
+          </div>
+          <div className="space-y-3">
+            {VRIKODARA_DIALOGUE.preFight.map((line, i) => (
+              <div
+                key={i}
+                className="p-3.5 bg-[#161218] border-l-2 border-[#ff7b54] text-sm text-[#f2e6d0] flex items-center gap-3"
+              >
+                <img
+                  src={
+                    line.speaker.includes('RUDRA')
+                      ? GAME_ASSETS.portraits.rudra
+                      : GAME_ASSETS.portraits.vrikodara
+                  }
+                  alt={line.speaker}
+                  className="w-11 h-11 object-cover border border-[#ff7b54]/60 shrink-0"
+                />
+                <div>
+                  <strong className="text-[#ffba78] font-mono-num uppercase mr-2">
+                    {line.speaker}:
+                  </strong>
+                  {line.text}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => onAdvanceStage('combat_arena')}
+              className="px-6 py-2.5 bg-[#ff7b54] hover:bg-[#ff9473] text-[#090807] font-bold text-xs tracking-wider uppercase cursor-pointer"
+            >
+              FACE VRIKODARA →
             </button>
           </div>
         </div>
@@ -611,7 +777,7 @@ export function NarrativeOverlay({
     const corr = SANJAYA_CORRECTIONS[0];
     return (
       <div className="fixed inset-0 z-50 bg-[#050407]/96 flex items-center justify-center p-6 overflow-y-auto">
-        <div className="max-w-3xl w-full bg-[#0e0b10] border-2 border-[#f5c451] p-8 space-y-6 shadow-[0_24px_90px_rgba(0,0,0,0.98)]">
+        <div className="max-w-3xl w-full bg-[#0e0b10] border-2 border-[#f5c451] p-8 space-y-5 shadow-[0_24px_90px_rgba(0,0,0,0.98)]">
           <div className="flex items-center justify-between border-b border-[#c89d46]/30 pb-3">
             <div>
               <div className="text-xs font-mono-num tracking-[0.26em] text-[#ff7b54] uppercase">
@@ -626,39 +792,80 @@ export function NarrativeOverlay({
             </span>
           </div>
 
-          <div className="p-4 bg-[#151118] border border-[#c89d46]/30 text-sm text-[#e0d4c0] leading-relaxed italic">
-            <strong>VRIKODARA’S LAST WORDS:</strong> {VRIKODARA_DIALOGUE.deathQuote}
+          <div className="p-4 bg-[#151118] border border-[#c89d46]/30 text-sm text-[#e0d4c0] leading-relaxed italic flex items-center gap-3.5">
+            <img
+              src={GAME_ASSETS.portraits.vrikodara}
+              alt="Vrikodara"
+              className="w-14 h-14 object-cover border border-[#ff7b54]/70 shrink-0 not-italic"
+            />
+            <div>
+              <strong className="text-[#ffba78] not-italic">VRIKODARA’S LAST WORDS:</strong>{' '}
+              {VRIKODARA_DIALOGUE.deathQuote}
+            </div>
           </div>
 
-          <p className="text-sm md:text-base text-[#f2e6d0] leading-relaxed">
-            {SHARD_1_MEMORY_SCRIPT.visualDescription}
-          </p>
+          {/* Shard #1 Cutscene Painting: Healer's Tent & Clay Lamp */}
+          <div className="relative border border-[#c89d46]/50 bg-[#09070b] overflow-hidden">
+            <img
+              src={SHARD_1_MEMORY_SCRIPT.artAssetUrl}
+              alt="Shard #1 Memory — The Healer's Tent in the Shishira Camp"
+              className="w-full h-56 md:h-64 object-cover"
+            />
+            <div
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                background:
+                  'linear-gradient(180deg, rgba(8,6,10,0.15) 0%, rgba(8,6,10,0.88) 100%)',
+              }}
+            />
+            <p className="relative p-4 text-xs md:text-sm text-[#f2e6d0] leading-relaxed">
+              {SHARD_1_MEMORY_SCRIPT.visualDescription}
+            </p>
+          </div>
 
           <div className="space-y-2.5">
             {SHARD_1_MEMORY_SCRIPT.exchanges.map((ex, i) => (
               <div
                 key={i}
-                className="p-3.5 bg-[#120e14] border-l-2 border-[#d4a548] text-sm text-[#fff6e8]"
+                className="p-3.5 bg-[#120e14] border-l-2 border-[#d4a548] text-sm text-[#fff6e8] flex items-center gap-3"
               >
-                <strong className="text-[#f5c451] font-mono-num mr-2">{ex.speaker}:</strong>
-                {ex.text}
+                <img
+                  src={
+                    ex.speaker.includes('SAVITRI')
+                      ? GAME_ASSETS.portraits.savitri
+                      : GAME_ASSETS.portraits.rudra
+                  }
+                  alt={ex.speaker}
+                  className="w-10 h-10 object-cover border border-[#d4a548]/60 shrink-0"
+                />
+                <div>
+                  <strong className="text-[#f5c451] font-mono-num mr-2">{ex.speaker}:</strong>
+                  {ex.text}
+                </div>
               </div>
             ))}
           </div>
 
           {/* Live Sanjaya Strikethrough Correction #1 */}
-          <div className="p-5 bg-[#1a1215] border-2 border-[#ff5e6c]/60 space-y-2">
-            <div className="text-[10px] font-mono-num tracking-[0.24em] text-[#ff8a94] uppercase">
-              {corr.actLabel} · SANJAYA’S CHRONICLE REWRITTEN
+          <div className="p-5 bg-[#1a1215] border-2 border-[#ff5e6c]/60 flex items-start gap-3.5">
+            <img
+              src={GAME_ASSETS.portraits.sanjaya}
+              alt="Sanjaya"
+              className="w-12 h-12 object-cover border border-[#ff5e6c]/60 shrink-0"
+            />
+            <div className="space-y-1">
+              <div className="text-[10px] font-mono-num tracking-[0.24em] text-[#ff8a94] uppercase">
+                {corr.actLabel} · SANJAYA’S CHRONICLE REWRITTEN
+              </div>
+              <p className="text-sm md:text-base text-[#e5dac5]">
+                {corr.sanjayaContext}{' '}
+                <span className="line-through text-[#ff5e6c] font-bold mx-1.5">{corr.lieText}</span>{' '}
+                <strong className="text-[#f5c451] font-bold text-lg underline decoration-[#f5c451]">
+                  {corr.truthText}
+                </strong>
+                .
+              </p>
             </div>
-            <p className="text-sm md:text-base text-[#e5dac5]">
-              {corr.sanjayaContext}{' '}
-              <span className="line-through text-[#ff5e6c] font-bold mx-1.5">{corr.lieText}</span>{' '}
-              <strong className="text-[#f5c451] font-bold text-lg underline decoration-[#f5c451]">
-                {corr.truthText}
-              </strong>
-              .
-            </p>
           </div>
 
           {/* Power Unlocked: Rakshasa Crushing Stance */}
@@ -679,6 +886,7 @@ export function NarrativeOverlay({
               onClick={() =>
                 onAdvanceStage('ferry_1', {
                   shardsCollected: Math.max(1, storyFlags.shardsCollected),
+                  shardsRecovered: Math.max(1, storyFlags.shardsRecovered || 0),
                   rakshasaStanceUnlocked: true,
                 })
               }
@@ -695,7 +903,7 @@ export function NarrativeOverlay({
   // ==========================================================================
   // STAGE 6: FERRY I — TWO PEOPLE AND A LANTERN (Section 9)
   // ==========================================================================
-  if (stage === 'ferry_1') {
+  if (stage === 'ferry_1' || stage === 'ferry_1_scene') {
     const selectedChoiceObj = FERRY_1_SCRIPT.choices.find((c) => c.id === ferryChoiceId);
     return (
       <div className="fixed inset-0 z-50 bg-[#050508] flex flex-col justify-between p-6 md:p-12 overflow-y-auto">
@@ -709,13 +917,20 @@ export function NarrativeOverlay({
         </div>
 
         <div className="max-w-4xl w-full mx-auto my-auto space-y-6 py-6">
-          <div className="p-6 bg-[#100d12] border border-[#c89d46]/45 space-y-4 shadow-[0_20px_70px_rgba(0,0,0,0.95)]">
-            <div className="text-xs font-mono-num tracking-[0.22em] text-[#f5b952] uppercase">
-              SAVITRI (ROWING IN THE LANTERN LIGHT)
+          <div className="p-6 bg-[#100d12] border border-[#c89d46]/45 flex items-start gap-4 shadow-[0_20px_70px_rgba(0,0,0,0.95)]">
+            <img
+              src={GAME_ASSETS.portraits.savitri}
+              alt="Savitri"
+              className="w-16 h-16 object-cover border border-[#f5b952]/70 shrink-0"
+            />
+            <div className="space-y-2">
+              <div className="text-xs font-mono-num tracking-[0.22em] text-[#f5b952] uppercase">
+                SAVITRI (ROWING IN THE LANTERN LIGHT)
+              </div>
+              <p className="text-base md:text-lg text-[#fff6e8] leading-relaxed">
+                {FERRY_1_SCRIPT.savitriOpening}
+              </p>
             </div>
-            <p className="text-base md:text-lg text-[#fff6e8] leading-relaxed">
-              {FERRY_1_SCRIPT.savitriOpening}
-            </p>
           </div>
 
           {/* Three Dialogue Choices (Section 9 & 31: Silence is always an option) */}

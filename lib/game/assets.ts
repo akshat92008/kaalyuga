@@ -19,6 +19,13 @@ export interface ChamberPropSpec {
   y: number;
 }
 
+export type Warden3DRigKey =
+  | 'wolf_guai'
+  | 'fire_monk'
+  | 'stone_golem'
+  | 'furnace_titan'
+  | 'sovereign_titan';
+
 export interface ChamberSpawnSpec {
   type: 'wolf_guai' | 'fire_monk' | 'stone_golem' | 'furnace_titan' | 'xuemo' | 'vrikodara';
   x: number;
@@ -26,6 +33,8 @@ export interface ChamberSpawnSpec {
   delay?: number;
   wave?: 1 | 2 | 3;
   trait?: EnemyTrait;
+  wardenRigKey?: Warden3DRigKey;
+  wardenTitle?: string;
 }
 
 export interface ChamberSpec {
@@ -35,6 +44,10 @@ export interface ChamberSpec {
   chineseSubtitle: string;
   sanjayaQuote: string;
   strikethroughLie?: string;
+  sanjayaStrikethrough?: string;
+  sanjayaCorrection?: string;
+  dialogueSpeaker?: string;
+  dialogueLine?: string;
   backgroundUrl: string;
   unlockedBackgroundUrl?: string;
   phase2BackgroundUrl?: string;
@@ -48,7 +61,7 @@ export interface ChamberSpec {
 
 export const GAME_ASSETS = {
   // Full-bleed Title Screen Key Art
-  titleBackdrop: '/assets/aistudio/Gemini_Generated_Image_5y993f5y993f5y99_b0ca23a4.png',
+  titleBackdrop: '/assets/aistudio/Eclipse_Warrior_of_the_Ruined_Temple_ae03cddc.png',
 
   // Real-Time 3D FBX Models, Skeletal Animations & PBR Textures for Rudra, Dundubhi & Vrikodara
   models3d: {
@@ -113,16 +126,106 @@ export const GAME_ASSETS = {
       '/models/Meshy_AI_Bloodbound_Titan_1025042731_texture_fbx/Meshy_AI_Bloodbound_Titan_1025042731_texture.fbx',
     bloodboundWarlordFbx:
       '/models/Meshy_AI_Bloodbound_Warlord_1025041901_texture_fbx/Meshy_AI_Bloodbound_Warlord_1025041901_texture.fbx',
+    crimsonSkullWarlord: {
+      runFbx:
+        '/models/Meshy_AI_Crimson_Skull_Warlord_biped/Meshy_AI_Crimson_Skull_Warlord_biped_Animation_Running_withSkin.fbx',
+      textures: {
+        baseColor:
+          '/models/Meshy_AI_Crimson_Skull_Warlord_biped/Meshy_AI_Crimson_Skull_Warlord_biped_Animation_Running_withSkin_texture_0.png',
+        normal:
+          '/models/Meshy_AI_Crimson_Skull_Warlord_biped/Meshy_AI_Crimson_Skull_Warlord_biped_Animation_Running_withSkin_normal.png',
+        roughness:
+          '/models/Meshy_AI_Crimson_Skull_Warlord_biped/Meshy_AI_Crimson_Skull_Warlord_biped_Animation_Running_withSkin_roughness.png',
+        metalness:
+          '/models/Meshy_AI_Crimson_Skull_Warlord_biped/Meshy_AI_Crimson_Skull_Warlord_biped_Animation_Running_withSkin_metallic.png',
+      },
+    },
+    skullcladWarlord: {
+      meshFbx:
+        '/models/Meshy_AI_Skullclad_Warlord_20261031_texture_fbx/Meshy_AI_Skullclad_Warlord_20261031_texture.fbx',
+      textures: {
+        baseColor:
+          '/models/Meshy_AI_Skullclad_Warlord_20261031_texture_fbx/Meshy_AI_Skullclad_Warlord_20261031_texture.png',
+        normal:
+          '/models/Meshy_AI_Skullclad_Warlord_20261031_texture_fbx/Meshy_AI_Skullclad_Warlord_20261031_texture_normal.png',
+        roughness:
+          '/models/Meshy_AI_Skullclad_Warlord_20261031_texture_fbx/Meshy_AI_Skullclad_Warlord_20261031_texture_roughness.png',
+        metalness:
+          '/models/Meshy_AI_Skullclad_Warlord_20261031_texture_fbx/Meshy_AI_Skullclad_Warlord_20261031_texture_metallic.png',
+      },
+    },
+    hornedBloodforgeWarlord: {
+      meshFbx:
+        '/models/Meshy_AI_Horned_Warlord_of_the_Bloodforge_20261031_texture_fbx/Meshy_AI_Horned_Warlord_of_the_Bloodforge_20261031_texture.fbx',
+      textures: {
+        baseColor:
+          '/models/Meshy_AI_Horned_Warlord_of_the_Bloodforge_20261031_texture_fbx/Meshy_AI_Horned_Warlord_of_the_Bloodforge_20261031_texture.png',
+        normal:
+          '/models/Meshy_AI_Horned_Warlord_of_the_Bloodforge_20261031_texture_fbx/Meshy_AI_Horned_Warlord_of_the_Bloodforge_20261031_texture_normal.png',
+        roughness:
+          '/models/Meshy_AI_Horned_Warlord_of_the_Bloodforge_20261031_texture_fbx/Meshy_AI_Horned_Warlord_of_the_Bloodforge_20261031_texture_roughness.png',
+        metalness:
+          '/models/Meshy_AI_Horned_Warlord_of_the_Bloodforge_20261031_texture_fbx/Meshy_AI_Horned_Warlord_of_the_Bloodforge_20261031_texture_metallic.png',
+      },
+    },
+    moltenWarlord: {
+      meshFbx:
+        '/models/Meshy_AI_Molten_Warlord_20261031_texture_fbx/Meshy_AI_Molten_Warlord_20261031_texture.fbx',
+      textures: {
+        baseColor:
+          '/models/Meshy_AI_Molten_Warlord_20261031_texture_fbx/Meshy_AI_Molten_Warlord_20261031_texture.png',
+        normal:
+          '/models/Meshy_AI_Molten_Warlord_20261031_texture_fbx/Meshy_AI_Molten_Warlord_20261031_texture_normal.png',
+        roughness:
+          '/models/Meshy_AI_Molten_Warlord_20261031_texture_fbx/Meshy_AI_Molten_Warlord_20261031_texture_roughness.png',
+        metalness:
+          '/models/Meshy_AI_Molten_Warlord_20261031_texture_fbx/Meshy_AI_Molten_Warlord_20261031_texture_metallic.png',
+      },
+    },
+    sovereignEternalWheel: {
+      meshFbx:
+        '/models/Meshy_AI_Sovereign_of_the_Eternal_Wheel_20261031_texture_fbx/Meshy_AI_Sovereign_of_the_Eternal_Wheel_20261031_texture.fbx',
+      textures: {
+        baseColor:
+          '/models/Meshy_AI_Sovereign_of_the_Eternal_Wheel_20261031_texture_fbx/Meshy_AI_Sovereign_of_the_Eternal_Wheel_20261031_texture.png',
+        normal:
+          '/models/Meshy_AI_Sovereign_of_the_Eternal_Wheel_20261031_texture_fbx/Meshy_AI_Sovereign_of_the_Eternal_Wheel_20261031_texture_normal.png',
+        roughness:
+          '/models/Meshy_AI_Sovereign_of_the_Eternal_Wheel_20261031_texture_fbx/Meshy_AI_Sovereign_of_the_Eternal_Wheel_20261031_texture_roughness.png',
+        metalness:
+          '/models/Meshy_AI_Sovereign_of_the_Eternal_Wheel_20261031_texture_fbx/Meshy_AI_Sovereign_of_the_Eternal_Wheel_20261031_texture_metallic.png',
+      },
+    },
   },
 
-  // Newly Uploaded + Previous Hand-Painted 16:9 Isometric Chamber Arenas
+  // Dedicated Hades-Style Character Portraits & Prologue/Cutscene Paintings (v7 Asset Bible)
+  portraits: {
+    savitri: '/assets/aistudio/Gemini_Generated_Image_kokt4ckokt4ckokt.png',
+    sanjaya: '/assets/aistudio/Gemini_Generated_Image_f67jx9f67jx9f67j.png',
+    dundubhi: '/assets/aistudio/Gemini_Generated_Image_48dcqm48dcqm48dc.png',
+    vrikodara: '/assets/aistudio/Gemini_Generated_Image_1pfq2k1pfq2k1pfq.png',
+    rudra: '/assets/aistudio/Ash-Worn_Mythic_Warrior_6e0e3114.png',
+    preserver: '/assets/aistudio/Majestic Blue-Gold Divine Guardian.png',
+  },
+  scrolls: {
+    scroll1Churning: '/assets/aistudio/Gemini_Generated_Image_pw6vhspw6vhspw6v.png',
+    scroll2ChildAndMani: '/assets/aistudio/Gemini_Generated_Image_laj3yelaj3yelaj3.png',
+    scroll3TwoBrothers: '/assets/aistudio/Gemini_Generated_Image_46i1mu46i1mu46i1.png',
+    scroll4TheLesson: '/assets/aistudio/Gemini_Generated_Image_is7maais7maais7m.png',
+    scroll5FallOfFather: '/assets/aistudio/Gemini_Generated_Image_yax76dyax76dyax7.png',
+  },
+  cutscenes: {
+    shard1HealerTent: '/assets/aistudio/Gemini_Generated_Image_p8dfx9p8dfx9p8df.png',
+  },
+
+  // Hand-Painted 16:9 Isometric Indian Kurukshetra & Kaliyuga Chamber Arenas (Zero Wukong/Chinese Arenas)
   chambers: {
-    vaitaraniGhat: '/assets/aistudio/Gemini_Generated_Image_c0fyyc0fyyc0fyyc_4d7dcd20.png',
+    vaitaraniGhat: '/assets/aistudio/Gemini_Generated_Image_vjfugjvjfugjvjfu_d880974a.png',
     raktabijaCourtyard: '/assets/aistudio/Gemini_Generated_Image_bmq158bmq158bmq1_a3eaf68a.png',
     chariotBonefield: '/assets/aistudio/Gemini_Generated_Image_ey07c4ey07c4ey07_1de21fb8.png',
-    warDrumColonnade: '/assets/aistudio/Gemini_Generated_Image_vjfugjvjfugjvjfu_d880974a.png',
-    soulFireSanctum: '/assets/aistudio/Gemini_Generated_Image_lcvwbvlcvwbvlcvw_f51e31fc.png',
-    gopuramCauseway: '/assets/aistudio/Gemini_Generated_Image_tbakuftbakuftbak_c9baa1f3.png',
+    warDrumColonnade: '/assets/aistudio/Gemini_Generated_Image_c0fyyc0fyyc0fyyc_4d7dcd20.png',
+    soulFireSanctum: '/assets/aistudio/Gemini_Generated_Image_acbxb7acbxb7acbx_9e34bd2e.png',
+    gopuramCauseway: '/assets/aistudio/Gemini_Generated_Image_c0fyyc0fyyc0fyyc_4d7dcd20.png',
     asuraLavaLocked: '/assets/aistudio/Gemini_Generated_Image_u58tfju58tfju58t_2d5d830a.png',
     asuraLavaUnlocked: '/assets/aistudio/Gemini_Generated_Image_8jz0rn8jz0rn8jz0_9c7ece82.png',
     bossSanctumPhase1: '/assets/aistudio/Gemini_Generated_Image_25mxvb25mxvb25mx_d4637a39.png',
@@ -152,29 +255,29 @@ export const GAME_ASSETS = {
     vrikaStalkerSheet4x1: '/assets/aistudio/Gemini_Generated_Image_vw8zcgvw8zcgvw8z_043bf070.png',
     agniSpearmanSheet4x1: '/assets/aistudio/Gemini_Generated_Image_wixy9mwixy9mwixy_470e5e55.png',
     magmaGolemSheet4x1: '/assets/aistudio/Gemini_Generated_Image_v7t1y5v7t1y5v7t1_9158f9e8.png',
-    furnaceColossusSheet4x1: '/assets/aistudio/Gemini_Generated_Image_uyv1euuyv1euuyv1_ae2bf117.png',
+    furnaceColossusSheet4x1: '/assets/aistudio/Gemini_Generated_Image_by91e1by91e1by91_46282a74.png',
   },
 
-  // 2.5D Y-Sorted Destructible Courtyard Props (Pure Black Background Set)
+  // 2.5D Y-Sorted Destructible Courtyard Props (Pure Black Background Indian Kurukshetra Set)
   kaliyugaProps: {
     kurukshetraPillar: '/assets/aistudio/Gemini_Generated_Image_9st0qa9st0qa9st0_64c7f4c4.png',
     pillarRubble: '/assets/aistudio/Gemini_Generated_Image_xp9eibxp9eibxp9e_197206c9.png',
-    brahmashiraShrine: '/assets/aistudio/Gemini_Generated_Image_0s5bd90s5bd90s5b_eb1b75fb.png',
-    brokenChariot: '/assets/aistudio/Gemini_Generated_Image_34fd4734fd4734fd_8d8139ae.png',
-    vaitaraniBoat: '/assets/aistudio/Gemini_Generated_Image_m3h1j5m3h1j5m3h1_22a5a080.png',
+    brahmashiraShrine: '/assets/aistudio/Gemini_Generated_Image_rc1gsbrc1gsbrc1g_d88016ca.png',
+    brokenChariot: '/assets/aistudio/Gemini_Generated_Image_w6hzmyw6hzmyw6hz_4319bd25.png',
+    vaitaraniBoat: '/assets/aistudio/Gemini_Generated_Image_x8gt5lx8gt5lx8gt_225a8aa8.png',
   },
 
   // Fallback 2D Character Poses (Used only during initial 3D FBX load)
   rudra: {
-    idle: '/assets/aistudio/Gemini_Generated_Image_f33z69f33z69f33z_23b04634.png',
-    run: '/assets/aistudio/Gemini_Generated_Image_9w9v119w9v119w9v_27b7999c.png',
-    slash1: '/assets/aistudio/Gemini_Generated_Image_8v7p198v7p198v7p_0f1b9b42.png',
-    slash2: '/assets/aistudio/Gemini_Generated_Image_r1a3c2r1a3c2r1a3_b0b216b2.png',
-    slam: '/assets/aistudio/Gemini_Generated_Image_x44z9mx44z9mx44z_9694f3a8.png',
-    parry: '/assets/aistudio/Gemini_Generated_Image_f33z69f33z69f33z_23b04634.png',
-    astra: '/assets/aistudio/Gemini_Generated_Image_8v7p198v7p198v7p_0f1b9b42.png',
-    heal: '/assets/aistudio/Gemini_Generated_Image_f33z69f33z69f33z_23b04634.png',
-    kneel: '/assets/aistudio/Gemini_Generated_Image_f33z69f33z69f33z_23b04634.png',
+    idle: '/assets/aistudio/Ashen_Warrior_with_Bloodied_Greatsword_a86e8491.png',
+    run: '/assets/aistudio/Fierce_Warrior_s_Leaping_Strike_0fc5a149.png',
+    slash1: '/assets/aistudio/Bloodied_Warrior_s_Greatblade_Slash_e905f195.png',
+    slash2: '/assets/aistudio/Fierce_Warrior_s_Downward_Strike_a4598509.png',
+    slam: '/assets/aistudio/Mythic_Trishula_War_Axe_6e39d1d1.png',
+    parry: '/assets/aistudio/Bloodied_Greatsword_Warrior_in_a_Defensive_Stance_137c9bf8.png',
+    astra: '/assets/aistudio/Flaming_Archer_of_the_White_Realm_8f79ff3f.png',
+    heal: '/assets/aistudio/Ash-Bound_Warrior_s_Golden_Draught_4475748f.png',
+    kneel: '/assets/aistudio/Battle-Worn_Warrior_Kneeling_on_His_Sword_55ca9257.png',
   },
   enemies: {
     vrikaIdle: '/assets/aistudio/Gemini_Generated_Image_vw8zcgvw8zcgvw8z_043bf070.png',
@@ -196,7 +299,7 @@ export const GAME_ASSETS = {
 
 export const CHAMBERS: ChamberSpec[] = [
   // ==========================================================================
-  // CHAMBER I: VAITARANI RIVER GHAT (NEW HAND-PAINTED ARENA)
+  // CHAMBER I: VAITARANI RIVER GHAT (EXPANSIVE HADES SCROLLING ARENA)
   // ==========================================================================
   {
     id: 1,
@@ -211,31 +314,43 @@ export const CHAMBERS: ChamberSpec[] = [
     isBossChamber: false,
     envEffect: 'blood_river',
     braziers: [
-      { x: 0.24, y: 0.24, color: '#ff6a18', radius: 165 },
-      { x: 0.76, y: 0.24, color: '#ff6a18', radius: 165 },
-      { x: 0.20, y: 0.78, color: '#ff4218', radius: 175 },
-      { x: 0.80, y: 0.78, color: '#ff4218', radius: 175 },
+      { x: 0.20, y: 0.22, color: '#ff6a18', radius: 195 },
+      { x: 0.80, y: 0.22, color: '#ff6a18', radius: 195 },
+      { x: 0.16, y: 0.54, color: '#ff4218', radius: 185 },
+      { x: 0.84, y: 0.54, color: '#ff4218', radius: 185 },
+      { x: 0.22, y: 0.82, color: '#ff4218', radius: 195 },
+      { x: 0.78, y: 0.82, color: '#ff4218', radius: 195 },
     ],
     props: [
-      { type: 'incense_cauldron', x: 0.36, y: 0.42 },
-      { type: 'pagoda_lantern', x: 0.64, y: 0.42 },
+      { type: 'incense_cauldron', x: 0.32, y: 0.44 },
+      { type: 'pagoda_lantern', x: 0.68, y: 0.42 },
       { type: 'dragon_pillar', x: 0.50, y: 0.34 },
-      { type: 'weapon_rack', x: 0.32, y: 0.68 },
+      { type: 'dragon_pillar', x: 0.52, y: 0.66 },
+      { type: 'weapon_rack', x: 0.28, y: 0.70 },
+      { type: 'incense_cauldron', x: 0.72, y: 0.68 },
     ],
     spawns: [
-      // Wave 1: Sharabha Hellhounds + Vrika Stalkers + Agni Spearmen
-      { type: 'wolf_guai', x: 0.56, y: 0.44, wave: 1 },
-      { type: 'wolf_guai', x: 0.64, y: 0.58, wave: 1, delay: 0.3 },
-      { type: 'fire_monk', x: 0.68, y: 0.48, wave: 1, delay: 0.6 },
-      // Wave 2: Undead Preta Bowman + Armored Magma Golem
-      { type: 'wolf_guai', x: 0.46, y: 0.38, wave: 2, trait: 'rakshasa_frenzy' },
-      { type: 'fire_monk', x: 0.70, y: 0.42, wave: 2, delay: 0.3 },
-      { type: 'stone_golem', x: 0.58, y: 0.62, wave: 2, delay: 0.5 },
+      // Wave 1: 2D Hand-Painted Sharabha Hellhounds + Vrika Stalkers + Agni Spearmen across the courtyard
+      { type: 'wolf_guai', x: 0.48, y: 0.46, wave: 1 },
+      { type: 'wolf_guai', x: 0.62, y: 0.64, wave: 1, delay: 0.25 },
+      { type: 'fire_monk', x: 0.72, y: 0.42, wave: 1, delay: 0.5 },
+      { type: 'wolf_guai', x: 0.38, y: 0.32, wave: 1, delay: 0.75 },
+      // Wave 2: 2D Preta Bowmen + Ghat-Warden
+      { type: 'wolf_guai', x: 0.36, y: 0.40, wave: 2, trait: 'rakshasa_frenzy' },
+      { type: 'fire_monk', x: 0.74, y: 0.38, wave: 2, delay: 0.25 },
+      {
+        type: 'furnace_titan',
+        x: 0.62,
+        y: 0.54,
+        wave: 2,
+        delay: 0.45,
+        wardenTitle: 'KAPALA · SKULLCLAD GHAT-WARDEN',
+      },
     ],
   },
 
   // ==========================================================================
-  // CHAMBER II: RAKTABIJA BLOOD-KUNDA COURTYARD (NEW HAND-PAINTED ARENA)
+  // CHAMBER II: RAKTABIJA BLOOD-KUNDA COURTYARD (EXPANSIVE HADES ARENA)
   // ==========================================================================
   {
     id: 2,
@@ -250,32 +365,42 @@ export const CHAMBERS: ChamberSpec[] = [
     isBossChamber: false,
     envEffect: 'blood_river',
     braziers: [
-      { x: 0.25, y: 0.22, color: '#ff5218', radius: 170 },
-      { x: 0.75, y: 0.22, color: '#ff5218', radius: 170 },
-      { x: 0.22, y: 0.78, color: '#ff2a3a', radius: 180 },
-      { x: 0.78, y: 0.78, color: '#ff2a3a', radius: 180 },
+      { x: 0.20, y: 0.20, color: '#ff5218', radius: 195 },
+      { x: 0.80, y: 0.20, color: '#ff5218', radius: 195 },
+      { x: 0.16, y: 0.52, color: '#ff2a3a', radius: 190 },
+      { x: 0.84, y: 0.52, color: '#ff2a3a', radius: 190 },
+      { x: 0.22, y: 0.82, color: '#ff2a3a', radius: 195 },
+      { x: 0.78, y: 0.82, color: '#ff2a3a', radius: 195 },
     ],
     props: [
-      { type: 'dragon_pillar', x: 0.40, y: 0.42 },
-      { type: 'dragon_pillar', x: 0.60, y: 0.42 },
-      { type: 'incense_cauldron', x: 0.50, y: 0.64 },
-      { type: 'weapon_rack', x: 0.68, y: 0.62 },
+      { type: 'dragon_pillar', x: 0.36, y: 0.38 },
+      { type: 'dragon_pillar', x: 0.64, y: 0.38 },
+      { type: 'incense_cauldron', x: 0.50, y: 0.66 },
+      { type: 'weapon_rack', x: 0.74, y: 0.64 },
+      { type: 'pagoda_lantern', x: 0.28, y: 0.68 },
     ],
     spawns: [
-      // Wave 1
-      { type: 'fire_monk', x: 0.62, y: 0.40, wave: 1 },
-      { type: 'fire_monk', x: 0.68, y: 0.58, wave: 1, delay: 0.3 },
-      { type: 'stone_golem', x: 0.54, y: 0.52, wave: 1, delay: 0.4 },
-      { type: 'wolf_guai', x: 0.48, y: 0.66, wave: 1, delay: 0.6 },
-      // Wave 2
-      { type: 'furnace_titan', x: 0.60, y: 0.48, wave: 2, trait: 'agni_aura' },
-      { type: 'wolf_guai', x: 0.42, y: 0.40, wave: 2, delay: 0.3 },
-      { type: 'fire_monk', x: 0.72, y: 0.52, wave: 2, delay: 0.5, trait: 'agni_aura' },
+      // Wave 1: 2D Swarm Mobs
+      { type: 'fire_monk', x: 0.58, y: 0.36, wave: 1 },
+      { type: 'fire_monk', x: 0.74, y: 0.60, wave: 1, delay: 0.25 },
+      { type: 'stone_golem', x: 0.50, y: 0.52, wave: 1, delay: 0.4 },
+      { type: 'wolf_guai', x: 0.40, y: 0.70, wave: 1, delay: 0.55 },
+      // Wave 2: Raktabija Crimson Skull Warlord + 2D Guards
+      {
+        type: 'furnace_titan',
+        x: 0.64,
+        y: 0.48,
+        wave: 2,
+        trait: 'agni_aura',
+        wardenTitle: 'RAKTABIJA · CRIMSON SKULL WARLORD',
+      },
+      { type: 'wolf_guai', x: 0.36, y: 0.36, wave: 2, delay: 0.3 },
+      { type: 'fire_monk', x: 0.76, y: 0.54, wave: 2, delay: 0.5, trait: 'agni_aura' },
     ],
   },
 
   // ==========================================================================
-  // CHAMBER III: KURUKSHETRA CHARIOT BONEFIELD (PREVIOUS FAN-FAVORITE ARENA)
+  // CHAMBER III: KURUKSHETRA CHARIOT BONEFIELD (EXPANSIVE HADES ARENA)
   // ==========================================================================
   {
     id: 3,
@@ -290,27 +415,37 @@ export const CHAMBERS: ChamberSpec[] = [
     isBossChamber: false,
     envEffect: 'lava_fissures',
     braziers: [
-      { x: 0.22, y: 0.26, color: '#ff7a18', radius: 175 },
-      { x: 0.78, y: 0.26, color: '#ff7a18', radius: 175 },
-      { x: 0.22, y: 0.76, color: '#ff5218', radius: 175 },
-      { x: 0.78, y: 0.76, color: '#ff5218', radius: 175 },
+      { x: 0.20, y: 0.22, color: '#ff7a18', radius: 195 },
+      { x: 0.80, y: 0.22, color: '#ff7a18', radius: 195 },
+      { x: 0.16, y: 0.54, color: '#ff5218', radius: 190 },
+      { x: 0.84, y: 0.54, color: '#ff5218', radius: 190 },
+      { x: 0.22, y: 0.80, color: '#ff5218', radius: 195 },
+      { x: 0.78, y: 0.80, color: '#ff5218', radius: 195 },
     ],
     props: [
-      { type: 'weapon_rack', x: 0.38, y: 0.40 },
-      { type: 'incense_cauldron', x: 0.54, y: 0.46 },
-      { type: 'dragon_pillar', x: 0.64, y: 0.38 },
-      { type: 'pagoda_lantern', x: 0.44, y: 0.68 },
+      { type: 'weapon_rack', x: 0.32, y: 0.38 },
+      { type: 'incense_cauldron', x: 0.52, y: 0.48 },
+      { type: 'dragon_pillar', x: 0.68, y: 0.36 },
+      { type: 'dragon_pillar', x: 0.38, y: 0.68 },
+      { type: 'pagoda_lantern', x: 0.68, y: 0.70 },
     ],
     spawns: [
-      // Wave 1
-      { type: 'stone_golem', x: 0.56, y: 0.46, wave: 1, trait: 'vajra_shield' },
-      { type: 'wolf_guai', x: 0.64, y: 0.38, wave: 1, delay: 0.2 },
-      { type: 'wolf_guai', x: 0.64, y: 0.62, wave: 1, delay: 0.4 },
-      { type: 'fire_monk', x: 0.72, y: 0.50, wave: 1, delay: 0.6 },
-      // Wave 2
-      { type: 'furnace_titan', x: 0.58, y: 0.52, wave: 2 },
-      { type: 'stone_golem', x: 0.46, y: 0.42, wave: 2, delay: 0.3 },
-      { type: 'fire_monk', x: 0.70, y: 0.42, wave: 2, delay: 0.5, trait: 'agni_aura' },
+      // Wave 1: 2D Swarm Mobs
+      { type: 'stone_golem', x: 0.54, y: 0.46, wave: 1, trait: 'vajra_shield' },
+      { type: 'wolf_guai', x: 0.66, y: 0.34, wave: 1, delay: 0.2 },
+      { type: 'wolf_guai', x: 0.66, y: 0.66, wave: 1, delay: 0.4 },
+      { type: 'fire_monk', x: 0.76, y: 0.50, wave: 1, delay: 0.6 },
+      // Wave 2: Raktaksha, Horned Warlord of the Bloodforge
+      {
+        type: 'furnace_titan',
+        x: 0.62,
+        y: 0.52,
+        wave: 2,
+        trait: 'vajra_shield',
+        wardenTitle: 'RAKTAKSHA · HORNED BLOODFORGE WARDEN',
+      },
+      { type: 'stone_golem', x: 0.42, y: 0.38, wave: 2, delay: 0.3 },
+      { type: 'fire_monk', x: 0.74, y: 0.40, wave: 2, delay: 0.5, trait: 'agni_aura' },
     ],
   },
 
@@ -330,58 +465,69 @@ export const CHAMBERS: ChamberSpec[] = [
     isBossChamber: true,
     envEffect: 'lava_fissures',
     braziers: [
-      { x: 0.20, y: 0.22, color: '#ff8a24', radius: 190 },
-      { x: 0.80, y: 0.22, color: '#ff8a24', radius: 190 },
-      { x: 0.20, y: 0.80, color: '#ff5218', radius: 190 },
-      { x: 0.80, y: 0.80, color: '#ff5218', radius: 190 },
+      { x: 0.18, y: 0.22, color: '#ff8a24', radius: 210 },
+      { x: 0.82, y: 0.22, color: '#ff8a24', radius: 210 },
+      { x: 0.18, y: 0.80, color: '#ff5218', radius: 210 },
+      { x: 0.82, y: 0.80, color: '#ff5218', radius: 210 },
     ],
     props: [
-      { type: 'dragon_pillar', x: 0.36, y: 0.38 },
-      { type: 'dragon_pillar', x: 0.64, y: 0.38 },
-      { type: 'dragon_pillar', x: 0.36, y: 0.68 },
-      { type: 'dragon_pillar', x: 0.64, y: 0.68 },
-      { type: 'incense_cauldron', x: 0.50, y: 0.28 },
+      { type: 'dragon_pillar', x: 0.34, y: 0.36 },
+      { type: 'dragon_pillar', x: 0.66, y: 0.36 },
+      { type: 'dragon_pillar', x: 0.34, y: 0.70 },
+      { type: 'dragon_pillar', x: 0.66, y: 0.70 },
+      { type: 'incense_cauldron', x: 0.50, y: 0.26 },
     ],
     spawns: [{ type: 'xuemo', x: 0.64, y: 0.52, wave: 1 }],
   },
 
   // ==========================================================================
-  // CHAMBER V: ASURA SOUL-FIRE SANCTUM (ACT II — CYAN SOUL-FIRE ARENA)
+  // CHAMBER V: KURUKSHETRA BRAHMASHIRA PYRE (ACT II — BURNING WAR-CAMP)
   // ==========================================================================
   {
     id: 5,
     chapterTitle: 'Act II · The Asura Inner Sanctum',
-    name: 'Bhairava Soul-Fire Sanctum',
-    chineseSubtitle: 'भैरव कुण्ड · CHAMBER V OF VIII',
-    strikethroughLie: '“The sages meditated beside cool Himalayan springs...”',
+    name: 'Brahmashira War-Camp Pyre',
+    chineseSubtitle: 'ब्रह्मशिर शिविर · CHAMBER V OF VIII',
+    strikethroughLie: '“The royal tents slumbered in peace after the final conch...”',
     sanjayaQuote:
-      '“Cold Bhairava soul-fire burns hotter than magma. Four-armed Kaliyuga Avatars guard the inner mandala!”',
+      '“Ashvatthama’s celestial Brahmashira weapon scorches the horizon! Four-armed Kaliyuga Avatars prowl the burning war-tents!”',
     backgroundUrl: GAME_ASSETS.chambers.soulFireSanctum,
-    floorTint: 'rgba(8, 22, 28, 0.08)',
+    floorTint: 'rgba(22, 12, 8, 0.08)',
     isBossChamber: false,
-    envEffect: 'sacred_mist',
+    envEffect: 'lava_fissures',
     braziers: [
-      { x: 0.22, y: 0.24, color: '#38e8ff', radius: 180 },
-      { x: 0.78, y: 0.24, color: '#38e8ff', radius: 180 },
-      { x: 0.22, y: 0.78, color: '#ff6a18', radius: 175 },
-      { x: 0.78, y: 0.78, color: '#ff6a18', radius: 175 },
+      { x: 0.20, y: 0.22, color: '#ff6a18', radius: 200 },
+      { x: 0.80, y: 0.22, color: '#ff6a18', radius: 200 },
+      { x: 0.16, y: 0.54, color: '#ff4218', radius: 190 },
+      { x: 0.84, y: 0.54, color: '#ff4218', radius: 190 },
+      { x: 0.22, y: 0.80, color: '#ff6a18', radius: 195 },
+      { x: 0.78, y: 0.80, color: '#ff6a18', radius: 195 },
     ],
     props: [
-      { type: 'dragon_pillar', x: 0.42, y: 0.40 },
-      { type: 'dragon_pillar', x: 0.58, y: 0.40 },
-      { type: 'incense_cauldron', x: 0.50, y: 0.62 },
-      { type: 'pagoda_lantern', x: 0.34, y: 0.64 },
+      { type: 'dragon_pillar', x: 0.38, y: 0.38 },
+      { type: 'dragon_pillar', x: 0.62, y: 0.38 },
+      { type: 'incense_cauldron', x: 0.50, y: 0.64 },
+      { type: 'pagoda_lantern', x: 0.30, y: 0.68 },
+      { type: 'weapon_rack', x: 0.72, y: 0.68 },
     ],
     spawns: [
-      // Wave 1: Kaliyuga Cosmic Avatar + Preta Bowmen + Sharabha Hounds
-      { type: 'furnace_titan', x: 0.60, y: 0.48, wave: 1, trait: 'vajra_shield' },
-      { type: 'fire_monk', x: 0.68, y: 0.38, wave: 1, delay: 0.25 },
-      { type: 'fire_monk', x: 0.68, y: 0.62, wave: 1, delay: 0.45 },
-      // Wave 2
-      { type: 'stone_golem', x: 0.52, y: 0.44, wave: 2, trait: 'agni_aura' },
-      { type: 'wolf_guai', x: 0.44, y: 0.60, wave: 2, delay: 0.2, trait: 'rakshasa_frenzy' },
-      { type: 'wolf_guai', x: 0.66, y: 0.52, wave: 2, delay: 0.4, trait: 'rakshasa_frenzy' },
-      { type: 'furnace_titan', x: 0.62, y: 0.50, wave: 2, delay: 0.6 },
+      // Wave 1: 2D Kaliyuga Cosmic Avatar + Preta Bowmen + Sharabha Hounds
+      { type: 'furnace_titan', x: 0.56, y: 0.48, wave: 1, trait: 'vajra_shield' },
+      { type: 'fire_monk', x: 0.72, y: 0.36, wave: 1, delay: 0.25 },
+      { type: 'fire_monk', x: 0.72, y: 0.66, wave: 1, delay: 0.45 },
+      // Wave 2: Sovereign of the Eternal Wheel + Frenzied Hounds
+      { type: 'stone_golem', x: 0.46, y: 0.40, wave: 2, trait: 'agni_aura' },
+      { type: 'wolf_guai', x: 0.38, y: 0.64, wave: 2, delay: 0.2, trait: 'rakshasa_frenzy' },
+      { type: 'wolf_guai', x: 0.70, y: 0.56, wave: 2, delay: 0.4, trait: 'rakshasa_frenzy' },
+      {
+        type: 'furnace_titan',
+        x: 0.64,
+        y: 0.50,
+        wave: 2,
+        delay: 0.55,
+        trait: 'vajra_shield',
+        wardenTitle: 'BHAIRAVA · ETERNAL WHEEL AVATAR',
+      },
     ],
   },
 
@@ -401,27 +547,37 @@ export const CHAMBERS: ChamberSpec[] = [
     isBossChamber: false,
     envEffect: 'lava_fissures',
     braziers: [
-      { x: 0.24, y: 0.22, color: '#ff6a18', radius: 175 },
-      { x: 0.76, y: 0.22, color: '#ff6a18', radius: 175 },
-      { x: 0.24, y: 0.80, color: '#ff2a3a', radius: 175 },
-      { x: 0.76, y: 0.80, color: '#ff2a3a', radius: 175 },
+      { x: 0.20, y: 0.22, color: '#ff6a18', radius: 195 },
+      { x: 0.80, y: 0.22, color: '#ff6a18', radius: 195 },
+      { x: 0.16, y: 0.54, color: '#ff2a3a', radius: 190 },
+      { x: 0.84, y: 0.54, color: '#ff2a3a', radius: 190 },
+      { x: 0.22, y: 0.82, color: '#ff2a3a', radius: 195 },
+      { x: 0.78, y: 0.82, color: '#ff2a3a', radius: 195 },
     ],
     props: [
-      { type: 'incense_cauldron', x: 0.44, y: 0.44 },
-      { type: 'incense_cauldron', x: 0.58, y: 0.58 },
-      { type: 'dragon_pillar', x: 0.52, y: 0.36 },
-      { type: 'weapon_rack', x: 0.36, y: 0.64 },
+      { type: 'incense_cauldron', x: 0.40, y: 0.42 },
+      { type: 'incense_cauldron', x: 0.62, y: 0.60 },
+      { type: 'dragon_pillar', x: 0.52, y: 0.34 },
+      { type: 'dragon_pillar', x: 0.48, y: 0.70 },
+      { type: 'weapon_rack', x: 0.32, y: 0.66 },
     ],
     spawns: [
-      // Wave 1
-      { type: 'stone_golem', x: 0.54, y: 0.44, wave: 1, trait: 'vajra_shield' },
-      { type: 'stone_golem', x: 0.62, y: 0.58, wave: 1, delay: 0.3 },
-      { type: 'fire_monk', x: 0.70, y: 0.46, wave: 1, delay: 0.5, trait: 'agni_aura' },
-      // Wave 2
-      { type: 'furnace_titan', x: 0.58, y: 0.50, wave: 2, trait: 'rakshasa_frenzy' },
-      { type: 'wolf_guai', x: 0.46, y: 0.38, wave: 2, delay: 0.25, trait: 'rakshasa_frenzy' },
-      { type: 'wolf_guai', x: 0.46, y: 0.66, wave: 2, delay: 0.45 },
-      { type: 'fire_monk', x: 0.72, y: 0.54, wave: 2, delay: 0.6 },
+      // Wave 1: 2D Swarm Mobs
+      { type: 'stone_golem', x: 0.52, y: 0.42, wave: 1, trait: 'vajra_shield' },
+      { type: 'stone_golem', x: 0.64, y: 0.62, wave: 1, delay: 0.3 },
+      { type: 'fire_monk', x: 0.74, y: 0.46, wave: 1, delay: 0.5, trait: 'agni_aura' },
+      // Wave 2: Agnimukha, The Molten Warlord
+      {
+        type: 'furnace_titan',
+        x: 0.60,
+        y: 0.50,
+        wave: 2,
+        trait: 'agni_aura',
+        wardenTitle: 'AGNIMUKHA · MOLTEN WARLORD',
+      },
+      { type: 'wolf_guai', x: 0.40, y: 0.36, wave: 2, delay: 0.25, trait: 'rakshasa_frenzy' },
+      { type: 'wolf_guai', x: 0.42, y: 0.68, wave: 2, delay: 0.45 },
+      { type: 'fire_monk', x: 0.76, y: 0.54, wave: 2, delay: 0.6 },
     ],
   },
 
@@ -442,28 +598,50 @@ export const CHAMBERS: ChamberSpec[] = [
     isBossChamber: false,
     envEffect: 'lava_fissures',
     braziers: [
-      { x: 0.20, y: 0.26, color: '#ff7a18', radius: 185 },
-      { x: 0.80, y: 0.26, color: '#ff7a18', radius: 185 },
-      { x: 0.18, y: 0.74, color: '#ff5218', radius: 185 },
-      { x: 0.82, y: 0.74, color: '#ff5218', radius: 185 },
+      { x: 0.18, y: 0.24, color: '#ff7a18', radius: 205 },
+      { x: 0.82, y: 0.24, color: '#ff7a18', radius: 205 },
+      { x: 0.16, y: 0.76, color: '#ff5218', radius: 205 },
+      { x: 0.84, y: 0.76, color: '#ff5218', radius: 205 },
     ],
     props: [
-      { type: 'dragon_pillar', x: 0.38, y: 0.42 },
-      { type: 'dragon_pillar', x: 0.62, y: 0.42 },
+      { type: 'dragon_pillar', x: 0.36, y: 0.40 },
+      { type: 'dragon_pillar', x: 0.64, y: 0.40 },
       { type: 'incense_cauldron', x: 0.50, y: 0.54 },
-      { type: 'pagoda_lantern', x: 0.38, y: 0.68 },
-      { type: 'weapon_rack', x: 0.62, y: 0.68 },
+      { type: 'pagoda_lantern', x: 0.34, y: 0.70 },
+      { type: 'weapon_rack', x: 0.66, y: 0.70 },
     ],
     spawns: [
-      // Wave 1
-      { type: 'furnace_titan', x: 0.56, y: 0.46, wave: 1, trait: 'agni_aura' },
-      { type: 'stone_golem', x: 0.64, y: 0.60, wave: 1, delay: 0.25, trait: 'vajra_shield' },
-      { type: 'fire_monk', x: 0.70, y: 0.40, wave: 1, delay: 0.45 },
-      // Wave 2
-      { type: 'furnace_titan', x: 0.52, y: 0.44, wave: 2, trait: 'vajra_shield' },
-      { type: 'furnace_titan', x: 0.64, y: 0.56, wave: 2, delay: 0.35, trait: 'rakshasa_frenzy' },
-      { type: 'wolf_guai', x: 0.44, y: 0.58, wave: 2, delay: 0.5, trait: 'rakshasa_frenzy' },
-      { type: 'fire_monk', x: 0.72, y: 0.50, wave: 2, delay: 0.65, trait: 'agni_aura' },
+      // Wave 1: Bloodforge Gatekeeper + 2D Royal Escort
+      {
+        type: 'furnace_titan',
+        x: 0.58,
+        y: 0.46,
+        wave: 1,
+        trait: 'agni_aura',
+        wardenTitle: 'GATEKEEPER · BLOODFORGE COLOSSUS',
+      },
+      { type: 'stone_golem', x: 0.66, y: 0.64, wave: 1, delay: 0.25, trait: 'vajra_shield' },
+      { type: 'fire_monk', x: 0.74, y: 0.38, wave: 1, delay: 0.45 },
+      // Wave 2: Twin Gate Guardians
+      {
+        type: 'furnace_titan',
+        x: 0.52,
+        y: 0.42,
+        wave: 2,
+        trait: 'vajra_shield',
+        wardenTitle: 'SEAL-GUARD · ETERNAL WHEEL AVATAR',
+      },
+      {
+        type: 'furnace_titan',
+        x: 0.66,
+        y: 0.58,
+        wave: 2,
+        delay: 0.35,
+        trait: 'rakshasa_frenzy',
+        wardenTitle: 'SEAL-GUARD · JATHARAGNI COLOSSUS',
+      },
+      { type: 'wolf_guai', x: 0.40, y: 0.62, wave: 2, delay: 0.5, trait: 'rakshasa_frenzy' },
+      { type: 'fire_monk', x: 0.76, y: 0.50, wave: 2, delay: 0.65, trait: 'agni_aura' },
     ],
   },
 
@@ -484,20 +662,21 @@ export const CHAMBERS: ChamberSpec[] = [
     isBossChamber: true,
     envEffect: 'eclipse_wind',
     braziers: [
-      { x: 0.20, y: 0.22, color: '#38e8ff', radius: 195 },
-      { x: 0.80, y: 0.22, color: '#38e8ff', radius: 195 },
-      { x: 0.16, y: 0.54, color: '#ff2a3a', radius: 195 },
-      { x: 0.84, y: 0.54, color: '#ff2a3a', radius: 195 },
-      { x: 0.24, y: 0.82, color: '#ff6a18', radius: 195 },
-      { x: 0.76, y: 0.82, color: '#ff6a18', radius: 195 },
+      { x: 0.18, y: 0.20, color: '#38e8ff', radius: 215 },
+      { x: 0.82, y: 0.20, color: '#38e8ff', radius: 215 },
+      { x: 0.14, y: 0.54, color: '#ff2a3a', radius: 215 },
+      { x: 0.86, y: 0.54, color: '#ff2a3a', radius: 215 },
+      { x: 0.22, y: 0.84, color: '#ff6a18', radius: 215 },
+      { x: 0.78, y: 0.84, color: '#ff6a18', radius: 215 },
     ],
     props: [
-      { type: 'dragon_pillar', x: 0.36, y: 0.36 },
-      { type: 'dragon_pillar', x: 0.64, y: 0.36 },
-      { type: 'dragon_pillar', x: 0.36, y: 0.68 },
-      { type: 'dragon_pillar', x: 0.64, y: 0.68 },
-      { type: 'incense_cauldron', x: 0.50, y: 0.30 },
+      { type: 'dragon_pillar', x: 0.34, y: 0.36 },
+      { type: 'dragon_pillar', x: 0.66, y: 0.36 },
+      { type: 'dragon_pillar', x: 0.34, y: 0.70 },
+      { type: 'dragon_pillar', x: 0.66, y: 0.70 },
+      { type: 'incense_cauldron', x: 0.50, y: 0.28 },
     ],
     spawns: [{ type: 'vrikodara', x: 0.64, y: 0.52, wave: 1 }],
   },
 ];
+

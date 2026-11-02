@@ -87,7 +87,7 @@ export function TitleScreen({
         <p className="text-xs md:text-sm text-[#d8ccb8] max-w-md leading-relaxed drop-shadow-[0_2px_8px_rgba(0,0,0,0.95)]">
           Three thousand years ago, Rudra burned forty thousand people in the Shishira camp on his
           father’s word because he never walked two hundred paces to look. Now he climbs Mount Meru
-          with theBroken Gada, guided by Savitri—the mother of a girl he killed.
+          with the Broken Gada, guided by Savitri—the mother of a girl he killed.
         </p>
 
         {/* Broken Gada Grip Selector */}

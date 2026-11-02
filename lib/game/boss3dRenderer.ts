@@ -14,6 +14,7 @@ import * as THREE from 'three';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { IS_SOFTWARE_WEBGL } from '../../engine/ue5GraphicsEngine';
+import { simplifyGroupGeometries } from './meshSimplifier';
 import { GAME_ASSETS } from './assets';
 
 export type Boss3DKind = 'dundubhi' | 'vrikodara';
@@ -248,8 +249,8 @@ export class Boss3DRenderer {
 
     this.scene = new THREE.Scene();
 
-    // Isometric Orthographic Camera matching Rudra's 30-degree Hades arena projection
-    const frustumHalf = 142;
+    // True 2.5D Hades Dimetric (2:1) Isometric Orthographic Camera (~27° elevation)
+    const frustumHalf = 138;
     this.camera = new THREE.OrthographicCamera(
       -frustumHalf,
       frustumHalf,
@@ -258,22 +259,22 @@ export class Boss3DRenderer {
       1,
       1200
     );
-    this.camera.position.set(0, 205, 320);
+    this.camera.position.set(0, 162, 315);
     this.camera.lookAt(0, 82, 0);
 
-    // Balanced Crisp Studio PBR Lighting
-    const ambient = new THREE.AmbientLight(0xe6e2ee, 1.7);
+    // High-Contrast Hades Studio PBR Lighting
+    const ambient = new THREE.AmbientLight(0xe6e2ee, 1.75);
     this.scene.add(ambient);
 
-    this.keyLight = new THREE.DirectionalLight(0xfff3db, 2.8);
-    this.keyLight.position.set(-140, 270, 210);
+    this.keyLight = new THREE.DirectionalLight(0xfff3db, 3.05);
+    this.keyLight.position.set(-145, 245, 220);
     this.scene.add(this.keyLight);
 
-    this.rimLight = new THREE.DirectionalLight(0xf5c878, 2.2);
-    this.rimLight.position.set(150, 210, -200);
+    this.rimLight = new THREE.DirectionalLight(0xffcf78, 2.65);
+    this.rimLight.position.set(155, 195, -210);
     this.scene.add(this.rimLight);
 
-    this.fillLight = new THREE.DirectionalLight(0x8896b8, 1.35);
+    this.fillLight = new THREE.DirectionalLight(0x7498c8, 1.45);
     this.fillLight.position.set(160, 75, 140);
     this.scene.add(this.fillLight);
 
@@ -347,7 +348,15 @@ export class Boss3DRenderer {
 
     const loadFbx = (url: string) =>
       new Promise<THREE.Group>((resolve, reject) => {
-        fbxLoader.load(url, resolve, undefined, reject);
+        fbxLoader.load(
+          url,
+          (obj) => {
+            simplifyGroupGeometries(obj, IS_SOFTWARE_WEBGL ? 32 : 54);
+            resolve(obj);
+          },
+          undefined,
+          reject
+        );
       });
 
     const loadTex = (url: string, isColor = false) =>

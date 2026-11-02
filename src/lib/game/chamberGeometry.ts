@@ -33,165 +33,168 @@ export interface ChamberGeometrySpec {
   traps: ChamberTrapSpec[];
 }
 
-// Calibrated walkable stone platform polygons matching the 8 hand-painted 16:9 isometric arenas
+// Calibrated expansive walkable stone platform polygons matching the 8 hand-painted 16:9 isometric arenas
 const CHAMBER_GEOMETRIES: ChamberGeometrySpec[] = [
-  // Chamber 1: Vaitarani River Ghat (Diamond Stone Platform)
+  // Chamber 1: Vaitarani River Ghat (Expansive Diamond Stone Platform)
   {
     outerPolygon: [
-      { x: 0.50, y: 0.16 },
-      { x: 0.84, y: 0.48 },
-      { x: 0.80, y: 0.62 },
-      { x: 0.50, y: 0.86 },
-      { x: 0.20, y: 0.62 },
-      { x: 0.16, y: 0.48 },
+      { x: 0.50, y: 0.13 },
+      { x: 0.89, y: 0.45 },
+      { x: 0.85, y: 0.68 },
+      { x: 0.50, y: 0.89 },
+      { x: 0.15, y: 0.68 },
+      { x: 0.11, y: 0.45 },
     ],
     chasmIslands: [],
-    leftGate: { x: 0.31, y: 0.24, angle: -0.52 },
-    rightGate: { x: 0.69, y: 0.24, angle: 0.52 },
+    leftGate: { x: 0.29, y: 0.21, angle: -0.52 },
+    rightGate: { x: 0.71, y: 0.21, angle: 0.52 },
     traps: [
-      { id: 'c1_t1', kind: 'agni_vent', x: 0.44, y: 0.52, radius: 56 },
-      { id: 'c1_t2', kind: 'chakram_slicer', x: 0.58, y: 0.52, radius: 56 },
+      { id: 'c1_t1', kind: 'agni_vent', x: 0.40, y: 0.52, radius: 58 },
+      { id: 'c1_t2', kind: 'chakram_slicer', x: 0.60, y: 0.52, radius: 58 },
+      { id: 'c1_t3', kind: 'agni_vent', x: 0.50, y: 0.38, radius: 56 },
     ],
   },
-  // Chamber 2: Raktabija Blood-Kunda Courtyard (Octagonal Courtyard)
+  // Chamber 2: Raktabija Blood-Kunda Courtyard (Wide Octagonal Courtyard)
   {
     outerPolygon: [
-      { x: 0.34, y: 0.17 },
-      { x: 0.66, y: 0.17 },
-      { x: 0.85, y: 0.38 },
-      { x: 0.85, y: 0.68 },
-      { x: 0.66, y: 0.86 },
-      { x: 0.34, y: 0.86 },
-      { x: 0.15, y: 0.68 },
-      { x: 0.15, y: 0.38 },
+      { x: 0.30, y: 0.14 },
+      { x: 0.70, y: 0.14 },
+      { x: 0.89, y: 0.36 },
+      { x: 0.89, y: 0.72 },
+      { x: 0.70, y: 0.89 },
+      { x: 0.30, y: 0.89 },
+      { x: 0.11, y: 0.72 },
+      { x: 0.11, y: 0.36 },
     ],
     chasmIslands: [],
-    leftGate: { x: 0.32, y: 0.22, angle: -0.45 },
-    rightGate: { x: 0.68, y: 0.22, angle: 0.45 },
+    leftGate: { x: 0.30, y: 0.20, angle: -0.45 },
+    rightGate: { x: 0.70, y: 0.20, angle: 0.45 },
     traps: [
-      { id: 'c2_t1', kind: 'chakram_slicer', x: 0.42, y: 0.54, radius: 58 },
-      { id: 'c2_t2', kind: 'agni_vent', x: 0.58, y: 0.54, radius: 58 },
+      { id: 'c2_t1', kind: 'chakram_slicer', x: 0.38, y: 0.54, radius: 58 },
+      { id: 'c2_t2', kind: 'agni_vent', x: 0.62, y: 0.54, radius: 58 },
+      { id: 'c2_t3', kind: 'chakram_slicer', x: 0.50, y: 0.40, radius: 58 },
     ],
   },
   // Chamber 3: Kurukshetra Chariot Bonefield
   {
     outerPolygon: [
-      { x: 0.30, y: 0.18 },
-      { x: 0.70, y: 0.18 },
-      { x: 0.86, y: 0.44 },
-      { x: 0.82, y: 0.76 },
-      { x: 0.64, y: 0.86 },
-      { x: 0.36, y: 0.86 },
-      { x: 0.18, y: 0.76 },
-      { x: 0.14, y: 0.44 },
+      { x: 0.28, y: 0.15 },
+      { x: 0.72, y: 0.15 },
+      { x: 0.89, y: 0.42 },
+      { x: 0.86, y: 0.78 },
+      { x: 0.68, y: 0.89 },
+      { x: 0.32, y: 0.89 },
+      { x: 0.14, y: 0.78 },
+      { x: 0.11, y: 0.42 },
     ],
     chasmIslands: [],
-    leftGate: { x: 0.33, y: 0.22, angle: -0.42 },
-    rightGate: { x: 0.67, y: 0.22, angle: 0.42 },
+    leftGate: { x: 0.31, y: 0.20, angle: -0.42 },
+    rightGate: { x: 0.69, y: 0.20, angle: 0.42 },
     traps: [
-      { id: 'c3_t1', kind: 'agni_vent', x: 0.46, y: 0.50, radius: 58 },
-      { id: 'c3_t2', kind: 'chakram_slicer', x: 0.58, y: 0.60, radius: 58 },
+      { id: 'c3_t1', kind: 'agni_vent', x: 0.42, y: 0.48, radius: 58 },
+      { id: 'c3_t2', kind: 'chakram_slicer', x: 0.60, y: 0.60, radius: 58 },
+      { id: 'c3_t3', kind: 'agni_vent', x: 0.52, y: 0.34, radius: 58 },
     ],
   },
   // Chamber 4: Mandapa of the War-Drum (3D Dundubhi Mid-Boss)
   {
     outerPolygon: [
-      { x: 0.26, y: 0.18 },
-      { x: 0.74, y: 0.18 },
-      { x: 0.88, y: 0.46 },
-      { x: 0.84, y: 0.78 },
-      { x: 0.68, y: 0.87 },
-      { x: 0.32, y: 0.87 },
-      { x: 0.16, y: 0.78 },
-      { x: 0.12, y: 0.46 },
+      { x: 0.24, y: 0.15 },
+      { x: 0.76, y: 0.15 },
+      { x: 0.90, y: 0.45 },
+      { x: 0.86, y: 0.80 },
+      { x: 0.70, y: 0.89 },
+      { x: 0.30, y: 0.89 },
+      { x: 0.14, y: 0.80 },
+      { x: 0.10, y: 0.45 },
     ],
     chasmIslands: [],
-    leftGate: { x: 0.34, y: 0.21, angle: -0.38 },
-    rightGate: { x: 0.66, y: 0.21, angle: 0.38 },
+    leftGate: { x: 0.32, y: 0.19, angle: -0.38 },
+    rightGate: { x: 0.68, y: 0.19, angle: 0.38 },
     traps: [
-      { id: 'c4_t1', kind: 'agni_vent', x: 0.50, y: 0.46, radius: 60 },
-      { id: 'c4_t2', kind: 'chakram_slicer', x: 0.50, y: 0.66, radius: 60 },
+      { id: 'c4_t1', kind: 'agni_vent', x: 0.50, y: 0.44, radius: 60 },
+      { id: 'c4_t2', kind: 'chakram_slicer', x: 0.50, y: 0.68, radius: 60 },
     ],
   },
   // Chamber 5: Bhairava Soul-Fire Sanctum
   {
     outerPolygon: [
-      { x: 0.32, y: 0.18 },
-      { x: 0.68, y: 0.18 },
-      { x: 0.86, y: 0.44 },
-      { x: 0.82, y: 0.76 },
-      { x: 0.66, y: 0.86 },
-      { x: 0.34, y: 0.86 },
-      { x: 0.18, y: 0.76 },
-      { x: 0.14, y: 0.44 },
+      { x: 0.28, y: 0.15 },
+      { x: 0.72, y: 0.15 },
+      { x: 0.89, y: 0.42 },
+      { x: 0.86, y: 0.78 },
+      { x: 0.68, y: 0.89 },
+      { x: 0.32, y: 0.89 },
+      { x: 0.14, y: 0.78 },
+      { x: 0.11, y: 0.42 },
     ],
     chasmIslands: [],
-    leftGate: { x: 0.34, y: 0.22, angle: -0.44 },
-    rightGate: { x: 0.66, y: 0.22, angle: 0.44 },
+    leftGate: { x: 0.32, y: 0.20, angle: -0.44 },
+    rightGate: { x: 0.68, y: 0.20, angle: 0.44 },
     traps: [
-      { id: 'c5_t1', kind: 'chakram_slicer', x: 0.43, y: 0.52, radius: 58 },
-      { id: 'c5_t2', kind: 'agni_vent', x: 0.57, y: 0.52, radius: 58 },
+      { id: 'c5_t1', kind: 'chakram_slicer', x: 0.40, y: 0.52, radius: 58 },
+      { id: 'c5_t2', kind: 'agni_vent', x: 0.60, y: 0.52, radius: 58 },
     ],
   },
   // Chamber 6: Shattered Gopuram Causeway
   {
     outerPolygon: [
-      { x: 0.30, y: 0.18 },
-      { x: 0.70, y: 0.18 },
-      { x: 0.85, y: 0.45 },
-      { x: 0.82, y: 0.76 },
-      { x: 0.65, y: 0.86 },
-      { x: 0.35, y: 0.86 },
-      { x: 0.18, y: 0.76 },
-      { x: 0.15, y: 0.45 },
+      { x: 0.28, y: 0.15 },
+      { x: 0.72, y: 0.15 },
+      { x: 0.89, y: 0.44 },
+      { x: 0.86, y: 0.78 },
+      { x: 0.68, y: 0.89 },
+      { x: 0.32, y: 0.89 },
+      { x: 0.14, y: 0.78 },
+      { x: 0.11, y: 0.44 },
     ],
     chasmIslands: [],
-    leftGate: { x: 0.33, y: 0.22, angle: -0.45 },
-    rightGate: { x: 0.67, y: 0.22, angle: 0.45 },
+    leftGate: { x: 0.31, y: 0.20, angle: -0.45 },
+    rightGate: { x: 0.69, y: 0.20, angle: 0.45 },
     traps: [
-      { id: 'c6_t1', kind: 'agni_vent', x: 0.38, y: 0.48, radius: 58 },
-      { id: 'c6_t2', kind: 'chakram_slicer', x: 0.50, y: 0.56, radius: 58 },
-      { id: 'c6_t3', kind: 'agni_vent', x: 0.62, y: 0.48, radius: 58 },
+      { id: 'c6_t1', kind: 'agni_vent', x: 0.36, y: 0.48, radius: 58 },
+      { id: 'c6_t2', kind: 'chakram_slicer', x: 0.50, y: 0.58, radius: 58 },
+      { id: 'c6_t3', kind: 'agni_vent', x: 0.64, y: 0.48, radius: 58 },
     ],
   },
   // Chamber 7: Sealed Gate of Jatharagni (Asura Lava Sanctum Locked -> Unlocked)
   {
     outerPolygon: [
-      { x: 0.32, y: 0.22 },
-      { x: 0.68, y: 0.22 },
-      { x: 0.84, y: 0.48 },
-      { x: 0.80, y: 0.78 },
-      { x: 0.64, y: 0.87 },
-      { x: 0.36, y: 0.87 },
-      { x: 0.20, y: 0.78 },
-      { x: 0.16, y: 0.48 },
+      { x: 0.28, y: 0.18 },
+      { x: 0.72, y: 0.18 },
+      { x: 0.88, y: 0.46 },
+      { x: 0.84, y: 0.80 },
+      { x: 0.66, y: 0.89 },
+      { x: 0.34, y: 0.89 },
+      { x: 0.16, y: 0.80 },
+      { x: 0.12, y: 0.46 },
     ],
     chasmIslands: [],
-    leftGate: { x: 0.44, y: 0.24, angle: 0 },
-    rightGate: { x: 0.56, y: 0.24, angle: 0 },
+    leftGate: { x: 0.42, y: 0.22, angle: 0 },
+    rightGate: { x: 0.58, y: 0.22, angle: 0 },
     traps: [
-      { id: 'c7_t1', kind: 'chakram_slicer', x: 0.44, y: 0.56, radius: 58 },
-      { id: 'c7_t2', kind: 'agni_vent', x: 0.56, y: 0.56, radius: 58 },
+      { id: 'c7_t1', kind: 'chakram_slicer', x: 0.42, y: 0.56, radius: 58 },
+      { id: 'c7_t2', kind: 'agni_vent', x: 0.58, y: 0.56, radius: 58 },
     ],
   },
   // Chamber 8: Sanctum of the Infernal Maw (Final 3D Boss Vrikodara: Circular Naga / Eclipse Platform)
   {
     outerPolygon: [
-      { x: 0.50, y: 0.18 },
-      { x: 0.74, y: 0.25 },
-      { x: 0.86, y: 0.48 },
-      { x: 0.78, y: 0.74 },
-      { x: 0.50, y: 0.86 },
-      { x: 0.22, y: 0.74 },
-      { x: 0.14, y: 0.48 },
-      { x: 0.26, y: 0.25 },
+      { x: 0.50, y: 0.15 },
+      { x: 0.78, y: 0.23 },
+      { x: 0.90, y: 0.48 },
+      { x: 0.82, y: 0.78 },
+      { x: 0.50, y: 0.89 },
+      { x: 0.18, y: 0.78 },
+      { x: 0.10, y: 0.48 },
+      { x: 0.22, y: 0.23 },
     ],
     chasmIslands: [],
-    leftGate: { x: 0.36, y: 0.22, angle: -0.4 },
-    rightGate: { x: 0.64, y: 0.22, angle: 0.4 },
+    leftGate: { x: 0.34, y: 0.20, angle: -0.4 },
+    rightGate: { x: 0.66, y: 0.20, angle: 0.4 },
     traps: [
-      { id: 'c8_t1', kind: 'agni_vent', x: 0.38, y: 0.52, radius: 58 },
-      { id: 'c8_t2', kind: 'chakram_slicer', x: 0.62, y: 0.52, radius: 58 },
+      { id: 'c8_t1', kind: 'agni_vent', x: 0.36, y: 0.52, radius: 58 },
+      { id: 'c8_t2', kind: 'chakram_slicer', x: 0.64, y: 0.52, radius: 58 },
     ],
   },
 ];
@@ -212,7 +215,7 @@ export function createChamberTrapsRuntime(
     kind: t.kind,
     x: t.x * worldW,
     y: t.y * worldH,
-    radius: t.radius,
+    radius: Math.round(t.radius * 1.18),
     state: 'idle',
     timer: 0,
   }));
@@ -286,7 +289,7 @@ export function constrainActorToChamber(
   chamberIndex: number,
   _isDodging: boolean,
   _isBoss: boolean,
-  marginPx: number = 18
+  marginPx: number = 12
 ): {
   x: number;
   y: number;
@@ -334,7 +337,7 @@ export function constrainActorToChamber(
   };
 }
 
-// Clean dark void backdrop (zero procedural magma/polygon shapes!)
+// Deep Obsidian Underworld Backdrop (Seamless Hades-style void behind chamber bounds)
 export function renderParallaxAbyss(
   ctx: CanvasRenderingContext2D,
   cw: number,
@@ -342,15 +345,25 @@ export function renderParallaxAbyss(
   _camX: number,
   _camY: number,
   _now: number,
-  _chamberIndex: number
+  chamberIndex: number
 ) {
   ctx.save();
-  ctx.fillStyle = '#050304';
+  const abyssGrad = ctx.createLinearGradient(0, 0, 0, ch);
+  if (chamberIndex >= 6) {
+    abyssGrad.addColorStop(0, '#090306');
+    abyssGrad.addColorStop(0.55, '#120407');
+    abyssGrad.addColorStop(1, '#1c0605');
+  } else {
+    abyssGrad.addColorStop(0, '#050407');
+    abyssGrad.addColorStop(0.55, '#0b0608');
+    abyssGrad.addColorStop(1, '#140807');
+  }
+  ctx.fillStyle = abyssGrad;
   ctx.fillRect(0, 0, cw, ch);
   ctx.restore();
 }
 
-// Render the hand-painted 16:9 isometric chamber artwork + Hand-Painted Exit Gate Archways & Reward Orbs
+// Render Seamless Vast 2.5D Hand-Painted Isometric Sanctuary + Surface Craters + Exit Gates
 export function renderIsometricChamberPlatform(
   ctx: CanvasRenderingContext2D,
   worldW: number,
@@ -365,15 +378,16 @@ export function renderIsometricChamberPlatform(
 ) {
   ctx.save();
 
-  // 1. Full-Bleed Hand-Painted 16:9 Chamber Arena Artwork
+  const geom = getChamberGeometry(chamberIndex);
+
+  // 1. Full Bleed Hand-Painted 16:9 Isometric Chamber Artwork (Zero polygon clipping, zero yellow grid lines, zero artificial borders)
   if (bgImg && bgImg.complete && bgImg.naturalWidth > 0) {
     ctx.drawImage(bgImg, 0, 0, worldW, worldH);
   } else {
-    ctx.fillStyle = '#0c0708';
+    ctx.fillStyle = '#0e090a';
     ctx.fillRect(0, 0, worldW, worldH);
   }
 
-  // Subtle atmospheric color grade
   if (floorTint) {
     ctx.fillStyle = floorTint;
     ctx.fillRect(0, 0, worldW, worldH);
@@ -382,27 +396,25 @@ export function renderIsometricChamberPlatform(
   // 2. Surface decals, craters, and ambient brazier floor pools
   renderSurfaceDetailsCallback();
 
-  // 3. Hand-Painted Isometric Exit Gate Archways (gcf89kgcf89kgcf8_26c0ebb5.png 2x1 & 5bgscc5bgscc5bgs_07c760f9.png 2x2)
-  // and Floating Hades Chamber Reward Orbs (e4v7n9e4v7n9e4v7_05a48632.png 2x2)
-  const geom = getChamberGeometry(chamberIndex);
+  // ============================================================================
+  // 4. MONUMENTAL ISOMETRIC EXIT GATE ARCHWAYS & FLOATING HADES REWARD ORBS
+  // ============================================================================
   const gatesAsset = getProcessedSpriteSync(GAME_ASSETS.exitGateArchways2x1);
   const gateOverlaysAsset = getProcessedSpriteSync(GAME_ASSETS.gateOverlays2x2);
   const rewardOrbsAsset = getProcessedSpriteSync(GAME_ASSETS.rewardOrbs2x2);
 
-  // Chamber 7 (index 6) uses the full-background Locked -> Unlocked gate swap in the center-top,
-  // so we place its reward orbs flanking the grand unsealed portal; other non-final chambers render both Left & Right gates.
   if (chamberIndex < 7) {
     const gates = [
       {
         pos: geom.leftGate,
-        orbFrame: isNextChamberBoss ? 3 : 0, // 0: Golden Lotus Boon Orb, 3: Crimson Skull Boss Orb
-        label: isNextChamberBoss ? 'SOVEREIGN BOSS' : 'DEVA BOON ALTAR',
+        orbFrame: isNextChamberBoss ? 3 : 0,
+        label: isNextChamberBoss ? 'SOVEREIGN BOSS' : 'DEVA BOON',
         accent: isNextChamberBoss ? '#ff384c' : '#ffd86b',
       },
       {
         pos: geom.rightGate,
-        orbFrame: isNextChamberBoss ? 2 : 1, // 1: Emerald Amrita Vitality Orb, 2: Cyan Trishula Shrine Orb
-        label: isNextChamberBoss ? 'ASTRA SHRINE + HP' : 'AMRITA +30 MAX HP',
+        orbFrame: isNextChamberBoss ? 2 : 1,
+        label: isNextChamberBoss ? 'SHRINE + HP' : 'AMRITA +30 HP',
         accent: isNextChamberBoss ? '#38e8ff' : '#3ee0a8',
       },
     ];
@@ -411,11 +423,25 @@ export function renderIsometricChamberPlatform(
       const gx = g.pos.x * worldW;
       const gy = g.pos.y * worldH;
 
-      // Render 2x1 Isometric Gopuram Exit Gate Archway on chambers that don't have a single central background gate
+      // Ground portal rune glow under each exit gate
+      ctx.save();
+      ctx.globalCompositeOperation = 'screen';
+      ctx.translate(gx, gy + 8);
+      ctx.scale(1, 0.52);
+      const gatePool = ctx.createRadialGradient(0, 0, 10, 0, 0, isChamberCleared ? 145 : 95);
+      gatePool.addColorStop(0, isChamberCleared ? g.accent + '88' : g.accent + '33');
+      gatePool.addColorStop(0.55, isChamberCleared ? g.accent + '33' : 'rgba(0,0,0,0)');
+      gatePool.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = gatePool;
+      ctx.beginPath();
+      ctx.arc(0, 0, isChamberCleared ? 145 : 95, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
       if (chamberIndex !== 6 && gatesAsset && gatesAsset.frames.length >= 2) {
-        const frameIdx = isChamberCleared ? 1 : 0; // 0 = Locked with Golden Chains, 1 = Unlocked Portal Vortex
+        const frameIdx = isChamberCleared ? 1 : 0;
         const f = gatesAsset.frames[frameIdx] || gatesAsset.frames[0];
-        const gateH = 210;
+        const gateH = 215;
         const gateW = (f.sw / Math.max(1, f.sh)) * gateH;
         ctx.save();
         ctx.translate(gx, gy);
@@ -434,7 +460,7 @@ export function renderIsometricChamberPlatform(
       } else if (gateOverlaysAsset && gateOverlaysAsset.frames.length >= 2) {
         const overlayIdx = isChamberCleared ? 1 : 0;
         const f = gateOverlaysAsset.frames[overlayIdx] || gateOverlaysAsset.frames[0];
-        const ovSize = 145;
+        const ovSize = 148;
         ctx.save();
         ctx.globalCompositeOperation = 'screen';
         ctx.translate(gx, gy - 42);
@@ -452,26 +478,24 @@ export function renderIsometricChamberPlatform(
         ctx.restore();
       }
 
-      // Floating Hades Reward Preview Orb (bobs smoothly above each exit gate, intensifies when unlocked!)
       if (rewardOrbsAsset && rewardOrbsAsset.frames.length > 0) {
         const orbIdx = Math.min(rewardOrbsAsset.frames.length - 1, g.orbFrame);
         const of = rewardOrbsAsset.frames[orbIdx];
         const bobY = Math.sin(now * 0.004 + g.orbFrame * 1.7) * 8;
-        const orbSize = isChamberCleared ? 86 : 64;
+        const orbSize = isChamberCleared ? 78 : 56;
 
         ctx.save();
         ctx.translate(gx, gy - 98 + bobY);
-        ctx.globalAlpha = isChamberCleared ? 1.0 : 0.72;
+        ctx.globalAlpha = isChamberCleared ? 1.0 : 0.78;
 
-        // Soft additive glow behind the orb
         ctx.save();
         ctx.globalCompositeOperation = 'screen';
-        const oGlow = ctx.createRadialGradient(0, 0, 4, 0, 0, orbSize * 0.85);
-        oGlow.addColorStop(0, g.accent + '88');
+        const oGlow = ctx.createRadialGradient(0, 0, 4, 0, 0, orbSize * 0.95);
+        oGlow.addColorStop(0, g.accent + 'aa');
         oGlow.addColorStop(1, 'rgba(0,0,0,0)');
         ctx.fillStyle = oGlow;
         ctx.beginPath();
-        ctx.arc(0, 0, orbSize * 0.85, 0, Math.PI * 2);
+        ctx.arc(0, 0, orbSize * 0.95, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
 
@@ -488,13 +512,13 @@ export function renderIsometricChamberPlatform(
         );
 
         if (isChamberCleared) {
-          ctx.font = "bold 11px 'Cinzel', Georgia, serif";
+          ctx.font = "bold 13px 'Cinzel', Georgia, serif";
           ctx.textAlign = 'center';
-          ctx.strokeStyle = 'rgba(0,0,0,0.92)';
+          ctx.strokeStyle = 'rgba(0,0,0,0.94)';
           ctx.lineWidth = 3.5;
-          ctx.strokeText(g.label, 0, orbSize * 0.55 + 10);
+          ctx.strokeText(g.label, 0, orbSize * 0.56 + 12);
           ctx.fillStyle = g.accent;
-          ctx.fillText(g.label, 0, orbSize * 0.55 + 10);
+          ctx.fillText(g.label, 0, orbSize * 0.56 + 12);
         }
         ctx.restore();
       }
@@ -638,88 +662,15 @@ export function updateAndRenderPressureTraps(
   }
 }
 
-// Render Hand-Painted Foreground Parallax Corner Silhouettes (glxj9tglxj9tglxj_b076ead2.png & 9eap7c9eap7c9eap_6d0dfd02.png)
+// Smooth Chamber Transition Wipe (no hanging corner foreground overlays)
 export function renderForegroundParallaxAndWipe(
   ctx: CanvasRenderingContext2D,
   cw: number,
   ch: number,
-  camX: number,
-  camY: number,
+  _camX: number,
+  _camY: number,
   wipeProgress: number
 ) {
-  const fgAssetA = getProcessedSpriteSync(GAME_ASSETS.foregroundOverhangsA2x2);
-  const fgAssetB = getProcessedSpriteSync(GAME_ASSETS.foregroundOverhangsB2x2);
-  const fgAsset = fgAssetA && fgAssetA.frames.length >= 4 ? fgAssetA : fgAssetB;
-
-  if (fgAsset && fgAsset.frames.length >= 4) {
-    // Inverse -0.065x parallax shift so foreground temple overhangs & gargoyles shift across viewport corners
-    const px = -((camX * 0.065) % 90);
-    const py = -((camY * 0.065) % 60);
-    const cornerW = Math.min(340, cw * 0.25);
-    const cornerH = Math.min(250, ch * 0.27);
-
-    ctx.save();
-    ctx.globalAlpha = 0.88;
-
-    // Top-Left: Temple roof overhang & hanging chains (Frame 0)
-    const f0 = fgAsset.frames[0];
-    ctx.drawImage(
-      fgAsset.cleanCanvas,
-      f0.sx,
-      f0.sy,
-      f0.sw,
-      f0.sh,
-      -24 + px * 0.5,
-      -18 + py * 0.5,
-      cornerW,
-      cornerH
-    );
-
-    // Top-Right: Horned Rakshasa gargoyle & bronze temple bells (Frame 1)
-    const f1 = fgAsset.frames[1];
-    ctx.drawImage(
-      fgAsset.cleanCanvas,
-      f1.sx,
-      f1.sy,
-      f1.sw,
-      f1.sh,
-      cw - cornerW + 24 + px * 0.5,
-      -18 + py * 0.5,
-      cornerW,
-      cornerH
-    );
-
-    // Bottom-Left: Cracked stone balustrade & smoking oil lamp (Frame 2)
-    const f2 = fgAsset.frames[2];
-    ctx.drawImage(
-      fgAsset.cleanCanvas,
-      f2.sx,
-      f2.sy,
-      f2.sw,
-      f2.sh,
-      -28 + px * 0.65,
-      ch - cornerH + 24 + py * 0.65,
-      cornerW,
-      cornerH
-    );
-
-    // Bottom-Right: Jagged obsidian spikes & torn war banners (Frame 3)
-    const f3 = fgAsset.frames[3];
-    ctx.drawImage(
-      fgAsset.cleanCanvas,
-      f3.sx,
-      f3.sy,
-      f3.sw,
-      f3.sh,
-      cw - cornerW + 28 + px * 0.65,
-      ch - cornerH + 24 + py * 0.65,
-      cornerW,
-      cornerH
-    );
-
-    ctx.restore();
-  }
-
   // Smooth Hades Diamond Iris Chamber Transition Wipe
   if (wipeProgress > 0 && wipeProgress < 1) {
     const alpha = Math.sin((1 - wipeProgress) * Math.PI);

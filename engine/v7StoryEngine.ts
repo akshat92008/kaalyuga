@@ -16,6 +16,7 @@ export type SliceStageId =
   | 'vrikodara_intro'
   | 'shard1_memory'
   | 'ferry_1'
+  | 'ferry_1_scene'
   | 'act6_choice'
   | 'ending_vow'
   | 'ending_sovereign';
@@ -27,6 +28,8 @@ export interface StoryMemoryFlags {
   deaths: number;
   rageUses: number;
   shardsCollected: number;
+  shardsRecovered: number;
+  dundubhiCleared: boolean;
   rakshasaStanceUnlocked: boolean;
   openingCompleted: boolean;
   prologueCompleted: boolean;
@@ -41,6 +44,8 @@ export const INITIAL_STORY_FLAGS: StoryMemoryFlags = {
   deaths: 0,
   rageUses: 0,
   shardsCollected: 0,
+  shardsRecovered: 0,
+  dundubhiCleared: false,
   rakshasaStanceUnlocked: false,
   openingCompleted: false,
   prologueCompleted: false,
@@ -56,9 +61,15 @@ export function loadStoryMemoryFlags(): StoryMemoryFlags {
     const raw = window.localStorage.getItem(STORY_STORAGE_KEY);
     if (!raw) return { ...INITIAL_STORY_FLAGS };
     const parsed = JSON.parse(raw);
+    const shards = Math.max(
+      Number(parsed.shardsCollected || 0),
+      Number(parsed.shardsRecovered || 0)
+    );
     return {
       ...INITIAL_STORY_FLAGS,
       ...parsed,
+      shardsCollected: shards,
+      shardsRecovered: shards,
       looks: Array.isArray(parsed.looks) ? parsed.looks : [],
     };
   } catch {
@@ -69,7 +80,15 @@ export function loadStoryMemoryFlags(): StoryMemoryFlags {
 export function saveStoryMemoryFlags(flags: StoryMemoryFlags): void {
   if (typeof window === 'undefined') return;
   try {
-    window.localStorage.setItem(STORY_STORAGE_KEY, JSON.stringify(flags));
+    const shards = Math.max(flags.shardsCollected || 0, flags.shardsRecovered || 0);
+    window.localStorage.setItem(
+      STORY_STORAGE_KEY,
+      JSON.stringify({
+        ...flags,
+        shardsCollected: shards,
+        shardsRecovered: shards,
+      })
+    );
   } catch {
     // Ignore storage quota errors
   }
@@ -84,6 +103,7 @@ export function saveStoryMemoryFlags(flags: StoryMemoryFlags): void {
 export function getLanternLightState(flags: StoryMemoryFlags): {
   state: LanternLightState;
   label: string;
+  hex: string;
   flameColor: string;
   glowColor: string;
   ambientOverlay: string;
@@ -95,6 +115,7 @@ export function getLanternLightState(flags: StoryMemoryFlags): {
     return {
       state: 'warm',
       label: 'WARM OCHRE FLAME',
+      hex: '#f5b952',
       flameColor: '#f5b952',
       glowColor: 'rgba(245, 185, 82, 0.34)',
       ambientOverlay: 'rgba(38, 24, 10, 0.08)',
@@ -107,6 +128,7 @@ export function getLanternLightState(flags: StoryMemoryFlags): {
     return {
       state: 'dim',
       label: 'DIMMING AMBER WICK',
+      hex: '#d9823b',
       flameColor: '#d9823b',
       glowColor: 'rgba(217, 130, 59, 0.22)',
       ambientOverlay: 'rgba(18, 22, 34, 0.16)',
@@ -118,6 +140,7 @@ export function getLanternLightState(flags: StoryMemoryFlags): {
   return {
     state: 'cool',
     label: 'COOL PALE EMBER',
+    hex: '#7ea8cc',
     flameColor: '#7ea8cc',
     glowColor: 'rgba(126, 168, 204, 0.20)',
     ambientOverlay: 'rgba(10, 18, 32, 0.26)',
@@ -147,7 +170,7 @@ export const PROLOGUE_SCROLLS: PrologueScrollSpec[] = [
     roman: 'SCROLL I OF V',
     title: 'The Churning of the Ocean',
     sanskritSubtitle: 'समुद्र मन्थन · SAMUDRA MANTHAN',
-    artAssetUrl: '/assets/aistudio/Gemini_Generated_Image_c0fyyc0fyyc0fyyc_4d7dcd20.png',
+    artAssetUrl: '/assets/aistudio/Gemini_Generated_Image_pw6vhspw6vhspw6v.png',
     visualDirection:
       'Gods and asuras pull the serpent Vasuki around Mount Mandara. Shiva drinks the Halahala poison; Mohini pours the golden Amrita while Rahu’s severed head rises to bite the sun.',
     sanjayaNarration:
@@ -164,7 +187,7 @@ export const PROLOGUE_SCROLLS: PrologueScrollSpec[] = [
     roman: 'SCROLL II OF V',
     title: 'The Child & The Mani',
     sanskritSubtitle: 'मणि गर्भ · THE ANCHORED SOUL',
-    artAssetUrl: '/assets/aistudio/Gemini_Generated_Image_bmq158bmq158bmq1_a3eaf68a.png',
+    artAssetUrl: '/assets/aistudio/Gemini_Generated_Image_laj3yelaj3yelaj3.png',
     visualDirection:
       'Exhausted gods kneel around the sage’s wife Suvarna and Kaala-Chakra. A newborn cries as a burning gem—the Mani—opens in his brow. Far away in the stone, a woman hums a lullaby once.',
     sanjayaNarration:
@@ -181,7 +204,7 @@ export const PROLOGUE_SCROLLS: PrologueScrollSpec[] = [
     roman: 'SCROLL III OF V',
     title: 'The Two Brothers',
     sanskritSubtitle: 'नचिकेता · THE HEALER’S SPARROW',
-    artAssetUrl: '/assets/aistudio/Gemini_Generated_Image_ey07c4ey07c4ey07_1de21fb8.png',
+    artAssetUrl: '/assets/aistudio/Gemini_Generated_Image_46i1mu46i1mu46i1.png',
     visualDirection:
       'In a quiet courtyard, older brother Nachiketa carefully bandages a brown sparrow’s broken wing while young Rudra stands holding a wooden practice mace.',
     sanjayaNarration:
@@ -202,7 +225,7 @@ export const PROLOGUE_SCROLLS: PrologueScrollSpec[] = [
     roman: 'SCROLL IV OF V',
     title: 'The Lesson',
     sanskritSubtitle: 'अप्रश्न · THE UNASKED QUESTION',
-    artAssetUrl: '/assets/aistudio/Gemini_Generated_Image_vjfugjvjfugjvjfu_d880974a.png',
+    artAssetUrl: '/assets/aistudio/Gemini_Generated_Image_is7maais7maais7m.png',
     visualDirection:
       'Rudra at fifteen stands in the rain of ash over a captured boy. His iron mace is raised; his hand trembles as he looks back at his father.',
     sanjayaNarration: '“His flaw was never that he picked a side. It was that he stopped asking.”',
@@ -226,7 +249,7 @@ export const PROLOGUE_SCROLLS: PrologueScrollSpec[] = [
     roman: 'SCROLL V OF V',
     title: 'The Fall of the Father',
     sanskritSubtitle: 'संजीवनी · THE SANJIVANI BARGAIN',
-    artAssetUrl: '/assets/aistudio/Gemini_Generated_Image_25mxvb25mxvb25mx_d4637a39.png',
+    artAssetUrl: '/assets/aistudio/Gemini_Generated_Image_yax76dyax76dyax7.png',
     visualDirection:
       'Shukracharya lifts a bronze bowl of glowing Sanjivani water in the dark. Kaala-Chakra reaches for it, his third eye opening with a coiled spiral mark.',
     sanjayaNarration:
@@ -454,6 +477,7 @@ export const VRIKODARA_DIALOGUE = {
 export const SHARD_1_MEMORY_SCRIPT = {
   title: 'SHARD #1 MEMORY · THE NIGHT OF ASH',
   subtitle: 'रक्तमणि स्मृति · WHAT THE STONE REMEMBERS',
+  artAssetUrl: '/assets/aistudio/Gemini_Generated_Image_p8dfx9p8dfx9p8df.png',
   visualDescription:
     'Inside a canvas healer’s tent lit by a single clay lamp. A rakshasa woman binds a soldier’s shoulder while her young son holds the lamp steady with both hands. Outside the tent flap, two hundred paces up the hill, the sky turns the blinding white of a held breath. The tent vanishes. The clay lamp rolls into the ash and goes out.',
   exchanges: [

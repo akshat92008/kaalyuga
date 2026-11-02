@@ -76,14 +76,32 @@ export default function StoryCodexModal({
                   src={GAME_ASSETS.rudra.idle}
                   alt="Rudra the Ash-Bound Warrior"
                   referrerPolicy="no-referrer"
-                  className="w-full h-64 object-contain border border-[#c89d46]/40 bg-[#141218] p-2"
+                  className="w-full h-56 object-contain border border-[#c89d46]/40 bg-[#141218] p-2"
                 />
-                <img
-                  src={GAME_ASSETS.rudra.slam}
-                  alt="Bloodforged Parashu Great-Axe"
-                  referrerPolicy="no-referrer"
-                  className="w-full h-44 object-contain border border-[#c89d46]/40 bg-[#141218] p-2"
-                />
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="border border-[#c89d46]/40 bg-[#141218] p-2 text-center">
+                    <img
+                      src={GAME_ASSETS.portraits.savitri}
+                      alt="Savitri — Ferrywoman of the Vaitarani"
+                      referrerPolicy="no-referrer"
+                      className="w-full h-32 object-cover mb-1.5"
+                    />
+                    <div className="text-[10px] font-mono-num text-[#f5b952] uppercase">
+                      SAVITRI · THE BOAT
+                    </div>
+                  </div>
+                  <div className="border border-[#c89d46]/40 bg-[#141218] p-2 text-center">
+                    <img
+                      src={GAME_ASSETS.portraits.sanjaya}
+                      alt="Sanjaya — The Blind Chronicler"
+                      referrerPolicy="no-referrer"
+                      className="w-full h-32 object-cover mb-1.5"
+                    />
+                    <div className="text-[10px] font-mono-num text-[#d4a548] uppercase">
+                      SANJAYA · CHRONICLER
+                    </div>
+                  </div>
+                </div>
               </div>
               <div className="md:col-span-7 space-y-4 leading-relaxed">
                 <h3 className="font-display text-xl font-bold text-[#f2c45a]">
@@ -244,40 +262,39 @@ export default function StoryCodexModal({
                   DUNDUBHI · The Bronze Buffalo Demon
                 </h4>
                 <img
-                  src={GAME_ASSETS.dundubhi.roar}
+                  src={GAME_ASSETS.portraits.dundubhi}
                   alt="Dundubhi the Bronze Buffalo Demon"
                   referrerPolicy="no-referrer"
-                  className="w-full h-44 object-contain bg-black/60 border border-[#c89d46]/25 p-2"
+                  className="w-full h-48 object-cover bg-black/60 border border-[#c89d46]/25"
                 />
                 <p className="text-xs text-[#b8ac98] leading-relaxed">
                   A towering Chola-bronze war-beast fused with temple war-bells. Dundubhi charges
                   across the trenches and unleashes resonant bell-shockwaves. Counter his horn
-                  rushes with <strong>Kalaripayattu Parry [T]</strong> or vault over his quakes in{' '}
-                  <strong>Tandava Stance</strong>.
+                  rushes with <strong>Kalaripayattu Parry [T]</strong> or bait him into the stone
+                  mandapa pillars.
                 </p>
               </div>
 
               <div className="p-5 bg-[#141217] border border-[#c89d46]/35 space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-[#ffaa5c] uppercase tracking-widest font-semibold">
-                    Chapter I Sovereign · Chamber 6/6
+                    Chapter I Sovereign · Chamber 8/8
                   </span>
-                  <span className="text-xs font-mono-num text-[#d4a548]">2,450 POSTURE · 3 PHASES</span>
+                  <span className="text-xs font-mono-num text-[#d4a548]">2,450 POSTURE · 2 PHASES</span>
                 </div>
                 <h4 className="font-display text-xl font-bold text-[#f5ebd6]">
                   VRIKODARA · The Iron Rakshasa
                 </h4>
                 <img
-                  src={GAME_ASSETS.vrikodara.p1Slam}
+                  src={GAME_ASSETS.portraits.vrikodara}
                   alt="Vrikodara the Iron Rakshasa"
                   referrerPolicy="no-referrer"
-                  className="w-full h-44 object-contain bg-black/60 border border-[#c89d46]/25 p-2"
+                  className="w-full h-48 object-cover bg-black/60 border border-[#c89d46]/25"
                 />
                 <p className="text-xs text-[#b8ac98] leading-relaxed">
-                  Guardian of the Sanctuary Cave who took the Brahmashira blast upon his own iron
-                  plate to save thirty-four war orphans. In Phase 2, his armor shatters to reveal a
-                  starving giant swinging a broken temple pillar. Shatter his Posture to grant him
-                  warrior&apos;s peace.
+                  Rudra&apos;s blood-brother in arms who lost his wife and son in the Shishira healer&apos;s
+                  tent. In Phase 2, he swallows his iron chains, his furnace-belly roaring as he
+                  grows by half and vomits molten slag across the stone.
                 </p>
               </div>
             </div>

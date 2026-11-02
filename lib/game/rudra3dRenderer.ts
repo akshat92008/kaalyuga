@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { IS_SOFTWARE_WEBGL } from '../../engine/ue5GraphicsEngine';
+import { loadFbxCached, simplifyGroupGeometries } from './meshSimplifier';
 import type { StaffStance } from './rules';
 
 export type RudraAnimState =
@@ -98,6 +99,7 @@ export class Rudra3DRenderer {
   private currentYaw = 0;
   private targetYaw = 0;
   private elapsedTime = 0;
+  private lastSoftwareRenderTime = -999;
   private charMaterials: THREE.MeshStandardMaterial[] = [];
   private wepMaterials: THREE.MeshStandardMaterial[] = [];
 
@@ -108,8 +110,8 @@ export class Rudra3DRenderer {
 
     this.scene = new THREE.Scene();
 
-    // Hades ~32° Isometric Orthographic Camera
-    const halfExtent = 135;
+    // True 2.5D Hades Dimetric (2:1) Isometric Orthographic Camera (~27° elevation, never 90° top-down)
+    const halfExtent = 132;
     this.camera = new THREE.OrthographicCamera(
       -halfExtent,
       halfExtent,
@@ -118,8 +120,8 @@ export class Rudra3DRenderer {
       1,
       1000
     );
-    this.camera.position.set(0, 205, 260);
-    this.camera.lookAt(0, 72, 0);
+    this.camera.position.set(0, 152, 295);
+    this.camera.lookAt(0, 76, 0);
 
     this.rootGroup = new THREE.Group();
     this.scene.add(this.rootGroup);
@@ -127,24 +129,24 @@ export class Rudra3DRenderer {
     this.weaponTipNode = new THREE.Object3D();
     this.weaponBaseNode = new THREE.Object3D();
 
-    // Crisp Dark-Mythology Lighting Rig
-    const ambient = new THREE.AmbientLight(0xd8d4e2, 1.55);
+    // High-Contrast Hades Dark-Mythology Rim & Key Lighting Rig
+    const ambient = new THREE.AmbientLight(0xd8d4e8, 1.65);
     this.scene.add(ambient);
 
-    this.keyLight = new THREE.DirectionalLight(0xfff4e0, 2.65);
-    this.keyLight.position.set(-130, 260, 190);
+    this.keyLight = new THREE.DirectionalLight(0xfff5e4, 2.95);
+    this.keyLight.position.set(-140, 240, 210);
     this.scene.add(this.keyLight);
 
-    this.rimLight = new THREE.DirectionalLight(0xe8c48e, 2.1);
-    this.rimLight.position.set(130, 210, -210);
+    this.rimLight = new THREE.DirectionalLight(0xffcf78, 2.55);
+    this.rimLight.position.set(145, 195, -220);
     this.scene.add(this.rimLight);
 
-    this.fillLight = new THREE.DirectionalLight(0x7c859e, 1.25);
-    this.fillLight.position.set(160, 55, 130);
+    this.fillLight = new THREE.DirectionalLight(0x68a8ff, 1.45);
+    this.fillLight.position.set(165, 65, 135);
     this.scene.add(this.fillLight);
 
-    this.axeGlowLight = new THREE.PointLight(0xd43b2a, 0.75, 150);
-    this.axeGlowLight.position.set(0, 90, 40);
+    this.axeGlowLight = new THREE.PointLight(0xff4e2a, 1.15, 175);
+    this.axeGlowLight.position.set(0, 90, 45);
     this.rootGroup.add(this.axeGlowLight);
 
     // Real-time 3D Axe Blade Trail Ribbon
@@ -194,9 +196,11 @@ export class Rudra3DRenderer {
       this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
       // UE5 Lumen-Style Studio IBL Environment Map for Metallic Armor & Broken Gada Reflections
-      const pmremGenerator = new THREE.PMREMGenerator(this.renderer);
-      this.scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
-      pmremGenerator.dispose();
+      if (!IS_SOFTWARE_WEBGL) {
+        const pmremGenerator = new THREE.PMREMGenerator(this.renderer);
+        this.scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
+        pmremGenerator.dispose();
+      }
 
       this.loadAssets();
     } catch (err) {
@@ -297,15 +301,22 @@ export class Rudra3DRenderer {
 
   private async loadAssets() {
     const texLoader = new THREE.TextureLoader();
-    const fbxLoader = new FBXLoader();
 
-    const loadTex = (url: string, isColor = false, attempt = 0): Promise<THREE.Texture> =>
+    const loadTex = (url: string, isColor = false, attempt = 0): Promise<THREE.Texture | null> =>
       new Promise((resolve, reject) => {
+        if (IS_SOFTWARE_WEBGL && !isColor) {
+          resolve(null);
+          return;
+        }
         texLoader.load(
           url,
           (tex) => {
             if (isColor) {
               tex.colorSpace = THREE.SRGBColorSpace;
+            }
+            if (IS_SOFTWARE_WEBGL) {
+              tex.generateMipmaps = false;
+              tex.minFilter = THREE.LinearFilter;
             }
             tex.needsUpdate = true;
             resolve(tex);
@@ -323,26 +334,10 @@ export class Rudra3DRenderer {
         );
       });
 
-    const loadFbx = (url: string, attempt = 0): Promise<THREE.Group> =>
-      new Promise((resolve, reject) => {
-        fbxLoader.load(
-          url,
-          (obj) => resolve(obj),
-          (ev) => {
-            if (ev.total > 0) {
-              this.loadProgress = Math.min(0.95, ev.loaded / ev.total);
-            }
-          },
-          (err) => {
-            if (attempt < 3) {
-              setTimeout(() => {
-                loadFbx(url, attempt + 1).then(resolve).catch(reject);
-              }, 800 * (attempt + 1));
-            } else {
-              reject(err);
-            }
-          }
-        );
+    const loadFbx = (url: string): Promise<THREE.Group> =>
+      loadFbxCached(url, true).then((obj) => {
+        this.loadProgress = 0.95;
+        return obj;
       });
 
     try {
@@ -377,11 +372,11 @@ export class Rudra3DRenderer {
 
       // 1. Configure Character PBR Material with UE5 IBL Reflections
       const charMat = new THREE.MeshStandardMaterial({
-        map: charAlbedo,
-        normalMap: charNormal,
+        map: charAlbedo || undefined,
+        normalMap: charNormal || undefined,
         normalScale: new THREE.Vector2(1.25, 1.25),
-        roughnessMap: charRough,
-        metalnessMap: charMetal,
+        roughnessMap: charRough || undefined,
+        metalnessMap: charMetal || undefined,
         roughness: 0.62,
         metalness: 0.48,
         envMapIntensity: 1.45,
@@ -415,11 +410,11 @@ export class Rudra3DRenderer {
 
       // 2. Configure 3D Weapon Material & Socket the Composite 3D Broken Gada + Bloodforged Parashu
       const wepMat = new THREE.MeshStandardMaterial({
-        map: wepAlbedo,
-        normalMap: wepNormal,
+        map: wepAlbedo || undefined,
+        normalMap: wepNormal || undefined,
         normalScale: new THREE.Vector2(1.35, 1.35),
-        roughnessMap: wepRough,
-        metalnessMap: wepMetal,
+        roughnessMap: wepRough || undefined,
+        metalnessMap: wepMetal || undefined,
         roughness: 0.38,
         metalness: 0.85,
         envMapIntensity: 1.6,
@@ -910,7 +905,10 @@ export class Rudra3DRenderer {
     this.updateWeaponTrail(dt, trailActive, trailColor);
 
     // 6. Render Isometric 3D Character + Axe to Offscreen Canvas
-    this.renderer.render(this.scene, this.camera);
+    if (!IS_SOFTWARE_WEBGL || this.elapsedTime - this.lastSoftwareRenderTime >= 0.045) {
+      this.lastSoftwareRenderTime = this.elapsedTime;
+      this.renderer.render(this.scene, this.camera);
+    }
     return true;
   }
 

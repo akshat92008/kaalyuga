@@ -49,10 +49,15 @@ export function loadAndProcessSprite(
   },
   retryCount: number = 0
 ): Promise<ProcessedSpriteAsset | null> {
+  const reqFrames = Math.max(1, options.frameCount ?? 1);
   if (processedCache.has(url)) {
-    return Promise.resolve(processedCache.get(url)!);
+    const existing = processedCache.get(url)!;
+    if (existing.frames.length >= reqFrames) {
+      return Promise.resolve(existing);
+    }
+    processedCache.delete(url);
   }
-  if (loadingPromises.has(url)) {
+  if (loadingPromises.has(url) && reqFrames === 1) {
     return loadingPromises.get(url)!;
   }
 
@@ -543,9 +548,13 @@ export function loadAndProcessSprite(
           let maxY = yStart;
           let found = false;
 
+          const innerMarginX = expectedFrames > 1 ? Math.min(6, Math.round((xEnd - xStart) * 0.025)) : 0;
+          const scanXStart = xStart + innerMarginX;
+          const scanXEnd = Math.max(scanXStart + 1, xEnd - innerMarginX);
+
           for (let y = yStart; y < yEnd; y++) {
             const rowOffset = y * w;
-            for (let x = xStart; x < xEnd; x++) {
+            for (let x = scanXStart; x < scanXEnd; x++) {
               const alpha = data[(rowOffset + x) * 4 + 3];
               if (alpha > 36) {
                 if (x < minX) minX = x;
@@ -644,7 +653,8 @@ export function loadAndProcessSprite(
           }
         }
 
-        const baseFrameHeight = frames[0]?.sh || h;
+        const maxSh = frames.reduce((acc, f) => Math.max(acc, f.sh), 0);
+        const baseFrameHeight = maxSh > 0 ? maxSh : frames[0]?.sh || h;
 
         const result: ProcessedSpriteAsset = {
           cleanCanvas,

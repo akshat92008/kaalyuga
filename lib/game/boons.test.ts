@@ -44,5 +44,5 @@ test('rollCelestialBoonOffer returns 3 unique unowned Celestial Boons', () => {
   const ids = new Set(offer.map((b) => b.id));
   assert.equal(ids.size, 3);
   assert.equal(ids.has('nezha_scorch_strike'), false);
-  assert.equal(CELESTIAL_BOONS.length, 12);
+  assert.equal(CELESTIAL_BOONS.length, 15);
 });

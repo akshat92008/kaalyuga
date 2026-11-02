@@ -16,8 +16,10 @@ export interface MoltenSlagFissure {
   x2: number;
   y2: number;
   width: number;
-  timer: number;
-  maxDuration: number;
+  life: number;
+  maxLife: number;
+  timer?: number;
+  maxDuration?: number;
 }
 
 /**
@@ -50,55 +52,48 @@ export function renderLanternAtmosphereAndAshStorm(
     return;
   }
 
-  // 2. Savitri's Lantern Temperature Rule:
-  //    Warm -> Ochre/Gold warmth around Rudra; Dim -> Muted Amber; Cool -> Cold Slate Shadows
+  // 2. Savitri's Lantern Temperature Rule (Screen-blended warm aura around Rudra + subtle peripheral vignette):
   const lanternRadius =
-    lanternState === 'warm' ? 420 : lanternState === 'dim' ? 330 : 255;
+    lanternState === 'warm' ? 460 : lanternState === 'dim' ? 360 : 280;
   const innerWarmth =
     lanternState === 'warm'
-      ? 'rgba(245, 185, 82, 0.13)'
+      ? 'rgba(255, 194, 88, 0.16)'
       : lanternState === 'dim'
-      ? 'rgba(217, 130, 59, 0.09)'
-      : 'rgba(126, 168, 204, 0.08)';
-  const outerCoolness =
-    lanternState === 'warm'
-      ? 'rgba(16, 12, 10, 0.22)'
-      : lanternState === 'dim'
-      ? 'rgba(12, 15, 24, 0.34)'
-      : 'rgba(8, 14, 28, 0.48)';
+      ? 'rgba(225, 140, 64, 0.11)'
+      : 'rgba(126, 178, 224, 0.10)';
 
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
   const lanternGrad = ctx.createRadialGradient(
     playerX,
-    playerY - 28,
-    36,
+    playerY - 24,
+    18,
     playerX,
-    playerY - 28,
+    playerY - 24,
     lanternRadius
   );
   lanternGrad.addColorStop(0, innerWarmth);
-  lanternGrad.addColorStop(0.55, 'rgba(0, 0, 0, 0.0)');
-  lanternGrad.addColorStop(1, outerCoolness);
+  lanternGrad.addColorStop(0.55, 'rgba(255, 145, 55, 0.04)');
+  lanternGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
   ctx.fillStyle = lanternGrad;
   ctx.fillRect(0, 0, width, height);
+  ctx.restore();
 
-  // 3. Act I Charnel Plains Ash-Storm Hazard (Section 32: "Ash-storms that cut vision")
+  // 3. Act I Charnel Plains Wind-Ash Streaks (Crisp diagonal ember/ash streaks without muddy grey screen wash)
   if (ashStormIntensity > 0.02) {
-    const stormAlpha = Math.min(0.38, ashStormIntensity * 0.32);
-    ctx.fillStyle = `rgba(28, 24, 20, ${stormAlpha.toFixed(3)})`;
-    ctx.fillRect(0, 0, width, height);
-
-    // Sweeping diagonal wind-ash streaks
-    ctx.strokeStyle = `rgba(212, 192, 165, ${(ashStormIntensity * 0.26).toFixed(3)})`;
-    ctx.lineWidth = 1.4;
+    ctx.save();
+    ctx.strokeStyle = `rgba(235, 205, 165, ${(ashStormIntensity * 0.22).toFixed(3)})`;
+    ctx.lineWidth = 1.25;
     ctx.beginPath();
-    for (let i = 0; i < 28; i++) {
+    for (let i = 0; i < 24; i++) {
       const seed = i * 137.5;
       const sx = ((seed + time * (340 + (i % 5) * 45)) % (width + 200)) - 100;
       const sy = ((seed * 2.3 + time * 95) % (height + 100)) - 50;
       ctx.moveTo(sx, sy);
-      ctx.lineTo(sx - 44, sy - 12);
+      ctx.lineTo(sx - 38, sy - 11);
     }
     ctx.stroke();
+    ctx.restore();
   }
 
   // 4. [E] Look Mode Room-Tone Spotlight Isolation (Section 35: "Only room tone and the object")
@@ -245,8 +240,9 @@ export function renderBossMythicMechanics(
 
   // 1. Render Arena-Splitting Molten Slag Fissures (Vrikodara Phase 2 & Rakshasa Crushing Stance)
   for (const fis of slagFissures) {
-    if (fis.timer <= 0) continue;
-    const alpha = Math.min(1, fis.timer / 0.6);
+    const rem = fis.life ?? fis.timer ?? 0;
+    if (rem <= 0) continue;
+    const alpha = Math.min(1, rem / 0.6);
     ctx.save();
     ctx.lineCap = 'round';
 

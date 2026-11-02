@@ -1,16 +1,24 @@
 'use client';
 
 // ============================================================================
-// MERU ENGINE v2.0 — REAL-TIME 60FPS 3D ENEMY SQUADRON RENDERER (THREE.JS + IBL)
-// - Eliminates stiff 4-frame 2D enemy sprite sheets by rendering 100% of Act I
-//   enemies (`wolf_guai`, `fire_monk`, `stone_golem`, `furnace_titan`) as real
-//   Three.js 3D WebGL rigs with UE5 RoomEnvironment IBL metallic reflections!
-// - Uses a SINGLE shared WebGLRenderer (zero WebGL context exhaustion) across
-//   4 distinct 3D archetype rigs with composite multi-part 3D weapons & shields:
-//   1) Ash-Stalker (`wolf_guai`): Twin Obsidian Katar Claws + crouched predator rig
-//   2) Dhanur-Preta (`fire_monk`): Blazing Agni Greatbow + drawn fire-arrow
-//   3) Vetala Gada-Guard (`stone_golem`): Chola War-Drum Shield (spiral-stamped) + Iron Gada
-//   4) Furnace Colossus (`furnace_titan`): Molten Siege Greathammer + magma furnace core
+// MERU ENGINE v3.0 — REAL-TIME 60FPS 3D ENEMY SQUADRON RENDERER + GPU T-POSE ANIMATOR
+// - Loads the 5 bespoke 3D Warlord FBX models uploaded in /public/models/:
+//   1) Ash-Stalker (`wolf_guai`): `Meshy_AI_Skullclad_Warlord_20261031_texture.fbx`
+//      + Twin Obsidian Katar Claws
+//   2) Dhanur-Preta (`fire_monk`): `Meshy_AI_Crimson_Skull_Warlord_biped_Animation_Running_withSkin.fbx`
+//      + Blazing Agni Greatbow & Drawn Ember Arrow
+//   3) Vetala Gada-Guard (`stone_golem`): `Meshy_AI_Horned_Warlord_of_the_Bloodforge_20261031_texture.fbx`
+//      + Chola War-Drum Shield + Heavy Iron Gada Mace
+//   4) Furnace Colossus (`furnace_titan`): `Meshy_AI_Molten_Warlord_20261031_texture.fbx`
+//      + Two-Handed Molten Siege Greathammer
+//   5) Kaliyuga Sovereign (`furnace_titan` with `vajra_shield`):
+//      `Meshy_AI_Sovereign_of_the_Eternal_Wheel_20261031_texture.fbx`
+// - Animates static T-Pose / A-Pose 3D Warlord meshes on the GPU via a custom
+//   Skeletal Vertex Shader (`onBeforeCompile`) that lowers T-pose arms into a
+//   natural warrior guard stance and drives full bipedal leg strides, arm swings,
+//   torso twists, overhead attack windups, and fierce downward weapon cleaves!
+// - Uses a per-enemy offscreen frame cache + staggered sequential FBX streaming
+//   so main-thread frame times remain locked at 60 FPS!
 // ============================================================================
 
 import * as THREE from 'three';
@@ -18,13 +26,16 @@ import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { IS_SOFTWARE_WEBGL } from '../../engine/ue5GraphicsEngine';
-import type { EnemyTrait } from './assets';
+import { loadFbxCached } from './meshSimplifier';
+import type { EnemyTrait, Warden3DRigKey } from './assets';
 
 export type RegularEnemy3DKind = 'wolf_guai' | 'fire_monk' | 'stone_golem' | 'furnace_titan';
+type ArchetypeSlotKey = RegularEnemy3DKind | 'sovereign_titan';
 
 export interface Enemy3DRenderParams {
   id: number;
   kind: RegularEnemy3DKind;
+  wardenRigKey?: Warden3DRigKey;
   trait?: EnemyTrait;
   animTime: number;
   vx: number;
@@ -38,9 +49,24 @@ export interface Enemy3DRenderParams {
   isParrying: boolean;
 }
 
+interface TPoseShaderUniforms {
+  uRestArmDrop: { value: number };
+  uLeftArmPitch: { value: number };
+  uRightArmPitch: { value: number };
+  uLegStride: { value: number };
+  uTorsoLean: { value: number };
+  uTorsoTwist: { value: number };
+  uBreath: { value: number };
+}
+
 interface Archetype3DRig {
   root: THREE.Group;
-  mixer: THREE.AnimationMixer;
+  isTPoseShaderRig: boolean;
+  tPoseUniforms: TPoseShaderUniforms | null;
+  baseRestArmDrop: number;
+  rightHandPivot: THREE.Group | null;
+  leftHandPivot: THREE.Group | null;
+  mixer: THREE.AnimationMixer | null;
   idleAction: THREE.AnimationAction | null;
   runAction: THREE.AnimationAction | null;
   attackAction: THREE.AnimationAction | null;
@@ -53,10 +79,19 @@ interface Archetype3DRig {
   materials: THREE.MeshStandardMaterial[];
 }
 
+interface CachedEnemyFrame {
+  canvas: HTMLCanvasElement;
+  ctx: CanvasRenderingContext2D;
+  lastAnimTime: number;
+  lastState: string;
+  lastHitFlash: boolean;
+}
+
 export class Enemy3DRenderer {
   public readonly canvas: HTMLCanvasElement;
   public isReady = false;
 
+  private readonly size: number;
   private renderer: THREE.WebGLRenderer | null = null;
   private scene: THREE.Scene;
   private camera: THREE.OrthographicCamera;
@@ -65,18 +100,23 @@ export class Enemy3DRenderer {
   private fillLight: THREE.DirectionalLight;
   private traitPointLight: THREE.PointLight;
 
-  private rigs: Partial<Record<RegularEnemy3DKind, Archetype3DRig>> = {};
+  private rigs: Partial<Record<ArchetypeSlotKey, Archetype3DRig>> = {};
   private perEnemyYaw: Map<number, number> = new Map();
+  private perEnemyCache: Map<number, CachedEnemyFrame> = new Map();
+  private activeCompositeCanvas: HTMLCanvasElement;
   private disposed = false;
 
-  constructor(size = 288) {
+  constructor(size = 320) {
+    this.size = size;
     this.canvas = document.createElement('canvas');
     this.canvas.width = size;
     this.canvas.height = size;
+    this.activeCompositeCanvas = this.canvas;
 
     this.scene = new THREE.Scene();
 
-    const halfExtent = 132;
+    // True 2.5D Hades Dimetric (2:1) Isometric Orthographic Camera (~27° elevation)
+    const halfExtent = 118;
     this.camera = new THREE.OrthographicCamera(
       -halfExtent,
       halfExtent,
@@ -85,26 +125,26 @@ export class Enemy3DRenderer {
       1,
       1000
     );
-    this.camera.position.set(0, 195, 260);
-    this.camera.lookAt(0, 74, 0);
+    this.camera.position.set(0, 148, 285);
+    this.camera.lookAt(0, 76, 0);
 
-    const ambient = new THREE.AmbientLight(0xdcd8e8, 1.65);
+    const ambient = new THREE.AmbientLight(0xe4dff0, 1.9);
     this.scene.add(ambient);
 
-    this.keyLight = new THREE.DirectionalLight(0xfff2dc, 2.75);
-    this.keyLight.position.set(-130, 260, 195);
+    this.keyLight = new THREE.DirectionalLight(0xfff4df, 3.35);
+    this.keyLight.position.set(-135, 240, 215);
     this.scene.add(this.keyLight);
 
-    this.rimLight = new THREE.DirectionalLight(0xf2c46d, 2.25);
-    this.rimLight.position.set(140, 210, -195);
+    this.rimLight = new THREE.DirectionalLight(0xffc258, 2.95);
+    this.rimLight.position.set(145, 195, -205);
     this.scene.add(this.rimLight);
 
-    this.fillLight = new THREE.DirectionalLight(0x7c8cb2, 1.3);
-    this.fillLight.position.set(150, 65, 130);
+    this.fillLight = new THREE.DirectionalLight(0x78a4d8, 1.55);
+    this.fillLight.position.set(150, 75, 140);
     this.scene.add(this.fillLight);
 
-    this.traitPointLight = new THREE.PointLight(0xff6a2b, 1.2, 220);
-    this.traitPointLight.position.set(0, 85, 55);
+    this.traitPointLight = new THREE.PointLight(0xff6a2b, 1.65, 250);
+    this.traitPointLight.position.set(0, 88, 60);
     this.scene.add(this.traitPointLight);
 
     try {
@@ -118,16 +158,160 @@ export class Enemy3DRenderer {
       this.renderer.setPixelRatio(1);
       this.renderer.outputColorSpace = THREE.SRGBColorSpace;
       this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-      this.renderer.toneMappingExposure = 1.12;
+      this.renderer.toneMappingExposure = 1.18;
 
-      const pmremGenerator = new THREE.PMREMGenerator(this.renderer);
-      this.scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
-      pmremGenerator.dispose();
+      if (!IS_SOFTWARE_WEBGL) {
+        const pmremGenerator = new THREE.PMREMGenerator(this.renderer);
+        this.scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
+        pmremGenerator.dispose();
+      }
 
       this.loadArchetypes();
     } catch {
       this.renderer = null;
     }
+  }
+
+  public getActiveCanvas(): HTMLCanvasElement {
+    return this.activeCompositeCanvas;
+  }
+
+  /**
+   * Injects a real-time 60FPS GPU Skeletal Vertex Shader into static T-pose / A-pose
+   * Meshy AI Warlord meshes (`y` in [-95.15, +94.77], centered at origin).
+   * - Drops outstretched T-pose arms down around the shoulder joints (`x = ±18.5, y = 44`)
+   *   into an authentic martial guard stance (`uRestArmDrop`).
+   * - Swings left/right arms (`uLeftArmPitch`, `uRightArmPitch`) for sprinting, bow draw,
+   *   shield block, overhead windups, and weapon cleaves.
+   * - Articulates left/right legs (`uLegStride`) around the hip joints (`x = ±10, y = -6`)
+   *   with automatic trailing-knee flexion for smooth bipedal running.
+   * - Twists and leans the upper torso (`uTorsoLean`, `uTorsoTwist`, `uBreath`).
+   */
+  private injectTPoseSkeletalShader(
+    mat: THREE.MeshStandardMaterial,
+    restArmDropRad: number
+  ): TPoseShaderUniforms {
+    const uniforms: TPoseShaderUniforms = {
+      uRestArmDrop: { value: restArmDropRad },
+      uLeftArmPitch: { value: 0 },
+      uRightArmPitch: { value: 0 },
+      uLegStride: { value: 0 },
+      uTorsoLean: { value: 0.08 },
+      uTorsoTwist: { value: 0 },
+      uBreath: { value: 0 },
+    };
+
+    mat.onBeforeCompile = (shader) => {
+      shader.uniforms.uRestArmDrop = uniforms.uRestArmDrop;
+      shader.uniforms.uLeftArmPitch = uniforms.uLeftArmPitch;
+      shader.uniforms.uRightArmPitch = uniforms.uRightArmPitch;
+      shader.uniforms.uLegStride = uniforms.uLegStride;
+      shader.uniforms.uTorsoLean = uniforms.uTorsoLean;
+      shader.uniforms.uTorsoTwist = uniforms.uTorsoTwist;
+      shader.uniforms.uBreath = uniforms.uBreath;
+
+      shader.vertexShader =
+        `
+        uniform float uRestArmDrop;
+        uniform float uLeftArmPitch;
+        uniform float uRightArmPitch;
+        uniform float uLegStride;
+        uniform float uTorsoLean;
+        uniform float uTorsoTwist;
+        uniform float uBreath;
+        ` + shader.vertexShader;
+
+      shader.vertexShader = shader.vertexShader.replace(
+        '#include <begin_vertex>',
+        `
+        #include <begin_vertex>
+        {
+          // Local FBX coordinates: Y in [-95.15, +94.77], X in [-94, +94], Z in [-32, +32]
+          float side = transformed.x >= 0.0 ? 1.0 : -1.0;
+          float absX = abs(transformed.x);
+
+          // 1. T-Pose / A-Pose Shoulder Arm Drop & Elbow Guard Bend
+          // Shoulder pivot at (side * 18.5, 44.0, 0.0)
+          float armMask = smoothstep(16.0, 27.0, absX) * smoothstep(6.0, 24.0, transformed.y);
+          if (armMask > 0.001) {
+            float sx = side * 18.5;
+            float sy = 44.0;
+            float dx = transformed.x - sx;
+            float dy = transformed.y - sy;
+
+            // Rotate arm downward toward waist by uRestArmDrop
+            float dropAng = -side * uRestArmDrop * armMask;
+            float cDrop = cos(dropAng);
+            float sDrop = sin(dropAng);
+            transformed.x = sx + dx * cDrop - dy * sDrop;
+            transformed.y = sy + dx * sDrop + dy * cDrop;
+
+            // Natural forearm forward guard bend (+Z) and slight inward tuck
+            float forearmMask = smoothstep(38.0, 66.0, absX) * armMask;
+            transformed.z += forearmMask * 14.5;
+            transformed.y += forearmMask * 4.5;
+
+            // 2. Dynamic Combat Arm Pitch (Swing forward/back around shoulder YZ plane)
+            float armPitch = (side < 0.0 ? uRightArmPitch : uLeftArmPitch) * armMask;
+            float dy2 = transformed.y - sy;
+            float dz2 = transformed.z;
+            float cPitch = cos(armPitch);
+            float sPitch = sin(armPitch);
+            transformed.y = sy + dy2 * cPitch - dz2 * sPitch;
+            transformed.z = dy2 * sPitch + dz2 * cPitch;
+          }
+
+          // 3. Upper Torso Breathing, Combat Lean (YZ) & Spine Twist (XZ)
+          float torsoMask = smoothstep(-6.0, 42.0, transformed.y);
+          if (torsoMask > 0.001) {
+            // Subtle ribcage breathing expansion
+            float chestMask = smoothstep(10.0, 45.0, transformed.y) * (1.0 - smoothstep(55.0, 75.0, transformed.y));
+            transformed.z += chestMask * uBreath * 2.4;
+            transformed.y += torsoMask * uBreath * 1.6;
+
+            // Spine Y-axis twist
+            float twistAng = uTorsoTwist * torsoMask;
+            float cTw = cos(twistAng);
+            float sTw = sin(twistAng);
+            float tx = transformed.x;
+            float tz = transformed.z;
+            transformed.x = tx * cTw - tz * sTw;
+            transformed.z = tx * sTw + tz * cTw;
+
+            // Waist forward/backward lean around hip pivot Y = -4.0
+            float leanAng = uTorsoLean * torsoMask;
+            float cLn = cos(leanAng);
+            float sLn = sin(leanAng);
+            float ty = transformed.y - (-4.0);
+            float tz2 = transformed.z;
+            transformed.y = -4.0 + ty * cLn - tz2 * sLn;
+            transformed.z = ty * sLn + tz2 * cLn;
+          }
+
+          // 4. Bipedal Leg Stride & Knee Flexion (below hip pivot Y = -6.0)
+          float legMask = smoothstep(-4.0, -20.0, transformed.y) * smoothstep(1.2, 6.5, absX);
+          if (legMask > 0.001) {
+            float hipY = -6.0;
+            float legAng = side * uLegStride * legMask;
+            float ly = transformed.y - hipY;
+            float lz = transformed.z;
+            float cLg = cos(legAng);
+            float sLg = sin(legAng);
+            transformed.y = hipY + ly * cLg - lz * sLg;
+            transformed.z = ly * sLg + lz * cLg;
+
+            // Bend knee backward (-Z) and lift foot (+Y) when calf swings back
+            float calfMask = smoothstep(-42.0, -72.0, transformed.y) * legMask;
+            float kneeFlex = max(0.0, -side * uLegStride);
+            transformed.z -= calfMask * kneeFlex * 16.0;
+            transformed.y += calfMask * abs(uLegStride) * 9.5;
+          }
+        }
+        `
+      );
+    };
+    mat.needsUpdate = true;
+    return uniforms;
   }
 
   /**
@@ -137,30 +321,31 @@ export class Enemy3DRenderer {
   private attachArchetype3DWeapons(
     kind: RegularEnemy3DKind,
     rightHand: THREE.Object3D | null,
-    leftForeArm: THREE.Object3D | null
+    leftForeArm: THREE.Object3D | null,
+    unitScale = 1.0
   ): THREE.MeshStandardMaterial[] {
     const mats: THREE.MeshStandardMaterial[] = [];
 
     const darkIronMat = new THREE.MeshStandardMaterial({
       color: 0x3b3d46,
-      roughness: 0.36,
+      roughness: 0.34,
       metalness: 0.88,
-      envMapIntensity: 1.55,
+      envMapIntensity: 1.65,
     });
     const cholaBronzeMat = new THREE.MeshStandardMaterial({
-      color: 0xd49b42,
-      roughness: 0.3,
+      color: 0xd8a248,
+      roughness: 0.28,
       metalness: 0.92,
-      envMapIntensity: 1.65,
+      envMapIntensity: 1.75,
       emissive: new THREE.Color(0x281404),
-      emissiveIntensity: 0.14,
+      emissiveIntensity: 0.16,
     });
     const agniEmberMat = new THREE.MeshStandardMaterial({
       color: 0xff5a1f,
       roughness: 0.22,
       metalness: 0.2,
       emissive: new THREE.Color(0xff4214),
-      emissiveIntensity: 1.75,
+      emissiveIntensity: 1.85,
     });
     mats.push(darkIronMat, cholaBronzeMat, agniEmberMat);
 
@@ -168,18 +353,19 @@ export class Enemy3DRenderer {
       // Ash-Stalker: Twin Curved Obsidian Katar Claws on right hand
       if (rightHand) {
         const holder = new THREE.Group();
+        holder.scale.setScalar(unitScale);
         const guardGeo = new THREE.BoxGeometry(0.14, 0.06, 0.12);
         const guard = new THREE.Mesh(guardGeo, cholaBronzeMat);
         holder.add(guard);
 
-        const bladeGeo = new THREE.ConeGeometry(0.038, 0.56, 6);
+        const bladeGeo = new THREE.ConeGeometry(0.04, 0.58, 6);
         bladeGeo.rotateX(Math.PI / 2);
         for (const offset of [-0.045, 0.045]) {
           const blade = new THREE.Mesh(bladeGeo, darkIronMat);
-          blade.position.set(offset, 0, 0.28);
+          blade.position.set(offset, 0, 0.29);
           holder.add(blade);
         }
-        holder.position.set(0, 0.06, 0.02);
+        holder.position.set(0, 0.06 * unitScale, 0.02 * unitScale);
         holder.rotation.set(0, Math.PI / 2, 0.25);
         rightHand.add(holder);
       }
@@ -187,63 +373,65 @@ export class Enemy3DRenderer {
       // Dhanur-Preta Bowman: Blazing Agni Greatbow on left arm + drawn ember arrow
       if (leftForeArm) {
         const bowGroup = new THREE.Group();
-        const arcGeo = new THREE.TorusGeometry(0.46, 0.028, 8, 20, Math.PI * 1.15);
+        bowGroup.scale.setScalar(unitScale);
+        const arcGeo = new THREE.TorusGeometry(0.48, 0.03, 8, 20, Math.PI * 1.15);
         const bowArc = new THREE.Mesh(arcGeo, cholaBronzeMat);
         bowArc.rotation.z = -Math.PI * 0.57;
         bowGroup.add(bowArc);
 
-        const arrowShaftGeo = new THREE.CylinderGeometry(0.012, 0.012, 0.72, 6);
+        const arrowShaftGeo = new THREE.CylinderGeometry(0.013, 0.013, 0.74, 6);
         arrowShaftGeo.rotateZ(Math.PI / 2);
         const arrowShaft = new THREE.Mesh(arrowShaftGeo, darkIronMat);
         arrowShaft.position.set(0.18, 0, 0);
         bowGroup.add(arrowShaft);
 
-        const arrowHeadGeo = new THREE.ConeGeometry(0.042, 0.16, 6);
+        const arrowHeadGeo = new THREE.ConeGeometry(0.045, 0.17, 6);
         arrowHeadGeo.rotateZ(-Math.PI / 2);
         const arrowHead = new THREE.Mesh(arrowHeadGeo, agniEmberMat);
         arrowHead.position.set(0.56, 0, 0);
         bowGroup.add(arrowHead);
 
-        bowGroup.position.set(0, 0.12, 0.08);
+        bowGroup.position.set(0, 0.12 * unitScale, 0.08 * unitScale);
         leftForeArm.add(bowGroup);
       }
     } else if (kind === 'stone_golem') {
-      // Vetala Gada-Guard (v7 Section 9): War-Drum Stamped Bronze Shield on Left Forearm + Heavy Iron Mace on Right Hand
+      // Vetala Gada-Guard: War-Drum Stamped Bronze Shield on Left Forearm + Heavy Iron Mace on Right Hand
       if (leftForeArm) {
         const shieldGroup = new THREE.Group();
-        const discGeo = new THREE.CylinderGeometry(0.34, 0.34, 0.045, 18);
+        shieldGroup.scale.setScalar(unitScale);
+        const discGeo = new THREE.CylinderGeometry(0.35, 0.35, 0.048, 18);
         discGeo.rotateX(Math.PI / 2);
         const disc = new THREE.Mesh(discGeo, darkIronMat);
         shieldGroup.add(disc);
 
-        // Raised Chola-Bronze War-Drum Rim & Spiral Boss Stamp
-        const rimGeo = new THREE.TorusGeometry(0.32, 0.032, 10, 22);
+        const rimGeo = new THREE.TorusGeometry(0.33, 0.034, 10, 22);
         const rim = new THREE.Mesh(rimGeo, cholaBronzeMat);
-        rim.position.set(0, 0, 0.025);
+        rim.position.set(0, 0, 0.026);
         shieldGroup.add(rim);
 
-        const spiralRingGeo = new THREE.TorusGeometry(0.15, 0.022, 8, 18);
+        const spiralRingGeo = new THREE.TorusGeometry(0.155, 0.024, 8, 18);
         const spiralRing = new THREE.Mesh(spiralRingGeo, cholaBronzeMat);
-        spiralRing.position.set(0, 0, 0.032);
+        spiralRing.position.set(0, 0, 0.034);
         shieldGroup.add(spiralRing);
 
-        shieldGroup.position.set(0, 0.14, 0.14);
+        shieldGroup.position.set(0, 0.14 * unitScale, 0.14 * unitScale);
         leftForeArm.add(shieldGroup);
       }
       if (rightHand) {
         const maceGroup = new THREE.Group();
-        const shaftGeo = new THREE.CylinderGeometry(0.026, 0.032, 0.78, 8);
+        maceGroup.scale.setScalar(unitScale);
+        const shaftGeo = new THREE.CylinderGeometry(0.028, 0.034, 0.82, 8);
         shaftGeo.rotateX(Math.PI / 2);
         const shaft = new THREE.Mesh(shaftGeo, darkIronMat);
-        shaft.position.set(0, 0, 0.22);
+        shaft.position.set(0, 0, 0.24);
         maceGroup.add(shaft);
 
-        const headGeo = new THREE.DodecahedronGeometry(0.14, 0);
+        const headGeo = new THREE.DodecahedronGeometry(0.15, 0);
         const head = new THREE.Mesh(headGeo, cholaBronzeMat);
-        head.position.set(0, 0, 0.56);
+        head.position.set(0, 0, 0.58);
         maceGroup.add(head);
 
-        maceGroup.position.set(0, 0.07, 0.01);
+        maceGroup.position.set(0, 0.07 * unitScale, 0.01 * unitScale);
         maceGroup.rotation.set(0, Math.PI / 2, 0.28);
         rightHand.add(maceGroup);
       }
@@ -251,23 +439,24 @@ export class Enemy3DRenderer {
       // Furnace Colossus: Two-Handed Molten Siege Greathammer
       if (rightHand) {
         const hammerGroup = new THREE.Group();
-        const shaftGeo = new THREE.CylinderGeometry(0.032, 0.038, 0.96, 10);
+        hammerGroup.scale.setScalar(unitScale);
+        const shaftGeo = new THREE.CylinderGeometry(0.034, 0.04, 0.98, 10);
         shaftGeo.rotateX(Math.PI / 2);
         const shaft = new THREE.Mesh(shaftGeo, darkIronMat);
         shaft.position.set(0, 0, 0.28);
         hammerGroup.add(shaft);
 
-        const blockGeo = new THREE.BoxGeometry(0.28, 0.42, 0.24);
+        const blockGeo = new THREE.BoxGeometry(0.29, 0.44, 0.25);
         const block = new THREE.Mesh(blockGeo, darkIronMat);
         block.position.set(0, 0, 0.68);
         hammerGroup.add(block);
 
-        const coreGeo = new THREE.CylinderGeometry(0.11, 0.11, 0.46, 10);
+        const coreGeo = new THREE.CylinderGeometry(0.115, 0.115, 0.48, 10);
         const core = new THREE.Mesh(coreGeo, agniEmberMat);
         core.position.set(0, 0, 0.68);
         hammerGroup.add(core);
 
-        hammerGroup.position.set(0, 0.075, 0.01);
+        hammerGroup.position.set(0, 0.075 * unitScale, 0.01 * unitScale);
         hammerGroup.rotation.set(0, Math.PI / 2, 0.28);
         rightHand.add(hammerGroup);
       }
@@ -299,194 +488,462 @@ export class Enemy3DRenderer {
     return clip;
   }
 
+  private replaceSlotRig(slot: ArchetypeSlotKey, nextRig: Archetype3DRig): void {
+    const prev = this.rigs[slot];
+    if (prev) {
+      this.scene.remove(prev.root);
+    }
+    this.rigs[slot] = nextRig;
+    this.perEnemyCache.clear();
+    this.isReady = true;
+  }
+
+  /**
+   * Builds a GPU-Animated 3D Warlord Rig from one of the static T-Pose / A-Pose `.fbx` models
+   * (`Skullclad_Warlord`, `Horned_Warlord_of_the_Bloodforge`, `Molten_Warlord`, `Sovereign_of_the_Eternal_Wheel`).
+   */
+  private buildTPoseWarlordRig(
+    kind: RegularEnemy3DKind,
+    fbxGroup: THREE.Group,
+    albedo: THREE.Texture | null,
+    normal: THREE.Texture | null,
+    rough: THREE.Texture | null,
+    metal: THREE.Texture | null,
+    tintHex: number,
+    emissiveHex: number,
+    scaleVec: [number, number, number],
+    restArmDropRad: number
+  ): Archetype3DRig {
+    const bodyMat = new THREE.MeshStandardMaterial({
+      map: albedo,
+      normalMap: normal,
+      normalScale: new THREE.Vector2(1.35, 1.35),
+      roughnessMap: rough,
+      metalnessMap: metal,
+      color: new THREE.Color(tintHex),
+      roughness: 0.44,
+      metalness: 0.72,
+      envMapIntensity: 1.65,
+      emissive: new THREE.Color(emissiveHex),
+      emissiveIntensity: 0.16,
+    });
+
+    const tPoseUniforms = this.injectTPoseSkeletalShader(bodyMat, restArmDropRad);
+
+    // Measure local bounding box so feet sit cleanly on y = 0
+    const box = new THREE.Box3().setFromObject(fbxGroup);
+    const minY = Number.isFinite(box.min.y) ? box.min.y : -95.15;
+
+    fbxGroup.traverse((obj) => {
+      if ((obj as THREE.Mesh).isMesh) {
+        const m = obj as THREE.Mesh;
+        m.material = bodyMat;
+        m.frustumCulled = false;
+      }
+    });
+
+    // Shift mesh up so feet rest on y = 0 in root space (total height ~190 units)
+    fbxGroup.position.set(0, -minY * scaleVec[1], 0);
+    fbxGroup.scale.set(scaleVec[0], scaleVec[1], scaleVec[2]);
+
+    // Shoulder-mounted weapon/shield pivot groups that track uRightArmPitch & uLeftArmPitch
+    const rightShoulderPivot = new THREE.Group();
+    rightShoulderPivot.position.set(-22 * scaleVec[0], 136 * scaleVec[1], 6 * scaleVec[2]);
+    const rightHandMount = new THREE.Group();
+    rightHandMount.position.set(-4 * scaleVec[0], -38 * scaleVec[1], 22 * scaleVec[2]);
+    rightShoulderPivot.add(rightHandMount);
+
+    const leftShoulderPivot = new THREE.Group();
+    leftShoulderPivot.position.set(22 * scaleVec[0], 136 * scaleVec[1], 6 * scaleVec[2]);
+    const leftHandMount = new THREE.Group();
+    leftHandMount.position.set(4 * scaleVec[0], -34 * scaleVec[1], 24 * scaleVec[2]);
+    leftShoulderPivot.add(leftHandMount);
+
+    const wepMats = this.attachArchetype3DWeapons(kind, rightHandMount, leftHandMount, 78);
+
+    const root = new THREE.Group();
+    root.visible = false;
+    root.add(fbxGroup);
+    root.add(rightShoulderPivot);
+    root.add(leftShoulderPivot);
+    this.scene.add(root);
+
+    return {
+      root,
+      isTPoseShaderRig: true,
+      tPoseUniforms,
+      baseRestArmDrop: restArmDropRad,
+      rightHandPivot: rightShoulderPivot,
+      leftHandPivot: leftShoulderPivot,
+      mixer: null,
+      idleAction: null,
+      runAction: null,
+      attackAction: null,
+      spine1: null,
+      spine2: null,
+      rightArm: null,
+      rightForeArm: null,
+      leftArm: null,
+      leftForeArm: null,
+      materials: [bodyMat, ...wepMats],
+    };
+  }
+
+  /**
+   * Builds a Skeletal SkinnedMesh Rig (used for `Crimson_Skull_Warlord_biped` and instant initial rigs).
+   */
+  private buildSkinnedWarlordRig(
+    kind: RegularEnemy3DKind,
+    sourceFbx: THREE.Group,
+    clips: THREE.AnimationClip[],
+    albedo: THREE.Texture | null,
+    normal: THREE.Texture | null,
+    rough: THREE.Texture | null,
+    metal: THREE.Texture | null,
+    tintHex: number,
+    emissiveHex: number,
+    scaleVec: [number, number, number],
+    cloneMesh = true
+  ): Archetype3DRig {
+    const charGroup = cloneMesh ? (SkeletonUtils.clone(sourceFbx) as THREE.Group) : sourceFbx;
+    charGroup.scale.set(scaleVec[0] * 100, scaleVec[1] * 100, scaleVec[2] * 100);
+
+    const bodyMat = new THREE.MeshStandardMaterial({
+      map: albedo,
+      normalMap: normal,
+      normalScale: new THREE.Vector2(1.3, 1.3),
+      roughnessMap: rough,
+      metalnessMap: metal,
+      color: new THREE.Color(tintHex),
+      roughness: 0.45,
+      metalness: 0.7,
+      envMapIntensity: 1.6,
+      emissive: new THREE.Color(emissiveHex),
+      emissiveIntensity: 0.15,
+    });
+
+    charGroup.traverse((obj) => {
+      if ((obj as THREE.Mesh).isMesh) {
+        const m = obj as THREE.Mesh;
+        m.material = bodyMat;
+        m.frustumCulled = false;
+      }
+    });
+
+    const spine1 = charGroup.getObjectByName('mixamorigSpine1') || charGroup.getObjectByName('Spine1') || null;
+    const spine2 = charGroup.getObjectByName('mixamorigSpine2') || charGroup.getObjectByName('Spine2') || null;
+    const rightArm = charGroup.getObjectByName('mixamorigRightArm') || charGroup.getObjectByName('RightArm') || null;
+    const rightForeArm =
+      charGroup.getObjectByName('mixamorigRightForeArm') || charGroup.getObjectByName('RightForeArm') || null;
+    const rightHand = charGroup.getObjectByName('mixamorigRightHand') || charGroup.getObjectByName('RightHand') || null;
+    const leftArm = charGroup.getObjectByName('mixamorigLeftArm') || charGroup.getObjectByName('LeftArm') || null;
+    const leftForeArm =
+      charGroup.getObjectByName('mixamorigLeftForeArm') || charGroup.getObjectByName('LeftForeArm') || null;
+
+    const wepMats = this.attachArchetype3DWeapons(kind, rightHand, leftForeArm, 1.0);
+
+    const root = new THREE.Group();
+    root.visible = false;
+    root.add(charGroup);
+    this.scene.add(root);
+
+    const inPlaceClips = clips.map((c) => this.makeInPlaceClip(c));
+    const findClip = (name: string) =>
+      inPlaceClips.find((c) => c.name.toLowerCase().includes(name.toLowerCase())) || inPlaceClips[0];
+
+    const idleClip = findClip('Casual_Walk') || inPlaceClips[0];
+    const runClip = findClip('Run') || idleClip;
+    const attackClip = findClip('Attack') || runClip;
+
+    const mixer = new THREE.AnimationMixer(charGroup);
+    const idleAction = idleClip ? mixer.clipAction(idleClip) : null;
+    const runAction = runClip ? mixer.clipAction(runClip) : null;
+    const attackAction = attackClip ? mixer.clipAction(attackClip) : null;
+
+    if (idleAction) idleAction.play();
+
+    return {
+      root,
+      isTPoseShaderRig: false,
+      tPoseUniforms: null,
+      baseRestArmDrop: 0,
+      rightHandPivot: null,
+      leftHandPivot: null,
+      mixer,
+      idleAction,
+      runAction,
+      attackAction,
+      spine1,
+      spine2,
+      rightArm,
+      rightForeArm,
+      leftArm,
+      leftForeArm,
+      materials: [bodyMat, ...wepMats],
+    };
+  }
+
   private async loadArchetypes(): Promise<void> {
-    const fbxLoader = new FBXLoader();
     const texLoader = new THREE.TextureLoader();
 
-    const loadFbx = (url: string) =>
-      new Promise<THREE.Group>((resolve, reject) => {
-        fbxLoader.load(url, resolve, undefined, reject);
-      });
+    const loadFbx = (url: string, shared = false) => loadFbxCached(url, shared);
 
-    const loadTex = (url: string, isColor = false) =>
-      new Promise<THREE.Texture>((resolve) => {
+    const loadTex = (url: string, isColor = false) => {
+      if (IS_SOFTWARE_WEBGL && !isColor) {
+        return Promise.resolve<THREE.Texture | null>(null);
+      }
+      return new Promise<THREE.Texture | null>((resolve) => {
         texLoader.load(
           url,
           (t) => {
             if (isColor) t.colorSpace = THREE.SRGBColorSpace;
+            if (IS_SOFTWARE_WEBGL) {
+              t.generateMipmaps = false;
+              t.minFilter = THREE.LinearFilter;
+            }
             t.needsUpdate = true;
             resolve(t);
           },
           undefined,
-          () => resolve(new THREE.Texture())
+          () => resolve(null)
         );
       });
+    };
+
+    const skullcladBase = '/models/Meshy_AI_Skullclad_Warlord_20261031_texture_fbx';
+    const crimsonSkullBase = '/models/Meshy_AI_Crimson_Skull_Warlord_biped';
+    const hornedBloodforgeBase =
+      '/models/Meshy_AI_Horned_Warlord_of_the_Bloodforge_20261031_texture_fbx';
+    const moltenWarlordBase = '/models/Meshy_AI_Molten_Warlord_20261031_texture_fbx';
+    const sovereignWheelBase =
+      '/models/Meshy_AI_Sovereign_of_the_Eternal_Wheel_20261031_texture_fbx';
 
     try {
-      const bipedUrl =
-        '/models/Meshy_AI_Ashen_Warborn_biped/Meshy_AI_Ashen_Warborn_biped_Meshy_Merged_Animations.fbx';
-      const warlordBase = '/models/Meshy_AI_Bloodbound_Warlord_1025041901_texture_fbx';
-      const titanBase = '/models/Meshy_AI_Bloodbound_Titan_1025042731_texture_fbx';
-      const warbornBase = '/models/Meshy_AI_Ashen_Warborn_biped';
-
       const [
-        baseBipedFbx,
-        warbornAlbedo,
-        warbornNorm,
-        warbornRough,
-        warbornMet,
-        warlordAlbedo,
-        warlordNorm,
-        warlordRough,
-        warlordMet,
-        titanAlbedo,
-        titanNorm,
-        titanRough,
-        titanMet,
+        skullcladFbx,
+        skullcladAlbedo,
+        skullcladNorm,
+        skullcladRough,
+        skullcladMet,
+        crimsonAlbedo,
+        crimsonNorm,
+        crimsonRough,
+        crimsonMet,
+        hornedAlbedo,
+        hornedNorm,
+        hornedRough,
+        hornedMet,
+        moltenAlbedo,
+        moltenNorm,
+        moltenRough,
+        moltenMet,
+        sovereignAlbedo,
+        sovereignNorm,
+        sovereignRough,
+        sovereignMet,
       ] = await Promise.all([
-        loadFbx(bipedUrl),
-        loadTex(`${warbornBase}/Meshy_AI_Ashen_Warborn_biped_texture_0.png`, true),
-        loadTex(`${warbornBase}/Meshy_AI_Ashen_Warborn_biped_texture_0_normal.png`, false),
-        loadTex(`${warbornBase}/Meshy_AI_Ashen_Warborn_biped_texture_0_roughness.png`, false),
-        loadTex(`${warbornBase}/Meshy_AI_Ashen_Warborn_biped_texture_0_metallic.png`, false),
-        loadTex(`${warlordBase}/Meshy_AI_Bloodbound_Warlord_1025041901_texture.png`, true),
-        loadTex(`${warlordBase}/Meshy_AI_Bloodbound_Warlord_1025041901_texture_normal.png`, false),
-        loadTex(`${warlordBase}/Meshy_AI_Bloodbound_Warlord_1025041901_texture_roughness.png`, false),
-        loadTex(`${warlordBase}/Meshy_AI_Bloodbound_Warlord_1025041901_texture_metallic.png`, false),
-        loadTex(`${titanBase}/Meshy_AI_Bloodbound_Titan_1025042731_texture.png`, true),
-        loadTex(`${titanBase}/Meshy_AI_Bloodbound_Titan_1025042731_texture_normal.png`, false),
-        loadTex(`${titanBase}/Meshy_AI_Bloodbound_Titan_1025042731_texture_roughness.png`, false),
-        loadTex(`${titanBase}/Meshy_AI_Bloodbound_Titan_1025042731_texture_metallic.png`, false),
+        loadFbx(`${skullcladBase}/Meshy_AI_Skullclad_Warlord_20261031_texture.fbx`),
+        loadTex(`${skullcladBase}/Meshy_AI_Skullclad_Warlord_20261031_texture.png`, true),
+        loadTex(`${skullcladBase}/Meshy_AI_Skullclad_Warlord_20261031_texture_normal.png`, false),
+        loadTex(`${skullcladBase}/Meshy_AI_Skullclad_Warlord_20261031_texture_roughness.png`, false),
+        loadTex(`${skullcladBase}/Meshy_AI_Skullclad_Warlord_20261031_texture_metallic.png`, false),
+        loadTex(`${crimsonSkullBase}/Meshy_AI_Crimson_Skull_Warlord_biped_texture_0.png`, true),
+        loadTex(`${crimsonSkullBase}/Meshy_AI_Crimson_Skull_Warlord_biped_texture_0_normal.png`, false),
+        loadTex(`${crimsonSkullBase}/Meshy_AI_Crimson_Skull_Warlord_biped_texture_0_roughness.png`, false),
+        loadTex(`${crimsonSkullBase}/Meshy_AI_Crimson_Skull_Warlord_biped_texture_0_metallic.png`, false),
+        loadTex(`${hornedBloodforgeBase}/Meshy_AI_Horned_Warlord_of_the_Bloodforge_20261031_texture.png`, true),
+        loadTex(`${hornedBloodforgeBase}/Meshy_AI_Horned_Warlord_of_the_Bloodforge_20261031_texture_normal.png`, false),
+        loadTex(`${hornedBloodforgeBase}/Meshy_AI_Horned_Warlord_of_the_Bloodforge_20261031_texture_roughness.png`, false),
+        loadTex(`${hornedBloodforgeBase}/Meshy_AI_Horned_Warlord_of_the_Bloodforge_20261031_texture_metallic.png`, false),
+        loadTex(`${moltenWarlordBase}/Meshy_AI_Molten_Warlord_20261031_texture.png`, true),
+        loadTex(`${moltenWarlordBase}/Meshy_AI_Molten_Warlord_20261031_texture_normal.png`, false),
+        loadTex(`${moltenWarlordBase}/Meshy_AI_Molten_Warlord_20261031_texture_roughness.png`, false),
+        loadTex(`${moltenWarlordBase}/Meshy_AI_Molten_Warlord_20261031_texture_metallic.png`, false),
+        loadTex(`${sovereignWheelBase}/Meshy_AI_Sovereign_of_the_Eternal_Wheel_20261031_texture.png`, true),
+        loadTex(`${sovereignWheelBase}/Meshy_AI_Sovereign_of_the_Eternal_Wheel_20261031_texture_normal.png`, false),
+        loadTex(`${sovereignWheelBase}/Meshy_AI_Sovereign_of_the_Eternal_Wheel_20261031_texture_roughness.png`, false),
+        loadTex(`${sovereignWheelBase}/Meshy_AI_Sovereign_of_the_Eternal_Wheel_20261031_texture_metallic.png`, false),
       ]);
 
       if (this.disposed) return;
 
-      const rawClips = baseBipedFbx.animations || [];
-      const inPlaceClips = rawClips.map((c) => this.makeInPlaceClip(c));
-      const findClip = (name: string) =>
-        inPlaceClips.find((c) => c.name.toLowerCase().includes(name.toLowerCase())) ||
-        inPlaceClips[0];
-
-      const idleClip = findClip('Casual_Walk') || inPlaceClips[0];
-      const runClip = findClip('Run') || idleClip;
-      const attackClip = findClip('Attack') || runClip;
-
-      const buildRig = (
-        kind: RegularEnemy3DKind,
-        albedo: THREE.Texture,
-        normal: THREE.Texture,
-        rough: THREE.Texture,
-        metal: THREE.Texture,
-        tintHex: number,
-        emissiveHex: number,
-        scaleVec: [number, number, number]
-      ): Archetype3DRig => {
-        const clonedChar = SkeletonUtils.clone(baseBipedFbx) as THREE.Group;
-        clonedChar.scale.set(scaleVec[0] * 100, scaleVec[1] * 100, scaleVec[2] * 100);
-
-        const bodyMat = new THREE.MeshStandardMaterial({
-          map: albedo,
-          normalMap: normal,
-          normalScale: new THREE.Vector2(1.25, 1.25),
-          roughnessMap: rough,
-          metalnessMap: metal,
-          color: new THREE.Color(tintHex),
-          roughness: 0.48,
-          metalness: 0.68,
-          envMapIntensity: 1.5,
-          emissive: new THREE.Color(emissiveHex),
-          emissiveIntensity: 0.14,
-        });
-
-        clonedChar.traverse((obj) => {
-          if ((obj as THREE.Mesh).isMesh) {
-            const m = obj as THREE.Mesh;
-            m.material = bodyMat;
-            m.frustumCulled = false;
-          }
-        });
-
-        const spine1 = clonedChar.getObjectByName('mixamorigSpine1') || null;
-        const spine2 = clonedChar.getObjectByName('mixamorigSpine2') || null;
-        const rightArm = clonedChar.getObjectByName('mixamorigRightArm') || null;
-        const rightForeArm = clonedChar.getObjectByName('mixamorigRightForeArm') || null;
-        const rightHand = clonedChar.getObjectByName('mixamorigRightHand') || null;
-        const leftArm = clonedChar.getObjectByName('mixamorigLeftArm') || null;
-        const leftForeArm = clonedChar.getObjectByName('mixamorigLeftForeArm') || null;
-
-        const wepMats = this.attachArchetype3DWeapons(kind, rightHand, leftForeArm);
-
-        const root = new THREE.Group();
-        root.visible = false;
-        root.add(clonedChar);
-        this.scene.add(root);
-
-        const mixer = new THREE.AnimationMixer(clonedChar);
-        const idleAction = idleClip ? mixer.clipAction(idleClip) : null;
-        const runAction = runClip ? mixer.clipAction(runClip) : null;
-        const attackAction = attackClip ? mixer.clipAction(attackClip) : null;
-
-        if (idleAction) idleAction.play();
-
-        return {
-          root,
-          mixer,
-          idleAction,
-          runAction,
-          attackAction,
-          spine1,
-          spine2,
-          rightArm,
-          rightForeArm,
-          leftArm,
-          leftForeArm,
-          materials: [bodyMat, ...wepMats],
-        };
-      };
-
-      // Build the 4 Distinct 3D Act I Enemy Archetype Rigs
-      this.rigs.wolf_guai = buildRig(
+      // Stage 1: Populate all 5 Enemy Archetype Rigs immediately using GPU T-Pose Skeletal Animation on Skullclad Warlord
+      this.replaceSlotRig(
         'wolf_guai',
-        warbornAlbedo,
-        warbornNorm,
-        warbornRough,
-        warbornMet,
-        0xb8a4d4,
-        0x220a2e,
-        [0.94, 0.90, 0.96]
+        this.buildTPoseWarlordRig(
+          'wolf_guai',
+          skullcladFbx.clone(true),
+          skullcladAlbedo,
+          skullcladNorm,
+          skullcladRough,
+          skullcladMet,
+          0xe8dcf8,
+          0x240a32,
+          [0.92, 0.88, 0.92],
+          0.56
+        )
       );
-      this.rigs.fire_monk = buildRig(
+      this.replaceSlotRig(
         'fire_monk',
-        warbornAlbedo,
-        warbornNorm,
-        warbornRough,
-        warbornMet,
-        0xf2b880,
-        0x381204,
-        [0.92, 0.98, 0.92]
+        this.buildTPoseWarlordRig(
+          'fire_monk',
+          skullcladFbx.clone(true),
+          crimsonAlbedo,
+          crimsonNorm,
+          crimsonRough,
+          crimsonMet,
+          0xffd8b0,
+          0x381204,
+          [0.94, 0.96, 0.94],
+          0.52
+        )
       );
-      this.rigs.stone_golem = buildRig(
+      this.replaceSlotRig(
         'stone_golem',
-        warlordAlbedo,
-        warlordNorm,
-        warlordRough,
-        warlordMet,
-        0xd8c8b0,
-        0x181208,
-        [1.12, 1.04, 1.12]
+        this.buildTPoseWarlordRig(
+          'stone_golem',
+          skullcladFbx.clone(true),
+          hornedAlbedo,
+          hornedNorm,
+          hornedRough,
+          hornedMet,
+          0xf0e2ce,
+          0x221408,
+          [1.06, 1.0, 1.06],
+          0.56
+        )
       );
-      this.rigs.furnace_titan = buildRig(
+      this.replaceSlotRig(
         'furnace_titan',
-        titanAlbedo,
-        titanNorm,
-        titanRough,
-        titanMet,
-        0xffb48a,
-        0x481204,
-        [1.24, 1.14, 1.24]
+        this.buildTPoseWarlordRig(
+          'furnace_titan',
+          skullcladFbx.clone(true),
+          moltenAlbedo,
+          moltenNorm,
+          moltenRough,
+          moltenMet,
+          0xffd2b4,
+          0x521604,
+          [1.14, 1.08, 1.14],
+          0.56
+        )
+      );
+      this.replaceSlotRig(
+        'sovereign_titan',
+        this.buildTPoseWarlordRig(
+          'furnace_titan',
+          skullcladFbx.clone(true),
+          sovereignAlbedo,
+          sovereignNorm,
+          sovereignRough,
+          sovereignMet,
+          0xe4f4ff,
+          0x103258,
+          [1.16, 1.1, 1.16],
+          0.48
+        )
       );
 
-      this.isReady = true;
+      // Stage 2: Sequentially stream the remaining 4 bespoke Warlord FBX meshes
+      if (!IS_SOFTWARE_WEBGL) {
+        const streamQueue: Array<() => Promise<void>> = [
+          async () => {
+            const fbx = await loadFbx(
+              `${hornedBloodforgeBase}/Meshy_AI_Horned_Warlord_of_the_Bloodforge_20261031_texture.fbx`
+            );
+            if (this.disposed) return;
+            this.replaceSlotRig(
+              'stone_golem',
+              this.buildTPoseWarlordRig(
+                'stone_golem',
+                fbx,
+                hornedAlbedo,
+                hornedNorm,
+                hornedRough,
+                hornedMet,
+                0xf0e2ce,
+                0x221408,
+                [1.02, 0.98, 1.02],
+                0.92
+              )
+            );
+          },
+          async () => {
+            const fbx = await loadFbx(
+              `${moltenWarlordBase}/Meshy_AI_Molten_Warlord_20261031_texture.fbx`
+            );
+            if (this.disposed) return;
+            this.replaceSlotRig(
+              'furnace_titan',
+              this.buildTPoseWarlordRig(
+                'furnace_titan',
+                fbx,
+                moltenAlbedo,
+                moltenNorm,
+                moltenRough,
+                moltenMet,
+                0xffd2b4,
+                0x521604,
+                [1.08, 1.04, 1.08],
+                0.94
+              )
+            );
+          },
+          async () => {
+            const fbx = await loadFbx(
+              `${sovereignWheelBase}/Meshy_AI_Sovereign_of_the_Eternal_Wheel_20261031_texture.fbx`
+            );
+            if (this.disposed) return;
+            this.replaceSlotRig(
+              'sovereign_titan',
+              this.buildTPoseWarlordRig(
+                'furnace_titan',
+                fbx,
+                sovereignAlbedo,
+                sovereignNorm,
+                sovereignRough,
+                sovereignMet,
+                0xe4f4ff,
+                0x103258,
+                [1.1, 1.06, 1.1],
+                0.48
+              )
+            );
+          },
+          async () => {
+            const fbx = await loadFbx(
+              `${crimsonSkullBase}/Meshy_AI_Crimson_Skull_Warlord_biped_Animation_Running_withSkin.fbx`
+            );
+            if (this.disposed) return;
+            this.replaceSlotRig(
+              'fire_monk',
+              this.buildSkinnedWarlordRig(
+                'fire_monk',
+                fbx,
+                fbx.animations || [],
+                crimsonAlbedo,
+                crimsonNorm,
+                crimsonRough,
+                crimsonMet,
+                0xffd8b0,
+                0x381204,
+                [0.98, 1.0, 0.98],
+                false
+              )
+            );
+          },
+        ];
+
+        for (const task of streamQueue) {
+          if (this.disposed) break;
+          await new Promise((r) => setTimeout(r, 400));
+          try {
+            await task();
+          } catch {
+            // Keep Stage 1 rig if individual high-poly mesh fails
+          }
+        }
+      }
     } catch {
       this.isReady = false;
     }
@@ -494,13 +951,53 @@ export class Enemy3DRenderer {
 
   public renderEnemy(params: Enemy3DRenderParams): boolean {
     if (!this.isReady || !this.renderer) return false;
-    const rig = this.rigs[params.kind];
+
+    const slotKey: ArchetypeSlotKey =
+      params.wardenRigKey && this.rigs[params.wardenRigKey]
+        ? params.wardenRigKey
+        : params.kind === 'furnace_titan' &&
+          params.trait === 'vajra_shield' &&
+          this.rigs.sovereign_titan
+        ? 'sovereign_titan'
+        : params.kind;
+
+    const rig = this.rigs[slotKey] || this.rigs[params.kind];
     if (!rig) return false;
 
+    // Check per-enemy frame cache (throttles WebGL re-renders to ~30fps per enemy while compositing at 60fps)
+    let cacheEntry = this.perEnemyCache.get(params.id);
+    if (!cacheEntry) {
+      const c = document.createElement('canvas');
+      c.width = this.size;
+      c.height = this.size;
+      const ctx = c.getContext('2d');
+      if (ctx) {
+        cacheEntry = {
+          canvas: c,
+          ctx,
+          lastAnimTime: -999,
+          lastState: '',
+          lastHitFlash: false,
+        };
+        this.perEnemyCache.set(params.id, cacheEntry);
+      }
+    }
+
+    const minFrameDelta = IS_SOFTWARE_WEBGL ? 0.065 : rig.isTPoseShaderRig ? 0.028 : 0.022;
+    if (
+      cacheEntry &&
+      Math.abs(params.animTime - cacheEntry.lastAnimTime) < minFrameDelta &&
+      params.aiState === cacheEntry.lastState &&
+      params.isHitFlash === cacheEntry.lastHitFlash
+    ) {
+      this.activeCompositeCanvas = cacheEntry.canvas;
+      return true;
+    }
+
     // Hide all other archetype roots
-    (Object.keys(this.rigs) as RegularEnemy3DKind[]).forEach((k) => {
+    (Object.keys(this.rigs) as ArchetypeSlotKey[]).forEach((k) => {
       const r = this.rigs[k];
-      if (r) r.root.visible = k === params.kind;
+      if (r) r.root.visible = r === rig;
     });
 
     // Smooth per-enemy 360-degree isometric yaw tracking
@@ -513,97 +1010,188 @@ export class Enemy3DRenderer {
     this.perEnemyYaw.set(params.id, nextYaw);
     rig.root.rotation.set(0, nextYaw, 0);
 
-    // Sample deterministic animation pose from `params.animTime`
     const speed = Math.hypot(params.vx, params.vy);
-    rig.idleAction?. stop();
-    rig.runAction?.stop();
-    rig.attackAction?.stop();
+    const isMoving = speed > 14 || params.aiState === 'chase';
 
-    if (params.aiState === 'attack' || params.aiState === 'windup') {
-      if (rig.attackAction) {
-        rig.attackAction.play();
-        const clipDur = rig.attackAction.getClip().duration || 1.0;
-        const sampleT =
-          params.aiState === 'windup'
-            ? params.windupProgress * 0.38 * clipDur
-            : (0.42 + (params.animTime % 0.35)) * clipDur;
-        rig.mixer.setTime(sampleT);
-      }
-    } else if (speed > 16 || params.aiState === 'chase') {
-      if (rig.runAction) {
-        rig.runAction.play();
-        const clipDur = rig.runAction.getClip().duration || 0.8;
-        rig.mixer.setTime((params.animTime * 1.15) % clipDur);
-      }
-    } else {
-      if (rig.idleAction) {
-        rig.idleAction.play();
-        const clipDur = rig.idleAction.getClip().duration || 1.2;
-        rig.mixer.setTime((params.animTime * 0.45) % clipDur);
-      }
-    }
+    if (rig.isTPoseShaderRig && rig.tPoseUniforms) {
+      // ======================================================================
+      // 60FPS GPU SKELETAL ANIMATION FOR STATIC T-POSE / A-POSE WARLORD MESHES
+      // ======================================================================
+      const u = rig.tPoseUniforms;
+      const t = params.animTime;
+      const runFreq = params.kind === 'wolf_guai' ? 10.5 : params.kind === 'stone_golem' ? 7.8 : 6.8;
+      const phase = t * runFreq + (params.id % 7) * 0.9;
 
-    // Procedural Combat & Archetype Upper-Body Articulation
-    if (rig.spine1) {
+      let restDrop = rig.baseRestArmDrop;
+      let leftPitch = Math.sin(t * 2.6) * 0.08;
+      let rightPitch = -Math.sin(t * 2.6) * 0.08;
+      let legStride = 0;
+      let torsoLean = params.kind === 'wolf_guai' ? 0.22 : 0.09;
+      let torsoTwist = Math.sin(t * 1.9) * 0.05;
+      const breath = Math.sin(t * 3.2);
+      let rootBobY = 0;
+
       if (params.isPostureBroken) {
-        rig.spine1.rotation.x += 0.42;
+        torsoLean = 0.42;
+        torsoTwist = Math.sin(t * 6.0) * 0.14;
+        leftPitch = 0.35;
+        rightPitch = 0.35;
+        restDrop = rig.baseRestArmDrop + 0.18;
+        rootBobY = -6;
       } else if (params.aiState === 'windup') {
-        rig.spine1.rotation.x -= 0.26 * params.windupProgress;
-        rig.spine1.rotation.y += 0.32 * params.windupProgress;
+        const wp = Math.min(1, Math.max(0, params.windupProgress));
+        rightPitch = -1.38 * wp;
+        leftPitch = 0.42 * wp;
+        restDrop = rig.baseRestArmDrop * (1 - wp * 0.35);
+        torsoLean = -0.24 * wp;
+        torsoTwist = 0.38 * wp;
+        legStride = -0.32 * wp;
+        rootBobY = wp * 4;
       } else if (params.aiState === 'attack') {
-        rig.spine1.rotation.x += 0.34;
-        rig.spine1.rotation.y -= 0.38;
-      } else if (params.kind === 'wolf_guai') {
-        // Predatory forward stalker crouch
-        rig.spine1.rotation.x += 0.24;
+        rightPitch = 1.18;
+        leftPitch = -0.52;
+        restDrop = rig.baseRestArmDrop + 0.12;
+        torsoLean = 0.38;
+        torsoTwist = -0.44;
+        legStride = 0.48;
+        rootBobY = -4;
+      } else if (isMoving) {
+        const strideAmp = params.kind === 'wolf_guai' ? 0.68 : 0.54;
+        legStride = Math.sin(phase) * strideAmp;
+        rightPitch = -Math.sin(phase) * (strideAmp * 0.95);
+        leftPitch = Math.sin(phase) * (strideAmp * 0.85);
+        torsoTwist = Math.sin(phase) * 0.22;
+        torsoLean = (params.kind === 'wolf_guai' ? 0.28 : 0.16) + Math.abs(Math.sin(phase)) * 0.06;
+        rootBobY = Math.abs(Math.sin(phase)) * 6.5;
+      } else {
+        legStride = Math.sin(t * 1.8) * 0.06;
+        rootBobY = Math.sin(t * 3.2) * 2.2;
+      }
+
+      if (params.isParrying) {
+        leftPitch = -0.78;
+        torsoTwist = -0.22;
+      }
+
+      u.uRestArmDrop.value = restDrop;
+      u.uLeftArmPitch.value = leftPitch;
+      u.uRightArmPitch.value = rightPitch;
+      u.uLegStride.value = legStride;
+      u.uTorsoLean.value = torsoLean;
+      u.uTorsoTwist.value = torsoTwist;
+      u.uBreath.value = breath;
+      rig.root.position.y = rootBobY;
+
+      if (rig.rightHandPivot) {
+        rig.rightHandPivot.rotation.set(rightPitch + torsoLean * 0.6, torsoTwist, 0);
+      }
+      if (rig.leftHandPivot) {
+        rig.leftHandPivot.rotation.set(leftPitch + torsoLean * 0.6, torsoTwist, 0);
+      }
+    } else if (rig.mixer) {
+      rig.root.position.y = 0;
+      rig.idleAction?.stop();
+      rig.runAction?.stop();
+      rig.attackAction?.stop();
+
+      if (params.aiState === 'attack' || params.aiState === 'windup') {
+        if (rig.attackAction) {
+          rig.attackAction.play();
+          const clipDur = rig.attackAction.getClip().duration || 1.0;
+          const sampleT =
+            params.aiState === 'windup'
+              ? params.windupProgress * 0.38 * clipDur
+              : (0.42 + (params.animTime % 0.35)) * clipDur;
+          rig.mixer.setTime(sampleT);
+        }
+      } else if (isMoving) {
+        if (rig.runAction) {
+          rig.runAction.play();
+          const clipDur = rig.runAction.getClip().duration || 0.8;
+          rig.mixer.setTime((params.animTime * 1.15) % clipDur);
+        }
+      } else {
+        if (rig.idleAction) {
+          rig.idleAction.play();
+          const clipDur = rig.idleAction.getClip().duration || 1.2;
+          rig.mixer.setTime((params.animTime * 0.38) % clipDur);
+        }
+      }
+
+      if (rig.spine1) {
+        if (params.isPostureBroken) {
+          rig.spine1.rotation.x += 0.42;
+        } else if (params.aiState === 'windup') {
+          rig.spine1.rotation.x -= 0.28 * params.windupProgress;
+          rig.spine1.rotation.y += 0.36 * params.windupProgress;
+        } else if (params.aiState === 'attack') {
+          rig.spine1.rotation.x += 0.36;
+          rig.spine1.rotation.y -= 0.42;
+        } else if (params.kind === 'wolf_guai') {
+          rig.spine1.rotation.x += 0.24;
+        }
+      }
+
+      if (params.isParrying && rig.leftArm) {
+        rig.leftArm.rotation.x -= 0.52;
+        rig.leftArm.rotation.z += 0.34;
       }
     }
 
-    if (params.isParrying && rig.leftArm) {
-      rig.leftArm.rotation.x -= 0.48;
-      rig.leftArm.rotation.z += 0.32;
-    }
-
-    // Configure dynamic trait / combat point light & hit-flash emissive
     if (params.trait === 'vajra_shield') {
       this.traitPointLight.color.setHex(0x5ce6ff);
-      this.traitPointLight.intensity = 2.1;
+      this.traitPointLight.intensity = 2.3;
     } else if (params.trait === 'agni_aura' || params.kind === 'furnace_titan') {
       this.traitPointLight.color.setHex(0xff6a2b);
-      this.traitPointLight.intensity = 2.2;
+      this.traitPointLight.intensity = 2.4;
     } else if (params.trait === 'rakshasa_frenzy') {
       this.traitPointLight.color.setHex(0xd946ef);
-      this.traitPointLight.intensity = 2.0;
+      this.traitPointLight.intensity = 2.2;
     } else {
-      this.traitPointLight.color.setHex(0xffaa44);
-      this.traitPointLight.intensity = 0.95;
+      this.traitPointLight.color.setHex(0xffb44c);
+      this.traitPointLight.intensity = 1.15;
     }
 
     for (const mat of rig.materials) {
       if (params.isHitFlash) {
         mat.emissive.setHex(0xffffff);
-        mat.emissiveIntensity = 0.85;
+        mat.emissiveIntensity = 0.88;
       } else if (params.aiState === 'windup') {
         mat.emissive.setHex(0xff3b1f);
-        mat.emissiveIntensity = 0.25 + params.windupProgress * 0.45;
+        mat.emissiveIntensity = 0.28 + params.windupProgress * 0.48;
       } else {
         mat.emissive.setHex(
           params.kind === 'furnace_titan'
-            ? 0x481204
+            ? params.trait === 'vajra_shield'
+              ? 0x103258
+              : 0x521604
             : params.kind === 'wolf_guai'
-            ? 0x220a2e
-            : 0x181208
+            ? 0x240a32
+            : 0x221408
         );
-        mat.emissiveIntensity = 0.14;
+        mat.emissiveIntensity = 0.16;
       }
     }
 
     this.renderer.render(this.scene, this.camera);
+
+    if (cacheEntry) {
+      cacheEntry.ctx.clearRect(0, 0, this.size, this.size);
+      cacheEntry.ctx.drawImage(this.canvas, 0, 0);
+      cacheEntry.lastAnimTime = params.animTime;
+      cacheEntry.lastState = params.aiState;
+      cacheEntry.lastHitFlash = params.isHitFlash;
+      this.activeCompositeCanvas = cacheEntry.canvas;
+    } else {
+      this.activeCompositeCanvas = this.canvas;
+    }
+
     return true;
   }
 
   public dispose(): void {
     this.disposed = true;
+    this.perEnemyCache.clear();
     this.renderer?.dispose();
     this.renderer = null;
   }
