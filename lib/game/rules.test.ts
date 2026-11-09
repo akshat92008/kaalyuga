@@ -16,6 +16,12 @@ import {
   isPointInDashCorridor,
   isPointInShockwaveRing,
   consumeDashStamina,
+  computeSmartEnemyWindup,
+  computeSmartEnemyRecovery,
+  computePredictiveAimLead,
+  computeAgniDashVelocityMultiplier,
+  computeVirtualJoystickVector,
+  computeGodOfWarHeavyStyleSpec,
 } from './rules';
 
 test('computeDerivedPlayerStats calculates correct baseline with initial shrine ranks', () => {
@@ -193,6 +199,60 @@ test('geometric combat hitboxes (cone cleave, dash corridor, shockwave) and dash
   assert.equal(dEmpty.canDash, false);
   assert.equal(dEmpty.nextCharges, 0);
   assert.equal(dEmpty.nextRechargeTimer, 0.5);
+});
+
+test('smart enemy pacing, predictive aim lead, and 3-stage Agni-Step dash curve work accurately', () => {
+  // Deliberate windup is slower (>0.6s for mobs) and scales by boss phase
+  assert.equal(computeSmartEnemyWindup({ enemyType: 'wolf_guai', isBoss: false }), 0.62);
+  assert.equal(computeSmartEnemyWindup({ enemyType: 'furnace_titan', isBoss: false }), 0.8);
+  assert.ok(
+    computeSmartEnemyWindup({ enemyType: 'vrikodara', isBoss: true, phase: 1 }) >
+      computeSmartEnemyWindup({ enemyType: 'vrikodara', isBoss: true, phase: 3 })
+  );
+
+  // Recovery gives generous punish window
+  assert.ok(computeSmartEnemyRecovery({ isBoss: false }) >= 1.15);
+  assert.ok(computeSmartEnemyRecovery({ isBoss: true, phase: 1 }) >= 1.0);
+
+  // Predictive aim leads moving player in direction of velocity
+  const lead = computePredictiveAimLead({
+    enemyX: 500,
+    enemyY: 500,
+    playerX: 700,
+    playerY: 500,
+    playerVx: 0,
+    playerVy: 240,
+  });
+  assert.ok(lead.targetY > 500);
+  assert.ok(lead.aimAngle > 0);
+
+  // 3-Stage non-linear Agni-Step dash velocity curve
+  assert.equal(computeAgniDashVelocityMultiplier(0.1), 1.42);
+  assert.equal(computeAgniDashVelocityMultiplier(0.5), 1.08);
+  assert.equal(computeAgniDashVelocityMultiplier(0.9), 0.38);
+
+  // Mobile 360-degree virtual joystick deadzone and clamping
+  const joyDead = computeVirtualJoystickVector({ deltaX: 2, deltaY: 1, maxRadius: 50 });
+  assert.equal(joyDead.active, false);
+  assert.equal(joyDead.normX, 0);
+
+  const joyFull = computeVirtualJoystickVector({ deltaX: 80, deltaY: 0, maxRadius: 50 });
+  assert.equal(joyFull.active, true);
+  assert.equal(joyFull.clampedX, 50);
+  assert.equal(joyFull.normX, 1);
+  assert.equal(joyFull.normY, 0);
+
+  // God-of-War distinct Heavy Attack styles per stance
+  const smashHeavy = computeGodOfWarHeavyStyleSpec('smash', 3);
+  const pillarHeavy = computeGodOfWarHeavyStyleSpec('pillar', 2);
+  const thrustHeavy = computeGodOfWarHeavyStyleSpec('thrust', 2);
+  assert.equal(smashHeavy.styleId, 'pralaya_earth_shatter');
+  assert.equal(smashHeavy.animClip, 'Skill_03');
+  assert.equal(pillarHeavy.styleId, 'sudarshana_vortex');
+  assert.equal(pillarHeavy.animClip, 'Skill_01');
+  assert.equal(thrustHeavy.styleId, 'brahmashira_lunge');
+  assert.equal(thrustHeavy.animClip, 'Attack');
+  assert.ok(thrustHeavy.forwardLungePx > smashHeavy.forwardLungePx);
 });
 
 

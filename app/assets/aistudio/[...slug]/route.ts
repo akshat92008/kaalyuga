@@ -13,11 +13,15 @@ function getMimeType(filename: string): string {
   if (ext === '.jpg' || ext === '.jpeg') return 'image/jpeg';
   if (ext === '.webp') return 'image/webp';
   if (ext === '.svg') return 'image/svg+xml';
+  if (ext === '.mp3') return 'audio/mpeg';
+  if (ext === '.wav') return 'audio/wav';
+  if (ext === '.ogg') return 'audio/ogg';
+  if (ext === '.m4a') return 'audio/mp4';
   return 'application/octet-stream';
 }
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   context: { params: Promise<{ slug: string[] }> }
 ) {
   try {
@@ -28,43 +32,88 @@ export async function GET(
     }
 
     const mimeType = getMimeType(relPath);
-    const headers = {
+    const baseHeaders: Record<string, string> = {
       'Content-Type': mimeType,
       'Cache-Control': 'public, max-age=31536000, immutable',
       'Access-Control-Allow-Origin': '*',
+      'Accept-Ranges': 'bytes',
     };
 
-    // 1. Check local cloned repo in /tmp/kaalyuga
-    const localRepoFile = path.join(LOCAL_REPO_DIR, relPath);
-    if (existsSync(localRepoFile)) {
-      const buf = await fs.readFile(localRepoFile);
-      return new NextResponse(new Uint8Array(buf), { status: 200, headers });
+    const respondWithBuffer = (buf: Buffer) => {
+      const range = req.headers.get('range');
+      if (range && mimeType.startsWith('audio/')) {
+        const parts = range.replace(/bytes=/, '').split('-');
+        const start = parseInt(parts[0], 10);
+        const end = parts[1] ? parseInt(parts[1], 10) : buf.length - 1;
+        if (!Number.isNaN(start) && start >= 0 && end < buf.length && start <= end) {
+          const chunk = buf.subarray(start, end + 1);
+          return new NextResponse(new Uint8Array(chunk), {
+            status: 206,
+            headers: {
+              ...baseHeaders,
+              'Content-Range': `bytes ${start}-${end}/${buf.length}`,
+              'Content-Length': String(chunk.length),
+            },
+          });
+        }
+      }
+      return new NextResponse(new Uint8Array(buf), {
+        status: 200,
+        headers: {
+          ...baseHeaders,
+          'Content-Length': String(buf.length),
+        },
+      });
+    };
+
+    // 1. Check workspace public/assets/aistudio and public/audio first
+    const workspaceCandidates = [
+      path.join(process.cwd(), 'public', 'assets', 'aistudio', relPath),
+      path.join(process.cwd(), 'public', 'audio', relPath),
+      path.join(LOCAL_REPO_DIR, relPath),
+      path.join(CACHE_DIR, relPath),
+    ];
+
+    for (const candidate of workspaceCandidates) {
+      if (existsSync(candidate)) {
+        const buf = await fs.readFile(candidate);
+        return respondWithBuffer(buf);
+      }
     }
 
-    // 2. Check /tmp cache
-    const cacheFile = path.join(CACHE_DIR, relPath);
-    if (existsSync(cacheFile)) {
-      const buf = await fs.readFile(cacheFile);
-      return new NextResponse(new Uint8Array(buf), { status: 200, headers });
+    // 2. Fetch from GitHub raw CDN and cache in /tmp
+    const encodedRel = encodeURIComponent(relPath).replace(/%2F/g, '/');
+    const remoteUrls = [
+      `${REPO_RAW_BASE}/${encodedRel}`,
+      `https://raw.githubusercontent.com/akshat92008/kaalyuga/main/public/audio/${encodedRel}`,
+      `https://raw.githubusercontent.com/akshat92008/kaalyuga/main/soundtracks/${encodedRel}`,
+      `https://raw.githubusercontent.com/akshat92008/kaalyuga/main/${encodedRel}`,
+    ];
+
+    let res: Response | null = null;
+    for (const url of remoteUrls) {
+      const attempt = await fetch(url);
+      if (attempt.ok) {
+        res = attempt;
+        break;
+      }
     }
 
-    // 3. Fetch from GitHub raw CDN and cache in /tmp
-    const remoteUrl = `${REPO_RAW_BASE}/${encodeURIComponent(relPath).replace(/%2F/g, '/')}`;
-    const res = await fetch(remoteUrl);
-    if (!res.ok) {
-      return new NextResponse(`Asset not found: ${relPath}`, { status: res.status });
+    if (!res || !res.ok) {
+      return new NextResponse(`Asset not found: ${relPath}`, { status: 404 });
     }
     const arrayBuffer = await res.arrayBuffer();
-    const uint8 = new Uint8Array(arrayBuffer);
+    const buf = Buffer.from(arrayBuffer);
 
+    const cacheFile = path.join(CACHE_DIR, relPath);
     try {
       await fs.mkdir(path.dirname(cacheFile), { recursive: true });
-      await fs.writeFile(cacheFile, uint8);
+      await fs.writeFile(cacheFile, buf);
     } catch {
       // Ignore cache write errors
     }
 
-    return new NextResponse(uint8, { status: 200, headers });
+    return respondWithBuffer(buf);
   } catch (err) {
     return new NextResponse(
       err instanceof Error ? err.message : 'Asset load error',
@@ -72,3 +121,4 @@ export async function GET(
     );
   }
 }
+

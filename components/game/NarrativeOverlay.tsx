@@ -23,6 +23,7 @@ interface NarrativeOverlayProps {
   onAdvanceStage: (nextStage: SliceStageId, updatedFlags?: Partial<StoryMemoryFlags>) => void;
   onOpenShrine: () => void;
   onStartAct1Run: (startChamberIndex?: number) => void;
+  onCompleteSlice?: () => void;
 }
 
 export function NarrativeOverlay({
@@ -33,6 +34,7 @@ export function NarrativeOverlay({
   onAdvanceStage,
   onOpenShrine,
   onStartAct1Run,
+  onCompleteSlice,
 }: NarrativeOverlayProps) {
   const [scrollIndex, setScrollIndex] = useState(0);
   const [hillLookAttempted, setHillLookAttempted] = useState(false);
@@ -597,6 +599,169 @@ export function NarrativeOverlay({
   }
 
   // ==========================================================================
+  // STAGE 3B: INTER-CHAMBER PAINTED CUTSCENES (SAVITRI'S LANTERN & THE PRESERVER)
+  // ==========================================================================
+  if (stage === 'savitri_lantern_interlude') {
+    return (
+      <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-6 select-none">
+        <div className="max-w-3xl w-full bg-[#0c0a0f] border-2 border-[#f5b952] p-7 space-y-5 shadow-[0_24px_90px_rgba(0,0,0,0.98)]">
+          <div className="flex items-center justify-between border-b border-[#c89d46]/30 pb-3">
+            <div className="flex items-center gap-3">
+              <span
+                className="w-3 h-3 rounded-full"
+                style={{
+                  backgroundColor: lantern.flameColor,
+                  boxShadow: `0 0 14px ${lantern.flameColor}`,
+                }}
+              />
+              <span className="text-xs font-mono-num tracking-[0.24em] text-[#f5b952] uppercase">
+                BETWEEN CHAMBERS · SAVITRI’S LANTERN ON THE RIVER BANK
+              </span>
+            </div>
+            <span className="text-xs font-mono-num text-[#d4a548]">
+              LANTERN: {lantern.label}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-center">
+            <div className="md:col-span-5 relative border border-[#f5b952]/60 bg-[#08060a] overflow-hidden">
+              <img
+                src={GAME_ASSETS.scrolls.scroll2ChildAndMani}
+                alt="Painted Scroll — The Child and the Mani"
+                className="w-full h-56 object-cover sepia-[0.2] contrast-115"
+              />
+              <div
+                className="absolute inset-0 pointer-events-none"
+                style={{
+                  background: `radial-gradient(circle at 50% 60%, ${lantern.glowColor} 0%, rgba(8,6,10,0.85) 85%)`,
+                }}
+              />
+              <div className="absolute bottom-2.5 left-3 right-3 text-[11px] text-[#f5dca0] italic">
+                Savitri lifts her lantern against the sealed threshold of Raktabija.
+              </div>
+            </div>
+
+            <div className="md:col-span-7 space-y-3.5">
+              <h3 className="font-display text-2xl font-bold text-[#fff6e8]">
+                The Only Warm Light on the Charnel Plains
+              </h3>
+              <div className="p-3.5 bg-[#151118] border-l-2 border-[#f5b952] text-sm text-[#f2e6d0] flex items-start gap-3">
+                <img
+                  src={GAME_ASSETS.portraits.savitri}
+                  alt="Savitri"
+                  className="w-12 h-12 object-cover border border-[#f5b952]/70 shrink-0 mt-0.5"
+                />
+                <div>
+                  <strong className="text-[#f5b952] font-mono-num uppercase mr-2">SAVITRI:</strong>
+                  “Hold still, Rudra. Look at the iron chains on that gate—and look at the haft of
+                  your own mace. The same coiled spiral is stamped into both. Your father
+                  Kaala-Chakra forged the locks before he sent you to burn the Shishira.”
+                </div>
+              </div>
+              <div className="p-3.5 bg-[#120e14] border-l-2 border-[#d4a548] text-sm text-[#e0d4c0] flex items-start gap-3">
+                <img
+                  src={GAME_ASSETS.portraits.sanjaya}
+                  alt="Sanjaya"
+                  className="w-12 h-12 object-cover border border-[#d4a548]/60 shrink-0 mt-0.5"
+                />
+                <div>
+                  <strong className="text-[#d4a548] font-mono-num uppercase mr-2">SANJAYA:</strong>
+                  “In the base of her lantern lies a folded tally-leaf written in your brother
+                  Nachiketa’s hand: <em>‘The yield does not match the wounded. I will tell Rudra at dawn.’</em>”
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end pt-2">
+            <button
+              type="button"
+              onClick={() => onAdvanceStage('combat_arena')}
+              className="px-6 py-2.5 bg-[#d4a548] hover:bg-[#e5b95c] text-[#090807] font-bold text-xs tracking-[0.16em] uppercase cursor-pointer"
+            >
+              STEP INTO THE SEALED GATE OF RAKTABIJA →
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (stage === 'preserver_interlude') {
+    return (
+      <div className="fixed inset-0 z-50 bg-black/92 flex items-center justify-center p-6 select-none">
+        <div className="max-w-3xl w-full bg-[#0b0a10] border-2 border-[#5ce6ff] p-7 space-y-5 shadow-[0_24px_90px_rgba(0,0,0,0.98)]">
+          <div className="flex items-center justify-between border-b border-[#5ce6ff]/30 pb-3">
+            <span className="text-xs font-mono-num tracking-[0.24em] text-[#5ce6ff] uppercase">
+              MEMORY ECHO · THE EIGHTEENTH NIGHT · THE PRESERVER MOMENT
+            </span>
+            <span className="text-xs font-mono-num text-[#ff9ea8]">
+              TIME HELD FOR ONE BREATH
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-center">
+            <div className="md:col-span-5 relative border border-[#5ce6ff]/60 bg-[#07080d] overflow-hidden">
+              <img
+                src={GAME_ASSETS.scrolls.scroll5FallOfFather}
+                alt="Painted Scroll — The Preserver and the Fall of the Father"
+                className="w-full h-56 object-cover"
+              />
+              <div
+                className="absolute inset-0 pointer-events-none"
+                style={{
+                  background:
+                    'linear-gradient(180deg, rgba(10,14,22,0.15) 0%, rgba(8,10,16,0.88) 100%)',
+                }}
+              />
+              <div className="absolute bottom-2.5 left-3 right-3 text-[11px] text-[#bfefff] italic">
+                “Vishnu never touched him. Time was held for one breath so it looked that way.”
+              </div>
+            </div>
+
+            <div className="md:col-span-7 space-y-3.5">
+              <h3 className="font-display text-2xl font-bold text-[#fff8eb]">
+                “Rudra. Go and Look.”
+              </h3>
+              <p className="text-xs sm:text-sm text-[#d8ccb8] leading-relaxed">
+                As the chariot pyres of Chamber III rise ahead, the hollow in your brow throbs with
+                white Brahmashira fire. You remember the Preserver descending through the smoke—his
+                hands open, never striking you, only blocking your blows while your father
+                Kaala-Chakra fell to the ground <strong>before</strong> the Preserver’s hand even
+                moved.
+              </p>
+              <div className="p-3.5 bg-[#111520] border-l-2 border-[#5ce6ff] text-sm text-[#e6f9ff] flex items-center gap-3">
+                <img
+                  src={GAME_ASSETS.portraits.preserver}
+                  alt="The Preserver"
+                  className="w-12 h-12 object-cover border border-[#5ce6ff]/70 shrink-0"
+                />
+                <div>
+                  <strong className="text-[#5ce6ff] font-mono-num uppercase mr-2">
+                    THE PRESERVER:
+                  </strong>
+                  “I shattered the Mani into seven shards to free the forty thousand souls you
+                  burned. Instead, they clung to the shards—and to your blood-brother Vrikodara.”
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end pt-2">
+            <button
+              type="button"
+              onClick={() => onAdvanceStage('combat_arena')}
+              className="px-6 py-2.5 bg-[#5ce6ff] hover:bg-[#82edff] text-[#06080c] font-bold text-xs tracking-[0.16em] uppercase cursor-pointer"
+            >
+              ENTER THE KURUKSHETRA CHARIOT PYRE →
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ==========================================================================
   // STAGE 4: DUNDUBHI INTRO, AFTERMATH & VRIKODARA INTRO (Section 9)
   // ==========================================================================
   if (stage === 'dundubhi_intro') {
@@ -987,15 +1152,18 @@ export function NarrativeOverlay({
 
               <button
                 type="button"
-                onClick={() =>
-                  onAdvanceStage('vaitarani_hub', {
+                onClick={() => {
+                  onAdvanceStage('combat_arena', {
                     ferry_listened: true,
                     ferry1Choice: selectedChoiceObj.id,
-                  })
-                }
+                  });
+                  if (onCompleteSlice) {
+                    onCompleteSlice();
+                  }
+                }}
                 className="px-7 py-3 bg-[#d4a548] hover:bg-[#e5b95c] text-[#090807] font-bold text-xs tracking-[0.18em] uppercase cursor-pointer"
               >
-                COMPLETE ACT I VERTICAL SLICE &amp; RETURN TO HUB →
+                COMPLETE ACT I VERTICAL SLICE (TO BE CONTINUED) →
               </button>
             </div>
           )}

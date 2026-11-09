@@ -11,6 +11,8 @@ export type SliceStageId =
   | 'opening_wake'
   | 'vaitarani_hub'
   | 'combat_arena'
+  | 'savitri_lantern_interlude'
+  | 'preserver_interlude'
   | 'dundubhi_intro'
   | 'dundubhi_aftermath'
   | 'vrikodara_intro'

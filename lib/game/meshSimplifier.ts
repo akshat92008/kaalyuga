@@ -35,6 +35,9 @@ export function simplifyGroupGeometries(
   minVertexThreshold = 18000
 ): void {
   group.traverse((obj) => {
+    if ((obj as THREE.SkinnedMesh).isSkinnedMesh) {
+      return;
+    }
     if ((obj as THREE.Mesh).isMesh) {
       const mesh = obj as THREE.Mesh;
       if (mesh.geometry) {

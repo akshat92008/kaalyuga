@@ -509,23 +509,21 @@ export class Enemy3DRenderer {
     normal: THREE.Texture | null,
     rough: THREE.Texture | null,
     metal: THREE.Texture | null,
-    tintHex: number,
-    emissiveHex: number,
     scaleVec: [number, number, number],
     restArmDropRad: number
   ): Archetype3DRig {
     const bodyMat = new THREE.MeshStandardMaterial({
       map: albedo,
       normalMap: normal,
-      normalScale: new THREE.Vector2(1.35, 1.35),
+      normalScale: new THREE.Vector2(1.25, 1.25),
       roughnessMap: rough,
       metalnessMap: metal,
-      color: new THREE.Color(tintHex),
-      roughness: 0.44,
-      metalness: 0.72,
-      envMapIntensity: 1.65,
-      emissive: new THREE.Color(emissiveHex),
-      emissiveIntensity: 0.16,
+      color: new THREE.Color(0xffffff),
+      roughness: rough ? 0.60 : 0.52,
+      metalness: metal ? 0.46 : 0.35,
+      envMapIntensity: 1.42,
+      emissive: new THREE.Color(0x000000),
+      emissiveIntensity: 0.0,
     });
 
     const tPoseUniforms = this.injectTPoseSkeletalShader(bodyMat, restArmDropRad);
@@ -590,7 +588,9 @@ export class Enemy3DRenderer {
   }
 
   /**
-   * Builds a Skeletal SkinnedMesh Rig (used for `Crimson_Skull_Warlord_biped` and instant initial rigs).
+   * Builds a Skeletal SkinnedMesh Rig (used for `Crimson_Skull_Warlord_biped`).
+   * Note: Meshy Biped FBX models already have an internal `Armature` with `scale = 100`,
+   * so `charGroup.scale` MUST remain ~1.0 (just like Rudra and Vrikodara).
    */
   private buildSkinnedWarlordRig(
     kind: RegularEnemy3DKind,
@@ -600,26 +600,25 @@ export class Enemy3DRenderer {
     normal: THREE.Texture | null,
     rough: THREE.Texture | null,
     metal: THREE.Texture | null,
-    tintHex: number,
-    emissiveHex: number,
     scaleVec: [number, number, number],
-    cloneMesh = true
+    cloneMesh = false
   ): Archetype3DRig {
     const charGroup = cloneMesh ? (SkeletonUtils.clone(sourceFbx) as THREE.Group) : sourceFbx;
-    charGroup.scale.set(scaleVec[0] * 100, scaleVec[1] * 100, scaleVec[2] * 100);
+    charGroup.scale.set(scaleVec[0], scaleVec[1], scaleVec[2]);
+    charGroup.position.set(0, 0, 0);
 
     const bodyMat = new THREE.MeshStandardMaterial({
       map: albedo,
       normalMap: normal,
-      normalScale: new THREE.Vector2(1.3, 1.3),
+      normalScale: new THREE.Vector2(1.25, 1.25),
       roughnessMap: rough,
       metalnessMap: metal,
-      color: new THREE.Color(tintHex),
-      roughness: 0.45,
-      metalness: 0.7,
-      envMapIntensity: 1.6,
-      emissive: new THREE.Color(emissiveHex),
-      emissiveIntensity: 0.15,
+      color: new THREE.Color(0xffffff),
+      roughness: rough ? 0.60 : 0.52,
+      metalness: metal ? 0.46 : 0.35,
+      envMapIntensity: 1.42,
+      emissive: new THREE.Color(0x000000),
+      emissiveIntensity: 0.0,
     });
 
     charGroup.traverse((obj) => {
@@ -651,9 +650,9 @@ export class Enemy3DRenderer {
     const findClip = (name: string) =>
       inPlaceClips.find((c) => c.name.toLowerCase().includes(name.toLowerCase())) || inPlaceClips[0];
 
-    const idleClip = findClip('Casual_Walk') || inPlaceClips[0];
-    const runClip = findClip('Run') || idleClip;
-    const attackClip = findClip('Attack') || runClip;
+    const idleClip = findClip('Walking') || findClip('Casual_Walk') || inPlaceClips[0];
+    const runClip = findClip('Running') || findClip('Run') || idleClip;
+    const attackClip = findClip('Attack') || findClip('Skill_01') || runClip;
 
     const mixer = new THREE.AnimationMixer(charGroup);
     const idleAction = idleClip ? mixer.clipAction(idleClip) : null;
@@ -717,6 +716,8 @@ export class Enemy3DRenderer {
     const moltenWarlordBase = '/models/Meshy_AI_Molten_Warlord_20261031_texture_fbx';
     const sovereignWheelBase =
       '/models/Meshy_AI_Sovereign_of_the_Eternal_Wheel_20261031_texture_fbx';
+    const rudraMergedUrl =
+      '/models/Meshy_AI_Ashen_Warborn_biped/Meshy_AI_Ashen_Warborn_biped_Meshy_Merged_Animations.fbx';
 
     try {
       const [
@@ -748,9 +749,9 @@ export class Enemy3DRenderer {
         loadTex(`${skullcladBase}/Meshy_AI_Skullclad_Warlord_20261031_texture_roughness.png`, false),
         loadTex(`${skullcladBase}/Meshy_AI_Skullclad_Warlord_20261031_texture_metallic.png`, false),
         loadTex(`${crimsonSkullBase}/Meshy_AI_Crimson_Skull_Warlord_biped_texture_0.png`, true),
-        loadTex(`${crimsonSkullBase}/Meshy_AI_Crimson_Skull_Warlord_biped_texture_0_normal.png`, false),
-        loadTex(`${crimsonSkullBase}/Meshy_AI_Crimson_Skull_Warlord_biped_texture_0_roughness.png`, false),
-        loadTex(`${crimsonSkullBase}/Meshy_AI_Crimson_Skull_Warlord_biped_texture_0_metallic.png`, false),
+        loadTex(`${crimsonSkullBase}/Meshy_AI_Crimson_Skull_Warlord_biped_normal.png`, false),
+        loadTex(`${crimsonSkullBase}/Meshy_AI_Crimson_Skull_Warlord_biped_roughness.png`, false),
+        loadTex(`${crimsonSkullBase}/Meshy_AI_Crimson_Skull_Warlord_biped_metallic.png`, false),
         loadTex(`${hornedBloodforgeBase}/Meshy_AI_Horned_Warlord_of_the_Bloodforge_20261031_texture.png`, true),
         loadTex(`${hornedBloodforgeBase}/Meshy_AI_Horned_Warlord_of_the_Bloodforge_20261031_texture_normal.png`, false),
         loadTex(`${hornedBloodforgeBase}/Meshy_AI_Horned_Warlord_of_the_Bloodforge_20261031_texture_roughness.png`, false),
@@ -767,181 +768,113 @@ export class Enemy3DRenderer {
 
       if (this.disposed) return;
 
-      // Stage 1: Populate all 5 Enemy Archetype Rigs immediately using GPU T-Pose Skeletal Animation on Skullclad Warlord
+      // Stage 1: Build Skullclad Warlord with its OWN matching UV textures (never apply mismatched UV textures from other models!)
       this.replaceSlotRig(
         'wolf_guai',
         this.buildTPoseWarlordRig(
           'wolf_guai',
-          skullcladFbx.clone(true),
+          skullcladFbx,
           skullcladAlbedo,
           skullcladNorm,
           skullcladRough,
           skullcladMet,
-          0xe8dcf8,
-          0x240a32,
-          [0.92, 0.88, 0.92],
+          [0.95, 0.92, 0.95],
           0.56
-        )
-      );
-      this.replaceSlotRig(
-        'fire_monk',
-        this.buildTPoseWarlordRig(
-          'fire_monk',
-          skullcladFbx.clone(true),
-          crimsonAlbedo,
-          crimsonNorm,
-          crimsonRough,
-          crimsonMet,
-          0xffd8b0,
-          0x381204,
-          [0.94, 0.96, 0.94],
-          0.52
-        )
-      );
-      this.replaceSlotRig(
-        'stone_golem',
-        this.buildTPoseWarlordRig(
-          'stone_golem',
-          skullcladFbx.clone(true),
-          hornedAlbedo,
-          hornedNorm,
-          hornedRough,
-          hornedMet,
-          0xf0e2ce,
-          0x221408,
-          [1.06, 1.0, 1.06],
-          0.56
-        )
-      );
-      this.replaceSlotRig(
-        'furnace_titan',
-        this.buildTPoseWarlordRig(
-          'furnace_titan',
-          skullcladFbx.clone(true),
-          moltenAlbedo,
-          moltenNorm,
-          moltenRough,
-          moltenMet,
-          0xffd2b4,
-          0x521604,
-          [1.14, 1.08, 1.14],
-          0.56
-        )
-      );
-      this.replaceSlotRig(
-        'sovereign_titan',
-        this.buildTPoseWarlordRig(
-          'furnace_titan',
-          skullcladFbx.clone(true),
-          sovereignAlbedo,
-          sovereignNorm,
-          sovereignRough,
-          sovereignMet,
-          0xe4f4ff,
-          0x103258,
-          [1.16, 1.1, 1.16],
-          0.48
         )
       );
 
-      // Stage 2: Sequentially stream the remaining 4 bespoke Warlord FBX meshes
-      if (!IS_SOFTWARE_WEBGL) {
-        const streamQueue: Array<() => Promise<void>> = [
-          async () => {
-            const fbx = await loadFbx(
-              `${hornedBloodforgeBase}/Meshy_AI_Horned_Warlord_of_the_Bloodforge_20261031_texture.fbx`
-            );
-            if (this.disposed) return;
-            this.replaceSlotRig(
-              'stone_golem',
-              this.buildTPoseWarlordRig(
-                'stone_golem',
-                fbx,
-                hornedAlbedo,
-                hornedNorm,
-                hornedRough,
-                hornedMet,
-                0xf0e2ce,
-                0x221408,
-                [1.02, 0.98, 1.02],
-                0.92
-              )
-            );
-          },
-          async () => {
-            const fbx = await loadFbx(
-              `${moltenWarlordBase}/Meshy_AI_Molten_Warlord_20261031_texture.fbx`
-            );
-            if (this.disposed) return;
-            this.replaceSlotRig(
-              'furnace_titan',
-              this.buildTPoseWarlordRig(
-                'furnace_titan',
-                fbx,
-                moltenAlbedo,
-                moltenNorm,
-                moltenRough,
-                moltenMet,
-                0xffd2b4,
-                0x521604,
-                [1.08, 1.04, 1.08],
-                0.94
-              )
-            );
-          },
-          async () => {
-            const fbx = await loadFbx(
-              `${sovereignWheelBase}/Meshy_AI_Sovereign_of_the_Eternal_Wheel_20261031_texture.fbx`
-            );
-            if (this.disposed) return;
-            this.replaceSlotRig(
-              'sovereign_titan',
-              this.buildTPoseWarlordRig(
-                'furnace_titan',
-                fbx,
-                sovereignAlbedo,
-                sovereignNorm,
-                sovereignRough,
-                sovereignMet,
-                0xe4f4ff,
-                0x103258,
-                [1.1, 1.06, 1.1],
-                0.48
-              )
-            );
-          },
-          async () => {
-            const fbx = await loadFbx(
+      // Stage 2: Load each bespoke Warlord FBX with its own matching UV textures & animations
+      const streamQueue: Array<() => Promise<void>> = [
+        async () => {
+          const [fbx, rudraFbx] = await Promise.all([
+            loadFbx(
               `${crimsonSkullBase}/Meshy_AI_Crimson_Skull_Warlord_biped_Animation_Running_withSkin.fbx`
-            );
-            if (this.disposed) return;
-            this.replaceSlotRig(
+            ),
+            loadFbx(rudraMergedUrl),
+          ]);
+          if (this.disposed) return;
+          const combinedClips = [...(fbx.animations || []), ...(rudraFbx.animations || [])];
+          this.replaceSlotRig(
+            'fire_monk',
+            this.buildSkinnedWarlordRig(
               'fire_monk',
-              this.buildSkinnedWarlordRig(
-                'fire_monk',
-                fbx,
-                fbx.animations || [],
-                crimsonAlbedo,
-                crimsonNorm,
-                crimsonRough,
-                crimsonMet,
-                0xffd8b0,
-                0x381204,
-                [0.98, 1.0, 0.98],
-                false
-              )
-            );
-          },
-        ];
+              fbx,
+              combinedClips,
+              crimsonAlbedo,
+              crimsonNorm,
+              crimsonRough,
+              crimsonMet,
+              [0.98, 0.98, 0.98],
+              false
+            )
+          );
+        },
+        async () => {
+          const fbx = await loadFbx(
+            `${hornedBloodforgeBase}/Meshy_AI_Horned_Warlord_of_the_Bloodforge_20261031_texture.fbx`
+          );
+          if (this.disposed) return;
+          this.replaceSlotRig(
+            'stone_golem',
+            this.buildTPoseWarlordRig(
+              'stone_golem',
+              fbx,
+              hornedAlbedo,
+              hornedNorm,
+              hornedRough,
+              hornedMet,
+              [1.02, 0.98, 1.02],
+              0.92
+            )
+          );
+        },
+        async () => {
+          const fbx = await loadFbx(
+            `${moltenWarlordBase}/Meshy_AI_Molten_Warlord_20261031_texture.fbx`
+          );
+          if (this.disposed) return;
+          this.replaceSlotRig(
+            'furnace_titan',
+            this.buildTPoseWarlordRig(
+              'furnace_titan',
+              fbx,
+              moltenAlbedo,
+              moltenNorm,
+              moltenRough,
+              moltenMet,
+              [1.08, 1.04, 1.08],
+              0.94
+            )
+          );
+        },
+        async () => {
+          const fbx = await loadFbx(
+            `${sovereignWheelBase}/Meshy_AI_Sovereign_of_the_Eternal_Wheel_20261031_texture.fbx`
+          );
+          if (this.disposed) return;
+          this.replaceSlotRig(
+            'sovereign_titan',
+            this.buildTPoseWarlordRig(
+              'furnace_titan',
+              fbx,
+              sovereignAlbedo,
+              sovereignNorm,
+              sovereignRough,
+              sovereignMet,
+              [1.1, 1.06, 1.1],
+              0.48
+            )
+          );
+        },
+      ];
 
-        for (const task of streamQueue) {
-          if (this.disposed) break;
-          await new Promise((r) => setTimeout(r, 400));
-          try {
-            await task();
-          } catch {
-            // Keep Stage 1 rig if individual high-poly mesh fails
-          }
+      for (const task of streamQueue) {
+        if (this.disposed) break;
+        await new Promise((r) => setTimeout(r, 120));
+        try {
+          await task();
+        } catch {
+          // Ignore individual model errors
         }
       }
     } catch {
@@ -952,16 +885,13 @@ export class Enemy3DRenderer {
   public renderEnemy(params: Enemy3DRenderParams): boolean {
     if (!this.isReady || !this.renderer) return false;
 
-    const slotKey: ArchetypeSlotKey =
-      params.wardenRigKey && this.rigs[params.wardenRigKey]
-        ? params.wardenRigKey
-        : params.kind === 'furnace_titan' &&
-          params.trait === 'vajra_shield' &&
-          this.rigs.sovereign_titan
-        ? 'sovereign_titan'
-        : params.kind;
+    const slotKey: ArchetypeSlotKey = params.wardenRigKey
+      ? params.wardenRigKey
+      : params.kind === 'furnace_titan' && params.trait === 'vajra_shield'
+      ? 'sovereign_titan'
+      : params.kind;
 
-    const rig = this.rigs[slotKey] || this.rigs[params.kind];
+    const rig = this.rigs[slotKey];
     if (!rig) return false;
 
     // Check per-enemy frame cache (throttles WebGL re-renders to ~30fps per enemy while compositing at 60fps)
@@ -1155,21 +1085,13 @@ export class Enemy3DRenderer {
     for (const mat of rig.materials) {
       if (params.isHitFlash) {
         mat.emissive.setHex(0xffffff);
-        mat.emissiveIntensity = 0.88;
+        mat.emissiveIntensity = 0.85;
       } else if (params.aiState === 'windup') {
         mat.emissive.setHex(0xff3b1f);
-        mat.emissiveIntensity = 0.28 + params.windupProgress * 0.48;
+        mat.emissiveIntensity = 0.22 + params.windupProgress * 0.36;
       } else {
-        mat.emissive.setHex(
-          params.kind === 'furnace_titan'
-            ? params.trait === 'vajra_shield'
-              ? 0x103258
-              : 0x521604
-            : params.kind === 'wolf_guai'
-            ? 0x240a32
-            : 0x221408
-        );
-        mat.emissiveIntensity = 0.16;
+        mat.emissive.setHex(0x000000);
+        mat.emissiveIntensity = 0.0;
       }
     }
 

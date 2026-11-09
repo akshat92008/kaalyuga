@@ -103,7 +103,7 @@ export class Rudra3DRenderer {
   private charMaterials: THREE.MeshStandardMaterial[] = [];
   private wepMaterials: THREE.MeshStandardMaterial[] = [];
 
-  constructor(size = 384) {
+  constructor(size = 256) {
     this.canvas = document.createElement('canvas');
     this.canvas.width = size;
     this.canvas.height = size;
@@ -165,7 +165,7 @@ export class Rudra3DRenderer {
     this.trailGeometry.setIndex(indices);
 
     this.trailMaterial = new THREE.MeshBasicMaterial({
-      color: 0xe62e3d,
+      color: 0xff9d2e,
       side: THREE.DoubleSide,
       transparent: true,
       opacity: 0.0,
@@ -174,6 +174,7 @@ export class Rudra3DRenderer {
     });
     this.trailMesh = new THREE.Mesh(this.trailGeometry, this.trailMaterial);
     this.trailMesh.frustumCulled = false;
+    this.trailMesh.visible = false;
     this.scene.add(this.trailMesh);
 
     this.initWebGL(size);
@@ -191,9 +192,8 @@ export class Rudra3DRenderer {
       this.renderer.setPixelRatio(1);
       this.renderer.outputColorSpace = THREE.SRGBColorSpace;
       this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-      this.renderer.toneMappingExposure = 1.12;
-      this.renderer.shadowMap.enabled = !IS_SOFTWARE_WEBGL;
-      this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      this.renderer.toneMappingExposure = 0.98;
+      this.renderer.shadowMap.enabled = false;
 
       // UE5 Lumen-Style Studio IBL Environment Map for Metallic Armor & Broken Gada Reflections
       if (!IS_SOFTWARE_WEBGL) {
@@ -335,7 +335,7 @@ export class Rudra3DRenderer {
       });
 
     const loadFbx = (url: string): Promise<THREE.Group> =>
-      loadFbxCached(url, true).then((obj) => {
+      loadFbxCached(url, false).then((obj) => {
         this.loadProgress = 0.95;
         return obj;
       });
@@ -370,27 +370,30 @@ export class Rudra3DRenderer {
 
       if (this.disposed) return;
 
-      // 1. Configure Character PBR Material with UE5 IBL Reflections
+      // 1. Configure Character PBR Material graded to match the warm hand-painted 2D Kurukshetra palette
       const charMat = new THREE.MeshStandardMaterial({
-        map: charAlbedo || undefined,
-        normalMap: charNormal || undefined,
-        normalScale: new THREE.Vector2(1.25, 1.25),
-        roughnessMap: charRough || undefined,
-        metalnessMap: charMetal || undefined,
-        roughness: 0.62,
-        metalness: 0.48,
-        envMapIntensity: 1.45,
-        emissive: new THREE.Color(0x0c0608),
-        emissiveIntensity: 0.08,
+        color: new THREE.Color(0xd8b692),
+        roughness: 0.76,
+        metalness: 0.22,
+        envMapIntensity: 0.82,
+        emissive: new THREE.Color(0x1c0d06),
+        emissiveIntensity: 0.16,
       });
+      if (charAlbedo) charMat.map = charAlbedo;
+      if (charNormal) {
+        charMat.normalMap = charNormal;
+        charMat.normalScale.set(1.15, 1.15);
+      }
+      if (charRough) charMat.roughnessMap = charRough;
+      if (charMetal) charMat.metalnessMap = charMetal;
       this.charMaterials.push(charMat);
 
       charObj.traverse((child) => {
         if ((child as THREE.Mesh).isMesh) {
           const mesh = child as THREE.Mesh;
           mesh.material = charMat;
-          mesh.castShadow = !IS_SOFTWARE_WEBGL;
-          mesh.receiveShadow = !IS_SOFTWARE_WEBGL;
+          mesh.castShadow = false;
+          mesh.receiveShadow = false;
           mesh.frustumCulled = false;
         }
       });
@@ -408,19 +411,22 @@ export class Rudra3DRenderer {
         charObj.getObjectByName('RightHand') ||
         null;
 
-      // 2. Configure 3D Weapon Material & Socket the Composite 3D Broken Gada + Bloodforged Parashu
+      // 2. Configure 3D Weapon Material & Socket a SINGLE Clean Weapon (no overlapping double weapons)
       const wepMat = new THREE.MeshStandardMaterial({
-        map: wepAlbedo || undefined,
-        normalMap: wepNormal || undefined,
-        normalScale: new THREE.Vector2(1.35, 1.35),
-        roughnessMap: wepRough || undefined,
-        metalnessMap: wepMetal || undefined,
-        roughness: 0.38,
-        metalness: 0.85,
-        envMapIntensity: 1.6,
-        emissive: new THREE.Color(0x280408),
-        emissiveIntensity: 0.1,
+        color: new THREE.Color(0xe6be82),
+        roughness: 0.42,
+        metalness: 0.78,
+        envMapIntensity: 1.15,
+        emissive: new THREE.Color(0x381206),
+        emissiveIntensity: 0.18,
       });
+      if (wepAlbedo) wepMat.map = wepAlbedo;
+      if (wepNormal) {
+        wepMat.normalMap = wepNormal;
+        wepMat.normalScale.set(1.25, 1.25);
+      }
+      if (wepRough) wepMat.roughnessMap = wepRough;
+      if (wepMetal) wepMat.metalnessMap = wepMetal;
       this.wepMaterials.push(wepMat);
 
       let weaponMesh: THREE.Mesh | null = null;
@@ -434,30 +440,29 @@ export class Rudra3DRenderer {
         const weaponHolder = new THREE.Group();
         weaponHolder.name = 'BrokenGadaWeaponHolder';
 
-        // Attach the composite 8-part 3D Broken Gada (with Suvarna's spiral forge-mark & molten core)
-        const brokenGadaGroup = this.buildProceduralBrokenGadaGroup(wepMat);
-        brokenGadaGroup.scale.set(0.52, 0.52, 0.52);
-        brokenGadaGroup.position.set(0, 0, 0.12);
-        weaponHolder.add(brokenGadaGroup);
-
         if (weaponMesh) {
           const mesh = weaponMesh as THREE.Mesh;
           mesh.material = wepMat;
           mesh.frustumCulled = false;
-          const axeScale = 0.46;
+          const axeScale = 0.44;
           mesh.scale.set(axeScale, axeScale, axeScale);
           mesh.rotation.set(0, 0, -Math.PI / 2);
-          mesh.position.set(0, 0, 0.18);
+          mesh.position.set(0, 0, 0.16);
           weaponHolder.add(mesh);
+        } else {
+          const brokenGadaGroup = this.buildProceduralBrokenGadaGroup(wepMat);
+          brokenGadaGroup.scale.set(0.46, 0.46, 0.46);
+          brokenGadaGroup.position.set(0, 0, 0.12);
+          weaponHolder.add(brokenGadaGroup);
         }
 
         this.weaponTipNode.position.set(0, 0, 0.56);
-        this.weaponBaseNode.position.set(0, 0, 0.18);
+        this.weaponBaseNode.position.set(0, 0, 0.16);
         weaponHolder.add(this.weaponTipNode);
         weaponHolder.add(this.weaponBaseNode);
 
-        weaponHolder.position.set(0.0, 0.076, 0.01);
-        weaponHolder.rotation.set(0.0, Math.PI / 2, 0.28);
+        weaponHolder.position.set(0.0, 0.072, 0.01);
+        weaponHolder.rotation.set(0.0, Math.PI / 2, 0.22);
 
         this.rightHandBone.add(weaponHolder);
         this.weaponObject = weaponHolder;
@@ -568,7 +573,7 @@ export class Rudra3DRenderer {
       for (let step = 0; step < times.length; step++) {
         const phase = Math.sin((step / (times.length - 1)) * Math.PI * 2);
         if (isHipsPos && itemSize === 3) {
-          outValues.push(0, 0.92 + phase * 0.014, 0);
+          outValues.push(0, (baseVal[1] || 0.92) + phase * 0.012, 0);
         } else if ((isSpine || isRightArm) && itemSize === 4) {
           const q = new THREE.Quaternion(baseVal[0], baseVal[1], baseVal[2], baseVal[3]);
           const breathQ = new THREE.Quaternion().setFromEuler(
@@ -616,8 +621,9 @@ export class Rudra3DRenderer {
 
     const prevAction = this.actions.get(this.activeActionName);
 
-    // Strictly stop all other non-active actions so 2-3 animations NEVER blend or spam simultaneously!
-    for (const [name, act] of this.actions.entries()) {
+    // Strictly stop all other non-active actions and clear active fades so animations NEVER glitch to bind-pose!
+    for (const [, act] of this.actions.entries()) {
+      act.stopFading();
       if (act !== nextAction && act !== prevAction) {
         act.stop();
         act.enabled = false;
@@ -635,6 +641,8 @@ export class Rudra3DRenderer {
     nextAction.play();
 
     if (prevAction && prevAction !== nextAction) {
+      prevAction.enabled = true;
+      prevAction.setEffectiveWeight(1);
       prevAction.crossFadeTo(nextAction, fadeDuration, false);
     }
 
@@ -659,29 +667,39 @@ export class Rudra3DRenderer {
       if (params.isHeavyAttack) {
         this.activeStrikeKind = 'heavy';
         this.currentAnimState = 'heavy';
-        this.attackHoldDuration = 0.42;
-        this.attackHoldTimer = 0.42;
-        this.transitionToAction('Skill_03', 0.05, 1.35, 0.22, true);
+        if (params.stance === 'smash') {
+          this.attackHoldDuration = 0.44;
+          this.attackHoldTimer = 0.44;
+          this.transitionToAction('Skill_03', 0.08, 1.42, 0.08, true);
+        } else if (params.stance === 'pillar') {
+          this.attackHoldDuration = 0.42;
+          this.attackHoldTimer = 0.42;
+          this.transitionToAction('Skill_01', 0.08, 1.52, 0.05, true);
+        } else {
+          this.attackHoldDuration = 0.4;
+          this.attackHoldTimer = 0.4;
+          this.transitionToAction('Attack', 0.08, 1.55, 0.1, true);
+        }
       } else {
         const step = ((params.comboStep - 1) % 4) + 1;
-        this.attackHoldDuration = step === 4 ? 0.36 : 0.27;
+        this.attackHoldDuration = step === 4 ? 0.36 : 0.28;
         this.attackHoldTimer = this.attackHoldDuration;
         if (step === 1) {
           this.activeStrikeKind = 'combo1';
           this.currentAnimState = 'combo1';
-          this.transitionToAction('Attack', 0.05, 1.45, 0.48, true);
+          this.transitionToAction('Attack', 0.07, 1.65, 0.06, true);
         } else if (step === 2) {
           this.activeStrikeKind = 'combo2';
           this.currentAnimState = 'combo2';
-          this.transitionToAction('Skill_01', 0.05, 1.45, 0.14, true);
+          this.transitionToAction('Skill_01', 0.07, 1.68, 0.05, true);
         } else if (step === 3) {
           this.activeStrikeKind = 'combo3';
           this.currentAnimState = 'combo3';
-          this.transitionToAction('Skill_01', 0.05, 1.55, 0.18, true);
+          this.transitionToAction('Triple_Combo_Attack', 0.07, 1.6, 0.08, true);
         } else {
           this.activeStrikeKind = 'combo4';
           this.currentAnimState = 'combo4';
-          this.transitionToAction('Skill_03', 0.05, 1.45, 0.24, true);
+          this.transitionToAction('Skill_03', 0.08, 1.55, 0.08, true);
         }
       }
     }
@@ -735,19 +753,19 @@ export class Rudra3DRenderer {
           break;
         case 'run':
           this.transitionToAction(
-            'Running',
+            speed > 205 && this.actions.has('Run_03') ? 'Run_03' : 'Running',
             0.08,
-            Math.min(1.45, Math.max(0.82, speed / 250))
+            Math.min(1.48, Math.max(0.85, speed / 240))
           );
           break;
         case 'dash':
-          this.transitionToAction('RunFast', 0.04, 1.65);
+          this.transitionToAction('RunFast', 0.05, 1.6);
           break;
         case 'parry':
-          this.transitionToAction('Skill_01', 0.06, 0.75, 0.15, true);
+          this.transitionToAction('Attack', 0.06, 0.85, 0.14, true);
           break;
         case 'cast':
-          this.transitionToAction('Skill_03', 0.06, 1.35, 0.22, true);
+          this.transitionToAction('Skill_03', 0.07, 1.35, 0.12, true);
           break;
         case 'heal':
           this.transitionToAction('Arise', 0.08, 1.15, 0.65, true);
@@ -760,9 +778,18 @@ export class Rudra3DRenderer {
           break;
       }
     } else if (nextState === 'run' && this.attackHoldTimer <= 0) {
-      const runAct = this.actions.get(this.activeActionName);
-      if (runAct) {
-        runAct.setEffectiveTimeScale(Math.min(1.45, Math.max(0.82, speed / 250)));
+      const desiredRunClip = speed > 205 && this.actions.has('Run_03') ? 'Run_03' : 'Running';
+      if (this.activeActionName !== desiredRunClip) {
+        this.transitionToAction(
+          desiredRunClip,
+          0.08,
+          Math.min(1.48, Math.max(0.85, speed / 240))
+        );
+      } else {
+        const runAct = this.actions.get(this.activeActionName);
+        if (runAct) {
+          runAct.setEffectiveTimeScale(Math.min(1.48, Math.max(0.85, speed / 240)));
+        }
       }
     }
 
@@ -784,52 +811,30 @@ export class Rudra3DRenderer {
 
     let angleDiff = this.targetYaw - this.currentYaw;
     angleDiff = Math.atan2(Math.sin(angleDiff), Math.cos(angleDiff));
-    const turnSpeed = this.attackHoldTimer > 0 || params.isDodging ? 36 : 18;
+    const turnSpeed = this.attackHoldTimer > 0 || params.isDodging ? 32 : 18;
     this.currentYaw += angleDiff * Math.min(1, turnSpeed * dt);
 
     // Advance base FBX animation mixer
     this.mixer.update(dt);
 
-    // 3. Layer Harmonious Hades-Style Upper-Body Cleave Articulation
+    // 3. Subtle Natural Torso Turn During Strikes (No Destructive Arm/Forearm Bone Twisting!)
     let spinYawOffset = 0;
     if (this.attackHoldTimer > 0 && this.activeStrikeKind !== 'none') {
       const p = 1 - this.attackHoldTimer / Math.max(0.01, this.attackHoldDuration);
-      const swingCurve = Math.sin(Math.min(1, p * 1.15) * Math.PI);
-      const sweepSigned = -1 + 2 * Math.min(1, Math.pow(p, 0.72));
+      const swingCurve = Math.sin(Math.min(1, p * 1.1) * Math.PI);
+      const sweepSigned = -1 + 2 * Math.min(1, Math.pow(p, 0.78));
 
       if (this.activeStrikeKind === 'combo1') {
-        // Forehand Right-to-Left Wide Horizontal Parashu Cleave
-        this.applyProceduralSwingPose(
-          sweepSigned * 0.48,
-          0.14 * swingCurve,
-          sweepSigned * 0.65,
-          -0.18 * swingCurve,
-          0.25 * swingCurve
-        );
+        this.applyProceduralSwingPose(sweepSigned * 0.16, 0.07 * swingCurve, 0, 0, 0);
       } else if (this.activeStrikeKind === 'combo2') {
-        // Backhand Left-to-Right Reverse Cleave
-        this.applyProceduralSwingPose(
-          -sweepSigned * 0.52,
-          0.12 * swingCurve,
-          -sweepSigned * 0.68,
-          -0.2 * swingCurve,
-          -0.25 * swingCurve
-        );
-      } else if (this.activeStrikeKind === 'combo3') {
-        // 360-Degree Whirlwind Spin
-        spinYawOffset = Math.min(1, p * 1.12) * Math.PI * 2;
-        this.applyProceduralSwingPose(0.32, 0.18, 0.42, -0.25, 0.3);
-      } else if (this.activeStrikeKind === 'combo4' || this.activeStrikeKind === 'heavy') {
-        // Overhead Guillotine Execution Slam
-        const slamPitch =
-          p < 0.32 ? -0.38 * (p / 0.32) : -0.38 + 0.92 * Math.min(1, (p - 0.32) / 0.48);
-        this.applyProceduralSwingPose(
-          0.18 * sweepSigned,
-          slamPitch * 0.45,
-          slamPitch * 0.75,
-          -0.22,
-          slamPitch * 0.35
-        );
+        this.applyProceduralSwingPose(-sweepSigned * 0.16, 0.07 * swingCurve, 0, 0, 0);
+      } else if (
+        this.activeStrikeKind === 'combo3' ||
+        (this.activeStrikeKind === 'heavy' && params.stance === 'pillar')
+      ) {
+        this.applyProceduralSwingPose(0.14 * sweepSigned, 0.09 * swingCurve, 0, 0, 0);
+      } else {
+        this.applyProceduralSwingPose(0.12 * sweepSigned, 0.1 * swingCurve, 0, 0, 0);
       }
     }
 
@@ -838,11 +843,11 @@ export class Rudra3DRenderer {
     // Kinetic sprint/dash lean
     const leanTarget =
       params.isDodging
-        ? 0.24
+        ? 0.18
         : this.attackHoldTimer > 0
-        ? 0.14
+        ? 0.1
         : speed > 120
-        ? 0.11
+        ? 0.08
         : 0;
     this.rootGroup.rotation.x = THREE.MathUtils.lerp(
       this.rootGroup.rotation.x,
@@ -855,57 +860,57 @@ export class Rudra3DRenderer {
       dt * 14
     );
 
-    this.rootGroup.position.y = Math.min(45, params.elevationY * 0.85);
+    // Keep character grounded inside the 3D orthographic frustum (2D elevationY is applied in screen space)
+    this.rootGroup.position.y = 0;
 
-    // 4. Authentic PBR Rim & Material Response
+    // 4. Authentic Warm Kurukshetra PBR Rim & Material Response
     if (params.isParrying) {
-      this.rimLight.color.setHex(0xffe082);
-      this.rimLight.intensity = 3.6;
+      this.rimLight.color.setHex(0xffd86b);
+      this.rimLight.intensity = 3.1;
     } else if (params.isDodging) {
-      this.rimLight.color.setHex(0x63f2ff);
-      this.rimLight.intensity = 3.4;
-    } else if (this.attackHoldTimer > 0) {
-      this.rimLight.color.setHex(0xff5252);
+      this.rimLight.color.setHex(0xffb84d);
       this.rimLight.intensity = 2.8;
+    } else if (this.attackHoldTimer > 0) {
+      this.rimLight.color.setHex(0xff7733);
+      this.rimLight.intensity = 2.6;
     } else {
-      this.rimLight.color.setHex(0xe8c48e);
-      this.rimLight.intensity = 2.0;
+      this.rimLight.color.setHex(0xd99652);
+      this.rimLight.intensity = 1.95;
     }
 
     for (const mat of this.charMaterials) {
       if (params.isHurt) {
-        mat.emissive.setHex(0xcc1b26);
-        mat.emissiveIntensity = 0.55;
+        mat.emissive.setHex(0xb8221e);
+        mat.emissiveIntensity = 0.48;
       } else if (params.isParrying) {
-        mat.emissive.setHex(0x8a6822);
-        mat.emissiveIntensity = 0.32;
+        mat.emissive.setHex(0x8a5a18);
+        mat.emissiveIntensity = 0.28;
       } else if (params.isDodging) {
-        mat.emissive.setHex(0x124e58);
-        mat.emissiveIntensity = 0.35;
+        mat.emissive.setHex(0x583212);
+        mat.emissiveIntensity = 0.25;
       } else {
-        mat.emissive.setHex(0x0c0608);
-        mat.emissiveIntensity = 0.08;
+        mat.emissive.setHex(0x1c0d06);
+        mat.emissiveIntensity = 0.16;
       }
     }
 
     for (const mat of this.wepMaterials) {
-      mat.emissive.setHex(0x3a060a);
-      mat.emissiveIntensity = this.attackHoldTimer > 0 ? 0.22 : 0.07;
+      mat.emissive.setHex(0x4a1608);
+      mat.emissiveIntensity = this.attackHoldTimer > 0 ? 0.35 : 0.14;
     }
 
     this.scene.updateMatrixWorld(true);
 
-    // 5. Update 3D Parashu Axe Blade Trail Ribbon
-    const trailActive = this.attackHoldTimer > 0 || params.isDodging;
-    const trailColor = params.isDodging
-      ? 0x5ce6ff
-      : this.activeStrikeKind === 'heavy' || this.activeStrikeKind === 'combo4'
-      ? 0xff3848
-      : 0xd92638;
+    // 5. Update 3D Parashu Axe Blade Trail Ribbon (warm golden-vermilion Agni arc)
+    const trailActive = this.attackHoldTimer > 0.05;
+    const trailColor =
+      this.activeStrikeKind === 'heavy' || this.activeStrikeKind === 'combo4'
+        ? 0xff7722
+        : 0xffaa33;
     this.updateWeaponTrail(dt, trailActive, trailColor);
 
     // 6. Render Isometric 3D Character + Axe to Offscreen Canvas
-    if (!IS_SOFTWARE_WEBGL || this.elapsedTime - this.lastSoftwareRenderTime >= 0.045) {
+    if (!IS_SOFTWARE_WEBGL || this.elapsedTime - this.lastSoftwareRenderTime >= 0.022) {
       this.lastSoftwareRenderTime = this.elapsedTime;
       this.renderer.render(this.scene, this.camera);
     }
@@ -918,44 +923,30 @@ export class Rudra3DRenderer {
   private applyProceduralSwingPose(
     spineYaw: number,
     spinePitch: number,
-    armSweep: number,
-    foreArmBend: number,
-    wristPitch: number
+    _armSweep: number,
+    _foreArmBend: number,
+    _wristPitch: number
   ) {
     const rotQ = this.scratchRotQ;
     const euler = this.scratchEuler;
 
+    // Gentle torso follow-through only — preserves natural Mixamo shoulder/elbow/wrist animations
     if (this.spine1Bone) {
-      euler.set(spinePitch * 0.5, spineYaw * 0.5, 0, 'XYZ');
+      euler.set(spinePitch * 0.45, spineYaw * 0.45, 0, 'XYZ');
       rotQ.setFromEuler(euler);
       this.spine1Bone.quaternion.multiply(rotQ);
     }
     if (this.spine2Bone) {
-      euler.set(spinePitch * 0.5, spineYaw * 0.6, 0, 'XYZ');
+      euler.set(spinePitch * 0.45, spineYaw * 0.5, 0, 'XYZ');
       rotQ.setFromEuler(euler);
       this.spine2Bone.quaternion.multiply(rotQ);
-    }
-    if (this.rightArmBone) {
-      euler.set(armSweep * 0.55, armSweep * 0.7, -0.15, 'XYZ');
-      rotQ.setFromEuler(euler);
-      this.rightArmBone.quaternion.multiply(rotQ);
-    }
-    if (this.rightForeArmBone) {
-      euler.set(foreArmBend, 0, 0, 'XYZ');
-      rotQ.setFromEuler(euler);
-      this.rightForeArmBone.quaternion.multiply(rotQ);
-    }
-    if (this.rightHandBone) {
-      euler.set(wristPitch, 0, 0, 'XYZ');
-      rotQ.setFromEuler(euler);
-      this.rightHandBone.quaternion.multiply(rotQ);
     }
   }
 
   private updateWeaponTrail(dt: number, active: boolean, colorHex: number) {
     for (let i = this.trailSamples.length - 1; i >= 0; i--) {
       this.trailSamples[i].age += dt;
-      if (this.trailSamples[i].age > 0.12) {
+      if (this.trailSamples[i].age > 0.09) {
         this.trailSamples.splice(i, 1);
       }
     }
@@ -983,7 +974,7 @@ export class Rudra3DRenderer {
     }
 
     this.trailMaterial.color.setHex(colorHex);
-    this.trailMaterial.opacity = active ? 0.68 : 0.24;
+    this.trailMaterial.opacity = active ? 0.46 : 0.14;
 
     const posAttr = this.trailGeometry.getAttribute('position') as THREE.BufferAttribute;
     const count = this.trailSamples.length;

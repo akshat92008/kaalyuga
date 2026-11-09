@@ -250,52 +250,142 @@ export default function StoryCodexModal({
           )}
 
           {tab === 'bosses' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="p-5 bg-[#141217] border border-[#c89d46]/35 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-[#ff6b78] uppercase tracking-widest font-semibold">
-                    Act I Vanguard · Chamber 3/6
-                  </span>
-                  <span className="text-xs font-mono-num text-[#d4a548]">1,850 POSTURE · 3 PHASES</span>
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="p-5 bg-[#141217] border border-[#c89d46]/35 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-[#ff6b78] uppercase tracking-widest font-semibold">
+                      Act I Vanguard · Chamber 4/8
+                    </span>
+                    <span className="text-xs font-mono-num text-[#d4a548]">1,850 POSTURE · 3 PHASES</span>
+                  </div>
+                  <h4 className="font-display text-xl font-bold text-[#f5ebd6]">
+                    DUNDUBHI · The Bronze Buffalo Demon
+                  </h4>
+                  <img
+                    src={GAME_ASSETS.portraits.dundubhi}
+                    alt="Dundubhi the Bronze Buffalo Demon"
+                    referrerPolicy="no-referrer"
+                    className="w-full h-48 object-cover bg-black/60 border border-[#c89d46]/25"
+                  />
+                  <p className="text-xs text-[#b8ac98] leading-relaxed">
+                    A towering Chola-bronze war-beast fused with temple war-bells. Dundubhi charges
+                    across the trenches and unleashes resonant bell-shockwaves. Counter his horn
+                    rushes with <strong>Kalaripayattu Parry [Q / T]</strong> or bait him into the stone
+                    mandapa pillars.
+                  </p>
                 </div>
-                <h4 className="font-display text-xl font-bold text-[#f5ebd6]">
-                  DUNDUBHI · The Bronze Buffalo Demon
-                </h4>
-                <img
-                  src={GAME_ASSETS.portraits.dundubhi}
-                  alt="Dundubhi the Bronze Buffalo Demon"
-                  referrerPolicy="no-referrer"
-                  className="w-full h-48 object-cover bg-black/60 border border-[#c89d46]/25"
-                />
-                <p className="text-xs text-[#b8ac98] leading-relaxed">
-                  A towering Chola-bronze war-beast fused with temple war-bells. Dundubhi charges
-                  across the trenches and unleashes resonant bell-shockwaves. Counter his horn
-                  rushes with <strong>Kalaripayattu Parry [T]</strong> or bait him into the stone
-                  mandapa pillars.
-                </p>
+
+                <div className="p-5 bg-[#141217] border border-[#c89d46]/35 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-[#ffaa5c] uppercase tracking-widest font-semibold">
+                      Chapter I Sovereign · Chamber 8/8
+                    </span>
+                    <span className="text-xs font-mono-num text-[#d4a548]">2,450 POSTURE · 2 PHASES</span>
+                  </div>
+                  <h4 className="font-display text-xl font-bold text-[#f5ebd6]">
+                    VRIKODARA · The Iron Rakshasa
+                  </h4>
+                  <img
+                    src={GAME_ASSETS.portraits.vrikodara}
+                    alt="Vrikodara the Iron Rakshasa"
+                    referrerPolicy="no-referrer"
+                    className="w-full h-48 object-cover bg-black/60 border border-[#c89d46]/25"
+                  />
+                  <p className="text-xs text-[#b8ac98] leading-relaxed">
+                    Rudra&apos;s blood-brother in arms who lost his wife and son in the Shishira healer&apos;s
+                    tent. In Phase 2, he swallows his iron chains, his furnace-belly roaring as he
+                    grows by half and vomits molten slag across the stone.
+                  </p>
+                </div>
               </div>
 
-              <div className="p-5 bg-[#141217] border border-[#c89d46]/35 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-[#ffaa5c] uppercase tracking-widest font-semibold">
-                    Chapter I Sovereign · Chamber 8/8
-                  </span>
-                  <span className="text-xs font-mono-num text-[#d4a548]">2,450 POSTURE · 2 PHASES</span>
+              <div className="border-t border-[#c89d46]/25 pt-5">
+                <div className="text-xs text-[#d4a548] uppercase tracking-[0.2em] mb-3 font-semibold">
+                  KURUKSHETRA WARDENS, ASURA LEGIONS &amp; ASH-BOUND CONCEPT ARCHIVE
                 </div>
-                <h4 className="font-display text-xl font-bold text-[#f5ebd6]">
-                  VRIKODARA · The Iron Rakshasa
-                </h4>
-                <img
-                  src={GAME_ASSETS.portraits.vrikodara}
-                  alt="Vrikodara the Iron Rakshasa"
-                  referrerPolicy="no-referrer"
-                  className="w-full h-48 object-cover bg-black/60 border border-[#c89d46]/25"
-                />
-                <p className="text-xs text-[#b8ac98] leading-relaxed">
-                  Rudra&apos;s blood-brother in arms who lost his wife and son in the Shishira healer&apos;s
-                  tent. In Phase 2, he swallows his iron chains, his furnace-belly roaring as he
-                  grows by half and vomits molten slag across the stone.
-                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                  {[
+                    {
+                      title: 'Horned Rakshasa Gada-Guard',
+                      role: 'Heavy Iron Mace Bruiser',
+                      img: GAME_ASSETS.wardenPortraits.hornedRakshasaGada,
+                    },
+                    {
+                      title: 'Chainbound Pillar Colossus',
+                      role: 'Jatharagni Siege Warden',
+                      img: GAME_ASSETS.wardenPortraits.chainboundColossus,
+                    },
+                    {
+                      title: 'Lavaforged Horned Colossus',
+                      role: 'Bloodforge Gatekeeper',
+                      img: GAME_ASSETS.wardenPortraits.lavaforgedColossus,
+                    },
+                    {
+                      title: 'Molten Demon Knight',
+                      role: 'Sanctum Elite Vanguard',
+                      img: GAME_ASSETS.wardenPortraits.moltenDemonKnight,
+                    },
+                    {
+                      title: 'Roaring Bronze Bell Minotaur',
+                      role: 'Dundubhi Phase II Aspect',
+                      img: GAME_ASSETS.wardenPortraits.roaringBronzeMinotaur,
+                    },
+                    {
+                      title: 'Verdigris Bull Demon',
+                      role: 'Mandapa Bell-Mace Sovereign',
+                      img: GAME_ASSETS.wardenPortraits.verdigrisBullDemon,
+                    },
+                    {
+                      title: 'Ember-Tipped Masked Archer',
+                      role: 'Preta Deadeye Marksman',
+                      img: GAME_ASSETS.wardenPortraits.emberTippedArcher,
+                    },
+                    {
+                      title: 'Embermaw Sharabha Hound',
+                      role: 'Vaitarani Pack Stalker',
+                      img: GAME_ASSETS.wardenPortraits.embermawHellhound,
+                    },
+                    {
+                      title: 'Ashen Jackal Stalker',
+                      role: 'Urumi Flanking Assassin',
+                      img: GAME_ASSETS.wardenPortraits.ashenJackalWarrior,
+                    },
+                    {
+                      title: 'Molten Iron Golem',
+                      role: 'Vajra-Shielded Juggernaut',
+                      img: GAME_ASSETS.wardenPortraits.moltenIronGolem,
+                    },
+                    {
+                      title: 'Eclipse Warrior of the Ruin',
+                      role: 'Rudra Blood-Eclipse Aspect',
+                      img: GAME_ASSETS.wardenPortraits.eclipseWarrior,
+                    },
+                    {
+                      title: 'Ash-Marked Bronze Turnaround',
+                      role: 'Rudra Armor Study',
+                      img: GAME_ASSETS.wardenPortraits.ashMarkedTurnaround,
+                    },
+                  ].map((entry) => (
+                    <div
+                      key={entry.title}
+                      className="bg-[#141218] border border-[#c89d46]/30 p-2 flex flex-col justify-between"
+                    >
+                      <img
+                        src={entry.img}
+                        alt={entry.title}
+                        referrerPolicy="no-referrer"
+                        className="w-full h-28 object-cover bg-black/60 mb-2 border border-[#c89d46]/15"
+                      />
+                      <div>
+                        <div className="text-[11px] font-bold text-[#f5ebd6] leading-tight">
+                          {entry.title}
+                        </div>
+                        <div className="text-[10px] text-[#d4a548]">{entry.role}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           )}

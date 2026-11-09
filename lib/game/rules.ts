@@ -436,4 +436,217 @@ export function consumeDashStamina(params: {
   };
 }
 
+/**
+ * Deliberate, readable, heavy enemy windup pacing (~40% slower than frantic spam)
+ * so every enemy attack has weight and clear counterplay.
+ */
+export function computeSmartEnemyWindup(params: {
+  enemyType: 'wolf_guai' | 'fire_monk' | 'stone_golem' | 'furnace_titan' | 'xuemo' | 'vrikodara';
+  isBoss: boolean;
+  phase?: 1 | 2 | 3;
+}): number {
+  if (params.isBoss) {
+    const phase = params.phase ?? 1;
+    return Number(Math.max(0.48, 0.74 - (phase - 1) * 0.08).toFixed(2));
+  }
+  switch (params.enemyType) {
+    case 'wolf_guai':
+      return 0.62;
+    case 'fire_monk':
+      return 0.68;
+    case 'stone_golem':
+      return 0.74;
+    case 'furnace_titan':
+      return 0.80;
+    default:
+      return 0.66;
+  }
+}
+
+/**
+ * Deliberate post-attack recovery window so players who dodge or parry
+ * are rewarded with a generous punish window.
+ */
+export function computeSmartEnemyRecovery(params: {
+  isBoss: boolean;
+  phase?: 1 | 2 | 3;
+}): number {
+  if (params.isBoss) {
+    const phase = params.phase ?? 1;
+    return Number(Math.max(0.84, 1.08 - (phase - 1) * 0.1).toFixed(2));
+  }
+  return 1.24;
+}
+
+/**
+ * Predicts Rudra's future position based on current velocity vector and distance
+ * so smart enemies intercept movement rather than swinging at where the player used to be.
+ */
+export function computePredictiveAimLead(params: {
+  enemyX: number;
+  enemyY: number;
+  playerX: number;
+  playerY: number;
+  playerVx: number;
+  playerVy: number;
+  leadTimeSeconds?: number;
+}): { targetX: number; targetY: number; aimAngle: number } {
+  const dist = Math.hypot(params.playerX - params.enemyX, params.playerY - params.enemyY);
+  const baseLead = params.leadTimeSeconds ?? 0.26;
+  const distFactor = Math.min(1.35, Math.max(0.45, dist / 220));
+  const targetX = params.playerX + params.playerVx * baseLead * distFactor;
+  const targetY = params.playerY + params.playerVy * baseLead * distFactor;
+  const aimAngle = Math.atan2(targetY - params.enemyY, targetX - params.enemyX);
+  return { targetX, targetY, aimAngle };
+}
+
+/**
+ * 3-stage non-linear Agni-Step dash velocity curve:
+ * - Stage 1 (0..0.30): Explosive initial burst (1.42x)
+ * - Stage 2 (0.30..0.75): High-speed phantom glide (1.08x)
+ * - Stage 3 (0.75..1.00): Crisp grounded plant (0.38x)
+ */
+export function computeAgniDashVelocityMultiplier(normalizedProgress: number): number {
+  const p = Math.max(0, Math.min(1, normalizedProgress));
+  if (p < 0.3) {
+    return 1.42;
+  }
+  if (p < 0.75) {
+    return 1.08;
+  }
+  return 0.38;
+}
+
+/**
+ * Computes normalized 360-degree mobile virtual joystick vector and clamped knob offset
+ * with a clean deadzone so slight thumb jitter doesn't drift the hero.
+ */
+export function computeVirtualJoystickVector(params: {
+  deltaX: number;
+  deltaY: number;
+  maxRadius: number;
+  deadzoneRatio?: number;
+}): {
+  normX: number;
+  normY: number;
+  clampedX: number;
+  clampedY: number;
+  magnitude: number;
+  active: boolean;
+} {
+  const maxR = Math.max(16, params.maxRadius);
+  const deadzone = params.deadzoneRatio ?? 0.12;
+  const rawDist = Math.hypot(params.deltaX, params.deltaY);
+  if (rawDist < 0.0001) {
+    return { normX: 0, normY: 0, clampedX: 0, clampedY: 0, magnitude: 0, active: false };
+  }
+  const clampedDist = Math.min(maxR, rawDist);
+  const ux = params.deltaX / rawDist;
+  const uy = params.deltaY / rawDist;
+  const clampedX = ux * clampedDist;
+  const clampedY = uy * clampedDist;
+  const rawMag = clampedDist / maxR;
+  if (rawMag <= deadzone) {
+    return { normX: 0, normY: 0, clampedX, clampedY, magnitude: 0, active: false };
+  }
+  const rescaledMag = (rawMag - deadzone) / (1 - deadzone);
+  return {
+    normX: Number((ux * rescaledMag).toFixed(4)),
+    normY: Number((uy * rescaledMag).toFixed(4)),
+    clampedX: Number(clampedX.toFixed(2)),
+    clampedY: Number(clampedY.toFixed(2)),
+    magnitude: Number(rescaledMag.toFixed(4)),
+    active: true,
+  };
+}
+
+export interface GodOfWarHeavyStyleSpec {
+  styleId: 'pralaya_earth_shatter' | 'sudarshana_vortex' | 'brahmashira_lunge';
+  calloutTitle: string;
+  calloutSubtitle: string;
+  animClip: 'Skill_03' | 'Skill_01' | 'Attack';
+  animStartTime: number;
+  animTimeScale: number;
+  forwardLungePx: number;
+  leapElevationPx: number;
+  cleaveRadiusPx: number;
+  corridorLengthPx: number;
+  spawnsPiercingWave: boolean;
+  shattersGuard: boolean;
+  hitstopSec: number;
+  cameraTrauma: number;
+}
+
+/**
+ * Returns the distinct God-of-War-style Heavy Attack combat choreography, hitbox geometry,
+ * camera juice, and 3D FBX animation clip parameters for each stance.
+ */
+export function computeGodOfWarHeavyStyleSpec(
+  stance: StaffStance,
+  focusOrbsConsumed: number
+): GodOfWarHeavyStyleSpec {
+  const orbScale = 1 + Math.max(0, Math.min(4, focusOrbsConsumed)) * 0.14;
+  if (stance === 'smash') {
+    return {
+      styleId: 'pralaya_earth_shatter',
+      calloutTitle:
+        focusOrbsConsumed > 0
+          ? `PRALAYA EARTH-SHATTER (${focusOrbsConsumed}★ TAPAS)`
+          : 'PRALAYA OVERHEAD SLAM!',
+      calloutSubtitle: 'SEISMIC CRATER + LAVA ERUPTION',
+      animClip: 'Skill_03',
+      animStartTime: 0.16,
+      animTimeScale: 1.38,
+      forwardLungePx: Math.round(52 * orbScale),
+      leapElevationPx: 38,
+      cleaveRadiusPx: Math.round(168 * orbScale),
+      corridorLengthPx: 0,
+      spawnsPiercingWave: focusOrbsConsumed >= 2,
+      shattersGuard: true,
+      hitstopSec: Number((0.088 * orbScale).toFixed(3)),
+      cameraTrauma: Math.min(1, Number((0.72 * orbScale).toFixed(2))),
+    };
+  }
+  if (stance === 'pillar') {
+    return {
+      styleId: 'sudarshana_vortex',
+      calloutTitle:
+        focusOrbsConsumed > 0
+          ? `SUDARSHANA CYCLONE (${focusOrbsConsumed}★ TAPAS)`
+          : 'SUDARSHANA 360° VORTEX!',
+      calloutSubtitle: '360° VACUUM CLEAVE + VAJRA ARCS',
+      animClip: 'Skill_01',
+      animStartTime: 0.06,
+      animTimeScale: 1.48,
+      forwardLungePx: Math.round(34 * orbScale),
+      leapElevationPx: 28,
+      cleaveRadiusPx: Math.round(188 * orbScale),
+      corridorLengthPx: 0,
+      spawnsPiercingWave: false,
+      shattersGuard: focusOrbsConsumed >= 1,
+      hitstopSec: Number((0.078 * orbScale).toFixed(3)),
+      cameraTrauma: Math.min(1, Number((0.64 * orbScale).toFixed(2))),
+    };
+  }
+  return {
+    styleId: 'brahmashira_lunge',
+    calloutTitle:
+      focusOrbsConsumed > 0
+        ? `BRAHMASHIRA IMPALING LUNGE (${focusOrbsConsumed}★ TAPAS)`
+        : 'BRAHMASHIRA SPARTAN LUNGE!',
+    calloutSubtitle: 'GUARD-SHATTER CORRIDOR + AGNI WAVE',
+    animClip: 'Attack',
+    animStartTime: 1.18,
+    animTimeScale: 1.56,
+    forwardLungePx: Math.round(128 * orbScale),
+    leapElevationPx: 14,
+    cleaveRadiusPx: Math.round(145 * orbScale),
+    corridorLengthPx: Math.round(255 * orbScale),
+    spawnsPiercingWave: true,
+    shattersGuard: true,
+    hitstopSec: Number((0.084 * orbScale).toFixed(3)),
+    cameraTrauma: Math.min(1, Number((0.68 * orbScale).toFixed(2))),
+  };
+}
+
 

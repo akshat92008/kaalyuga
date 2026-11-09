@@ -44,8 +44,9 @@ export async function GET(
       'Access-Control-Allow-Origin': '*',
     };
 
-    // 1. Check /tmp/kaalyuga/public/models/ or /tmp/kaalyuga/cutscenes/assets/
+    // 1. Check workspace public/models/ first, then /tmp caches
     const candidateLocalPaths = [
+      path.join(process.cwd(), 'public', 'models', relPath),
       path.join(LOCAL_PUBLIC_MODELS, relPath),
       path.join(LOCAL_CUTSCENE_ASSETS, relPath),
       path.join(CACHE_MODELS_DIR, relPath),

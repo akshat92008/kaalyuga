@@ -234,42 +234,9 @@ export function renderBossMythicMechanics(
     tuskLodgedTimer?: number;
     vacuumActiveTimer?: number;
   } | null,
-  slagFissures: MoltenSlagFissure[]
+  _slagFissures: MoltenSlagFissure[]
 ): void {
   ctx.save();
-
-  // 1. Render Arena-Splitting Molten Slag Fissures (Vrikodara Phase 2 & Rakshasa Crushing Stance)
-  for (const fis of slagFissures) {
-    const rem = fis.life ?? fis.timer ?? 0;
-    if (rem <= 0) continue;
-    const alpha = Math.min(1, rem / 0.6);
-    ctx.save();
-    ctx.lineCap = 'round';
-
-    // Outer charred stone crust
-    ctx.strokeStyle = `rgba(24, 10, 8, ${(0.85 * alpha).toFixed(2)})`;
-    ctx.lineWidth = fis.width + 10;
-    ctx.beginPath();
-    ctx.moveTo(fis.x1, fis.y1);
-    ctx.lineTo(fis.x2, fis.y2);
-    ctx.stroke();
-
-    // Molten orange-gold furnace slag core
-    ctx.strokeStyle = `rgba(255, 102, 36, ${(0.92 * alpha).toFixed(2)})`;
-    ctx.lineWidth = fis.width;
-    ctx.beginPath();
-    ctx.moveTo(fis.x1, fis.y1);
-    ctx.lineTo(fis.x2, fis.y2);
-    ctx.stroke();
-
-    ctx.strokeStyle = `rgba(255, 228, 130, ${(0.85 * alpha).toFixed(2)})`;
-    ctx.lineWidth = Math.max(3, fis.width * 0.38);
-    ctx.beginPath();
-    ctx.moveTo(fis.x1, fis.y1);
-    ctx.lineTo(fis.x2, fis.y2);
-    ctx.stroke();
-    ctx.restore();
-  }
 
   if (!boss) {
     ctx.restore();

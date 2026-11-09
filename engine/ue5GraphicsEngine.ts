@@ -222,20 +222,21 @@ export function renderUE5PostProcessingPass(
 
   // 2. Physically-Based HDR Emissive Bloom & Hades-Style Isometric Contrast Vignette
   if (settings.hdrBloom) {
+    const maxDim = Math.max(cw, ch);
     ctx.save();
     ctx.globalCompositeOperation = 'screen';
     const bloomIntensity = isTransformActive
       ? 0.18
       : isBossPhase2Plus
       ? 0.145
-      : 0.095;
+      : 0.11;
     const bloomGrad = ctx.createRadialGradient(
       cw * 0.5,
       ch * 0.48,
-      cw * 0.04,
+      maxDim * 0.04,
       cw * 0.5,
       ch * 0.48,
-      cw * 0.58
+      maxDim * 0.58
     );
     bloomGrad.addColorStop(
       0,
@@ -245,7 +246,7 @@ export function renderUE5PostProcessingPass(
         ? `rgba(125, 205, 255, ${bloomIntensity * 0.92})`
         : `rgba(255, 202, 102, ${bloomIntensity})`
     );
-    bloomGrad.addColorStop(0.55, 'rgba(255, 132, 58, 0.038)');
+    bloomGrad.addColorStop(0.55, 'rgba(255, 132, 58, 0.045)');
     bloomGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
     ctx.fillStyle = bloomGrad;
     ctx.fillRect(0, 0, cw, ch);
@@ -256,13 +257,13 @@ export function renderUE5PostProcessingPass(
     const vigGrad = ctx.createRadialGradient(
       cw * 0.5,
       ch * 0.5,
-      cw * 0.44,
+      maxDim * 0.48,
       cw * 0.5,
       ch * 0.5,
-      cw * 0.78
+      maxDim * 0.85
     );
     vigGrad.addColorStop(0, 'rgba(0, 0, 0, 0)');
-    vigGrad.addColorStop(1, 'rgba(5, 3, 7, 0.32)');
+    vigGrad.addColorStop(1, 'rgba(5, 3, 7, 0.14)');
     ctx.fillStyle = vigGrad;
     ctx.fillRect(0, 0, cw, ch);
     ctx.restore();

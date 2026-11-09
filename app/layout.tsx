@@ -1,24 +1,5 @@
 import type {Metadata} from 'next';
-import { Cinzel, Plus_Jakarta_Sans, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
-
-const cinzel = Cinzel({
-  subsets: ['latin'],
-  weight: ['600', '700', '800', '900'],
-  variable: '--font-cinzel',
-});
-
-const jakarta = Plus_Jakarta_Sans({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
-  variable: '--font-jakarta',
-});
-
-const jetbrains = JetBrains_Mono({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
-  variable: '--font-mono',
-});
 
 export const metadata: Metadata = {
   title: 'Kaliyuga Repository Audit & Engineering Workbench',
@@ -37,7 +18,15 @@ export const metadata: Metadata = {
 
 export default function RootLayout({children}: {children: React.ReactNode}) {
   return (
-    <html lang="en" className={`${cinzel.variable} ${jakarta.variable} ${jetbrains.variable} dark`}>
+    <html lang="en" className="dark">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
+          rel="stylesheet"
+        />
+      </head>
       <body
         suppressHydrationWarning
         className="bg-[#090807] text-[#F5EDE0] font-sans antialiased overflow-hidden select-none"
