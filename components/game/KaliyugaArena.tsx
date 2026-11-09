@@ -1405,6 +1405,12 @@ export default function KaliyugaArena() {
       };
 
       const cfg = configs[type];
+      if (typeof window !== 'undefined' && isMultiRowSpriteUrl(cfg.sheet)) {
+        loadAndProcessSprite(cfg.sheet, {
+          mode: 'character',
+          gridLayout: 'multirow',
+        });
+      }
       const isWarden3D = false;
       const traitPrefix =
         trait === 'vajra_shield'
@@ -2020,32 +2026,19 @@ export default function KaliyugaArena() {
       });
     });
 
-    // Preload Multi-Row Green-Screen Enemy & Boss Sprite Sheets
-    const multiRowEnemySheets: string[] = [
+    // Preload initial Chamber 1 & 2 Multi-Row Green-Screen Enemy Sprite Sheets (remaining sheets load on-demand per chamber)
+    const initialMultiRowSheets: string[] = [
       GAME_ASSETS.enemySheets.bronzeSpearmanSheet,
       GAME_ASSETS.enemySheets.ghoulSheet,
-      GAME_ASSETS.enemySheets.fantasyKnightSheet,
-      GAME_ASSETS.enemySheets.kabandhaMonsterSheet,
-      GAME_ASSETS.enemySheets.hoodedMageSheet,
-      GAME_ASSETS.enemySheets.nagaWarriorSheet,
-      GAME_ASSETS.enemySheets.ogreWarriorSheet,
-      GAME_ASSETS.enemySheets.demonicOgreSheet,
-      GAME_ASSETS.enemySheets.moltenGolemSheet,
-      GAME_ASSETS.enemySheets.undeadMonsterSheet,
       GAME_ASSETS.enemySheets.undeadWarriorSheet,
-      GAME_ASSETS.enemySheets.undeadArcherSheet,
-      GAME_ASSETS.bossSheets.dundubhiMinotaurSheetP1,
-      GAME_ASSETS.bossSheets.dundubhiMinotaurSheetP2,
-      GAME_ASSETS.bossSheets.vrikodaraDemonicKingSheet,
+      GAME_ASSETS.enemySheets.hoodedMageSheet,
+      GAME_ASSETS.enemySheets.fantasyKnightSheet,
     ];
-    multiRowEnemySheets.forEach((url, idx) => {
-      // Stagger background processing across idle frames so startup is instant and zero-lag
-      window.setTimeout(() => {
-        loadAndProcessSprite(url, {
-          mode: 'character',
-          gridLayout: 'multirow',
-        });
-      }, idx * 45);
+    initialMultiRowSheets.forEach((url) => {
+      loadAndProcessSprite(url, {
+        mode: 'character',
+        gridLayout: 'multirow',
+      });
     });
 
     // Preload 4x1 Animated Roaring Agni Brazier Flame Flipbook
@@ -4501,17 +4494,19 @@ export default function KaliyugaArena() {
 
     const safeIdx = Math.max(0, Math.min(asset.frames.length - 1, frameIndex));
     const frame = explicitFrame || asset.frames[safeIdx];
-    const baseH = Math.max(asset.baseFrameHeight || frame.sh, frame.sh);
+    const baseH = Math.max(16, asset.baseFrameHeight || frame.sh);
 
-    // Strictly cap character height to targetHeight so overhead weapons or multi-row frames never make enemies gigantic
-    const pixelScale = targetHeight / Math.max(1, baseH);
-    const drawW = Math.min(targetHeight * 1.32, frame.sw * pixelScale);
-    const drawH = Math.min(targetHeight * 1.05, frame.sh * pixelScale);
+    // Constant per-sheet pixel scale so raising weapons overhead or lunging horizontally never shrinks or squashes the character
+    const pixelScale = targetHeight / baseH;
+    const drawW = frame.sw * pixelScale;
+    const drawH = frame.sh * pixelScale;
     const anchorXRatio =
       frame.anchorX !== undefined && frame.sw > 0
-        ? Math.max(0.22, Math.min(0.78, frame.anchorX / frame.sw))
+        ? Math.max(0.18, Math.min(0.82, frame.anchorX / frame.sw))
         : 0.5;
     const drawOffsetX = -drawW * anchorXRatio;
+    const groundY = (frame.groundOffsetY ?? frame.sh) * pixelScale;
+    const drawOffsetY = -groundY + 4;
 
     // 1.5. Projected Directional Floor Shadow Silhouette (skewed away from nearest brazier light source)
     if (asset.shadowCanvas) {
@@ -4531,7 +4526,7 @@ export default function KaliyugaArena() {
         frame.sw,
         frame.sh,
         drawOffsetX,
-        -drawH + 5,
+        drawOffsetY,
         drawW,
         drawH
       );
@@ -4548,21 +4543,23 @@ export default function KaliyugaArena() {
     // Optional celestial backlight rim silhouette
     if (rimTint !== 'none' && !hitFlash) {
       const rimCanvas = rimTint === 'jade' ? asset.jadeCanvas : asset.goldCanvas;
-      ctx.save();
-      ctx.globalCompositeOperation = 'screen';
-      ctx.globalAlpha = 0.38;
-      ctx.drawImage(
-        rimCanvas,
-        frame.sx,
-        frame.sy,
-        frame.sw,
-        frame.sh,
-        drawOffsetX - 2,
-        -drawH + 3,
-        drawW + 4,
-        drawH + 2
-      );
-      ctx.restore();
+      if (rimCanvas) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'screen';
+        ctx.globalAlpha = 0.38;
+        ctx.drawImage(
+          rimCanvas,
+          frame.sx,
+          frame.sy,
+          frame.sw,
+          frame.sh,
+          drawOffsetX - 2,
+          drawOffsetY - 2,
+          drawW + 4,
+          drawH + 2
+        );
+        ctx.restore();
+      }
     }
 
     const sourceCanvas = hitFlash ? asset.flashCanvas : asset.cleanCanvas;
@@ -4573,7 +4570,7 @@ export default function KaliyugaArena() {
       frame.sw,
       frame.sh,
       drawOffsetX,
-      -drawH + 5,
+      drawOffsetY,
       drawW,
       drawH
     );
@@ -5483,7 +5480,7 @@ export default function KaliyugaArena() {
           // Check Death -> KO transition
           if (e.hp <= 0 && e.aiState !== 'ko') {
             e.aiState = 'ko';
-            e.koTimer = 0.72;
+            e.koTimer = 0.92;
             const baseKarma = e.isBoss ? 290 : e.type === 'furnace_titan' ? 62 : 34;
             const gainedKarma = Math.round(baseKarma * stats.karmaMultiplier);
             const gainedXp = e.isBoss ? 180 : e.type === 'furnace_titan' ? 65 : 35;
@@ -5673,7 +5670,9 @@ export default function KaliyugaArena() {
           const dy = anchorY - e.y;
           const dist = Math.hypot(dx, dy) || 1;
           if (e.aiState !== 'windup' && e.aiState !== 'attack') {
-            e.facing = dx >= 0 ? 1 : -1;
+            if (Math.abs(dx) > 14) {
+              e.facing = dx >= 0 ? 1 : -1;
+            }
             const desiredAngle = predictedLead.aimAngle;
             let angleDiff = desiredAngle - e.aimAngle;
             while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
@@ -5683,60 +5682,79 @@ export default function KaliyugaArena() {
 
           if (e.aiState === 'idle' || e.aiState === 'chase') {
             e.aiTimer -= simDt;
-            const prevEx = e.x;
-            const prevEy = e.y;
+            let stepX = 0;
+            let stepY = 0;
 
             // Smart Tactical Pursuit, Flanking Encirclement & Anti-Backstab Reflex
-            const sprintBoost = dist > 200 ? 1.38 : 1.15;
+            const sprintBoost = dist > 200 ? 1.24 : 1.05;
             const flankSign = e.id % 2 === 0 ? 1 : -1;
             const perpX = (-dy / dist) * flankSign;
             const perpY = (dx / dist) * flankSign;
 
             if (e.type === 'wolf_guai') {
-              const moveSpd = 265 * sprintBoost;
-              const flankWeight = dist < 190 ? 0.55 : 0.25;
-              if (dist > 48) {
-                e.x += ((dx / dist) * (1 - flankWeight * 0.35) + perpX * flankWeight) * moveSpd * simDt;
-                e.y += ((dy / dist) * (1 - flankWeight * 0.35) + perpY * flankWeight) * moveSpd * 0.84 * simDt;
+              const moveSpd = 210 * sprintBoost;
+              const flankWeight = dist < 190 ? 0.45 : 0.22;
+              if (dist > 52) {
+                stepX = ((dx / dist) * (1 - flankWeight * 0.35) + perpX * flankWeight) * moveSpd * simDt;
+                stepY = ((dy / dist) * (1 - flankWeight * 0.35) + perpY * flankWeight) * moveSpd * 0.84 * simDt;
+              } else {
+                // Continuous tactical circling at close range so animation never flickers between walk and idle
+                stepX = perpX * moveSpd * 0.52 * simDt;
+                stepY = perpY * moveSpd * 0.44 * simDt;
               }
             } else if (e.type === 'fire_monk') {
-              const moveSpd = 215 * sprintBoost;
+              const moveSpd = 175 * sprintBoost;
               if (dist > 245) {
-                e.x += (dx / dist) * moveSpd * simDt;
-                e.y += (dy / dist) * moveSpd * 0.82 * simDt;
-              } else if (dist < 155) {
+                stepX = (dx / dist) * moveSpd * simDt;
+                stepY = (dy / dist) * moveSpd * 0.82 * simDt;
+              } else if (dist < 145) {
                 // Smart ranged kiting & evasive backstep when Rudra rushes in!
-                e.x -= ((dx / dist) * 0.95 - perpX * 0.35) * moveSpd * 1.08 * simDt;
-                e.y -= ((dy / dist) * 0.95 - perpY * 0.35) * moveSpd * 0.95 * simDt;
+                stepX = -((dx / dist) * 0.95 - perpX * 0.35) * moveSpd * 0.96 * simDt;
+                stepY = -((dy / dist) * 0.95 - perpY * 0.35) * moveSpd * 0.86 * simDt;
               } else {
                 // Tactical kiting & orbital strafe while lining up Aghori skulls / Preta arrows
-                e.x += perpX * moveSpd * 0.88 * simDt;
-                e.y += perpY * moveSpd * 0.72 * simDt;
+                stepX = perpX * moveSpd * 0.78 * simDt;
+                stepY = perpY * moveSpd * 0.65 * simDt;
               }
             } else if (e.type === 'stone_golem' || e.type === 'furnace_titan') {
-              const moveSpd = (e.type === 'furnace_titan' ? 210 : 198) * sprintBoost;
-              const flankWeight = dist < 175 ? 0.34 : 0.16;
-              if (dist > 56) {
-                e.x += ((dx / dist) * 0.92 + perpX * flankWeight) * moveSpd * simDt;
-                e.y += ((dy / dist) * 0.92 + perpY * flankWeight) * moveSpd * 0.82 * simDt;
+              const moveSpd = (e.type === 'furnace_titan' ? 172 : 164) * sprintBoost;
+              const flankWeight = dist < 175 ? 0.30 : 0.14;
+              if (dist > 60) {
+                stepX = ((dx / dist) * 0.92 + perpX * flankWeight) * moveSpd * simDt;
+                stepY = ((dy / dist) * 0.92 + perpY * flankWeight) * moveSpd * 0.82 * simDt;
+              } else {
+                stepX = perpX * moveSpd * 0.48 * simDt;
+                stepY = perpY * moveSpd * 0.40 * simDt;
               }
             } else if (e.isBoss) {
-              const bossSpd = (e.type === 'vrikodara' ? 245 : 232) * (1 + (e.phase - 1) * 0.18) * (dist > 210 ? 1.38 : 1.0);
-              if (dist > 68) {
-                e.x += (dx / dist) * bossSpd * simDt;
-                e.y += (dy / dist) * bossSpd * 0.85 * simDt;
+              const bossSpd = (e.type === 'vrikodara' ? 205 : 196) * (1 + (e.phase - 1) * 0.14) * (dist > 210 ? 1.24 : 1.0);
+              if (dist > 72) {
+                stepX = (dx / dist) * bossSpd * simDt;
+                stepY = (dy / dist) * bossSpd * 0.85 * simDt;
+              } else {
+                stepX = perpX * bossSpd * 0.45 * simDt;
+                stepY = perpY * bossSpd * 0.38 * simDt;
               }
             }
 
-            if (simDt > 0.0001) {
-              e.vx = (e.x - prevEx) / simDt;
-              e.vy = (e.y - prevEy) / simDt;
-            } else {
-              e.vx = 0;
-              e.vy = 0;
+            if (stepX !== 0 || stepY !== 0) {
+              const stepConstraint = constrainActorToChamber(
+                e.x + stepX,
+                e.y + stepY,
+                0,
+                0,
+                worldW,
+                worldH,
+                sim.chamberIndex,
+                false,
+                e.isBoss,
+                e.isBoss ? 28 : 20
+              );
+              e.x = stepConstraint.x;
+              e.y = stepConstraint.y;
             }
-            const movedSpeed = Math.hypot(e.vx, e.vy);
-            e.aiState = movedSpeed > 10 ? 'chase' : 'idle';
+            const movedDist = Math.hypot(stepX, stepY);
+            e.aiState = movedDist > 4 * simDt ? 'chase' : 'idle';
 
             const canGuard =
               e.isBoss ||
@@ -5871,7 +5889,7 @@ export default function KaliyugaArena() {
 
             if (e.aiTimer <= 0) {
               e.aiState = 'attack';
-              e.aiTimer = e.isBoss ? 0.30 : 0.20;
+              e.aiTimer = e.isBoss ? 0.38 : 0.32;
               e.scaleX = 1.0;
               e.scaleY = 1.0;
               e.slashArcAlpha = 1.0;
@@ -7422,8 +7440,7 @@ export default function KaliyugaArena() {
         } else if (act.kind === 'enemy') {
           const e = act.enemy;
           const isFlash = e.hitFlashTimer > 0;
-          const bob =
-            e.aiState === 'chase' ? Math.abs(Math.sin(e.animTime * 8)) * 1.8 : 0;
+          const bob = 0;
           const bossRim = e.isBoss && (e.phase >= 2 || e.aiState === 'windup') ? 'gold' : 'none';
           const enemySkewX = 0;
 
@@ -7459,7 +7476,7 @@ export default function KaliyugaArena() {
             const bossAnimState: 'idle' | 'walk' | 'windup' | 'attack' | 'special' | 'hurt' | 'death' =
               e.aiState === 'ko'
                 ? 'death'
-                : e.postureBrokenTimer > 0 || (e.tuskLodgedTimer && e.tuskLodgedTimer > 0) || isFlash
+                : e.postureBrokenTimer > 0 || (e.tuskLodgedTimer && e.tuskLodgedTimer > 0)
                 ? 'hurt'
                 : e.aiState === 'attack'
                 ? e.attackKind === 'shockwave' || e.phase >= 2
@@ -7473,11 +7490,11 @@ export default function KaliyugaArena() {
 
             const bossStateProgress =
               e.aiState === 'ko'
-                ? 1 - Math.max(0, e.koTimer / 0.72)
+                ? 1 - Math.max(0, e.koTimer / 0.92)
                 : e.aiState === 'windup'
                 ? 1 - Math.max(0, e.aiTimer / Math.max(0.05, e.windupDuration))
                 : e.aiState === 'attack'
-                ? 1 - Math.max(0, e.aiTimer / 0.30)
+                ? 1 - Math.max(0, e.aiTimer / 0.38)
                 : 0;
 
             if (renderedBoss3D && boss3d) {
@@ -7617,7 +7634,7 @@ export default function KaliyugaArena() {
             const enemyAnimState: 'idle' | 'walk' | 'windup' | 'attack' | 'special' | 'hurt' | 'death' =
               e.aiState === 'ko'
                 ? 'death'
-                : e.postureBrokenTimer > 0 || isFlash
+                : e.postureBrokenTimer > 0
                 ? 'hurt'
                 : e.aiState === 'attack'
                 ? e.attackKind === 'shockwave' || e.trait === 'agni_aura'
@@ -7631,11 +7648,11 @@ export default function KaliyugaArena() {
 
             const enemyStateProgress =
               e.aiState === 'ko'
-                ? 1 - Math.max(0, e.koTimer / 0.72)
+                ? 1 - Math.max(0, e.koTimer / 0.92)
                 : e.aiState === 'windup'
                 ? 1 - Math.max(0, e.aiTimer / Math.max(0.05, e.windupDuration))
                 : e.aiState === 'attack'
-                ? 1 - Math.max(0, e.aiTimer / 0.20)
+                ? 1 - Math.max(0, e.aiTimer / 0.32)
                 : 0;
 
             const explicitEnemyFrame = getMultiRowFrameBounds(
@@ -7654,15 +7671,15 @@ export default function KaliyugaArena() {
                 ? Math.floor(e.animTime * 8.0) % 4
                 : Math.floor(e.animTime * 3.2) % 2;
 
-            // Regular enemies are Rudra height (62–68px), Elite Wardens slightly taller (74px)
+            // Regular enemies are Rudra height (64–68px), Elite Wardens slightly taller (72px)
             const targetH =
               e.type === 'furnace_titan'
-                ? 74
+                ? 72
                 : e.type === 'stone_golem'
                 ? 68
                 : e.type === 'fire_monk'
-                ? 62
-                : 62;
+                ? 64
+                : 64;
 
             const enemy3d = enemy3dRef.current;
             const renderedEnemy3D =
