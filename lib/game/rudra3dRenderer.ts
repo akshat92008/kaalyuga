@@ -3,6 +3,11 @@ import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { IS_SOFTWARE_WEBGL } from '../../engine/ue5GraphicsEngine';
 import { loadFbxCached, simplifyGroupGeometries } from './meshSimplifier';
+import {
+  Hades2DSpriteBaker,
+  computeSpriteSheetFrameKey,
+  regradeTextureToHadesPalette,
+} from './hadesSpriteBaker';
 import type { StaffStance } from './rules';
 
 export type RudraAnimState =
@@ -50,6 +55,8 @@ interface TrailSample {
 
 export class Rudra3DRenderer {
   public canvas: HTMLCanvasElement;
+  private webglCanvas: HTMLCanvasElement;
+  private spriteBaker: Hades2DSpriteBaker;
   public isReady = false;
   public loadError: string | null = null;
   public loadProgress = 0;
@@ -82,7 +89,7 @@ export class Rudra3DRenderer {
   private lastAttackTriggerStep = 0;
   private wasAttackingLastFrame = false;
 
-  // Balanced PBR Lighting (preserves dark iron & blood-crimson textures)
+  // High-Contrast Hades Toon/Specular Lighting (gleaming bronze & blood-crimson)
   private keyLight: THREE.DirectionalLight;
   private rimLight: THREE.DirectionalLight;
   private fillLight: THREE.DirectionalLight;
@@ -95,10 +102,12 @@ export class Rudra3DRenderer {
   private trailSamples: TrailSample[] = [];
   private readonly maxTrailSamples = 14;
 
-  // Smooth 360-degree isometric yaw
+  // Smooth 360-degree isometric yaw + Stepped 2D Sprite-Sheet Frame Clock
   private currentYaw = 0;
   private targetYaw = 0;
   private elapsedTime = 0;
+  private clipAnimTime = 0;
+  private lastQuantizedStep = -1;
   private lastSoftwareRenderTime = -999;
   private charMaterials: THREE.MeshStandardMaterial[] = [];
   private wepMaterials: THREE.MeshStandardMaterial[] = [];
@@ -108,10 +117,15 @@ export class Rudra3DRenderer {
     this.canvas.width = size;
     this.canvas.height = size;
 
+    this.webglCanvas = document.createElement('canvas');
+    this.webglCanvas.width = size;
+    this.webglCanvas.height = size;
+    this.spriteBaker = new Hades2DSpriteBaker(size, 84);
+
     this.scene = new THREE.Scene();
 
     // True 2.5D Hades Dimetric (2:1) Isometric Orthographic Camera (~27° elevation, never 90° top-down)
-    const halfExtent = 132;
+    const halfExtent = 104;
     this.camera = new THREE.OrthographicCamera(
       -halfExtent,
       halfExtent,
@@ -120,8 +134,8 @@ export class Rudra3DRenderer {
       1,
       1000
     );
-    this.camera.position.set(0, 152, 295);
-    this.camera.lookAt(0, 76, 0);
+    this.camera.position.set(0, 148, 290);
+    this.camera.lookAt(0, 82, 0);
 
     this.rootGroup = new THREE.Group();
     this.scene.add(this.rootGroup);
@@ -129,24 +143,24 @@ export class Rudra3DRenderer {
     this.weaponTipNode = new THREE.Object3D();
     this.weaponBaseNode = new THREE.Object3D();
 
-    // High-Contrast Hades Dark-Mythology Rim & Key Lighting Rig
-    const ambient = new THREE.AmbientLight(0xd8d4e8, 1.65);
+    // High-Contrast Hades Dark-Mythology Rim & Key Lighting Rig (warm mahogany shadows, gleaming bronze highlights)
+    const ambient = new THREE.AmbientLight(0x7a4836, 1.15);
     this.scene.add(ambient);
 
-    this.keyLight = new THREE.DirectionalLight(0xfff5e4, 2.95);
-    this.keyLight.position.set(-140, 240, 210);
+    this.keyLight = new THREE.DirectionalLight(0xffebd0, 3.65);
+    this.keyLight.position.set(-145, 250, 210);
     this.scene.add(this.keyLight);
 
-    this.rimLight = new THREE.DirectionalLight(0xffcf78, 2.55);
-    this.rimLight.position.set(145, 195, -220);
+    this.rimLight = new THREE.DirectionalLight(0xffa838, 3.35);
+    this.rimLight.position.set(150, 205, -220);
     this.scene.add(this.rimLight);
 
-    this.fillLight = new THREE.DirectionalLight(0x68a8ff, 1.45);
+    this.fillLight = new THREE.DirectionalLight(0xb83848, 1.55);
     this.fillLight.position.set(165, 65, 135);
     this.scene.add(this.fillLight);
 
-    this.axeGlowLight = new THREE.PointLight(0xff4e2a, 1.15, 175);
-    this.axeGlowLight.position.set(0, 90, 45);
+    this.axeGlowLight = new THREE.PointLight(0xff5e24, 1.55, 185);
+    this.axeGlowLight.position.set(0, 92, 48);
     this.rootGroup.add(this.axeGlowLight);
 
     // Real-time 3D Axe Blade Trail Ribbon
@@ -183,7 +197,7 @@ export class Rudra3DRenderer {
   private initWebGL(size: number) {
     try {
       this.renderer = new THREE.WebGLRenderer({
-        canvas: this.canvas,
+        canvas: this.webglCanvas,
         alpha: true,
         antialias: !IS_SOFTWARE_WEBGL,
         powerPreference: 'high-performance',
@@ -192,10 +206,10 @@ export class Rudra3DRenderer {
       this.renderer.setPixelRatio(1);
       this.renderer.outputColorSpace = THREE.SRGBColorSpace;
       this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-      this.renderer.toneMappingExposure = 0.98;
+      this.renderer.toneMappingExposure = 1.16;
       this.renderer.shadowMap.enabled = false;
 
-      // UE5 Lumen-Style Studio IBL Environment Map for Metallic Armor & Broken Gada Reflections
+      // UE5 Lumen-Style Studio IBL Environment Map for Gleaming Bronze Skin & Broken Gada Reflections
       if (!IS_SOFTWARE_WEBGL) {
         const pmremGenerator = new THREE.PMREMGenerator(this.renderer);
         this.scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
@@ -370,19 +384,21 @@ export class Rudra3DRenderer {
 
       if (this.disposed) return;
 
-      // 1. Configure Character PBR Material graded to match the warm hand-painted 2D Kurukshetra palette
+      // 1. Re-grade Rudra's pale grey skin texture into gleaming oiled bronze & royal crimson
+      const gradedCharAlbedo = regradeTextureToHadesPalette(charAlbedo, 'rudra_bronze');
+
       const charMat = new THREE.MeshStandardMaterial({
-        color: new THREE.Color(0xd8b692),
-        roughness: 0.76,
-        metalness: 0.22,
-        envMapIntensity: 0.82,
-        emissive: new THREE.Color(0x1c0d06),
-        emissiveIntensity: 0.16,
+        color: new THREE.Color(0xffe0be),
+        roughness: 0.34,
+        metalness: 0.44,
+        envMapIntensity: 1.48,
+        emissive: new THREE.Color(0x2e1206),
+        emissiveIntensity: 0.22,
       });
-      if (charAlbedo) charMat.map = charAlbedo;
+      if (gradedCharAlbedo) charMat.map = gradedCharAlbedo;
       if (charNormal) {
         charMat.normalMap = charNormal;
-        charMat.normalScale.set(1.15, 1.15);
+        charMat.normalScale.set(1.28, 1.28);
       }
       if (charRough) charMat.roughnessMap = charRough;
       if (charMetal) charMat.metalnessMap = charMetal;
@@ -647,6 +663,8 @@ export class Rudra3DRenderer {
     }
 
     this.activeActionName = clipName;
+    this.clipAnimTime = startTimeOffset;
+    this.lastQuantizedStep = -1;
   }
 
   public updateAndRender(params: Rudra3DRenderParams): boolean {
@@ -814,8 +832,33 @@ export class Rudra3DRenderer {
     const turnSpeed = this.attackHoldTimer > 0 || params.isDodging ? 32 : 18;
     this.currentYaw += angleDiff * Math.min(1, turnSpeed * dt);
 
+    // 2.5 Compute Hades 2D Stepped Sprite-Sheet Frame Key ("Animated on Twos")
+    this.clipAnimTime += dt;
+    const isActionSwing = this.attackHoldTimer > 0 || params.isDodging || params.isCasting;
+    const { frameKey, quantizedYaw, quantizedTimeStep } = computeSpriteSheetFrameKey({
+      id: 'rudra',
+      animName: this.activeActionName || this.currentAnimState,
+      animTime: this.clipAnimTime % 2.4,
+      yawRad: this.currentYaw,
+      isAttacking: isActionSwing,
+      isHurt: params.isHurt,
+      isParrying: params.isParrying,
+    });
+
+    // If not in an active weapon swing and this exact 2D sprite frame is cached in the Atlas, draw it in 0ms!
+    if (
+      !isActionSwing &&
+      this.trailSamples.length === 0 &&
+      this.spriteBaker.drawCachedFrame(frameKey, this.canvas)
+    ) {
+      this.mixer.update(dt);
+      this.lastQuantizedStep = quantizedTimeStep;
+      return true;
+    }
+
     // Advance base FBX animation mixer
     this.mixer.update(dt);
+    this.lastQuantizedStep = quantizedTimeStep;
 
     // 3. Subtle Natural Torso Turn During Strikes (No Destructive Arm/Forearm Bone Twisting!)
     let spinYawOffset = 0;
@@ -838,7 +881,7 @@ export class Rudra3DRenderer {
       }
     }
 
-    this.rootGroup.rotation.y = this.currentYaw + spinYawOffset;
+    this.rootGroup.rotation.y = quantizedYaw + spinYawOffset;
 
     // Kinetic sprint/dash lean
     const leanTarget =
@@ -851,52 +894,57 @@ export class Rudra3DRenderer {
         : 0;
     this.rootGroup.rotation.x = THREE.MathUtils.lerp(
       this.rootGroup.rotation.x,
-      leanTarget * Math.cos(this.currentYaw),
+      leanTarget * Math.cos(quantizedYaw),
       dt * 14
     );
     this.rootGroup.rotation.z = THREE.MathUtils.lerp(
       this.rootGroup.rotation.z,
-      -leanTarget * Math.sin(this.currentYaw),
+      -leanTarget * Math.sin(quantizedYaw),
       dt * 14
     );
 
     // Keep character grounded inside the 3D orthographic frustum (2D elevationY is applied in screen space)
     this.rootGroup.position.y = 0;
 
-    // 4. Authentic Warm Kurukshetra PBR Rim & Material Response
+    // 4. Authentic Warm Kurukshetra Rim & Specular Bronze Response
+    let rimHexCss = '#ffbe55';
     if (params.isParrying) {
-      this.rimLight.color.setHex(0xffd86b);
-      this.rimLight.intensity = 3.1;
+      this.rimLight.color.setHex(0xffe074);
+      this.rimLight.intensity = 3.8;
+      rimHexCss = '#ffe484';
     } else if (params.isDodging) {
-      this.rimLight.color.setHex(0xffb84d);
-      this.rimLight.intensity = 2.8;
+      this.rimLight.color.setHex(0xffc258);
+      this.rimLight.intensity = 3.5;
+      rimHexCss = '#ffc65c';
     } else if (this.attackHoldTimer > 0) {
-      this.rimLight.color.setHex(0xff7733);
-      this.rimLight.intensity = 2.6;
+      this.rimLight.color.setHex(0xff772e);
+      this.rimLight.intensity = 3.6;
+      rimHexCss = '#ff8838';
     } else {
-      this.rimLight.color.setHex(0xd99652);
-      this.rimLight.intensity = 1.95;
+      this.rimLight.color.setHex(0xffaa3b);
+      this.rimLight.intensity = 3.25;
+      rimHexCss = '#ffbe55';
     }
 
     for (const mat of this.charMaterials) {
       if (params.isHurt) {
-        mat.emissive.setHex(0xb8221e);
-        mat.emissiveIntensity = 0.48;
+        mat.emissive.setHex(0xd42a22);
+        mat.emissiveIntensity = 0.56;
       } else if (params.isParrying) {
-        mat.emissive.setHex(0x8a5a18);
-        mat.emissiveIntensity = 0.28;
+        mat.emissive.setHex(0x9a6418);
+        mat.emissiveIntensity = 0.34;
       } else if (params.isDodging) {
-        mat.emissive.setHex(0x583212);
-        mat.emissiveIntensity = 0.25;
+        mat.emissive.setHex(0x683a14);
+        mat.emissiveIntensity = 0.28;
       } else {
-        mat.emissive.setHex(0x1c0d06);
-        mat.emissiveIntensity = 0.16;
+        mat.emissive.setHex(0x2e1206);
+        mat.emissiveIntensity = 0.22;
       }
     }
 
     for (const mat of this.wepMaterials) {
-      mat.emissive.setHex(0x4a1608);
-      mat.emissiveIntensity = this.attackHoldTimer > 0 ? 0.35 : 0.14;
+      mat.emissive.setHex(0x581808);
+      mat.emissiveIntensity = this.attackHoldTimer > 0 ? 0.42 : 0.18;
     }
 
     this.scene.updateMatrixWorld(true);
@@ -909,10 +957,17 @@ export class Rudra3DRenderer {
         : 0xffaa33;
     this.updateWeaponTrail(dt, trailActive, trailColor);
 
-    // 6. Render Isometric 3D Character + Axe to Offscreen Canvas
+    // 6. Render Isometric 3D Character + Bake 2D Ink-Outlined Hades Sprite Sheet Frame
     if (!IS_SOFTWARE_WEBGL || this.elapsedTime - this.lastSoftwareRenderTime >= 0.022) {
       this.lastSoftwareRenderTime = this.elapsedTime;
       this.renderer.render(this.scene, this.camera);
+      this.spriteBaker.bakeSpriteFrame(this.webglCanvas, this.canvas, {
+        frameKey,
+        rimColor: rimHexCss,
+        outlinePx: 2.25,
+        isHurt: params.isHurt,
+        cacheFrame: !isActionSwing && this.trailSamples.length === 0,
+      });
     }
     return true;
   }

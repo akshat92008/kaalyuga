@@ -49,13 +49,9 @@ const CHAMBER_GEOMETRIES: ChamberGeometrySpec[] = [
       { x: 0.10, y: 0.42 },
     ],
     chasmIslands: [],
-    leftGate: { x: 0.29, y: 0.22, angle: -0.52 },
-    rightGate: { x: 0.71, y: 0.22, angle: 0.52 },
-    traps: [
-      { id: 'c1_t1', kind: 'agni_vent', x: 0.40, y: 0.52, radius: 58 },
-      { id: 'c1_t2', kind: 'chakram_slicer', x: 0.60, y: 0.52, radius: 58 },
-      { id: 'c1_t3', kind: 'agni_vent', x: 0.50, y: 0.38, radius: 56 },
-    ],
+    leftGate: { x: 0.37, y: 0.28, angle: -0.35 },
+    rightGate: { x: 0.63, y: 0.28, angle: 0.35 },
+    traps: [],
   },
   // Chamber 2: Raktabija Blood-Kunda Courtyard (Wide Octagonal Courtyard)
   {
@@ -70,13 +66,9 @@ const CHAMBER_GEOMETRIES: ChamberGeometrySpec[] = [
       { x: 0.10, y: 0.36 },
     ],
     chasmIslands: [],
-    leftGate: { x: 0.30, y: 0.21, angle: -0.45 },
-    rightGate: { x: 0.70, y: 0.21, angle: 0.45 },
-    traps: [
-      { id: 'c2_t1', kind: 'chakram_slicer', x: 0.38, y: 0.54, radius: 58 },
-      { id: 'c2_t2', kind: 'agni_vent', x: 0.62, y: 0.54, radius: 58 },
-      { id: 'c2_t3', kind: 'chakram_slicer', x: 0.50, y: 0.40, radius: 58 },
-    ],
+    leftGate: { x: 0.37, y: 0.28, angle: -0.35 },
+    rightGate: { x: 0.63, y: 0.28, angle: 0.35 },
+    traps: [],
   },
   // Chamber 3: Kurukshetra Chariot Bonefield
   {
@@ -91,15 +83,11 @@ const CHAMBER_GEOMETRIES: ChamberGeometrySpec[] = [
       { x: 0.10, y: 0.40 },
     ],
     chasmIslands: [],
-    leftGate: { x: 0.31, y: 0.21, angle: -0.42 },
-    rightGate: { x: 0.69, y: 0.21, angle: 0.42 },
-    traps: [
-      { id: 'c3_t1', kind: 'agni_vent', x: 0.42, y: 0.48, radius: 58 },
-      { id: 'c3_t2', kind: 'chakram_slicer', x: 0.60, y: 0.60, radius: 58 },
-      { id: 'c3_t3', kind: 'agni_vent', x: 0.52, y: 0.34, radius: 58 },
-    ],
+    leftGate: { x: 0.37, y: 0.28, angle: -0.35 },
+    rightGate: { x: 0.63, y: 0.28, angle: 0.35 },
+    traps: [],
   },
-  // Chamber 4: Mandapa of the War-Drum (3D Dundubhi Mid-Boss)
+  // Chamber 4: Mandapa of the War-Drum (Dundubhi Mid-Boss)
   {
     outerPolygon: [
       { x: 0.20, y: 0.12 },
@@ -112,12 +100,9 @@ const CHAMBER_GEOMETRIES: ChamberGeometrySpec[] = [
       { x: 0.09, y: 0.44 },
     ],
     chasmIslands: [],
-    leftGate: { x: 0.32, y: 0.21, angle: -0.38 },
-    rightGate: { x: 0.68, y: 0.21, angle: 0.38 },
-    traps: [
-      { id: 'c4_t1', kind: 'agni_vent', x: 0.50, y: 0.44, radius: 60 },
-      { id: 'c4_t2', kind: 'chakram_slicer', x: 0.50, y: 0.68, radius: 60 },
-    ],
+    leftGate: { x: 0.38, y: 0.28, angle: -0.32 },
+    rightGate: { x: 0.62, y: 0.28, angle: 0.32 },
+    traps: [],
   },
   // Chamber 5: Bhairava Soul-Fire Sanctum
   {
@@ -132,12 +117,9 @@ const CHAMBER_GEOMETRIES: ChamberGeometrySpec[] = [
       { x: 0.10, y: 0.40 },
     ],
     chasmIslands: [],
-    leftGate: { x: 0.32, y: 0.21, angle: -0.44 },
-    rightGate: { x: 0.68, y: 0.21, angle: 0.44 },
-    traps: [
-      { id: 'c5_t1', kind: 'chakram_slicer', x: 0.40, y: 0.52, radius: 58 },
-      { id: 'c5_t2', kind: 'agni_vent', x: 0.60, y: 0.52, radius: 58 },
-    ],
+    leftGate: { x: 0.37, y: 0.28, angle: -0.35 },
+    rightGate: { x: 0.63, y: 0.28, angle: 0.35 },
+    traps: [],
   },
   // Chamber 6: Shattered Gopuram Causeway
   {
@@ -152,13 +134,9 @@ const CHAMBER_GEOMETRIES: ChamberGeometrySpec[] = [
       { x: 0.10, y: 0.42 },
     ],
     chasmIslands: [],
-    leftGate: { x: 0.31, y: 0.21, angle: -0.45 },
-    rightGate: { x: 0.69, y: 0.21, angle: 0.45 },
-    traps: [
-      { id: 'c6_t1', kind: 'agni_vent', x: 0.36, y: 0.48, radius: 58 },
-      { id: 'c6_t2', kind: 'chakram_slicer', x: 0.50, y: 0.58, radius: 58 },
-      { id: 'c6_t3', kind: 'agni_vent', x: 0.64, y: 0.48, radius: 58 },
-    ],
+    leftGate: { x: 0.37, y: 0.28, angle: -0.35 },
+    rightGate: { x: 0.63, y: 0.28, angle: 0.35 },
+    traps: [],
   },
   // Chamber 7: Sealed Gate of Jatharagni (Asura Lava Sanctum Locked -> Unlocked)
   {
@@ -173,14 +151,11 @@ const CHAMBER_GEOMETRIES: ChamberGeometrySpec[] = [
       { x: 0.11, y: 0.44 },
     ],
     chasmIslands: [],
-    leftGate: { x: 0.40, y: 0.22, angle: 0 },
-    rightGate: { x: 0.60, y: 0.22, angle: 0 },
-    traps: [
-      { id: 'c7_t1', kind: 'chakram_slicer', x: 0.42, y: 0.56, radius: 58 },
-      { id: 'c7_t2', kind: 'agni_vent', x: 0.58, y: 0.56, radius: 58 },
-    ],
+    leftGate: { x: 0.40, y: 0.28, angle: 0 },
+    rightGate: { x: 0.60, y: 0.28, angle: 0 },
+    traps: [],
   },
-  // Chamber 8: Sanctum of the Infernal Maw (Final 3D Boss Vrikodara: Circular Naga / Eclipse Platform)
+  // Chamber 8: Sanctum of the Infernal Maw (Final Boss Vrikodara: Circular Naga / Eclipse Platform)
   {
     outerPolygon: [
       { x: 0.22, y: 0.12 },
@@ -193,12 +168,9 @@ const CHAMBER_GEOMETRIES: ChamberGeometrySpec[] = [
       { x: 0.10, y: 0.46 },
     ],
     chasmIslands: [],
-    leftGate: { x: 0.34, y: 0.21, angle: -0.4 },
-    rightGate: { x: 0.66, y: 0.21, angle: 0.4 },
-    traps: [
-      { id: 'c8_t1', kind: 'agni_vent', x: 0.36, y: 0.52, radius: 58 },
-      { id: 'c8_t2', kind: 'chakram_slicer', x: 0.64, y: 0.52, radius: 58 },
-    ],
+    leftGate: { x: 0.38, y: 0.28, angle: -0.32 },
+    rightGate: { x: 0.62, y: 0.28, angle: 0.32 },
+    traps: [],
   },
 ];
 
@@ -388,7 +360,59 @@ export function renderParallaxAbyss(
   ctx.restore();
 }
 
-// Render Seamless Vast 2.5D Hand-Painted Isometric Sanctuary + Surface Craters + Exit Gates
+// Singleton Low-End-Optimized Arena Video Pool (Only 1 active decoder at a time + 30Hz offscreen frame blit cache)
+const arenaVideoPool = new Map<string, HTMLVideoElement>();
+let currentPlayingVideoUrl: string | null = null;
+let offscreenVideoCanvas: HTMLCanvasElement | null = null;
+let offscreenVideoCtx: CanvasRenderingContext2D | null = null;
+let lastVideoBlitTimeMs = 0;
+let lastBlittedVideoUrl: string | null = null;
+
+export function getOrStartArenaVideo(videoUrl: string | undefined, paused: boolean = false): HTMLVideoElement | null {
+  if (typeof window === 'undefined' || typeof document === 'undefined' || !videoUrl) {
+    return null;
+  }
+  let video = arenaVideoPool.get(videoUrl);
+  if (!video) {
+    video = document.createElement('video');
+    video.src = videoUrl;
+    video.muted = true;
+    video.defaultMuted = true;
+    video.loop = true;
+    video.playsInline = true;
+    video.crossOrigin = 'anonymous';
+    video.preload = 'auto';
+    arenaVideoPool.set(videoUrl, video);
+  }
+
+  // Pause all other chamber videos so low-end devices only ever decode 1 stream
+  if (currentPlayingVideoUrl !== videoUrl) {
+    arenaVideoPool.forEach((otherVid, url) => {
+      if (url !== videoUrl && !otherVid.paused) {
+        try {
+          otherVid.pause();
+        } catch {}
+      }
+    });
+    currentPlayingVideoUrl = videoUrl;
+  }
+
+  if (paused) {
+    if (!video.paused) {
+      try {
+        video.pause();
+      } catch {}
+    }
+  } else if (video.paused && video.readyState >= 1) {
+    video.play().catch(() => {});
+  } else if (video.paused && video.networkState !== 3) {
+    video.play().catch(() => {});
+  }
+
+  return video;
+}
+
+// Render Seamless Vast 2.5D Hand-Painted Isometric Sanctuary + HD Animated Video Arena + Surface Craters + Exit Gates
 export function renderIsometricChamberPlatform(
   ctx: CanvasRenderingContext2D,
   worldW: number,
@@ -399,18 +423,64 @@ export function renderIsometricChamberPlatform(
   now: number,
   isChamberCleared: boolean,
   isNextChamberBoss: boolean,
-  renderSurfaceDetailsCallback: () => void
+  renderSurfaceDetailsCallback: () => void,
+  activeVideoUrl?: string,
+  disableVideoBg: boolean = false
 ) {
   ctx.save();
 
   const geom = getChamberGeometry(chamberIndex);
+  const resolvedVideoUrl = !disableVideoBg ? activeVideoUrl : undefined;
+  const activeVideo = resolvedVideoUrl ? getOrStartArenaVideo(resolvedVideoUrl, false) : null;
+  const isVideoReady =
+    Boolean(activeVideo) &&
+    activeVideo!.readyState >= 2 &&
+    activeVideo!.videoWidth > 0 &&
+    activeVideo!.videoHeight > 0;
 
-  // 1. Full Bleed Hand-Painted 16:9 Isometric Chamber Artwork (with rich carved Vedic courtyard fallback while streaming)
-  if (bgImg && bgImg.complete && bgImg.naturalWidth > 0) {
+  // 1. Full Bleed 1080p HD Animated Arena Video OR Hand-Painted 16:9 Isometric Chamber Artwork
+  if (isVideoReady && activeVideo) {
+    const targetVidW = Math.min(1920, activeVideo.videoWidth || 1920);
+    const targetVidH = Math.min(1080, activeVideo.videoHeight || 1080);
+    if (
+      (!offscreenVideoCanvas ||
+        offscreenVideoCanvas.width !== targetVidW ||
+        offscreenVideoCanvas.height !== targetVidH) &&
+      typeof document !== 'undefined'
+    ) {
+      offscreenVideoCanvas = document.createElement('canvas');
+      offscreenVideoCanvas.width = targetVidW;
+      offscreenVideoCanvas.height = targetVidH;
+      offscreenVideoCtx = offscreenVideoCanvas.getContext('2d', { alpha: false });
+    }
+    if (
+      offscreenVideoCanvas &&
+      offscreenVideoCtx &&
+      (now - lastVideoBlitTimeMs >= 16 || lastBlittedVideoUrl !== resolvedVideoUrl)
+    ) {
+      offscreenVideoCtx.drawImage(
+        activeVideo,
+        0,
+        0,
+        offscreenVideoCanvas.width,
+        offscreenVideoCanvas.height
+      );
+      lastVideoBlitTimeMs = now;
+      lastBlittedVideoUrl = resolvedVideoUrl || null;
+    }
+    ctx.drawImage(offscreenVideoCanvas || activeVideo, 0, 0, worldW, worldH);
+    if (floorTint) {
+      ctx.save();
+      ctx.globalAlpha = 0.08;
+      ctx.fillStyle = floorTint;
+      ctx.fillRect(0, 0, worldW, worldH);
+      ctx.restore();
+    }
+  } else if (bgImg && bgImg.complete && bgImg.naturalWidth > 0) {
     ctx.drawImage(bgImg, 0, 0, worldW, worldH);
     if (floorTint) {
       ctx.save();
-      ctx.globalAlpha = 0.22;
+      ctx.globalAlpha = 0.12;
       ctx.fillStyle = floorTint;
       ctx.fillRect(0, 0, worldW, worldH);
       ctx.restore();
@@ -484,119 +554,63 @@ export function renderIsometricChamberPlatform(
       const gy = g.pos.y * worldH;
       const pulse = 0.85 + Math.sin(now * 0.005 + gIdx * 1.6) * 0.15;
 
-      // 4.1. Receding Isometric Stone Causeway Bridge ("Another Path Beyond the Gate")
+      // 4.1. Flush Recessed Isometric Floor Portal & Vedic Yantra Threshold (Embedded flat into stone floor, never floating in air!)
       ctx.save();
-      ctx.translate(gx, gy);
-      ctx.rotate(g.angle * 0.45);
-
-      const bridgeLen = 185;
-      const bridgeW = 94;
-      const bridgeGrad = ctx.createLinearGradient(0, 12, 0, -bridgeLen);
-      bridgeGrad.addColorStop(0, 'rgba(28, 19, 16, 0.92)');
-      bridgeGrad.addColorStop(0.55, isChamberCleared ? 'rgba(62, 34, 22, 0.85)' : 'rgba(18, 12, 12, 0.72)');
-      bridgeGrad.addColorStop(1, 'rgba(6, 4, 5, 0)');
-
-      ctx.fillStyle = bridgeGrad;
-      ctx.beginPath();
-      ctx.moveTo(-bridgeW * 0.55, 14);
-      ctx.lineTo(bridgeW * 0.55, 14);
-      ctx.lineTo(bridgeW * 0.34, -bridgeLen);
-      ctx.lineTo(-bridgeW * 0.34, -bridgeLen);
-      ctx.closePath();
-      ctx.fill();
-
-      // Stepped Flagstone Slabs & Glowing Runic Mortar along the receding path
-      for (let step = 0; step < 6; step++) {
-        const t0 = step / 6;
-        const sy = 6 - t0 * (bridgeLen * 0.86);
-        const sw = bridgeW * (0.96 - t0 * 0.36);
-        ctx.strokeStyle = isChamberCleared
-          ? `${g.accent}${Math.round((0.68 - t0 * 0.48) * 255).toString(16).padStart(2, '0')}`
-          : 'rgba(180, 120, 65, 0.22)';
-        ctx.lineWidth = isChamberCleared ? 2.0 : 1.1;
-        ctx.strokeRect(-sw * 0.5, sy - 16, sw, 13);
-      }
-
-      // Volumetric Portal God-Ray spilling from the gate onto the arena floor
-      ctx.save();
-      ctx.globalCompositeOperation = 'screen';
-      const rayLen = isChamberCleared ? 165 : 78;
-      const rayGrad = ctx.createLinearGradient(0, -24, 0, rayLen);
-      rayGrad.addColorStop(0, isChamberCleared ? g.accent + 'aa' : 'rgba(255, 72, 36, 0.45)');
-      rayGrad.addColorStop(0.45, isChamberCleared ? g.accent + '44' : 'rgba(255, 72, 36, 0.14)');
-      rayGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-      ctx.fillStyle = rayGrad;
-      ctx.beginPath();
-      ctx.moveTo(-42, -18);
-      ctx.lineTo(42, -18);
-      ctx.lineTo(84, rayLen);
-      ctx.lineTo(-84, rayLen);
-      ctx.closePath();
-      ctx.fill();
-
-      // Animated Glowing Path Chevrons beckoning Rudra through the unsealed gate
-      if (isChamberCleared) {
-        for (let c = 0; c < 3; c++) {
-          const cy = 62 - ((now * 0.048 + c * 26) % 78);
-          const cAlpha = Math.max(0, Math.min(1, (62 - cy) / 55)) * (1 - Math.max(0, (12 - cy) / 30));
-          ctx.globalAlpha = cAlpha * 0.85;
-          ctx.strokeStyle = g.accent;
-          ctx.lineWidth = 2.6;
-          ctx.beginPath();
-          ctx.moveTo(-18, cy + 8);
-          ctx.lineTo(0, cy - 4);
-          ctx.lineTo(18, cy + 8);
-          ctx.stroke();
-        }
-      }
-      ctx.restore();
-      ctx.restore();
-
-      // 4.2. Ground Portal Mandala Pool under each exit gate
-      ctx.save();
-      ctx.globalCompositeOperation = 'screen';
-      ctx.translate(gx, gy + 8);
+      ctx.translate(gx, gy + 4);
       ctx.scale(1, 0.52);
-      const gatePool = ctx.createRadialGradient(0, 0, 10, 0, 0, isChamberCleared ? 165 : 108);
-      gatePool.addColorStop(0, isChamberCleared ? g.accent + '99' : 'rgba(255, 68, 36, 0.42)');
-      gatePool.addColorStop(0.55, isChamberCleared ? g.accent + '38' : 'rgba(255, 120, 42, 0.14)');
+
+      // Outer carved obsidian & Chola-bronze floor ring
+      const outerR = isChamberCleared ? 78 : 66;
+      ctx.fillStyle = 'rgba(12, 7, 6, 0.88)';
+      ctx.beginPath();
+      ctx.arc(0, 0, outerR + 8, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = isChamberCleared ? g.accent : 'rgba(198, 146, 84, 0.55)';
+      ctx.lineWidth = isChamberCleared ? 3.5 : 2.2;
+      ctx.beginPath();
+      ctx.arc(0, 0, outerR, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.strokeStyle = isChamberCleared ? '#fff0c8' : 'rgba(160, 88, 54, 0.42)';
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.arc(0, 0, outerR * 0.74, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // 8-point Vedic Ashtadala Lotus / Yantra spokes carved flat into the floor
+      const rot = isChamberCleared ? now * 0.0008 * (gIdx === 0 ? 1 : -1) : 0;
+      ctx.save();
+      ctx.rotate(rot);
+      for (let k = 0; k < 8; k++) {
+        const a = (k * Math.PI) / 4;
+        ctx.strokeStyle = isChamberCleared ? g.accent + 'cc' : 'rgba(210, 95, 55, 0.35)';
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a) * (outerR * 0.28), Math.sin(a) * (outerR * 0.28));
+        ctx.lineTo(Math.cos(a) * (outerR * 0.94), Math.sin(a) * (outerR * 0.94));
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      // Inner glowing portal well
+      const gatePool = ctx.createRadialGradient(0, 0, 6, 0, 0, outerR);
+      gatePool.addColorStop(0, isChamberCleared ? g.accent + 'cc' : 'rgba(255, 68, 36, 0.45)');
+      gatePool.addColorStop(0.58, isChamberCleared ? g.accent + '44' : 'rgba(180, 42, 24, 0.18)');
       gatePool.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = gatePool;
       ctx.beginPath();
-      ctx.arc(0, 0, isChamberCleared ? 165 : 108, 0, Math.PI * 2);
+      ctx.arc(0, 0, outerR, 0, Math.PI * 2);
       ctx.fill();
-      ctx.restore();
 
-      // 4.3. Hand-Painted Isometric Gopuram Gate Archway + Chained/Unsealed Portal Overlay
-      if (chamberIndex !== 6 && gatesAsset && gatesAsset.frames.length >= 2) {
-        const frameIdx = isChamberCleared ? 1 : 0;
-        const f = gatesAsset.frames[frameIdx] || gatesAsset.frames[0];
-        const gateH = 228;
-        const gateW = (f.sw / Math.max(1, f.sh)) * gateH;
-        ctx.save();
-        ctx.translate(gx, gy);
-        ctx.drawImage(
-          gatesAsset.cleanCanvas,
-          f.sx,
-          f.sy,
-          f.sw,
-          f.sh,
-          -gateW * 0.5,
-          -gateH * 0.78,
-          gateW,
-          gateH
-        );
-        ctx.restore();
-      }
-
+      // Project gate overlay rune flat onto the isometric floor plane
       if (gateOverlaysAsset && gateOverlaysAsset.frames.length >= 2) {
         const overlayIdx = isChamberCleared ? 1 : 0;
         const f = gateOverlaysAsset.frames[overlayIdx] || gateOverlaysAsset.frames[0];
-        const ovSize = chamberIndex === 6 ? 164 : 132;
+        const ovSize = outerR * 1.65;
         ctx.save();
         ctx.globalCompositeOperation = 'screen';
-        ctx.globalAlpha = isChamberCleared ? 0.92 * pulse : 0.84;
-        ctx.translate(gx, gy - 46);
+        ctx.globalAlpha = isChamberCleared ? 0.85 * pulse : 0.65;
         ctx.drawImage(
           gateOverlaysAsset.cleanCanvas,
           f.sx,
@@ -610,26 +624,27 @@ export function renderIsometricChamberPlatform(
         );
         ctx.restore();
       }
+      ctx.restore();
 
-      // 4.4. Floating Next-Path Reward Sigil & Path Inscription
-      if (rewardOrbsAsset && rewardOrbsAsset.frames.length > 0) {
+      // 4.2. Grounded Next-Path Reward Sigil & Path Inscription (Appears once the chamber is cleared so nothing floats in the air during combat!)
+      if (isChamberCleared && rewardOrbsAsset && rewardOrbsAsset.frames.length > 0) {
         const orbIdx = Math.min(rewardOrbsAsset.frames.length - 1, g.orbFrame);
         const of = rewardOrbsAsset.frames[orbIdx];
-        const bobY = Math.sin(now * 0.004 + g.orbFrame * 1.7) * 8;
-        const orbSize = isChamberCleared ? 82 : 58;
+        const bobY = Math.sin(now * 0.004 + g.orbFrame * 1.7) * 4;
+        const orbSize = 52;
 
         ctx.save();
-        ctx.translate(gx, gy - 104 + bobY);
-        ctx.globalAlpha = isChamberCleared ? 1.0 : 0.82;
+        ctx.translate(gx, gy - 22 + bobY);
+        ctx.globalAlpha = isChamberCleared ? 1.0 : 0.84;
 
         ctx.save();
         ctx.globalCompositeOperation = 'screen';
-        const oGlow = ctx.createRadialGradient(0, 0, 4, 0, 0, orbSize * 0.98);
+        const oGlow = ctx.createRadialGradient(0, 0, 4, 0, 0, orbSize * 0.95);
         oGlow.addColorStop(0, g.accent + 'bb');
         oGlow.addColorStop(1, 'rgba(0,0,0,0)');
         ctx.fillStyle = oGlow;
         ctx.beginPath();
-        ctx.arc(0, 0, orbSize * 0.98, 0, Math.PI * 2);
+        ctx.arc(0, 0, orbSize * 0.95, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
 
@@ -649,16 +664,16 @@ export function renderIsometricChamberPlatform(
         ctx.textAlign = 'center';
         ctx.strokeStyle = 'rgba(0,0,0,0.95)';
         ctx.lineWidth = 3.5;
-        const titleText = isChamberCleared ? `GATE UNSEALED · ${g.label}` : `SEALED · ${g.label}`;
-        ctx.strokeText(titleText, 0, orbSize * 0.54 + 10);
+        const titleText = isChamberCleared ? `UNSEALED · ${g.label}` : `SEALED · ${g.label}`;
+        ctx.strokeText(titleText, 0, orbSize * 0.54 + 12);
         ctx.fillStyle = isChamberCleared ? g.accent : '#d8b48a';
-        ctx.fillText(titleText, 0, orbSize * 0.54 + 10);
+        ctx.fillText(titleText, 0, orbSize * 0.54 + 12);
 
         if (isChamberCleared) {
           ctx.font = "600 10px 'Plus Jakarta Sans', sans-serif";
-          ctx.strokeText(g.subLabel, 0, orbSize * 0.54 + 24);
+          ctx.strokeText(g.subLabel, 0, orbSize * 0.54 + 26);
           ctx.fillStyle = '#f5ebd6';
-          ctx.fillText(g.subLabel, 0, orbSize * 0.54 + 24);
+          ctx.fillText(g.subLabel, 0, orbSize * 0.54 + 26);
         }
         ctx.restore();
       }

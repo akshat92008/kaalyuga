@@ -1,6 +1,7 @@
 {
   "name": "Kaliyuga: The Bleeding Crown",
-  "description": "A 2.5D isometric Indian mythological action roguelite about Rudra, Savitri's lantern, three stances, divine Astras, and the cost of not looking.",
+  "description": "A 2.5D isometric mythological action roguelike set in the aftermath of the Kurukshetra War. Master three stances, invoke celestial Astras, and uncover the five memory shards across the Charnel Plains.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
+

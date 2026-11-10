@@ -15,6 +15,11 @@ import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { IS_SOFTWARE_WEBGL } from '../../engine/ue5GraphicsEngine';
 import { loadFbxCached } from './meshSimplifier';
+import {
+  Hades2DSpriteBaker,
+  computeSpriteSheetFrameKey,
+  regradeTextureToHadesPalette,
+} from './hadesSpriteBaker';
 import { GAME_ASSETS } from './assets';
 
 export type Boss3DKind = 'dundubhi' | 'vrikodara';
@@ -233,6 +238,8 @@ function createBipedCombatIdleClip(clips: THREE.AnimationClip[]): THREE.Animatio
 
 export class Boss3DRenderer {
   public readonly canvas: HTMLCanvasElement;
+  private readonly webglCanvas: HTMLCanvasElement;
+  private readonly spriteBaker: Hades2DSpriteBaker;
   public isReady = false;
   public loadProgress = 0;
 
@@ -254,6 +261,7 @@ export class Boss3DRenderer {
   private attackSwingTimer = 0;
   private attackSwingDuration = 0.36;
   private elapsedTime = 0;
+  private clipAnimTime = 0;
   private lastRenderTime = -999;
   private disposed = false;
 
@@ -274,10 +282,15 @@ export class Boss3DRenderer {
     this.canvas.width = size;
     this.canvas.height = size;
 
+    this.webglCanvas = document.createElement('canvas');
+    this.webglCanvas.width = size;
+    this.webglCanvas.height = size;
+    this.spriteBaker = new Hades2DSpriteBaker(size, 96);
+
     this.scene = new THREE.Scene();
 
     // True 2.5D Hades Dimetric (2:1) Isometric Orthographic Camera (~27° elevation, matching Rudra3DRenderer)
-    const frustumHalf = 136;
+    const frustumHalf = 108;
     this.camera = new THREE.OrthographicCamera(
       -frustumHalf,
       frustumHalf,
@@ -286,22 +299,22 @@ export class Boss3DRenderer {
       1,
       1200
     );
-    this.camera.position.set(0, 158, 308);
-    this.camera.lookAt(0, 80, 0);
+    this.camera.position.set(0, 154, 300);
+    this.camera.lookAt(0, 84, 0);
 
-    // Balanced Hades Hand-Painted Studio Lighting (matches Rudra3DRenderer so textures pop cleanly!)
-    const ambient = new THREE.AmbientLight(0xdcd8ec, 1.72);
+    // High-Contrast Hades Dark-Mythology Rim & Key Lighting (deep wine shadows, fiery golden rim)
+    const ambient = new THREE.AmbientLight(0x784638, 1.18);
     this.scene.add(ambient);
 
-    this.keyLight = new THREE.DirectionalLight(0xfff5e4, 2.98);
-    this.keyLight.position.set(-140, 240, 215);
+    this.keyLight = new THREE.DirectionalLight(0xffebd0, 3.65);
+    this.keyLight.position.set(-140, 245, 215);
     this.scene.add(this.keyLight);
 
-    this.rimLight = new THREE.DirectionalLight(0xffcf78, 2.55);
-    this.rimLight.position.set(150, 195, -215);
+    this.rimLight = new THREE.DirectionalLight(0xffa638, 3.35);
+    this.rimLight.position.set(150, 200, -215);
     this.scene.add(this.rimLight);
 
-    this.fillLight = new THREE.DirectionalLight(0x68a8ff, 1.45);
+    this.fillLight = new THREE.DirectionalLight(0xb83848, 1.55);
     this.fillLight.position.set(165, 70, 135);
     this.scene.add(this.fillLight);
 
@@ -345,7 +358,7 @@ export class Boss3DRenderer {
 
     try {
       this.renderer = new THREE.WebGLRenderer({
-        canvas: this.canvas,
+        canvas: this.webglCanvas,
         alpha: true,
         antialias: !IS_SOFTWARE_WEBGL,
         powerPreference: 'high-performance',
@@ -354,7 +367,7 @@ export class Boss3DRenderer {
       this.renderer.setPixelRatio(1);
       this.renderer.outputColorSpace = THREE.SRGBColorSpace;
       this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-      this.renderer.toneMappingExposure = 1.12;
+      this.renderer.toneMappingExposure = 1.18;
       this.renderer.shadowMap.enabled = !IS_SOFTWARE_WEBGL;
       this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
@@ -463,11 +476,11 @@ export class Boss3DRenderer {
           normalScale: new THREE.Vector2(1.35, 1.35),
           roughnessMap: wepRoughTex || undefined,
           metalnessMap: wepMetTex || undefined,
-          roughness: 0.38,
+          roughness: 0.34,
           metalness: 0.85,
           envMapIntensity: 1.55,
-          emissive: new THREE.Color(0x280408),
-          emissiveIntensity: 0.08,
+          emissive: new THREE.Color(0x38080c),
+          emissiveIntensity: 0.14,
         });
 
       // ======================================================================
@@ -480,6 +493,7 @@ export class Boss3DRenderer {
 
       const dundubhiMaterials: THREE.MeshStandardMaterial[] = [];
       const dunWepMat = createWepMat();
+      const gradedDunBase = regradeTextureToHadesPalette(dunBase, 'dundubhi_chola');
 
       dundubhiGroup.traverse((obj) => {
         if ((obj as THREE.Mesh).isMesh) {
@@ -488,16 +502,17 @@ export class Boss3DRenderer {
           mesh.castShadow = !IS_SOFTWARE_WEBGL;
           mesh.receiveShadow = !IS_SOFTWARE_WEBGL;
           const mat = new THREE.MeshStandardMaterial({
-            map: dunBase || undefined,
+            color: new THREE.Color(0xffe4c4),
+            map: gradedDunBase || undefined,
             normalMap: dunNorm || undefined,
-            normalScale: new THREE.Vector2(1.25, 1.25),
+            normalScale: new THREE.Vector2(1.3, 1.3),
             roughnessMap: dunRough || undefined,
             metalnessMap: dunMet || undefined,
-            roughness: 0.58,
-            metalness: 0.48,
-            envMapIntensity: 1.45,
-            emissive: new THREE.Color(0x0c0608),
-            emissiveIntensity: 0.06,
+            roughness: 0.42,
+            metalness: 0.52,
+            envMapIntensity: 1.48,
+            emissive: new THREE.Color(0x241008),
+            emissiveIntensity: 0.16,
           });
           mesh.material = mat;
           dundubhiMaterials.push(mat);
@@ -592,8 +607,8 @@ export class Boss3DRenderer {
 
       // ======================================================================
       // 2. CONFIGURE VRIKODARA (Crimson Skull Warlord — Native Meshy Biped Rig)
-      //    Exact same native scale (1, 1, 1), balanced PBR shader, and Meshy Biped
-      //    animations as Rudra so Vrikodara looks 100% like the uploaded model!
+      //    Exact same native scale (1, 1, 1), Hades cel/toon shader, and Meshy Biped
+      //    animations as Rudra so Vrikodara looks 100% like an ink-outlined Hades boss!
       // ======================================================================
       const vrikodaraRoot = new THREE.Group();
       vrikodaraGroup.position.set(0, 0, 0);
@@ -602,20 +617,20 @@ export class Boss3DRenderer {
 
       const vrikMaterials: THREE.MeshStandardMaterial[] = [];
       const vrikWepMat = createWepMat();
+      const gradedVrikBase = regradeTextureToHadesPalette(vrikBase, 'vrikodara_crimson');
 
-      // Match Rudra3DRenderer's exact PBR material balance so Crimson Skull Warlord's hand-painted
-      // red/bone/iron texture_0.png shines with zero metallic washout!
       const vrikCharMat = new THREE.MeshStandardMaterial({
-        map: vrikBase || undefined,
+        color: new THREE.Color(0xffe0c8),
+        map: gradedVrikBase || undefined,
         normalMap: vrikNorm || undefined,
-        normalScale: new THREE.Vector2(1.25, 1.25),
+        normalScale: new THREE.Vector2(1.3, 1.3),
         roughnessMap: vrikRough || undefined,
         metalnessMap: vrikMet || undefined,
-        roughness: 0.60,
-        metalness: 0.46,
-        envMapIntensity: 1.42,
-        emissive: new THREE.Color(0x0c0506),
-        emissiveIntensity: 0.06,
+        roughness: 0.40,
+        metalness: 0.50,
+        envMapIntensity: 1.48,
+        emissive: new THREE.Color(0x28080a),
+        emissiveIntensity: 0.16,
       });
       vrikMaterials.push(vrikCharMat);
 
@@ -808,6 +823,7 @@ export class Boss3DRenderer {
     }
 
     rig.activeKey = key;
+    this.clipAnimTime = startTimeOffset;
   }
 
   private selectDesiredClip(params: Boss3DUpdateParams, dt: number): BossClipKey {
@@ -944,6 +960,49 @@ export class Boss3DRenderer {
       this.transitionToClip(rig, desiredClip, 0.14, targetTimeScale, 0, false);
     }
 
+    let aimDx = Math.cos(params.aimAngle);
+    let aimDy = Math.sin(params.aimAngle);
+    if (params.aiState === 'chase' && speed > 24) {
+      aimDx = params.vx;
+      aimDy = params.vy;
+    }
+    if (Math.hypot(aimDx, aimDy) > 0.001) {
+      this.targetYaw = Math.atan2(aimDx, aimDy);
+    } else {
+      this.targetYaw = Math.atan2(params.facing, 0.35);
+    }
+
+    let angleDiff = this.targetYaw - this.currentYaw;
+    angleDiff = Math.atan2(Math.sin(angleDiff), Math.cos(angleDiff));
+    const turnSpeed = params.aiState === 'attack' || params.aiState === 'windup' ? 24 : 14;
+    this.currentYaw += angleDiff * Math.min(1, turnSpeed * dt);
+
+    // Compute Hades 2D Stepped Sprite-Sheet Frame Key ("Animated on Twos")
+    this.clipAnimTime += dt * targetTimeScale;
+    const isBossAction =
+      params.aiState === 'windup' ||
+      params.aiState === 'attack' ||
+      this.attackSwingTimer > 0;
+    const { frameKey, quantizedYaw } = computeSpriteSheetFrameKey({
+      id: params.kind,
+      animName: rig.activeKey || desiredClip,
+      animTime: this.clipAnimTime % 2.4,
+      yawRad: this.currentYaw,
+      isAttacking: isBossAction,
+      isHurt: params.isHitFlash,
+      isParrying: Boolean(params.isParrying),
+      phase: params.phase,
+    });
+
+    if (
+      !isBossAction &&
+      this.trailSamples.length === 0 &&
+      this.spriteBaker.drawCachedFrame(frameKey, this.canvas)
+    ) {
+      rig.mixer.update(dt);
+      return true;
+    }
+
     // Advance base FBX animation mixer
     rig.mixer.update(dt);
 
@@ -973,23 +1032,7 @@ export class Boss3DRenderer {
       spinYawOffset = Math.min(1, p * 1.15) * Math.PI * 2;
     }
 
-    let aimDx = Math.cos(params.aimAngle);
-    let aimDy = Math.sin(params.aimAngle);
-    if (params.aiState === 'chase' && speed > 24) {
-      aimDx = params.vx;
-      aimDy = params.vy;
-    }
-    if (Math.hypot(aimDx, aimDy) > 0.001) {
-      this.targetYaw = Math.atan2(aimDx, aimDy);
-    } else {
-      this.targetYaw = Math.atan2(params.facing, 0.35);
-    }
-
-    let angleDiff = this.targetYaw - this.currentYaw;
-    angleDiff = Math.atan2(Math.sin(angleDiff), Math.cos(angleDiff));
-    const turnSpeed = params.aiState === 'attack' || params.aiState === 'windup' ? 24 : 14;
-    this.currentYaw += angleDiff * Math.min(1, turnSpeed * dt);
-    rig.root.rotation.y = this.currentYaw + spinYawOffset;
+    rig.root.rotation.y = quantizedYaw + spinYawOffset;
 
     const leanTarget =
       params.aiState === 'attack'
@@ -1001,44 +1044,47 @@ export class Boss3DRenderer {
         : 0;
     rig.root.rotation.x = THREE.MathUtils.lerp(
       rig.root.rotation.x,
-      leanTarget * Math.cos(this.currentYaw),
+      leanTarget * Math.cos(quantizedYaw),
       dt * 12
     );
     rig.root.rotation.z = THREE.MathUtils.lerp(
       rig.root.rotation.z,
-      -leanTarget * Math.sin(this.currentYaw),
+      -leanTarget * Math.sin(quantizedYaw),
       dt * 12
     );
 
     // Clean Rim Light & Hit-Flash Response (preserves true painted texture colors!)
+    let rimHexCss = params.kind === 'vrikodara' ? '#ff6a42' : '#ffbe55';
     if (params.isParrying) {
       this.rimLight.color.setHex(0xffe082);
-      this.rimLight.intensity = 3.2;
+      this.rimLight.intensity = 3.6;
+      rimHexCss = '#ffe484';
     } else if (params.aiState === 'attack' || params.aiState === 'windup') {
       this.rimLight.color.setHex(0xff5238);
-      this.rimLight.intensity = 2.8;
+      this.rimLight.intensity = 3.5;
+      rimHexCss = '#ff5838';
     } else {
-      this.rimLight.color.setHex(0xffcf78);
-      this.rimLight.intensity = 2.55;
+      this.rimLight.color.setHex(0xffb858);
+      this.rimLight.intensity = 3.2;
     }
 
     for (const mat of rig.materials) {
       if (params.isHitFlash) {
         mat.emissive.setHex(0xfff0d0);
-        mat.emissiveIntensity = 0.65;
+        mat.emissiveIntensity = 0.68;
       } else if (params.isParrying) {
         mat.emissive.setHex(0xffd86b);
-        mat.emissiveIntensity = 0.32;
+        mat.emissiveIntensity = 0.36;
       } else {
-        mat.emissive.setHex(0x0c0506);
-        mat.emissiveIntensity = 0.06;
+        mat.emissive.setHex(params.kind === 'vrikodara' ? 0x28080a : 0x241008);
+        mat.emissiveIntensity = 0.16;
       }
     }
 
     for (const wMat of rig.weaponMaterials) {
-      wMat.emissive.setHex(0x44080a);
+      wMat.emissive.setHex(0x4a0c10);
       wMat.emissiveIntensity =
-        params.aiState === 'attack' ? 0.30 : params.aiState === 'windup' ? 0.16 : 0.06;
+        params.aiState === 'attack' ? 0.38 : params.aiState === 'windup' ? 0.22 : 0.12;
     }
 
     this.scene.updateMatrixWorld(true);
@@ -1051,6 +1097,13 @@ export class Boss3DRenderer {
     this.updateWeaponTrail(rig, dt, trailActive, trailColor);
 
     this.renderer.render(this.scene, this.camera);
+    this.spriteBaker.bakeSpriteFrame(this.webglCanvas, this.canvas, {
+      frameKey,
+      rimColor: rimHexCss,
+      outlinePx: 2.5,
+      isHurt: params.isHitFlash,
+      cacheFrame: !isBossAction && this.trailSamples.length === 0,
+    });
     return true;
   }
 

@@ -29,7 +29,37 @@ export interface ProcessedSpriteAsset {
 const processedCache = new Map<string, ProcessedSpriteAsset>();
 const loadingPromises = new Map<string, Promise<ProcessedSpriteAsset | null>>();
 
+export const KNOWN_GREY_GRID_SHEETS: Record<
+  string,
+  { cols: number; rows: number; scaleAdjust?: number }
+> = {
+  '4lkbel4lkbel4lkb': { cols: 8, rows: 6, scaleAdjust: 1.04 }, // Hooded Mage
+  '4onmdt4onmdt4onm': { cols: 8, rows: 6, scaleAdjust: 1.06 }, // Undead Shield-Swordsman
+  '70z55s70z55s70z5': { cols: 8, rows: 6, scaleAdjust: 0.96 }, // Ember-Pillar Abomination
+  '7yurbo7yurbo7yur': { cols: 8, rows: 6, scaleAdjust: 1.02 }, // Rakshasa Mace Brute
+  '8yp2l78yp2l78yp2': { cols: 8, rows: 6, scaleAdjust: 1.12 }, // Bronze Spearman
+  'a1cw1wa1cw1wa1cw': { cols: 8, rows: 6, scaleAdjust: 1.04 }, // Naga Serpent-Blade
+  'd57givd57givd57g': { cols: 8, rows: 6, scaleAdjust: 1.05 }, // Feral Ghoul
+  'h2s8ngh2s8ngh2s8': { cols: 8, rows: 6, scaleAdjust: 0.98 }, // Minotaur Great-Axe
+  'kx4tuckx4tuckx4t': { cols: 8, rows: 6, scaleAdjust: 0.98 }, // Minotaur Brawler
+  'oen1iloen1iloen1': { cols: 10, rows: 6, scaleAdjust: 1.08 }, // Undead Longbow Archer
+  'ojo449ojo449ojo4': { cols: 8, rows: 6, scaleAdjust: 0.94 }, // Charnel Flesh-Hulk
+  'q7gfcrq7gfcrq7gf': { cols: 10, rows: 6, scaleAdjust: 1.04 }, // Temple Warhammer Guardian
+  's313yes313yes313': { cols: 8, rows: 6, scaleAdjust: 1.02 }, // Horned Shield Guard
+  'wg0e4cwg0e4cwg0e': { cols: 10, rows: 6, scaleAdjust: 1.06 }, // Red-Eyed Crawler Ghoul
+};
+
+export function getGreyGridSpecForUrl(
+  url: string
+): { cols: number; rows: number; scaleAdjust?: number } | null {
+  for (const [token, spec] of Object.entries(KNOWN_GREY_GRID_SHEETS)) {
+    if (url.includes(token)) return spec;
+  }
+  return null;
+}
+
 export const KNOWN_MULTIROW_UUIDS = [
+  ...Object.keys(KNOWN_GREY_GRID_SHEETS),
   'Bronze_Spearman_Sprite_Sheet',
   'Ghoul_Animation_Sprite_Sheet',
   'Fantasy_Knight_Combat_Sprite_Sheet',
@@ -111,11 +141,28 @@ interface SheetAnimManifest {
 }
 
 /**
- * Exact Per-Sheet Animation Row & Frame Manifest verified against all 15 uploaded sprite sheets.
+ * Exact Per-Sheet Animation Row & Frame Manifest verified against all uploaded sprite sheets.
  * Windup (anticipation) and Attack (strike + follow-through) use non-overlapping monotonic frame ranges
  * so windup -> attack plays smoothly forward without jumping backward.
  */
 function getManifestForSheetUrl(url: string, numRows: number): SheetAnimManifest {
+  const greySpec = getGreyGridSpecForUrl(url);
+  if (greySpec) {
+    // 6-Row Isometric Grey-Background Sheet:
+    // Row 0 = Idle; Row 1 = Walk/Run; Row 2 = Windup(0..3) + Attack(3..end); Row 3 = Special/Heavy; Row 4 = Hurt; Row 5 = Death
+    return {
+      idle: { row: 0, start: 0, end: Math.min(6, greySpec.cols) },
+      walk: { row: 1, start: 0, end: 99 },
+      windup: { row: 2, start: 0, end: 3 },
+      attack: { row: 2, start: 3, end: 99 },
+      special: { row: 3, start: 1, end: 99 },
+      hurt: { row: 4, start: 0, end: 4 },
+      death: { row: 5, start: 0, end: 99 },
+      standingRefRow: 0,
+      standingRefEnd: 4,
+      scaleAdjust: greySpec.scaleAdjust ?? 1.04,
+    };
+  }
   if (url.includes('Bronze_Spearman_Sprite_Sheet')) {
     // 3 rows: Row 0 = Idle(0..4) + Walk(4..9); Row 1 = Hurt(0..2) + Death(2..8); Row 2 = Spear Attack(0..6)
     return {
@@ -446,7 +493,37 @@ export function getProcessedSpriteSync(url: string): ProcessedSpriteAsset | unde
         url.includes('enemy') ||
         url.includes('brazier') ||
         KNOWN_4X1_UUIDS.some((token) => url.includes(token)));
+    const isVfxFlipbook4x2 =
+      url.includes('94a7b372') ||
+      url.includes('641e6edf') ||
+      url.includes('a192f958') ||
+      url.includes('5e38a9cc') ||
+      url.includes('c9aef3c4') ||
+      url.includes('557d80c2') ||
+      url.includes('d902fbcf') ||
+      url.includes('319410b6') ||
+      url.includes('9bf5a8bb') ||
+      url.includes('2c297451') ||
+      url.includes('a0db012d') ||
+      url.includes('a2584071') ||
+      url.includes('6d72d5b4');
+    const isVfxFlipbook1x6 = url.includes('045bab37');
+    const isVfxFlipbook1x8 =
+      url.includes('5833cc93') ||
+      url.includes('ckan5e') ||
+      url.includes('g4k6rg') ||
+      url.includes('1934edb4') ||
+      url.includes('55b33a2e') ||
+      url.includes('05d4d912') ||
+      url.includes('ba35aea3') ||
+      url.includes('0382a20d') ||
+      url.includes('b41bc40f') ||
+      url.includes('c25414cb');
     const isVfx =
+      isVfxFlipbook4x2 ||
+      isVfxFlipbook1x6 ||
+      isVfxFlipbook1x8 ||
+      url.includes('/assets/vfx/') ||
       url.includes('CB33122A-A9C1-4A00-8F0C-6B65EE5BF3AE') ||
       url.includes('vfx') ||
       url.includes('decal') ||
@@ -464,9 +541,19 @@ export function getProcessedSpriteSync(url: string): ProcessedSpriteAsset | unde
     loadAndProcessSprite(url, {
       removeBlackBg: true,
       stripCornerWatermark: !isMultiRow,
-      frameCount: isMultiRow ? 16 : is2x2 || is4x1 ? 4 : url.includes('2x1') || url.includes('gcf89k') ? 2 : 1,
+      frameCount: isMultiRow
+        ? 16
+        : isVfxFlipbook4x2 || isVfxFlipbook1x8
+        ? 8
+        : isVfxFlipbook1x6
+        ? 6
+        : is2x2 || is4x1
+        ? 4
+        : url.includes('2x1') || url.includes('gcf89k')
+        ? 2
+        : 1,
       mode: isVfx ? 'vfx' : 'character',
-      gridLayout: isMultiRow ? 'multirow' : is2x2 ? '2x2' : '1xN',
+      gridLayout: isMultiRow ? 'multirow' : isVfxFlipbook4x2 ? '4x2' : is2x2 ? '2x2' : '1xN',
     });
   }
   return undefined;
@@ -482,7 +569,7 @@ export function loadAndProcessSprite(
     stripCornerWatermark?: boolean;
     frameCount?: number;
     mode?: 'character' | 'vfx' | 'prop';
-    gridLayout?: '1xN' | '2x2' | 'multirow';
+    gridLayout?: '1xN' | '2x2' | '4x2' | 'multirow';
   } = {
     removeBlackBg: true,
     stripCornerWatermark: true,
@@ -525,9 +612,10 @@ export function loadAndProcessSprite(
         }
         const expectedFrames = Math.max(1, options.frameCount ?? 1);
         const is2x2Grid = options.gridLayout === '2x2';
+        const is4x2Grid = options.gridLayout === '4x2';
         const maxDim = isMultiRow
           ? MAX_MULTIROW_SHEET_DIM
-          : expectedFrames === 1 && !is2x2Grid
+          : expectedFrames === 1 && !is2x2Grid && !is4x2Grid
             ? 256
             : MAX_SPRITE_SHEET_DIM;
         const scale = Math.min(1, maxDim / Math.max(rawW, rawH));
@@ -566,9 +654,344 @@ export function loadAndProcessSprite(
         const colOpaqueCount = new Int32Array(w);
         const rowOpaqueCount = new Int32Array(h);
 
-        // FAST PATH FOR MULTI-ROW GREEN-SCREEN SPRITE SHEETS:
-        // Preserves 100% original crisp black ink outlines & warm bronze/gold colors with smooth alpha edge anti-aliasing
+        // FAST PATH FOR MULTI-ROW SPRITE SHEETS (14 Isometric Grey-Grid Sheets + Legacy Green-Screen Sheets):
         if (isMultiRow) {
+          const greySpec = getGreyGridSpecForUrl(url);
+          if (greySpec) {
+            // 1. Sample neutral grey background from cell corners
+            const cellW = w / greySpec.cols;
+            const cellH = h / greySpec.rows;
+            const samplePts: Array<[number, number]> = [
+              [2, 2],
+              [Math.max(2, Math.floor(cellW) - 3), 2],
+              [2, Math.max(2, Math.floor(cellH) - 3)],
+              [w - 3, 2],
+            ];
+            let sumR = 0;
+            let sumG = 0;
+            let sumB = 0;
+            for (const [sx, sy] of samplePts) {
+              const sIdx = (sy * w + sx) * 4;
+              sumR += data[sIdx];
+              sumG += data[sIdx + 1];
+              sumB += data[sIdx + 2];
+            }
+            const bgR = sumR / samplePts.length;
+            const bgG = sumG / samplePts.length;
+            const bgB = sumB / samplePts.length;
+
+            // Strip bottom-right Gemini star watermark corner before flood-fill
+            const wmX0 = Math.floor(w * 0.935);
+            const wmY0 = Math.floor(h * 0.915);
+            for (let y = wmY0; y < h; y++) {
+              const rOff = y * w;
+              for (let x = wmX0; x < w; x++) {
+                const p = rOff + x;
+                bgMask[p] = 1;
+                data[p * 4 + 3] = 0;
+              }
+            }
+
+            const isGreyBgCandidate = (p: number): boolean => {
+              const idx = p * 4;
+              if (data[idx + 3] < 24) return true;
+              const r = data[idx];
+              const g = data[idx + 1];
+              const b = data[idx + 2];
+              const maxC = Math.max(r, g, b);
+              const minC = Math.min(r, g, b);
+              const chroma = maxC - minC;
+              const dist = Math.abs(r - bgR) + Math.abs(g - bgG) + Math.abs(b - bgB);
+              return (
+                (chroma <= 22 && dist <= 62) ||
+                (chroma <= 15 && minC >= 88 && maxC <= 168)
+              );
+            };
+
+            // 2. Cell-border-seeded BFS flood-fill so interior grey armor/bone inside dark outlines stays 100% solid!
+            const queue = new Int32Array(totalPixels);
+            let qHead = 0;
+            let qTail = 0;
+            const trySeed = (x: number, y: number) => {
+              if (x < 0 || x >= w || y < 0 || y >= h) return;
+              const p = y * w + x;
+              if (bgMask[p] === 0 && isGreyBgCandidate(p)) {
+                bgMask[p] = 1;
+                data[p * 4 + 3] = 0;
+                queue[qTail++] = p;
+              }
+            };
+
+            for (let r = 0; r <= greySpec.rows; r++) {
+              const by = Math.min(h - 1, Math.max(0, Math.round((r * h) / greySpec.rows)));
+              for (let x = 0; x < w; x++) {
+                trySeed(x, by);
+                if (by > 0) trySeed(x, by - 1);
+                if (by + 1 < h) trySeed(x, by + 1);
+              }
+            }
+            for (let c = 0; c <= greySpec.cols; c++) {
+              const bx = Math.min(w - 1, Math.max(0, Math.round((c * w) / greySpec.cols)));
+              for (let y = 0; y < h; y++) {
+                trySeed(bx, y);
+                if (bx > 0) trySeed(bx - 1, y);
+                if (bx + 1 < w) trySeed(bx + 1, y);
+              }
+            }
+
+            while (qHead < qTail) {
+              const curr = queue[qHead++];
+              const cx = curr % w;
+              const cy = (curr - cx) / w;
+              if (cx > 0) {
+                const n = curr - 1;
+                if (bgMask[n] === 0 && isGreyBgCandidate(n)) {
+                  bgMask[n] = 1;
+                  data[n * 4 + 3] = 0;
+                  queue[qTail++] = n;
+                }
+              }
+              if (cx + 1 < w) {
+                const n = curr + 1;
+                if (bgMask[n] === 0 && isGreyBgCandidate(n)) {
+                  bgMask[n] = 1;
+                  data[n * 4 + 3] = 0;
+                  queue[qTail++] = n;
+                }
+              }
+              if (cy > 0) {
+                const n = curr - w;
+                if (bgMask[n] === 0 && isGreyBgCandidate(n)) {
+                  bgMask[n] = 1;
+                  data[n * 4 + 3] = 0;
+                  queue[qTail++] = n;
+                }
+              }
+              if (cy + 1 < h) {
+                const n = curr + w;
+                if (bgMask[n] === 0 && isGreyBgCandidate(n)) {
+                  bgMask[n] = 1;
+                  data[n * 4 + 3] = 0;
+                  queue[qTail++] = n;
+                }
+              }
+            }
+
+            // 3. Clean 1px grey fringe along exterior silhouette & populate hit-flash buffer
+            for (let y = 0; y < h; y++) {
+              const rOff = y * w;
+              for (let x = 0; x < w; x++) {
+                const p = rOff + x;
+                if (bgMask[p] !== 0) continue;
+                const idx = p * 4;
+                const r = data[idx];
+                const g = data[idx + 1];
+                const b = data[idx + 2];
+                const touchesBg =
+                  (x > 0 && bgMask[p - 1] === 1) ||
+                  (x + 1 < w && bgMask[p + 1] === 1) ||
+                  (y > 0 && bgMask[p - w] === 1) ||
+                  (y + 1 < h && bgMask[p + w] === 1);
+                if (touchesBg) {
+                  const chroma = Math.max(r, g, b) - Math.min(r, g, b);
+                  const dist = Math.abs(r - bgR) + Math.abs(g - bgG) + Math.abs(b - bgB);
+                  if (chroma <= 24 && dist <= 78) {
+                    // Darken & feather neutral grey anti-aliasing fringe into crisp dark ink edge
+                    data[idx] = Math.round(r * 0.25);
+                    data[idx + 1] = Math.round(g * 0.2);
+                    data[idx + 2] = Math.round(b * 0.2);
+                    data[idx + 3] = 150;
+                  }
+                }
+                const a = data[idx + 3];
+                fData[idx] = 255;
+                fData[idx + 1] = 242;
+                fData[idx + 2] = 205;
+                fData[idx + 3] = a;
+              }
+            }
+
+            ctx.putImageData(imgData, 0, 0);
+            flashCtx.putImageData(flashImgData, 0, 0);
+
+            // 4. Segment exact cols x rows grid cells
+            const segmentedRows: SpriteFrameBounds[][] = [];
+            const frames: SpriteFrameBounds[] = [];
+
+            for (let r = 0; r < greySpec.rows; r++) {
+              const ry0 = Math.round((r * h) / greySpec.rows);
+              const ry1 = Math.round(((r + 1) * h) / greySpec.rows);
+              const rawRowFrames: Array<{
+                sx: number;
+                sy: number;
+                sw: number;
+                sh: number;
+                maxY: number;
+              }> = [];
+
+              for (let c = 0; c < greySpec.cols; c++) {
+                const cx0 = Math.round((c * w) / greySpec.cols);
+                const cx1 = Math.round(((c + 1) * w) / greySpec.cols);
+                const ch = ry1 - ry0;
+
+                // Strip any dangling feet/shadows from the row above in the top 16% of the cell
+                // if separated by a horizontal gap from the character's main body
+                const topCheckLimit = Math.min(ry1 - 4, ry0 + Math.round(ch * 0.16));
+                let lastEmptyTopY = -1;
+                for (let y = ry0; y <= topCheckLimit; y++) {
+                  let fgInRow = 0;
+                  const rOff = y * w;
+                  for (let x = cx0 + 2; x < cx1 - 2; x++) {
+                    if (bgMask[rOff + x] === 0 && data[(rOff + x) * 4 + 3] > 80) fgInRow++;
+                  }
+                  if (fgInRow <= 1) lastEmptyTopY = y;
+                }
+                if (lastEmptyTopY > ry0) {
+                  for (let y = ry0; y <= lastEmptyTopY; y++) {
+                    const rOff = y * w;
+                    for (let x = cx0; x < cx1; x++) {
+                      const p = rOff + x;
+                      bgMask[p] = 1;
+                      data[p * 4 + 3] = 0;
+                      fData[p * 4 + 3] = 0;
+                    }
+                  }
+                }
+
+                // Strip any protruding head/weapon tips from the row below in the bottom 12% of the cell
+                const botCheckStart = Math.max(ry0 + 4, ry1 - Math.round(ch * 0.12));
+                let firstEmptyBotY = -1;
+                for (let y = botCheckStart; y < ry1; y++) {
+                  let fgInRow = 0;
+                  const rOff = y * w;
+                  for (let x = cx0 + 2; x < cx1 - 2; x++) {
+                    if (bgMask[rOff + x] === 0 && data[(rOff + x) * 4 + 3] > 80) fgInRow++;
+                  }
+                  if (fgInRow <= 1) {
+                    firstEmptyBotY = y;
+                    break;
+                  }
+                }
+                if (firstEmptyBotY >= botCheckStart) {
+                  for (let y = firstEmptyBotY; y < ry1; y++) {
+                    const rOff = y * w;
+                    for (let x = cx0; x < cx1; x++) {
+                      const p = rOff + x;
+                      bgMask[p] = 1;
+                      data[p * 4 + 3] = 0;
+                      fData[p * 4 + 3] = 0;
+                    }
+                  }
+                }
+
+                let minX = cx1;
+                let maxX = cx0;
+                let minY = ry1;
+                let maxY = ry0;
+                let count = 0;
+
+                for (let y = ry0 + 2; y < ry1 - 2; y++) {
+                  const rOff = y * w;
+                  for (let x = cx0 + 2; x < cx1 - 2; x++) {
+                    const p = rOff + x;
+                    if (bgMask[p] === 0 && data[p * 4 + 3] > 80) {
+                      if (x < minX) minX = x;
+                      if (x > maxX) maxX = x;
+                      if (y < minY) minY = y;
+                      if (y > maxY) maxY = y;
+                      count++;
+                    }
+                  }
+                }
+
+                if (count >= 28 && maxX - minX >= 10 && maxY - minY >= 14) {
+                  const pad = 2;
+                  const sx = Math.max(cx0, minX - pad);
+                  const sy = Math.max(ry0, minY - pad);
+                  const sw = Math.min(cx1 - sx, maxX - minX + 1 + pad * 2);
+                  const sh = Math.min(ry1 - sy, maxY - minY + 1 + pad * 2);
+                  rawRowFrames.push({ sx, sy, sw, sh, maxY });
+                }
+              }
+
+              if (rawRowFrames.length > 0) {
+                const sortedMaxY = rawRowFrames.map((f) => f.maxY).sort((a, b) => a - b);
+                const rowGroundY = sortedMaxY[Math.floor(sortedMaxY.length * 0.75)];
+
+                const rowFrames: SpriteFrameBounds[] = rawRowFrames.map((rf) => {
+                  const bandY0 = Math.max(rf.sy, Math.floor(rf.sy + rf.sh * 0.25));
+                  const bandY1 = Math.min(rf.sy + rf.sh, Math.ceil(rf.sy + rf.sh * 0.9));
+                  let weightedXSum = 0;
+                  let weightTotal = 0;
+                  for (let x = rf.sx; x < rf.sx + rf.sw; x++) {
+                    let colBody = 0;
+                    for (let y = bandY0; y < bandY1; y++) {
+                      if (bgMask[y * w + x] === 0) colBody++;
+                    }
+                    if (colBody > 0) {
+                      const weight = colBody * colBody;
+                      weightedXSum += (x - rf.sx) * weight;
+                      weightTotal += weight;
+                    }
+                  }
+                  const anchorX =
+                    weightTotal > 0
+                      ? Math.max(rf.sw * 0.25, Math.min(rf.sw * 0.75, weightedXSum / weightTotal))
+                      : rf.sw * 0.5;
+                  const effectiveGroundY =
+                    Math.abs(rf.maxY - rowGroundY) <= 8 ? rowGroundY : rf.maxY;
+                  const groundOffsetY = Math.max(rf.sh * 0.78, effectiveGroundY - rf.sy);
+                  return {
+                    sx: rf.sx,
+                    sy: rf.sy,
+                    sw: rf.sw,
+                    sh: rf.sh,
+                    anchorX,
+                    groundOffsetY,
+                  };
+                });
+
+                segmentedRows.push(rowFrames);
+                for (const f of rowFrames) frames.push(f);
+              }
+            }
+
+            if (frames.length === 0) {
+              frames.push({ sx: 0, sy: 0, sw: w, sh: h, anchorX: w * 0.5, groundOffsetY: h });
+            }
+
+            const manifest = getManifestForSheetUrl(url, segmentedRows.length);
+            const refRow = segmentedRows[0] || frames;
+            const sortedRefH = refRow
+              .map((f) => f.groundOffsetY || f.sh)
+              .sort((a, b) => a - b);
+            const rawRefHeight =
+              sortedRefH.length > 0
+                ? sortedRefH[Math.floor(sortedRefH.length * 0.5)]
+                : frames[0]?.sh || h;
+            const baseFrameHeight = Math.max(
+              16,
+              Math.round(rawRefHeight / (manifest.scaleAdjust || 1))
+            );
+
+            const result: ProcessedSpriteAsset = {
+              url,
+              cleanCanvas,
+              flashCanvas,
+              goldCanvas: flashCanvas,
+              jadeCanvas: cleanCanvas,
+              width: w,
+              height: h,
+              frames,
+              rows: segmentedRows,
+              baseFrameHeight,
+            };
+            processedCache.set(url, result);
+            loadingPromises.delete(url);
+            resolve(result);
+            return;
+          }
+
           // 1. Chroma-key green background (#00FF00) + smooth anti-aliased edge despill
           for (let p = 0; p < totalPixels; p++) {
             const idx = p * 4;
@@ -581,18 +1004,18 @@ export function loadAndProcessSprite(
 
             if (
               a < 24 ||
-              (g > 100 && greenExcess > 28 && maxRB < 175) ||
-              (g > 160 && greenExcess > 20)
+              (g > 96 && greenExcess > 24 && maxRB < 180) ||
+              (g > 155 && greenExcess > 18)
             ) {
               bgMask[p] = 1;
               data[idx + 3] = 0;
             } else if (greenExcess > 8) {
               data[idx + 1] = maxRB;
               const edgeAlpha =
-                greenExcess > 20
-                  ? Math.max(0, Math.min(255, Math.round(255 * (1 - (greenExcess - 20) / 18))))
+                greenExcess > 18
+                  ? Math.max(0, Math.min(255, Math.round(255 * (1 - (greenExcess - 18) / 18))))
                   : 255;
-              if (edgeAlpha < 48) {
+              if (edgeAlpha < 52) {
                 bgMask[p] = 1;
                 data[idx + 3] = 0;
               } else {
@@ -603,16 +1026,26 @@ export function loadAndProcessSprite(
             }
           }
 
-          // 2. Strip only true full-width horizontal grid lines (>92% of width non-background) and accumulate row/col histograms
+          // 2. Strip full-width horizontal grid lines (>78% width) and thin monochrome text-label rows ("SHEET 1: IDLE", etc.)
           for (let y = 0; y < h; y++) {
             const rowOff = y * w;
             let rowNonBg = 0;
+            let warmBodyPixels = 0;
             for (let x = 0; x < w; x++) {
               if (bgMask[rowOff + x] === 0) {
                 rowNonBg++;
+                const idx = (rowOff + x) * 4;
+                const r = data[idx];
+                const g = data[idx + 1];
+                const b = data[idx + 2];
+                if (r > 68 && (r - b > 14 || r - g > 10 || Math.max(r, g, b) > 95)) {
+                  warmBodyPixels++;
+                }
               }
             }
-            if (rowNonBg > w * 0.92) {
+            const isGridLine = rowNonBg > w * 0.78;
+            const isTextLabelRow = rowNonBg > 0 && rowNonBg < w * 0.22 && warmBodyPixels <= 2;
+            if (isGridLine || isTextLabelRow) {
               for (let x = 0; x < w; x++) {
                 const p = rowOff + x;
                 bgMask[p] = 1;
@@ -644,9 +1077,9 @@ export function loadAndProcessSprite(
           const rawBands: Array<[number, number]> = [];
           let inBand = false;
           let bandStart = 0;
-          const minBandHeight = Math.max(12, Math.round(h * 0.04));
+          const minBandHeight = Math.max(18, Math.round(h * 0.048));
           for (let y = 0; y < h; y++) {
-            if (rowOpaqueCount[y] > 2) {
+            if (rowOpaqueCount[y] > 4) {
               if (!inBand) {
                 inBand = true;
                 bandStart = y;
@@ -729,6 +1162,7 @@ export function loadAndProcessSprite(
             let minY = yEnd;
             let maxY = yStart;
             let found = false;
+            const bandH = yEnd - yStart;
 
             for (let y = yStart; y < yEnd; y++) {
               const rowOff = y * w;
@@ -742,7 +1176,14 @@ export function loadAndProcessSprite(
                 }
               }
             }
-            if (!found || maxX - minX < 8 || maxY - minY < 10) return null;
+            // Reject tiny text labels ("1. IDLE (4)") or stray artifacts shorter than 36% of row height
+            if (
+              !found ||
+              maxX - minX < Math.max(12, Math.round(bandH * 0.20)) ||
+              maxY - minY < Math.max(22, Math.round(bandH * 0.36))
+            ) {
+              return null;
+            }
             const pad = 2;
             const sx = Math.max(xStart, minX - pad);
             const sy = Math.max(yStart, minY - pad);
@@ -756,14 +1197,19 @@ export function loadAndProcessSprite(
 
           for (const [ry0, ry1] of rowBands) {
             const rowH = ry1 - ry0;
-            if (rowH < 14) continue;
+            if (rowH < 18) continue;
 
             const colCount = new Int32Array(w);
+            const torsoColCount = new Int32Array(w);
+            const torsoY0 = Math.round(ry0 + rowH * 0.16);
+            const torsoY1 = Math.round(ry0 + rowH * 0.82);
             for (let y = ry0; y < ry1; y++) {
               const rOff = y * w;
+              const isTorsoBand = y >= torsoY0 && y <= torsoY1;
               for (let x = 0; x < w; x++) {
                 if (bgMask[rOff + x] === 0) {
                   colCount[x]++;
+                  if (isTorsoBand) torsoColCount[x]++;
                 }
               }
             }
@@ -789,10 +1235,10 @@ export function loadAndProcessSprite(
               rawCols.push([colStart, w]);
             }
 
-            // Merge only small detached weapon/shield/spark fragments (< 38% of rowH) into their adjacent character pose
-            const smallFragW = Math.round(rowH * 0.38);
-            const maxMergeGap = Math.round(rowH * 0.18);
-            const minValidPoseW = Math.round(rowH * 0.22);
+            // Merge only small detached weapon/shield/spark fragments (< 32% of rowH) into their adjacent character pose
+            const smallFragW = Math.round(rowH * 0.32);
+            const maxMergeGap = Math.round(rowH * 0.14);
+            const minValidPoseW = Math.round(rowH * 0.24);
             const mergedCols: Array<[number, number]> = [];
             for (const col of rawCols) {
               const cw = col[1] - col[0];
@@ -810,14 +1256,17 @@ export function loadAndProcessSprite(
               }
             }
 
-            // Only split a column if two full characters touched tip-to-toe (spanW > 1.95x median pose width AND a deep valley exists)
-            const widths = mergedCols.map((c) => c[1] - c[0]).sort((a, b) => a - b);
-            const medW =
-              widths.length > 0
-                ? widths[Math.floor(widths.length * 0.45)]
-                : Math.round(rowH * 0.85);
-            const minSubPoseW = Math.max(Math.round(rowH * 0.55), Math.round(medW * 0.78));
-            const splitTriggerW = Math.max(Math.round(rowH * 1.85), Math.round(medW * 1.95));
+            // Determine canonical single-pose width from non-merged single poses, falling back to 0.88 * rowH
+            const singlePoseWidths = mergedCols
+              .map((c) => c[1] - c[0])
+              .filter((cw) => cw >= rowH * 0.42 && cw <= rowH * 1.32)
+              .sort((a, b) => a - b);
+            const canonicalPoseW =
+              singlePoseWidths.length > 0
+                ? singlePoseWidths[Math.floor(singlePoseWidths.length * 0.5)]
+                : Math.round(rowH * 0.88);
+            const minSubPoseW = Math.max(Math.round(rowH * 0.44), Math.round(canonicalPoseW * 0.58));
+            const splitTriggerW = Math.max(Math.round(rowH * 1.38), Math.round(canonicalPoseW * 1.46));
 
             const rawRowFrames: Array<{
               sx: number;
@@ -831,13 +1280,13 @@ export function loadAndProcessSprite(
               const spanW = cx1 - cx0;
               if (spanW > splitTriggerW) {
                 const subCount = Math.min(
-                  4,
-                  Math.max(2, Math.round(spanW / Math.max(rowH * 0.85, medW * 1.15)))
+                  10,
+                  Math.max(2, Math.round(spanW / Math.max(rowH * 0.72, canonicalPoseW)))
                 );
                 let prevX = cx0;
                 for (let k = 1; k < subCount; k++) {
                   const nomX = Math.round(cx0 + (k * spanW) / subCount);
-                  const rad = Math.max(8, Math.round(spanW / (subCount * 2.8)));
+                  const rad = Math.max(10, Math.round(spanW / (subCount * 2.6)));
                   let bestX = nomX;
                   let bestVal = Number.MAX_SAFE_INTEGER;
                   for (
@@ -846,19 +1295,16 @@ export function loadAndProcessSprite(
                     sx++
                   ) {
                     const v =
-                      colCount[Math.max(0, sx - 1)] +
-                      colCount[sx] * 2 +
-                      colCount[Math.min(w - 1, sx + 1)];
+                      torsoColCount[Math.max(0, sx - 1)] +
+                      torsoColCount[sx] * 2 +
+                      torsoColCount[Math.min(w - 1, sx + 1)] +
+                      colCount[sx];
                     if (v < bestVal) {
                       bestVal = v;
                       bestX = sx;
                     }
                   }
-                  if (
-                    bestVal <= Math.round(rowH * 0.16) &&
-                    bestX - prevX >= minSubPoseW &&
-                    cx1 - bestX >= minSubPoseW
-                  ) {
+                  if (bestX - prevX >= minSubPoseW && cx1 - bestX >= minSubPoseW) {
                     const rf = extractRawFrame(prevX, bestX, ry0, ry1);
                     if (rf) rawRowFrames.push(rf);
                     prevX = bestX;
@@ -1179,11 +1625,47 @@ export function loadAndProcessSprite(
 
             if (isVfxMode) {
               const maxChannel = Math.max(r, g, b);
-              if (maxChannel < 20 && luma < 16) {
+              const minChannel = Math.min(r, g, b);
+              const chroma = maxChannel - minChannel;
+              const isDarkSolidBgVfx =
+                url.includes('5833cc93') ||
+                url.includes('ckan5e') ||
+                url.includes('g4k6rg') ||
+                url.includes('1934edb4') ||
+                url.includes('55b33a2e');
+              const isCheckerboardVfx =
+                !isDarkSolidBgVfx &&
+                (url.includes('/assets/vfx/') || url.includes('/assets/concepts/'));
+
+              if (maxChannel < 26 && luma < 22) {
                 data[idx + 3] = 0;
                 continue;
+              } else if (isDarkSolidBgVfx && maxChannel < 54 && chroma < 24) {
+                // Strip dark charcoal background (#1c1c1e / #212226) cleanly
+                data[idx + 3] = 0;
+                continue;
+              } else if (isDarkSolidBgVfx && maxChannel < 82 && chroma < 32) {
+                const factor = Math.max(0, Math.min(1, (maxChannel - 50) / 32));
+                a = Math.round(a * factor * factor);
+                data[idx] = Math.round(r * factor);
+                data[idx + 1] = Math.round(g * factor);
+                data[idx + 2] = Math.round(b * factor);
+                data[idx + 3] = a;
+                if (a < 18) continue;
+              } else if (isCheckerboardVfx && chroma <= 44 && luma < 215) {
+                // Strip neutral gray checkerboard squares (#4a4a4a / #7a7a7a), baked-in semi-transparent checkerboard, and black cell border lines
+                data[idx + 3] = 0;
+                continue;
+              } else if (isCheckerboardVfx && chroma <= 68 && luma < 205) {
+                const chromaFactor = Math.pow(Math.max(0, Math.min(1, (chroma - 44) / 24)), 1.35);
+                a = Math.round(a * chromaFactor);
+                data[idx] = Math.round(r * chromaFactor);
+                data[idx + 1] = Math.round(g * chromaFactor);
+                data[idx + 2] = Math.round(b * chromaFactor);
+                data[idx + 3] = a;
+                if (a < 20) continue;
               } else if (maxChannel < 64) {
-                const factor = Math.max(0, Math.min(1, (maxChannel - 16) / 48));
+                const factor = Math.max(0, Math.min(1, (maxChannel - 18) / 46));
                 a = Math.round(a * factor);
                 data[idx + 3] = a;
               }
@@ -1236,24 +1718,47 @@ export function loadAndProcessSprite(
         goldCtx.putImageData(goldImgData, 0, 0);
         jadeCtx.putImageData(jadeImgData, 0, 0);
 
+        const isBoxedVfxSheet =
+          isVfxMode && (url.includes('/assets/vfx/') || url.includes('/assets/concepts/'));
+        const isNarrowMiddleStripVfx =
+          url.includes('ba35aea3') ||
+          url.includes('0382a20d') ||
+          url.includes('b41bc40f') ||
+          url.includes('05d4d912');
+
         const computeTightBoundsInBox = (
           xStart: number,
           xEnd: number,
           yStart: number,
           yEnd: number
         ): SpriteFrameBounds => {
-          let minX = xEnd;
-          let maxX = xStart;
-          let minY = yEnd;
-          let maxY = yStart;
-          let found = false;
+          const boxW = Math.max(1, xEnd - xStart);
+          const boxH = Math.max(1, yEnd - yStart);
+          const innerMarginX = isBoxedVfxSheet
+            ? Math.max(5, Math.round(boxW * 0.08))
+            : expectedFrames > 1
+            ? Math.min(6, Math.round(boxW * 0.025))
+            : 0;
+          const innerMarginY = isNarrowMiddleStripVfx
+            ? Math.round(boxH * 0.31)
+            : isBoxedVfxSheet
+            ? is4x2Grid
+              ? Math.max(8, Math.round(boxH * 0.11))
+              : Math.max(8, Math.round(boxH * 0.16))
+            : 0;
 
-          const innerMarginX =
-            expectedFrames > 1 ? Math.min(6, Math.round((xEnd - xStart) * 0.025)) : 0;
           const scanXStart = xStart + innerMarginX;
           const scanXEnd = Math.max(scanXStart + 1, xEnd - innerMarginX);
+          const scanYStart = yStart + innerMarginY;
+          const scanYEnd = Math.max(scanYStart + 1, yEnd - innerMarginY);
 
-          for (let y = yStart; y < yEnd; y++) {
+          let minX = scanXEnd;
+          let maxX = scanXStart;
+          let minY = scanYEnd;
+          let maxY = scanYStart;
+          let found = false;
+
+          for (let y = scanYStart; y < scanYEnd; y++) {
             const rowOffset = y * w;
             for (let x = scanXStart; x < scanXEnd; x++) {
               const alpha = data[(rowOffset + x) * 4 + 3];
@@ -1269,17 +1774,17 @@ export function loadAndProcessSprite(
 
           if (found && maxX > minX && maxY > minY) {
             const pad = 2;
-            const sx = Math.max(xStart, minX - pad);
-            const sy = Math.max(yStart, minY - pad);
-            const sw = Math.min(xEnd - sx, maxX - minX + 1 + pad * 2);
-            const sh = Math.min(yEnd - sy, maxY - minY + 1 + pad * 2);
+            const sx = Math.max(scanXStart, minX - pad);
+            const sy = Math.max(scanYStart, minY - pad);
+            const sw = Math.min(scanXEnd - sx, maxX - minX + 1 + pad * 2);
+            const sh = Math.min(scanYEnd - sy, maxY - minY + 1 + pad * 2);
             return { sx, sy, sw, sh, anchorX: sw * 0.5, groundOffsetY: sh };
           }
-          const fallbackSw = Math.max(1, xEnd - xStart);
-          const fallbackSh = Math.max(1, yEnd - yStart);
+          const fallbackSw = Math.max(1, scanXEnd - scanXStart);
+          const fallbackSh = Math.max(1, scanYEnd - scanYStart);
           return {
-            sx: xStart,
-            sy: yStart,
+            sx: scanXStart,
+            sy: scanYStart,
             sw: fallbackSw,
             sh: fallbackSh,
             anchorX: fallbackSw * 0.5,
@@ -1288,7 +1793,19 @@ export function loadAndProcessSprite(
         };
 
         const frames: SpriteFrameBounds[] = [];
-        if (is2x2Grid) {
+        if (is4x2Grid) {
+          const cols = 4;
+          const midY = Math.round(h * 0.5);
+          for (let r = 0; r < 2; r++) {
+            const y0 = r === 0 ? 0 : midY;
+            const y1 = r === 0 ? midY : h;
+            for (let c = 0; c < cols; c++) {
+              const x0 = Math.round((c * w) / cols);
+              const x1 = Math.round(((c + 1) * w) / cols);
+              frames.push(computeTightBoundsInBox(x0, x1, y0, y1));
+            }
+          }
+        } else if (is2x2Grid) {
           const midX = Math.round(w * 0.5);
           const midY = Math.round(h * 0.5);
           frames.push(computeTightBoundsInBox(0, midX, 0, midY));
@@ -1349,4 +1866,3 @@ export function loadAndProcessSprite(
   loadingPromises.set(url, promise);
   return promise;
 }
-

@@ -947,7 +947,7 @@ export function NarrativeOverlay({
             </div>
 
             <div className="md:col-span-7 space-y-3.5">
-              <h3 className="font-display text-2xl font-bold text-[#fff8eb]">
+              <h3 className="font-display text-2xl font-bold text-[#fff6e8]">
                 “Rudra. Go and Look.”
               </h3>
               <p className="text-xs sm:text-sm text-[#d8ccb8] leading-relaxed">
@@ -1479,7 +1479,7 @@ export function NarrativeOverlay({
             <div className="text-xs font-mono-num tracking-[0.26em] text-[#f5c451] uppercase">
               ENDING ONE · THE VOW · THE TWO HUNDRED PACES
             </div>
-            <h2 className="font-display text-3xl font-bold text-[#fff8eb]">
+            <h2 className="font-display text-3xl font-bold text-[#fff6e8]">
               “Rudra. I gave you my life so you could hold the world. You held it. Now let it go.”
             </h2>
             <p className="text-sm text-[#e0d4c0] leading-relaxed">
@@ -1499,7 +1499,7 @@ export function NarrativeOverlay({
                   : ' its wing still crooked (find 3+ Look objects in Act I to bandage its wing).'}
               </strong>
             </p>
-            <div className="p-4 bg-[#16131a] border-l-2 border-[#f5c451] text-sm text-[#fff8eb]">
+            <div className="p-4 bg-[#16131a] border-l-2 border-[#f5c451] text-sm text-[#fff6e8]">
               <strong className="text-[#f5c451] mr-2">SANJAYA (UNCORRECTED):</strong>
               “Let it be written that he was not wronged. He was forgiven, and he was not let off.
               And he stayed.”
@@ -1512,7 +1512,7 @@ export function NarrativeOverlay({
             <div className="text-xs font-mono-num tracking-[0.26em] text-[#ff8a94] uppercase">
               ENDING TWO · THE SOVEREIGN
             </div>
-            <h2 className="font-display text-3xl font-bold text-[#fff8eb]">
+            <h2 className="font-display text-3xl font-bold text-[#fff6e8]">
               “Rudra. What did you pay?” — “Nothing that mattered.”
             </h2>
             <p className="text-sm text-[#e0d4c0] leading-relaxed">
