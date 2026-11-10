@@ -2,17 +2,20 @@ import type {Metadata} from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Kaliyuga Repository Audit & Engineering Workbench',
-  description: 'Comprehensive architectural, code quality, performance, asset pipeline, and gameplay mechanics audit of akshat92008/kaalyuga.',
+  title: 'Kaliyuga: The Bleeding Crown',
+  description:
+    "A 2.5D isometric Indian mythological action roguelite about Rudra, Savitri's lantern, three stances, divine Astras, and the cost of not looking.",
   openGraph: {
-    title: 'Kaliyuga Repository Audit & Engineering Workbench',
-    description: 'Comprehensive architectural, code quality, performance, asset pipeline, and gameplay mechanics audit of akshat92008/kaalyuga.',
+    title: 'Kaliyuga: The Bleeding Crown',
+    description:
+      "A 2.5D isometric Indian mythological action roguelite about Rudra, Savitri's lantern, three stances, divine Astras, and the cost of not looking.",
     type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Kaliyuga Repository Audit & Engineering Workbench',
-    description: 'Comprehensive architectural, code quality, performance, asset pipeline, and gameplay mechanics audit of akshat92008/kaalyuga.',
+    title: 'Kaliyuga: The Bleeding Crown',
+    description:
+      "A 2.5D isometric Indian mythological action roguelite about Rudra, Savitri's lantern, three stances, divine Astras, and the cost of not looking.",
   },
 };
 

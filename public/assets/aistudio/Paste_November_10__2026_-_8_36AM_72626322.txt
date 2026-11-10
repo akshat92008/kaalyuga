@@ -1,0 +1,1368 @@
+# Kaliyuga: The Bleeding Crown — Complete Vertical Slice Gameplay Design
+
+This is the gameplay and combat design I recommend we build for the first playable release. It covers what the player does, how Rudra fights, how Astras work, how enemies behave, how chambers operate, how bosses work, and how progression and replayability function.
+
+I'm deliberately leaving out art direction, character appearance, animation style, cutscenes and cinematic presentation. This is about making the game genuinely fun to play.
+
+I am also keeping our existing foundation in mind: isometric 2.5D combat, Rudra's weapon, three stances, the Charnel Plains, Dundubhi, Vrikodara, Savitri's boat and the first shard.
+
+## 1. The overall gameplay experience
+
+The game should follow a simple but satisfying loop:
+
+## The main gameplay loop
+
+Return to Savitri's boat
+
+Prepare, upgrade, equip Astras and choose to enter the realm
+
+Enter Charnel Plains
+
+Explore, fight enemies and discover secrets
+
+Clear combat chambers
+
+Fight waves, earn rewards and make build decisions
+
+Face Dundubhi
+
+Test your combat skills against the mini-boss
+
+Face Vrikodara
+
+Learn a more demanding multi-phase boss encounter
+
+Claim the first shard
+
+Unlock progression and a story memory
+
+Return to the boat and prepare again
+
+Keep permanent progress and attempt another run
+
+The player should experience three things throughout:
+
+1. Getting better at controlling Rudra.
+2. Making interesting decisions about their combat build.
+3. Learning enemy and boss patterns rather than simply increasing damage.
+
+Target: approximately 30–60 minutes for a first complete vertical-slice experience, with shorter replay runs after learning the encounters.
+
+# 2. Rudra's core combat system
+
+This is the most important part of the game. Everything else should be built around making this feel excellent.
+
+I want Rudra to be a weapon-focused warrior who can invoke Astras. He should not feel like a mage who occasionally hits enemies with a mace.
+
+## 2.1 Basic controls
+
+Proposed keyboard and mouse layout:
+
+| Input       | Action                            |
+| ----------- | --------------------------------- |
+| WASD        | Move in eight directions          |
+| Left click  | Light attack                      |
+| Right click | Heavy attack                      |
+| Space       | Dodge                             |
+| Shift       | Parry / guard                     |
+| Q           | Astra 1                           |
+| E           | Astra 2                           |
+| R           | Astra 3 / ultimate, when unlocked |
+| F           | Interact                          |
+| Tab         | Pause / combat information        |
+
+The exact bindings should be configurable. Gamepad support should be included in the release plan, but keyboard and mouse should be polished first.
+
+## 2.2 Light attacks
+
+Light attacks should be the player's primary way of building combos.
+
+Proposed behaviour:
+
+- Fast attacks.
+- Low stamina cost or no stamina cost.
+- Three-hit base combination.
+- Can transition into a heavy attack.
+- Different animations and hit reactions depending on stance.
+- Good against smaller enemies.
+
+Example:
+
+1. First attack: quick horizontal strike.
+2. Second attack: reverse strike.
+3. Third attack: powerful finishing hit.
+
+The player should be able to move between attacks without feeling locked into an unnecessarily long animation.
+
+Important: attacks should have clear startup, active and recovery periods. A player should be able to understand when an attack is committed and when they can move again.
+
+## 2.3 Heavy attacks
+
+Heavy attacks should be slower but more powerful.
+
+They should:
+
+- Deal greater damage.
+- Break enemy posture.
+- Interrupt certain enemy attacks.
+- Have different effects against armour.
+- Create meaningful openings.
+
+We should support holding the heavy attack button to charge it.
+
+A fully charged attack should be stronger but expose Rudra to danger.
+
+## 2.4 Combos
+
+I want combos to reward timing and variety rather than button mashing.
+
+For the vertical slice:
+
+- Three-hit light combo.
+- Light → light → heavy.
+- Heavy → light follow-up.
+- Dodge → attack follow-up.
+- Parry → counterattack.
+- Stance-specific finishers.
+
+The first version does not need 30 combinations. It needs a handful that feel responsive and useful.
+
+## 2.5 Dodging
+
+Dodging is essential in an isometric action game.
+
+Rudra should:
+
+- Dodge in the direction of movement.
+- Have a short invulnerability window.
+- Spend stamina.
+- Be able to dodge through certain attacks.
+- Recover control quickly after the dodge.
+
+There should be no unlimited dodge spam.
+
+A dodge should be a deliberate response to an enemy telegraph.
+
+## 2.6 Parrying
+
+This should become one of our signature mechanics.
+
+If the player presses parry shortly before an enemy attack connects:
+
+- The attack is deflected.
+- Rudra takes no damage from that hit.
+- The enemy briefly loses balance.
+- The enemy's posture decreases.
+- Rudra earns Astra energy.
+
+A badly timed parry should not grant these rewards. Depending on the attack, it can result in a normal block, stamina loss or being hit.
+
+Some attacks should be explicitly unparryable. Their telegraphs must communicate that clearly.
+
+## 2.7 Posture and execution
+
+I want two separate health concepts for enemies:
+
+- Health: how close the enemy is to death.
+- Posture: how close the enemy is to being staggered.
+
+Posture increases when:
+
+- Rudra lands heavy attacks.
+- Rudra parries.
+- Rudra attacks an enemy during recovery.
+- Certain Astras hit an enemy.
+
+When posture reaches its limit, the enemy becomes staggered.
+
+The player can then perform an execution or a powerful follow-up attack.
+
+This gives heavy attacks and parries a purpose beyond raw damage.
+
+# 3. The three existing stances
+
+I would preserve the three stances already established in our design rather than inventing an entirely new weapon system.
+
+Each stance should have a different purpose.
+
+Smash stance — Break the enemy
+
+[Collective Media Network launches Historyverse with AI-powered Mahabharata microdrama](https://images.openai.com/static-rsc-4/youGVCLByKCu-kGd63SEKEDTwmTpSblvNYOcNK_ZJbBkuEPRWgEyoOpB9ic3aqxS3y7C2mYZI_uzlMVIvNvhoRAX1LZ128UpG-mA1eajhHKm8stumf4XboCOd7RpqXo-ThaRj2wMGmp-VmGb8v43ZHB9YCr2-VFsqzi_KsdIrwA?purpose=inline)
+
+[buzzincontent.com](https://www.buzzincontent.com/branded-content/collective-media-network-launches-historyverse-with-ai-powered-mahabharata-microdrama-9531525?utm_source=chatgpt.com)
+
+- Slow, heavy attacks.
+- High posture damage.
+- Strong against armour.
+- Better at interrupting large enemies.
+- Less effective against fast enemies.
+
+  Best for heavy enemies
+
+Pillar stance — Control the fight
+
+[Bhima's Role in the Kurukshetra War: A Journey into a Warrior’s Dual Legacy — Moolatattva](https://images.openai.com/static-rsc-4/4QSV4QAsYKUMQBh3-21MS500EXsQtpj8lc--weZMU1u7ZtTdwqkOP88yCc6Vlpq_twx7aEtEaUBxFVqIhrhn0K3YRfD4-94YwM2F9cv2l7mcZtKnqkOH6NWRlMa6Bilag5uvsGCX32RRe9txq_C8r_KO_l829lA1iGSgX5qCm3M?purpose=inline)
+
+[moolatattva.com](https://www.moolatattva.com/blog-posts/bhimas-role-in-the-kurukshetra-war?utm_source=chatgpt.com)
+
+- Wider attacks.
+- Strong defensive follow-ups.
+- Better crowd control.
+- Useful when surrounded.
+- Stronger opportunities after a successful parry.
+
+  Best for groups
+
+Thrust stance — Precision and speed
+
+[韋駄天とスカンダ｜及川洋三](https://images.openai.com/static-rsc-4/DNMEmpP4TX6gfqY9Z4hFn88luDS_EJtuTuIAwzAMx8P_iNTgY5eGf6EE65-DmEtj4teVPMrVPOD9r5KuHTQkoLGZspnMfEthv9b37tGmBCGdHhq8YEyaJlXwSSCHCDlsaTPg7PqAdooSAwKeabZbZUYGpy-IILgqfV5HsHo_mJ4?purpose=inline)
+
+[note.com](https://note.com/btyam182/n/n3f286bf461de?utm_source=chatgpt.com)
+
+- Faster attacks.
+- Better reach.
+- Strong against exposed targets.
+- Useful for punishing boss recovery.
+- Lower posture damage per hit.
+
+  Best for fast enemies and openings
+
+### How stances should work
+
+A stance should not simply change damage numbers.
+
+It should change:
+
+- Attack speed.
+- Attack range.
+- Attack area.
+- Posture damage.
+- Astra behaviour.
+- Dodge and counterattack opportunities.
+
+Players should be able to switch stances during combat without opening a menu.
+
+The stance-switching animation should be short enough that it doesn't make the combat feel sluggish, but switching should not cancel every mistake or become a free defensive escape.
+
+For the first release, each stance needs a functional light combo, heavy attack, dodge follow-up and at least one meaningful interaction with an Astra.
+
+# 4. The Astra system — our most important new mechanic
+
+This is where I want Kaliyuga to establish its own identity.
+
+In the Valmiki Ramayana, Bala Kanda 27–28, Vishwamitra teaches Rama to invoke divine weapons and subsequently teaches him how to withdraw them. The Agni Purana's Dhanurveda section also distinguishes several types of weapons. These provide useful inspiration for treating Astras as something more than generic spells.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://www.valmiki.iitk.ac.in\&sz=32)
+
+Valmiki IIT Kanpur+2
+
+
+
+Our game interpretation:
+
+An Astra is a powerful invocation that changes the battlefield.
+
+## 4.1 Astra energy
+
+Rudra has an invocation meter.
+
+The meter fills through skilled physical combat:
+
+| Player action    | Astra energy    |
+| ---------------- | --------------- |
+| Normal attacks   | Small amount    |
+| Heavy attacks    | Moderate amount |
+| Successful parry | High amount     |
+| Perfect dodge    | Moderate amount |
+| Execution        | High amount     |
+| Taking damage    | No reward       |
+
+This encourages aggressive but intelligent fighting.
+
+I would not make the player wait passively for cooldowns. Their actions should generate the resources needed to use their powers.
+
+## 4.2 Three Astras for the vertical slice
+
+I recommend implementing three, but keeping their scope controlled.
+
+1\. Agneyastra
+
+Area damage
+
+[आग्नेयास्त्र: रामायण-महाभारत में अग्नि और विनाश का रहस्य ! | पौराणिक - Pauranik](https://images.openai.com/static-rsc-4/_gZpK8I-NrKFFHgS5PLYa2WGTYXe26qSR0MvMno7TqjumBpyYwE8fHqe-3mt4ZopGAUsig5BIbY8kCq2mH253BiukSBvl4APcLnHrrALFwBT7W3RUCRkpUqLIursIyDDRmH3EYVDBwcv_93_EV6w2pGj5vJGbcD77a04I_qdXTE?purpose=inline)
+
+[pauranik.org](https://pauranik.org/post/agni-astra-aur-uska-vinashkaari-upyog?utm_source=chatgpt.com)
+
+What it does:
+
+Rudra invokes fire, which erupts across a selected area.
+
+- Damages multiple enemies.
+- Leaves burning ground briefly.
+- Burning enemies take additional damage from certain attacks.
+- Useful against groups.
+
+Stance interactions:
+
+- Smash: explosive fire impact.
+- Pillar: circular fire eruption.
+- Thrust: narrow forward fire wave.
+
+2\. Vayavyastra
+
+Crowd control
+
+[वायव्यास्त्र: पवन देव का अदृश्य दिव्यास्त्र, रहस्य और](https://images.openai.com/static-rsc-4/IK9XImMI1FcjARTOYAaBKsVVjLPyM30MizGoaQ8wOWiFswYQ1g4fY0PfFwJV119nwc--F1z0RQNgvG3mHTDMGS_gqgL_8mdhKZ_7ZPecj1jTqvItrNFfLcIQgTfDQkH8sRUSJlREOqC7xcnOtjOjmHwCkeP7NKzJwdnPcLqbeyg?purpose=inline)
+
+[pauranik.org](https://pauranik.org/post/vayuastra-vayu-dev-ka-prachand-vinashkari-astra?utm_source=chatgpt.com)
+
+What it does:
+
+Rudra releases a powerful force of wind.
+
+- Pushes lighter enemies away.
+- Interrupts certain enemy attacks.
+- Can redirect selected projectiles.
+- Creates space when surrounded.
+
+Stance interactions:
+
+- Smash: outward shockwave.
+- Pillar: temporary defensive wind ring.
+- Thrust: forward-moving wind blast.
+
+3\. Vajrastra
+
+Precision
+
+[Top 10 Most Powerful Weapons in Hindu Mythology Ranked - Vedapath Blog](https://images.openai.com/static-rsc-4/abs9kBFRVmy15syM0OaBEE80GGj2bxEjDVjGlvM8kyUgRi3vA_TqwOE8crKgy4ZwXCEmBNC5HHmhjR859P2V_c0iL8Zz3J6ilLjwb8oYYlR6Hwbn44kBS_Bb5zkf53mEjlzURqyO4LsLL9ygw0tBB71Ge08TUj3msvqmhqGN6Eo?purpose=inline)
+
+[vedapath.app](https://vedapath.app/blog/top-10-most-powerful-weapons-in-hindu-mythology-ranked?utm_source=chatgpt.com)
+
+What it does:
+
+Rudra invokes a focused thunderbolt against an enemy.
+
+- Deals high damage to one target.
+- Deals strong posture damage.
+- Can interrupt specific heavy attacks.
+- Particularly useful against armoured enemies and bosses.
+
+Stance interactions:
+
+- Smash: powerful ground strike.
+- Pillar: defensive lightning counter.
+- Thrust: focused piercing strike.
+
+These are original gameplay interpretations inspired by mythological names and associations. We should verify individual textual descriptions before presenting any invented property as scripture.
+
+## 4.3 The Astra invocation process
+
+I want each Astra to have a deliberate process:
+
+1. The player builds energy.
+2. The player chooses an Astra.
+3. Rudra begins invoking it.
+4. The player directs or releases the power.
+5. The Astra affects the battlefield.
+6. Some effects can be withdrawn or ended early.
+
+The withdrawal idea is especially interesting because it draws from Rama learning how to withdraw Astras.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://srivalmikiramayana.com\&sz=32)
+
+Śrī Vālmīki Rāmāyaṇa+1
+
+
+
+For the vertical slice, withdrawal can be a simple second input that ends a persistent effect early. We don't need a complicated mantra puzzle system yet.
+
+## 4.4 Astra combinations
+
+This is a future expansion, not a requirement for the first build.
+
+Examples:
+
+- Agneyastra + Vayavyastra: spread fire across a wider area.
+- Varunastra + Vajrastra: create a charged water zone.
+- Vayavyastra + Nagastra: force enemies into a serpent's path.
+
+The important design rule is that combinations should create new tactical decisions, not simply multiply damage.
+
+Vertical slice decision: three individual Astras, three stance interactions each, no elaborate combination tree yet.
+
+# 5. Enemy combat and artificial intelligence
+
+A great combat system needs enemies that make the player use all its parts.
+
+I don't want 15 enemies that all run towards Rudra and attack. Every enemy should have a clear purpose.
+
+## 5.1 Enemy categories
+
+For our first realm, I recommend four functional archetypes.
+
+A. Charnel Grunt — basic melee enemy
+
+[The Flesh-Eaters: Ancient Pisachas in Hindu Mythology That Still Hunt Among Us (Part 1) - Backyard Drunkard](https://images.openai.com/static-rsc-4/XuA--BQUkD9hDbaZGuIICwdaxeQ_W5LJMuejG1Uz8aOZKORCa5R03YB23fopQMxKCXoSw7TvNv4LLXGBpI0bHKLV-bdjzhR6k5HeO5VzDw7W7-rwgNb17HQJ8tcpIKDWzA97TZuNzeb541BFJzgmlTh9-UNkvrq2NzQoEBkMllo?purpose=inline)
+
+[backyarddrunkard.com](https://backyarddrunkard.com/mythology/pisachas-part-1/?utm_source=chatgpt.com)
+
+- Approaches Rudra.
+- Attacks with simple combos.
+- Can be interrupted.
+- Easy to kill individually.
+- Dangerous in groups.
+
+  Teaches basic attacks, dodging and crowd control.
+
+B. Spear Wraith — ranged enemy
+
+[TFT : Comment jouer la composition Challenger / Îles Obscures ? (Set 9) - Teamfight Tactics - GAMEWAVE](https://images.openai.com/static-rsc-4/ULdb6rpZO5vEna9MGy7pVfktgNfG4rPc2S-39jP9i8ZmR7UrcZyFeMJk7R1lsnfQNoIdgJVRrugUWMpjc4_FiVIQqgy-J35eFcxv4Zsrnf02xS_WQO1A8wMV5i3mm5kT3VTixGSkZ4DKrHPgs6D0zK6agooSYppPOhvvBsalUfE?purpose=inline)
+
+[gamewave.fr](https://gamewave.fr/tft/tft-comment-jouer-la-composition-challenger-iles-obscures-set-9/?utm_source=chatgpt.com)
+
+- Keeps distance.
+- Throws spears or energy projectiles.
+- Repositions when approached.
+- Has a visible attack wind-up.
+- Vulnerable during recovery.
+
+  Teaches positioning and prioritising threats.
+
+C. Guardian — defensive enemy
+
+[8 legendary demons from Hindu mythology](https://images.openai.com/static-rsc-4/yx58fNqPz5Cey2VcMWRgZPxntjMIWVwRlKSI1Hgzws1GKXKQFtH13zu2l0N9H8dOo0NQ-tqv9ab3pJApFPUypB5oD3uVG8EKYsiBHxEe_wl4TH3WecoY1aAA6T3BJPpQdbLBZ7fihGf0No73-p31PIN6mGvECjKeiiuW2sf_OBQ?purpose=inline)
+
+[timesofindia.indiatimes.com](https://timesofindia.indiatimes.com/life-style/soul-search/8-legendary-demons-from-hindu-mythology/photostory/106113958.cms?utm_source=chatgpt.com)
+
+- Uses a shield or strong defence.
+- Blocks normal attacks.
+- Has a slow, dangerous attack.
+- Can be broken with heavy attacks, parries or the right Astra.
+
+  Teaches posture damage and attack selection.
+
+D. Rakshasa Brute — heavy enemy
+
+[ramayana-journey-portfolio](https://images.openai.com/static-rsc-4/RMj01Hko7C1OtEzBW5muzeXMeINX3sctZu5ZgjMZNrPzuE-Xpd1Wz-E5gzQEBDsr-U2IYwV8pZZgmqmNv-7wiHyvdFSTP-JGWHDNbOwEv8YXizxuIhP27El6jBf9UZvK9P5BKidnsg71vM85WIixw4wSSFGvExTJ7e8M5VLQDTQ?purpose=inline)
+
+[ramatales.com](https://ramatales.com/characters?utm_source=chatgpt.com)
+
+- High health and posture.
+- Large area attacks.
+- Slow but punishing.
+- Resists interruption during certain attacks.
+- Has dangerous recovery windows.
+
+  Teaches heavy attack timing and boss-like behaviour.
+
+These are functional enemy roles. We can retain the existing enemies in the repository and assign them these roles rather than building four entirely new models or sprites.
+
+## 5.2 Enemy behaviour rules
+
+Every enemy needs a consistent set of behaviours:
+
+1. Idle or guard.
+2. Detect Rudra.
+3. Approach or maintain distance.
+4. Select an attack.
+5. Show a readable warning.
+6. Execute the attack.
+7. Recover.
+8. React to damage or posture break.
+9. Die.
+
+The AI must also understand:
+
+- Arena boundaries.
+- Collision with other enemies.
+- Obstacles.
+- Rudra's current location.
+- Other enemies' positions.
+- Whether another enemy is already attacking.
+
+### One important improvement: group coordination
+
+Enemies should not all attack at once.
+
+Imagine five enemies surrounding Rudra:
+
+- One melee enemy attacks.
+- One ranged enemy fires from the back.
+- One heavy enemy prepares a large attack.
+- Others reposition.
+
+This creates pressure without making combat unfair.
+
+We should use attack slots or simple coordination rules so that the player can read what's happening.
+
+## 5.3 Enemy attack readability
+
+Every dangerous attack needs three clear stages:
+
+| Stage    | What the player sees         |
+| -------- | ---------------------------- |
+| Warning  | Enemy prepares the attack    |
+| Attack   | Damage and hitbox are active |
+| Recovery | Enemy becomes vulnerable     |
+
+This is especially important for our isometric camera. The player must understand the attack's actual danger area, not just see an animation.
+
+# 6. The Narayanastra-inspired encounter
+
+I want one encounter in the vertical slice to demonstrate that Kaliyuga has more creative combat than just attack, dodge and repeat.
+
+The Mahabharata's Narayanastra episode is a strong inspiration: the weapon's danger increases against resistance, and laying down weapons is the response described in the story.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://mahabharatkatha.org\&sz=32)
+
+Mahabharata+1
+
+
+
+We can adapt that into an optional special encounter or a later chamber.
+
+### How it works
+
+1. A special enemy starts invoking a powerful weapon.
+2. The arena becomes dangerous.
+3. The player sees that the attack reacts to aggression.
+4. Continuing to attack increases the danger.
+5. The player must stop attacking and lower their weapon.
+6. The attack passes.
+7. The enemy enters a vulnerable state.
+
+This is an encounter where the player must understand the rule rather than simply react faster.
+
+I would not make it a random mechanic that appears without explanation. It should be introduced fairly, with clear visual and gameplay communication.
+
+For the first vertical slice, this is optional. I would finish the ordinary combat loop and bosses first.
+
+# 7. Chamber design and run progression
+
+Now we need to make the world between fights interesting.
+
+I recommend a branching chamber structure inspired by roguelikes, but with our own progression and mythology.
+
+## 7.1 Chamber types
+
+| Chamber           | Purpose                                    |
+| ----------------- | ------------------------------------------ |
+| Combat chamber    | Fight enemies and earn rewards             |
+| Elite chamber     | Fight stronger enemies                     |
+| Astra chamber     | Improve an Astra                           |
+| Shrine chamber    | Permanent or temporary upgrades            |
+| Soul chamber      | Recover health or earn resources           |
+| Challenge chamber | Complete a special objective               |
+| Boss chamber      | Face Dundubhi or Vrikodara                 |
+| Secret chamber    | Discover lore, resources or hidden rewards |
+
+For the vertical slice, not all of these need to be implemented. We need combat, reward, healing, shrine and boss rooms first.
+
+## 7.2 How a chamber works
+
+Every combat chamber should follow the same reliable flow:
+
+1. Rudra enters.
+2. The entrance closes or becomes inaccessible.
+3. Enemies spawn.
+4. The player fights.
+5. New waves appear if required.
+6. The last enemy dies.
+7. The chamber clears.
+8. The reward becomes available.
+9. The exit opens.
+
+The chamber must not open simply because the enemy count becomes zero if an enemy is still alive, stuck or waiting to spawn.
+
+We need a clear state system:
+
+`Entering → Active → Wave Complete → Cleared → Rewarded → Exit Open`
+
+If Rudra dies, the chamber must transition cleanly into the death and return system.
+
+## 7.3 Branching choices
+
+After clearing a chamber, the player can choose between two or three destinations.
+
+Example:
+
+Choose your next chamber
+
+Combat chamber
+
+Lower risk
+
+Reward: healing resource and currency.
+
+Elite chamber
+
+Higher risk
+
+Reward: stronger Astra upgrade.
+
+Shrine chamber
+
+Strategic
+
+Reward: a permanent or temporary improvement.
+
+This gives players decisions instead of forcing everyone down exactly the same sequence.
+
+For our first release, a few fixed branch choices are enough. We do not need a huge procedural level-generation system.
+
+## 7.4 Chamber difficulty
+
+Difficulty should increase through combinations, not just bigger health bars.
+
+For example:
+
+- Early chamber: two melee enemies and one ranged enemy.
+- Next chamber: add a guardian.
+- Elite chamber: a brute plus ranged support.
+- Late chamber: several enemy types with coordinated attacks.
+
+The player should feel they are getting better at handling more complex situations.
+
+# 8. Dundubhi — mini-boss design
+
+Dundubhi should test the player's basic combat skills.
+
+I want his encounter to have a recognisable central mechanic: the arena is affected by his charges.
+
+[Similar search | Deep Dream Generator](https://images.openai.com/static-rsc-4/FTBD5w0ou4iyy1lDpbHRnjmqd2IeEZOTVbwxkYDanxxxYOxUE6eAPteUcL-m_o2P75BezV85Z_quwv_xmh5QLnsL72AR-avkQeWpoyrSkQOgcUDnh6F_pDk8YaUo87yc7bhstu7F4j-y0GiZffBpSla5p9SWMnkvEW_cxH9SjRM?purpose=inline)
+
+[deepdreamgenerator.com](https://deepdreamgenerator.com/search?q=995942dc-8e0f-5088-a15a-dadb033432dd\&s=results\&t=explore\&utm_source=chatgpt.com)
+
+## Attack set
+
+| Attack      | Behaviour                   | Player response                       |
+| ----------- | --------------------------- | ------------------------------------- |
+| Head charge | Charges in a straight line  | Dodge sideways                        |
+| Ground slam | Creates an area shockwave   | Dodge or jump equivalent if supported |
+| Horn sweep  | Wide close-range attack     | Dodge away or parry if permitted      |
+| Stomp       | Creates a local impact zone | Move out of the marked area           |
+| Rage charge | Faster repeated charge      | Use positioning and obstacles         |
+
+## The interactive arena
+
+This is where we can make the fight special.
+
+- Dundubhi charges through pillars.
+- Certain pillars break or become damaged.
+- A collision briefly stuns him.
+- The player can deliberately bait him into the environment.
+- Damaged pillars change safe movement routes.
+
+This turns the environment into a weapon.
+
+## Boss phases
+
+Phase 1 — Learn his attacks
+
+- Slower charge.
+- Clear attack warnings.
+- Large recovery windows.
+
+Phase 2 — The enraged beast
+
+- Faster attacks.
+- More frequent charges.
+- More environmental destruction.
+- Less time between attacks.
+
+Victory
+
+The player gets a reward and access to the next part of the realm.
+
+The key is that the player should be able to win through mastery, not by having an overpowered build.
+
+# 9. Vrikodara — major boss design
+
+Vrikodara should be the biggest combat test of the vertical slice.
+
+Our existing design describes him as a starving, ash-grey Rakshasa with a broken pillar, a furnace-like body and an escalating second phase. I would preserve that identity.
+
+[Black Myth Wukong: All Samadhi Fire Crystals](https://images.openai.com/static-rsc-4/RhI6BKz5RicZzxpf8OKeJeoCnPnNIXdRI58mz7J77MCTE1y4S8Pc20rP0_OGvcAW80gvfo0IlHcEb7r9Kob4uXu-51FvvIVY2KctcL3DGYnFVgbfYPeF2AoevCCUR3RHqXvViT3pfeK64lj-lgIKoMbez873-ORAevf48IT2P6U?purpose=inline)
+
+[xboxplay.games](https://xboxplay.games/black-myth-wukong/how-to-get-all-samadhi-fire-crystals-in-black-myth-wukong-57689?utm_source=chatgpt.com)
+
+His central gameplay identity should be consumption.
+
+He pulls things towards himself, controls space and makes the arena increasingly dangerous.
+
+## Attack set
+
+| Attack          | Behaviour                        | Player response                                 |
+| --------------- | -------------------------------- | ----------------------------------------------- |
+| Furnace breath  | Sweeps fire across an area       | Move around the safe side                       |
+| Devouring pull  | Pulls Rudra towards him          | Dodge against the pull or escape its area       |
+| Ground eruption | Creates dangerous furnace zones  | Move to safe ground                             |
+| Pillar strike   | Uses his broken pillar           | Dodge or parry where permitted                  |
+| Ash burst       | Releases a radial explosion      | Escape the marked area                          |
+| Consume         | Absorbs nearby energy or objects | Interrupt or reposition if the mechanic permits |
+
+## Phase 1 — The hungry Warden
+
+- Teaches the player's response to pulls.
+- Uses furnace attacks.
+- Has predictable recovery windows.
+- Can be staggered after heavy attacks or well-timed counters.
+
+## Phase 2 — The furnace awakens
+
+- More dangerous ground zones.
+- Faster combinations.
+- Greater arena control.
+- Less predictable attack sequences, but still readable.
+- More opportunities to exploit his recovery.
+
+## Boss rules
+
+Both bosses need:
+
+- Clear health bars.
+- Clearly communicated phases.
+- Readable attack warnings.
+- Consistent hitboxes.
+- Fair recovery windows.
+- Stagger and damage reactions.
+- Victory and defeat states.
+- Correct reward triggers.
+
+A boss should never get stuck in an attack loop or become invulnerable without communicating why.
+
+# 10. Player health, stamina and other resources
+
+We need to be careful not to create ten different meters that confuse the player.
+
+I recommend four main resources.
+
+| Resource              | Purpose                                        |
+| --------------------- | ---------------------------------------------- |
+| Health                | How much damage Rudra can take                 |
+| Stamina               | Used for dodges and selected defensive actions |
+| Astra energy          | Used to invoke Astras                          |
+| Look / realm currency | Used for rewards, discoveries and upgrades     |
+
+## 10.1 Health
+
+- Rudra begins a run with full health.
+- Enemies and bosses deal damage.
+- Healing is limited.
+- Healing chambers and specific rewards restore health.
+- Death ends the current run.
+
+The player should understand how much health they have and how dangerous the next encounter is.
+
+## 10.2 Stamina
+
+Stamina should be used for:
+
+- Dodging.
+- Certain defensive actions.
+- Potentially charged defensive attacks, if required by the existing combat system.
+
+It should regenerate when the player is not spending it.
+
+I would avoid making every light attack consume stamina. That can make the combat feel restrictive.
+
+## 10.3 Astra energy
+
+- Earned through skilled combat.
+- Used for invocations.
+- Persists during a chamber.
+- Carries between chambers during the run, subject to the chosen design.
+- Resets or partially resets on death according to the final progression rules.
+
+My recommendation: keep the invocation meter across chambers within a run. This makes players think about whether to spend a powerful Astra now or save it for a harder encounter.
+
+## 10.4 Look and currency
+
+Our existing Look system should remain important.
+
+Players can discover hidden details and earn a resource through exploration.
+
+We should separate:
+
+- Temporary run resources, which are lost on death.
+- Permanent progression resources, which remain.
+
+This avoids making every death feel like losing all progress.
+
+# 11. Boons, upgrades and build creation
+
+This is how players develop different combat styles across repeated runs.
+
+I want inspiration from roguelike boon systems, but not an overwhelming number of random upgrades.
+
+## 11.1 Temporary upgrades
+
+These are earned during the run.
+
+Examples:
+
+| Upgrade         | Effect                                                            |
+| --------------- | ----------------------------------------------------------------- |
+| Burning Wrath   | Agneyastra leaves fire for longer                                 |
+| Storm's Reach   | Vayavyastra has greater range                                     |
+| Thunder Breaker | Vajrastra deals more posture damage                               |
+| Iron Resolve    | Successful parries restore a little stamina                       |
+| Ashen Fury      | Heavy attacks deal additional damage to burning enemies           |
+| Serpent's Mark  | Certain enemies take increased damage after being hit by an Astra |
+
+These should have clear descriptions and meaningful choices.
+
+## 11.2 Permanent upgrades
+
+These are bought at the boat or unlocked through permanent progression.
+
+Examples:
+
+- Slightly increased maximum health.
+- Increased stamina capacity.
+- Increased Astra energy generation.
+- Improved healing.
+- Additional starting currency.
+- Better recovery after a parry.
+
+Our GDD already includes permanent shrine upgrades. I would use that system rather than inventing another upgrade currency.
+
+## 11.3 Upgrade rarity
+
+We can have three levels:
+
+- Common: small improvements.
+- Rare: meaningful combat changes.
+- Legendary: changes to how a mechanic behaves.
+
+Example:
+
+Common: Agneyastra deals 10% more damage.
+
+Rare: Burning enemies take more posture damage.
+
+Legendary: Killing a burning enemy creates a smaller fire eruption.
+
+The exact numbers must be tuned through actual playtesting, not guessed permanently now.
+
+## 11.4 Build identity
+
+The player should be able to develop different styles.
+
+The Flame Breaker
+
+Smash stance + Agneyastra + heavy attacks.
+
+Focus: large damage and enemy groups.
+
+The Storm Dancer
+
+Thrust stance + Vayavyastra + fast movement.
+
+Focus: positioning, speed and interruption.
+
+The Thunder Executioner
+
+Pillar stance + Vajrastra + parries.
+
+Focus: posture breaking and boss punishment.
+
+These are examples of play styles, not rigid classes. The player should be free to mix upgrades.
+
+For the first vertical slice, we only need a small selection of upgrades that make these styles possible.
+
+# 12. Death and the return system
+
+Death should be a normal part of the game's progression, not a frustrating reset of everything.
+
+Our existing story already makes this meaningful: Rudra is cursed and cannot die permanently.
+
+## What happens when Rudra dies?
+
+1. The current run ends.
+2. Temporary rewards are lost.
+3. Permanent progression remains.
+4. Rudra returns to Savitri's boat.
+5. The player can spend retained resources.
+6. The player can begin another attempt.
+
+The player should never lose a permanent shard or completed story milestone because of an ordinary death.
+
+## What should persist?
+
+| Progress                        | After death |
+| ------------------------------- | ----------- |
+| Permanent shrine upgrades       | Retained    |
+| Unlocked permanent abilities    | Retained    |
+| Collected permanent shard       | Retained    |
+| Completed story memories        | Retained    |
+| Temporary boons                 | Lost        |
+| Temporary run currency          | Lost        |
+| Chamber progress in current run | Reset       |
+| Permanent discoveries           | Retained    |
+
+We should keep the existing lantern-state system and use it to reflect progress where appropriate.
+
+## Healing and recovery
+
+Healing should be scarce enough that the player must make decisions.
+
+- Certain rooms can restore health.
+- Some upgrades can improve healing.
+- Executions could provide a small amount of recovery through an upgrade.
+- Boss rewards can restore or increase resources.
+
+I would not make the player automatically heal to full after every chamber.
+
+# 13. Savitri's boat — the gameplay hub
+
+The boat should not be just a menu screen.
+
+It should be the place where players prepare and see their progression.
+
+[A man in a boat with a lantern floats down an underground river, illuminated by a blood moon at the end of the cave. · 1366x768 free photo from n0mad - pictures and wallpapers](https://images.openai.com/static-rsc-4/S3RYchgaOjjJJhl59kZUcZ1C3USzSyQg6usI3Jwwx13D_em0ieiZtVA8VIkzlrUUIZvkiow0bpwerTDyn0O6ndQ9OxM8WC5llDjp_orEq9PUySmXVFAUUPGCbTb7pxRDfB39psF4a6fjWUG82-USN4GlTx9ZDXh2psI4txibPFk?purpose=inline)
+
+[fonwall.ru](https://fonwall.ru/en/wallpaper/fantastic-landscape-underworld-lantern/1366x768/?utm_source=chatgpt.com)
+
+The player should be able to:
+
+1. Start the next run.
+2. Upgrade permanent stats.
+3. Choose available Astras.
+4. Review unlocked upgrades.
+5. View discoveries and Look entries.
+6. Review previous run results.
+7. Access settings.
+
+### One feature I particularly recommend: run summary
+
+After returning from a run, show:
+
+- Chambers cleared.
+- Enemies defeated.
+- Bosses defeated.
+- Damage dealt.
+- Damage taken.
+- Number of successful parries.
+- Astras used.
+- Resources collected.
+- New discoveries.
+
+This helps players understand how they performed and what they can improve.
+
+# 14. Exploration and interaction
+
+I don't want every room to be an empty arena.
+
+Our existing Look mechanic can provide exploration without requiring complicated quest systems.
+
+The player can discover:
+
+- Ancient inscriptions.
+- Forgotten weapons.
+- Remains of previous battles.
+- Abandoned shrines.
+- Traces of the dead.
+- Hidden paths.
+- Objects associated with the realm's history.
+
+## Interaction rules
+
+An object can have three kinds of interactions:
+
+| Type     | Player experience               |
+| -------- | ------------------------------- |
+| Look     | Discover optional information   |
+| Interact | Activate an object or mechanism |
+| Collect  | Receive a reward or resource    |
+
+A Look interaction should be optional. Players who want to focus on combat shouldn't be forced to read everything.
+
+I would add one or two meaningful discoveries in the vertical slice, rather than fill every chamber with text.
+
+## Optional challenges
+
+We can introduce small challenges:
+
+- Clear a chamber without taking damage.
+- Defeat a heavy enemy using posture breaks.
+- Parry three consecutive attacks.
+- Destroy a group using an Astra.
+- Complete a chamber within a time limit.
+
+These can reward temporary upgrades or additional currency.
+
+They should be optional, not mandatory obstacles that prevent progress.
+
+# 15. User interface and information the player needs
+
+The player must always understand what is happening.
+
+We don't need a complicated HUD. We need a readable one.
+
+Proposed gameplay HUD layout
+
+RUDRA
+
+Health
+
+STAMINA
+
+Stamina
+
+ASTRA ENERGY
+
+Pillar stance
+
+## Q
+
+Agni
+
+## E
+
+Vayu
+
+## R
+
+Vajra
+
+Illustrative layout, not final UI artwork
+
+Essential HUD information
+
+- Health.
+- Stamina.
+- Astra energy.
+- Current stance.
+- Astra availability.
+- Boss health and phase.
+- Temporary status effects.
+- Current chamber objective.
+
+## Other screens we need
+
+| Screen          | Required functionality                        |
+| --------------- | --------------------------------------------- |
+| Main menu       | New game, continue, settings, exit            |
+| Pause menu      | Resume, settings, restart run, return to menu |
+| Settings        | Audio, controls, display, graphics            |
+| Astra selection | Choose available Astras                       |
+| Reward screen   | Compare and select upgrades                   |
+| Shrine screen   | Permanent progression                         |
+| Death screen    | Run summary and return                        |
+| Victory screen  | Rewards, shard and progression                |
+| Look journal    | Collected discoveries and lore                |
+
+The screens should be simple, fast and consistent. We should not interrupt combat with unnecessary menus.
+
+# 16. Status effects and combat interactions
+
+We can use a small number of status effects to create deeper combat.
+
+I recommend four for the first release.
+
+| Effect    | What it does                                           |
+| --------- | ------------------------------------------------------ |
+| Burning   | Deals damage over time                                 |
+| Soaked    | Makes targets vulnerable to selected follow-up effects |
+| Staggered | Temporarily interrupts an enemy                        |
+| Marked    | Makes an enemy easier to track or target               |
+
+Later, we can add:
+
+- Frozen.
+- Poisoned.
+- Weakened.
+- Electrified.
+- Cursed.
+
+But we should avoid adding too many overlapping status effects.
+
+### Elemental interactions
+
+We could eventually build a small interaction system:
+
+- Fire + wind: fire spreads.
+- Water + lightning: electrified water zone.
+- Fire + water: steam or extinguishing effects.
+
+These interactions would give the player reasons to experiment with Astra combinations.
+
+For the vertical slice, I would only implement interactions that are actually used by our three available Astras and the selected enemy types. Don't build a giant elemental simulation.
+
+# 17. Difficulty and fairness
+
+We need a difficulty system that makes the game challenging without feeling unfair.
+
+My recommendation:
+
+### Normal difficulty
+
+The intended first-playthrough experience.
+
+- Clear enemy telegraphs.
+- Reasonable health and damage.
+- Enough healing opportunities.
+- Boss attacks are demanding but learnable.
+
+### Hard difficulty
+
+Unlocked or selectable later.
+
+- More aggressive enemy combinations.
+- Less healing.
+- Stronger enemy pressure.
+- More demanding boss patterns.
+
+We don't need three or four difficulty settings for the first release. Normal mode needs to be balanced first.
+
+### Fairness rules
+
+These are non-negotiable:
+
+1. The player should understand why they took damage.
+2. Enemy attacks should have consistent hitboxes.
+3. Off-screen enemies should not hit the player without warning.
+4. Boss attacks should not be unavoidable.
+5. The player should not get trapped permanently against walls.
+6. Dodge invulnerability should work consistently.
+7. The player should not be interrupted by invisible collision.
+8. A dead enemy should not keep attacking.
+9. Reward and chamber states should never become stuck.
+10. Boss phases should never skip or repeat incorrectly.
+
+# 18. Save system and technical gameplay requirements
+
+These are not visible gameplay features, but they determine whether the game can actually be deployed.
+
+## Save data
+
+The game needs to save:
+
+- Current story progression.
+- Unlocked realms and bosses.
+- Permanent upgrades.
+- Shard collection.
+- Permanent discoveries.
+- Unlocked Astras.
+- Settings and controls.
+- Completed milestones.
+
+We should not save every temporary enemy state as permanent progression.
+
+The save system should be versioned so future updates don't break existing player saves.
+
+## Game states
+
+There should be one authoritative gameplay state.
+
+For example:
+
+`MENU → HUB → RUNNING → CHAMBER → REWARD → BOSS → VICTORY / DEATH → HUB`
+
+The game must handle:
+
+- Pausing during combat.
+- Restarting after death.
+- Returning to the menu.
+- Browser refresh or game reopening.
+- Saving after permanent rewards.
+- Loading the correct chamber and story progression.
+
+## Performance and stability
+
+Our release target should be:
+
+- Stable 60 FPS on the intended hardware.
+- No major frame drops during crowded combat.
+- No repeated enemy spawning.
+- No memory leaks from particles or projectiles.
+- No stuck inputs.
+- No broken save data.
+- No unhandled errors during a full run.
+
+We also need to test the production build, not just the development environment.
+
+# 19. Exact vertical slice content
+
+Now I want to make a clear distinction between the complete vision and what we should actually implement.
+
+We already have a substantial game foundation. I don't recommend rewriting it or adding a huge number of new features.
+
+Here is my proposed content lock:
+
+| System                   | Vertical slice requirement           |
+| ------------------------ | ------------------------------------ |
+| Rudra movement           | Fully functional                     |
+| Light and heavy attacks  | Fully functional                     |
+| Three stances            | Fully functional                     |
+| Combos                   | Core combinations                    |
+| Dodge                    | Stamina and i-frames                 |
+| Parry                    | Timing and counter                   |
+| Posture                  | Stagger and execution                |
+| Astras                   | Three usable Astras                  |
+| Astra energy             | Combat-generated                     |
+| Astra/stance interaction | Three effects per Astra, if feasible |
+| Enemy types              | Four distinct combat roles           |
+| Enemy coordination       | Basic group intelligence             |
+| Chamber system           | Complete wave/reward/exit flow       |
+| Chamber branches         | A few meaningful choices             |
+| Dundubhi                 | Complete mini-boss                   |
+| Vrikodara                | Complete two-phase boss              |
+| Progression              | Temporary and permanent upgrades     |
+| Exploration              | Look and a few discoveries           |
+| Hub                      | Boat, preparation and upgrades       |
+| Death                    | Return and persistence               |
+| Save system              | Reliable versioned saves             |
+| HUD and menus            | Complete                             |
+| Controller support       | At least core controls               |
+| Release build            | Tested and deployable                |
+
+## What we should NOT build yet
+
+These ideas are good, but they are outside the first slice:
+
+- All six realms.
+- All six wardens.
+- Every mythological Astra.
+- Full Astra combination system.
+- Companions and party combat.
+- Complex quest chains.
+- Large equipment and loot inventories.
+- Multiple weapon types.
+- A huge procedural chamber generator.
+- Extensive multiplayer features.
+- A complex elemental simulation.
+
+I want us to finish something polished before expanding the scope.
+
+# 20. The actual development order
+
+This is how I would build and finish the vertical slice using our existing code and AI coding agents.
+
+The order matters. We should not build Astra combinations while the basic combat still has problems.
+
+# Development roadmap
+
+1. Phase 1 — Stabilise Rudra
+   - Movement and collision.
+   - Light and heavy attacks.
+   - Combos.
+   - Stance switching.
+   - Dodge and stamina.
+   - Parry and counter.
+   - Posture and execution.
+   First priority
+2. Phase 2 — Fix enemy combat
+   - Enemy attack patterns.
+   - Enemy detection and movement.
+   - Attack telegraphs.
+   - Enemy group coordination.
+   - Hit reactions.
+   - Death and cleanup.
+3. Phase 3 — Build the Astra system
+   - Invocation energy.
+   - Astra selection and activation.
+   - Agneyastra.
+   - Vayavyastra.
+   - Vajrastra.
+   - Stance interactions.
+   - Cooldowns or energy costs.
+4. Phase 4 — Complete chamber gameplay
+   - Wave spawning.
+   - Chamber completion.
+   - Rewards.
+   - Branching choices.
+   - Healing and shrine rooms.
+   - Door and transition logic.
+5. Phase 5 — Finish Dundubhi
+   - Charge attacks.
+   - Pillar interactions.
+   - Boss phases.
+   - Damage and posture.
+   - Victory and reward.
+6. Phase 6 — Finish Vrikodara
+   - Furnace attacks.
+   - Pulling mechanics.
+   - Phase transitions.
+   - Arena hazards.
+   - Final defeat and shard reward.
+7. Phase 7 — Complete progression
+   - Boons.
+   - Permanent upgrades.
+   - Boat hub.
+   - Death and return.
+   - Save/load.
+   - First shard and memory.
+8. Phase 8 — Release preparation
+   - HUD and menus.
+   - Controls and settings.
+   - Balance and difficulty.
+   - Performance optimisation.
+   - Full-run testing.
+   - Production deployment.
+
+## 21. How we should work with Codex and Antigravity
+
+One important rule: don't ask an AI coding agent to rebuild the entire game in one giant prompt.
+
+Give it one system at a time.
+
+For every phase:
+
+1. Ask the agent to inspect the existing implementation.
+2. Identify what already works and what is missing.
+3. Ask it to propose the smallest necessary changes.
+4. Implement the changes.
+5. Run the game.
+6. Test the relevant gameplay.
+7. Fix regressions before moving forward.
+
+We should avoid duplicate systems and parallel implementations of the same mechanic.
+
+For example, when implementing Astras, the agent must first inspect the existing combat, ability, particle and resource systems. It should reuse them where appropriate rather than create a second combat engine.
+
+## 22. My final combat design philosophy
+
+I want to establish five rules for Kaliyuga.
+
+| Rule                         | What it means                                       |
+| ---------------------------- | --------------------------------------------------- |
+| Weapon mastery first         | Rudra must be fun without Astras                    |
+| Power through skill          | Good combat generates invocation energy             |
+| Every enemy has a purpose    | Enemies demand different strategies                 |
+| Every boss teaches something | Boss fights test mastery, not just damage           |
+| Choices matter               | Stances, Astras and rewards create different builds |
+
+And there is one feature I particularly want us to protect:
+
+The player should sometimes win because they chose not to attack.
+
+The Narayanastra-inspired encounter is an example. The player must understand the enemy and respond intelligently. This fits Rudra's story and gives the game a combat identity that goes beyond the usual action roguelike formula.
+
+## 23. What I consider the most important decisions to lock
+
+My recommended final vertical-slice design:
+
+- Isometric 2.5D gameplay.
+- Weapon-focused Rudra combat.
+- Three stances.
+- Light/heavy combos.
+- Dodge, parry, posture and executions.
+- Three initial Astras.
+- Four functional enemy roles.
+- Branching combat chambers.
+- Interactive Dundubhi arena.
+- Two-phase Vrikodara.
+- Temporary boons and permanent upgrades.
+- Vaitarani boat hub.
+- Look and exploration.
+- Death, return and replay.
+- First shard and story progression.
+
+One final qualification: this is the proposed design specification, not a claim that every listed feature is missing from the current repository. We should audit each item against the existing implementation before assigning coding work.
+
+My strongest advice: finish the existing chamber gameplay first, then integrate Astras into it. Don't start by adding more content.
+
+That gives us a vertical slice where the player can enter the realm, experience satisfying combat, learn the Astras, defeat two distinctive bosses, earn a meaningful reward, die and return, and start another run. That's the foundation worth releasing.

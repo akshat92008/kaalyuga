@@ -186,6 +186,20 @@ import {
   updateAndRenderPressureTraps,
   renderForegroundParallaxAndWipe,
 } from '@/lib/game/chamberGeometry';
+import {
+  ActiveAstraZone,
+  AstraId,
+  ASTRA_ENERGY_GAINS,
+  ASTRA_METADATA,
+  assignGroupAttackTokens,
+  classifyEnemyRole,
+  CombatDifficulty,
+  createInitialNarayanastraTrial,
+  DIFFICULTY_MODIFIERS,
+  getAstraManifestation,
+  NarayanastraTrialState,
+  RunSummaryStats,
+} from '@/lib/game/astraEngine';
 
 
 interface EnemyEntity {
@@ -242,6 +256,9 @@ interface EnemyEntity {
   phase: 1 | 2 | 3;
   scorchTimer: number;
   scorchTickAccum: number;
+  soakedTimer?: number;
+  markedTimer?: number;
+  narayanastraChantUsed?: boolean;
 }
 
 interface DestructiblePropEntity {
@@ -393,6 +410,15 @@ interface HudSnapshot {
     hp: number;
     maxHp: number;
   }>;
+  stamina: number;
+  maxStamina: number;
+  astraEnergy: number;
+  maxAstraEnergy: number;
+  agneyastraCd: number;
+  vayavyastraCd: number;
+  vajrastraCd: number;
+  activeUpasamharaZones: AstraId[];
+  narayanastraTrial: NarayanastraTrialState;
   boss: {
     active: boolean;
     type: string;
@@ -673,6 +699,9 @@ export default function KaliyugaArena() {
     });
   }, []);
 
+  const [combatDifficulty, setCombatDifficulty] = useState<CombatDifficulty>('normal');
+  const [lastRunSummary, setLastRunSummary] = useState<RunSummaryStats | null>(null);
+
   const [hud, setHud] = useState<HudSnapshot>(() => {
     const derived = computeDerivedPlayerStats(INITIAL_SHRINE_RANKS);
     return {
@@ -708,6 +737,15 @@ export default function KaliyugaArena() {
       styleStatus: computeCombatStyleStatus(0),
       partyLinkCd: 0,
       partyCompanions: [],
+      stamina: 100,
+      maxStamina: 100,
+      astraEnergy: 45,
+      maxAstraEnergy: 100,
+      agneyastraCd: 0,
+      vayavyastraCd: 0,
+      vajrastraCd: 0,
+      activeUpasamharaZones: [],
+      narayanastraTrial: createInitialNarayanastraTrial(),
       boss: null,
     };
   });
@@ -717,6 +755,13 @@ export default function KaliyugaArena() {
     state: 'title' as 'title' | 'playing' | 'paused' | 'gameover',
     deathTimer: 0,
     modalPaused: false,
+    difficulty: 'normal' as CombatDifficulty,
+    activeAstraZones: [] as ActiveAstraZone[],
+    narayanastraTrial: createInitialNarayanastraTrial() as NarayanastraTrialState,
+    runEnemiesDefeated: 0,
+    runAstrasInvoked: 0,
+    runUpasamharaWithdrawals: 0,
+    runNarayanastraPassed: 0,
     storyFlags: { ...INITIAL_STORY_FLAGS } as StoryMemoryFlags,
     graphicsSettings: { ...DEFAULT_UE5_GRAPHICS_SETTINGS } as MeruGraphicsSettings,
     nearestLookObject: null as LookObjectSpec | null,
@@ -802,6 +847,13 @@ export default function KaliyugaArena() {
       hp: 250,
       maxHp: 250,
       displayHp: 250,
+      stamina: 100,
+      maxStamina: 100,
+      astraEnergy: 45,
+      maxAstraEnergy: 100,
+      agneyastraCd: 0,
+      vayavyastraCd: 0,
+      vajrastraCd: 0,
       focusOrbs: 1,
       focusProgress: 0.35,
       stance: 'smash' as StaffStance,
@@ -1696,6 +1748,8 @@ export default function KaliyugaArena() {
       sim.lightningArcs = [];
       sim.slagFissures = [];
       sim.sonicZones = [];
+      sim.activeAstraZones = [];
+      sim.narayanastraTrial = createInitialNarayanastraTrial();
       sim.slagTickAccum = 0;
       sim.nearestLookObject = null;
       sim.activeLookObject = null;
@@ -1723,6 +1777,9 @@ export default function KaliyugaArena() {
         sim.runParriesLanded = 0;
         sim.runDodgesCompleted = 0;
         sim.runPostureBreaks = 0;
+        sim.runAstrasInvoked = 0;
+        sim.runUpasamharaWithdrawals = 0;
+        sim.runNarayanastraPassed = 0;
         sim.partyLinkCd = 0;
         setOwnedBoons([]);
         setBoonReadyCount(1);
@@ -1732,6 +1789,13 @@ export default function KaliyugaArena() {
         sim.player.maxHp = totalMaxHp;
         sim.player.hp = totalMaxHp;
         sim.player.displayHp = totalMaxHp;
+        sim.player.stamina = 100;
+        sim.player.maxStamina = 100;
+        sim.player.astraEnergy = 50;
+        sim.player.maxAstraEnergy = 100;
+        sim.player.agneyastraCd = 0;
+        sim.player.vayavyastraCd = 0;
+        sim.player.vajrastraCd = 0;
         sim.player.maxGourdSips = Math.max(1, derived.maxGourdSips - pactMods.kalashaSipPenalty);
         sim.player.gourdSips = sim.player.maxGourdSips;
         sim.player.extraLives = derived.extraLives;
@@ -2376,6 +2440,292 @@ export default function KaliyugaArena() {
     [spawnFloatingText]
   );
 
+  const gainAstraEnergy = useCallback((baseAmount: number) => {
+    const sim = simRef.current;
+    const p = sim.player;
+    const diffMod = DIFFICULTY_MODIFIERS[sim.difficulty]?.astraGainMult ?? 1.0;
+    const gain = Math.round(baseAmount * diffMod);
+    p.astraEnergy = Math.max(0, Math.min(p.maxAstraEnergy, p.astraEnergy + gain));
+  }, []);
+
+  // Unified 3-Astra Invocation System ([Q] Agneyastra, [E] Vayavyastra, [R] Vajrastra) x 3 Stances + Upasamhara Withdrawal
+  const triggerAstraInvocation = useCallback(
+    (astraId: AstraId) => {
+      const sim = simRef.current;
+      const p = sim.player;
+      if (sim.state !== 'playing') return;
+
+      // 1. Check if an active persistent zone for this Astra is already deployed -> Trigger UPASAMHARA WITHDRAWAL!
+      const existingZoneIdx = sim.activeAstraZones.findIndex((z) => z.astraId === astraId);
+      if (existingZoneIdx !== -1) {
+        const zone = sim.activeAstraZones[existingZoneIdx];
+        sim.activeAstraZones.splice(existingZoneIdx, 1);
+        p.astraEnergy = Math.min(
+          p.maxAstraEnergy,
+          p.astraEnergy + ASTRA_ENERGY_GAINS.UPASAMHARA_REFUND
+        );
+        sim.runUpasamharaWithdrawals += 1;
+        soundEngine.playSpell('parry');
+        spawnShockwave(zone.x, zone.y, zone.radius * 1.15, zone.color, 0.36);
+        spawnParticles(zone.x, zone.y - 22, 26, zone.color, 210, 4.5, 45);
+        // Parting burst on withdrawal
+        sim.enemies.forEach((e) => {
+          if (e.aiState === 'ko') return;
+          if (Math.hypot(e.x - zone.x, e.y - zone.y) <= zone.radius * 1.2) {
+            const burstDmg = 55;
+            e.hp = Math.max(0, e.hp - burstDmg);
+            sim.runDamageDealt += burstDmg;
+            e.hitFlashTimer = 0.1;
+            const posRes = applyPostureDamage({
+              currentPosture: e.posture,
+              maxPosture: e.maxPosture,
+              postureDamage: 38,
+              alreadyBroken: e.postureBrokenTimer > 0,
+            });
+            e.posture = posRes.nextPosture;
+            if (posRes.triggeredBreak) {
+              e.postureBrokenTimer = 4.2;
+              e.aiState = 'recover';
+              e.aiTimer = 4.2;
+              sim.runPostureBreaks += 1;
+            }
+          }
+        });
+        spawnFloatingText(
+          p.x,
+          p.y - 88,
+          `UPASAMHARA WITHDRAWAL! (+${ASTRA_ENERGY_GAINS.UPASAMHARA_REFUND} ASTRA ENERGY)`,
+          '#ffd86b',
+          1.18,
+          `${ASTRA_METADATA[astraId].name.toUpperCase()} RECALLED IN CONTROL`
+        );
+        return;
+      }
+
+      const spec = getAstraManifestation(astraId, p.stance);
+      const meta = ASTRA_METADATA[astraId];
+      const boonMods = computeBoonModifiers(sim.activeBoons);
+      const cdField =
+        astraId === 'agneyastra'
+          ? 'agneyastraCd'
+          : astraId === 'vayavyastra'
+          ? 'vayavyastraCd'
+          : 'vajrastraCd';
+
+      if (p[cdField] > 0) {
+        spawnFloatingText(
+          p.x,
+          p.y - 72,
+          `${meta.name.toUpperCase()} RECHARGING (${p[cdField].toFixed(1)}s)`,
+          '#a99e8b',
+          0.92
+        );
+        return;
+      }
+
+      if (p.astraEnergy < spec.energyCost) {
+        if (p.focusOrbs > 0) {
+          p.focusOrbs -= 1;
+          p.astraEnergy = Math.min(p.maxAstraEnergy, p.astraEnergy + 35);
+        } else {
+          spawnFloatingText(
+            p.x,
+            p.y - 74,
+            `NEED ${spec.energyCost} ASTRA ENERGY · STRIKE OR PARRY TO CHARGE!`,
+            '#ff8a94',
+            0.96
+          );
+          return;
+        }
+      }
+
+      p.astraEnergy = Math.max(0, p.astraEnergy - spec.energyCost);
+      p[cdField] = Number((spec.cooldownSec * boonMods.spellCooldownMultiplier).toFixed(2));
+      p.action = 'astra';
+      p.actionDuration = 0.38;
+      p.actionTimer = 0.38;
+      p.invulnTimer = Math.max(p.invulnTimer, 0.36);
+      sim.runAstrasInvoked += 1;
+      sim.cameraShakeTrauma = Math.min(1, sim.cameraShakeTrauma + 0.48);
+      sim.screenFlashAlpha = 0.18;
+      sim.screenFlashColor = meta.color;
+      soundEngine.playSpell('immobilize');
+
+      // Aim vector toward nearest enemy or cursor
+      let aimX = sim.input.pointerX;
+      let aimY = sim.input.pointerY;
+      let nearestDist = 9999;
+      sim.enemies.forEach((e) => {
+        if (e.aiState === 'ko') return;
+        const d = Math.hypot(e.x - p.x, e.y - p.y);
+        if (d < nearestDist && d < 460) {
+          nearestDist = d;
+          aimX = e.x;
+          aimY = e.y;
+        }
+      });
+      const aimAngle = Math.atan2(aimY - p.y, aimX - p.x);
+      p.facing = Math.cos(aimAngle) >= 0 ? 1 : -1;
+      p.slashAngle = aimAngle;
+      p.slashArcAlpha = 1.0;
+
+      const stats = computeDerivedPlayerStats(sim.ranks);
+      const baseAstraDmg = Math.round(
+        52 * spec.damageMultiplier * stats.damageMultiplier * boonMods.damageMultiplier
+      );
+
+      // Spawn persistent zone if manifestation supports Upasamhara (Agneyastra + Smash OR Vayavyastra + Pillar)
+      if (spec.supportsUpasamhara) {
+        const zoneX =
+          astraId === 'agneyastra' ? p.x + Math.cos(aimAngle) * 58 : p.x;
+        const zoneY =
+          astraId === 'agneyastra' ? p.y + Math.sin(aimAngle) * 38 : p.y;
+        sim.activeAstraZones.push({
+          id: `${astraId}_${Date.now()}`,
+          astraId,
+          stance: p.stance,
+          x: zoneX,
+          y: zoneY,
+          radius: spec.radius,
+          remainingSec: 6.0,
+          maxSec: 6.0,
+          tickTimer: 0,
+          followsPlayer: astraId === 'vayavyastra' && p.stance === 'pillar',
+          color: meta.color,
+        });
+      }
+
+      // If Thrust stance, also launch a piercing elemental Astra wave projectile
+      if (p.stance === 'thrust') {
+        const proj = sim.projectiles.find((pr) => !pr.active);
+        if (proj) {
+          proj.active = true;
+          proj.x = p.x + Math.cos(aimAngle) * 32;
+          proj.y = p.y - 22 + Math.sin(aimAngle) * 18;
+          proj.vx = Math.cos(aimAngle) * 720;
+          proj.vy = Math.sin(aimAngle) * 720;
+          proj.radius = 18;
+          proj.damage = baseAstraDmg;
+          proj.color = meta.color;
+          proj.life = 1.6;
+          proj.deflected = true;
+          proj.isPlayerCast = true;
+        }
+      }
+
+      spawnShockwave(p.x, p.y, spec.radius, meta.color, 0.42);
+      spawnParticles(p.x, p.y - 26, 30, meta.color, 230, 4.8, 70);
+
+      const corridorEndX = p.x + Math.cos(aimAngle) * spec.range;
+      const corridorEndY = p.y + Math.sin(aimAngle) * spec.range;
+
+      // Apply Stance-Specific Astra Effect to Enemies
+      sim.enemies.forEach((e) => {
+        if (e.aiState === 'ko') return;
+        const dist = Math.hypot(e.x - p.x, e.y - p.y);
+        const inHitZone =
+          p.stance === 'thrust'
+            ? isPointInDashCorridor({
+                px: e.x,
+                py: e.y,
+                startX: p.x,
+                startY: p.y,
+                endX: corridorEndX,
+                endY: corridorEndY,
+                halfWidth: 72,
+              }) || dist <= 110
+            : dist <= spec.radius + (e.isBoss ? 42 : 24);
+
+        if (!inHitZone) return;
+
+        // Vajrastra shatters Guardian shields and Dundubhi bronze armor!
+        const roleInfo = classifyEnemyRole(e.type, e.trait);
+        if (astraId === 'vajrastra' && (roleInfo.hasFrontalShield || e.parryStanceTimer > 0)) {
+          e.parryStanceTimer = 0;
+          if (e.type === 'xuemo') e.armorCracked = true;
+          spawnFloatingText(e.x, e.y - 94, 'VAJRA SHIELD SHATTERED!', '#facc15', 1.24);
+        }
+
+        // Environmental & Status Synergy: +50% Vajrastra damage on Soaked targets or in Vaitarani river chambers (Ch 1, 2, 5)
+        const isWaterChamber = sim.chamberIndex === 0 || sim.chamberIndex === 1 || sim.chamberIndex === 4;
+        const isSoaked = (e.soakedTimer || 0) > 0 || isWaterChamber;
+        const isMarked = (e.markedTimer || 0) > 0;
+        const synergyMult =
+          (astraId === 'vajrastra' && isSoaked ? 1.5 : 1.0) * (isMarked ? 1.25 : 1.0);
+
+        const finalDmg = Math.round(baseAstraDmg * synergyMult);
+        e.hp = Math.max(0, e.hp - finalDmg);
+        sim.runDamageDealt += finalDmg;
+        e.hitFlashTimer = 0.14;
+
+        // Apply Canonical Status Effect (Burning, Soaked, Staggered, Marked)
+        if (spec.statusApplied === 'burning') {
+          e.scorchTimer = Math.max(e.scorchTimer, 4.5);
+        } else if (spec.statusApplied === 'marked') {
+          e.markedTimer = Math.max(e.markedTimer || 0, 6.0);
+        } else if (spec.statusApplied === 'soaked') {
+          e.soakedTimer = Math.max(e.soakedTimer || 0, 6.0);
+        }
+
+        // Vayavyastra Smash hurls enemies outward for Wall-Slam; Thrust pulls Spear Wraiths off balance
+        const kAngle = Math.atan2(e.y - p.y, e.x - p.x);
+        if (astraId === 'vayavyastra' && p.stance === 'smash') {
+          const galePush = e.isBoss ? 140 : 320;
+          e.vx += Math.cos(kAngle) * galePush;
+          e.vy += Math.sin(kAngle) * galePush;
+        } else if (astraId === 'vayavyastra' && p.stance === 'thrust') {
+          e.vx -= Math.cos(kAngle) * 145;
+          e.vy -= Math.sin(kAngle) * 145;
+        } else {
+          const push = e.isBoss ? 70 : 140;
+          e.vx += Math.cos(kAngle) * push;
+          e.vy += Math.sin(kAngle) * push;
+        }
+
+        const posRes = applyPostureDamage({
+          currentPosture: e.posture,
+          maxPosture: e.maxPosture,
+          postureDamage: Math.round(spec.postureDamage * synergyMult),
+          alreadyBroken: e.postureBrokenTimer > 0,
+        });
+        e.posture = posRes.nextPosture;
+        if (posRes.triggeredBreak) {
+          e.postureBrokenTimer = 4.5;
+          e.aiState = 'recover';
+          e.aiTimer = 4.5;
+          sim.runPostureBreaks += 1;
+          recordQuestEvent('shatter_posture', 1);
+          spawnFloatingText(e.x, e.y - 84, 'POSTURE SHATTERED! [F] EXECUTE', '#ff4d3b', 1.2);
+        }
+
+        if (astraId === 'vajrastra' || astraId === 'agneyastra') {
+          sim.lightningArcs.push({
+            x1: e.x + (Math.random() - 0.5) * 70,
+            y1: e.y - 480,
+            x2: e.x,
+            y2: e.y - 18,
+            life: 0.36,
+            maxLife: 0.36,
+            color: meta.color,
+          });
+        }
+        spawnParticles(e.x, e.y - 26, 18, meta.color, 195, 4.4, 90);
+      });
+
+      spawnFloatingText(
+        p.x,
+        p.y - 90,
+        `[${meta.keybind}] ${meta.name.toUpperCase()} · ${spec.title.toUpperCase()}!`,
+        meta.accentHex,
+        1.2,
+        spec.supportsUpasamhara
+          ? `PRESS [${meta.keybind}] AGAIN FOR UPASAMHARA WITHDRAWAL (+10 ENERGY)`
+          : spec.sanskritSubtitle
+      );
+    },
+    [recordQuestEvent, spawnFloatingText, spawnParticles, spawnShockwave]
+  );
+
   const triggerPartyLinkStrike = useCallback(() => {
     const sim = simRef.current;
     const p = sim.player;
@@ -2751,6 +3101,7 @@ export default function KaliyugaArena() {
       p.invulnTimer = Math.max(p.invulnTimer, 0.85);
       p.hp = Math.min(p.maxHp, p.hp + 14);
       if (p.focusOrbs < 4) p.focusOrbs += 1;
+      gainAstraEnergy(ASTRA_ENERGY_GAINS.PERFECT_PARRY);
       addStylePoints(145);
       sim.hitstopTimer = 0.095;
       sim.cameraShakeTrauma = Math.min(1, sim.cameraShakeTrauma + 0.62);
@@ -2764,19 +3115,19 @@ export default function KaliyugaArena() {
         'PERFECT GOLDEN PARRY! · RIPOSTE READY [LMB/RMB]',
         '#ffd86b',
         1.24,
-        '+1 FOCUS ORB · +14 HP · PARRY RESET'
+        `+${ASTRA_ENERGY_GAINS.PERFECT_PARRY} ASTRA ENERGY · +14 HP · PARRY RESET`
       );
     } else {
       addStylePoints(25);
       spawnFloatingText(
         p.x,
         p.y - 75,
-        'KALARIPAYATTU · VAJRA PARRY STANCE [Q]',
+        'KALARIPAYATTU · VAJRA PARRY STANCE [SHIFT]',
         '#f5ebd6',
         1.05
       );
     }
-  }, [addStylePoints, recordQuestEvent, spawnFloatingText, spawnParticles, spawnShockwave]);
+  }, [addStylePoints, gainAstraEnergy, recordQuestEvent, spawnFloatingText, spawnParticles, spawnShockwave]);
 
   // Prince of Persia: Sands of Time Temporal Rewind (`[T]`)
   const triggerKalaRewind = useCallback(() => {
@@ -3176,11 +3527,12 @@ export default function KaliyugaArena() {
       scale: 1.2,
     });
 
-    // Grant +1 Focus Orb and heal 28 HP on Execute
+    // Grant +1 Focus Orb, +30 Astra Energy, and heal 28 HP on Execute
     p.hp = Math.min(p.maxHp, p.hp + 28);
     if (p.focusOrbs < 4) {
       p.focusOrbs = Math.min(4, p.focusOrbs + 1);
     }
+    gainAstraEnergy(ASTRA_ENERGY_GAINS.EXECUTION);
 
     soundEngine.playHit('execute');
     spawnShockwave(brokenEnemy.x, brokenEnemy.y, 245, '#ff4d3b', 0.46);
@@ -3201,11 +3553,11 @@ export default function KaliyugaArena() {
     spawnFloatingText(
       brokenEnemy.x,
       brokenEnemy.y - 96,
-      `EXECUTE -${execDmg}`,
+      `EXECUTE -${execDmg} (+${ASTRA_ENERGY_GAINS.EXECUTION} ASTRA)`,
       '#ff4d3b',
       1.25
     );
-  }, [recordQuestEvent, spawnAfterimage, spawnFloatingText, spawnParticles, spawnShockwave]);
+  }, [gainAstraEnergy, recordQuestEvent, spawnAfterimage, spawnFloatingText, spawnParticles, spawnShockwave]);
 
   const triggerStanceHeavyUnleash = useCallback(() => {
     const sim = simRef.current;
@@ -3592,7 +3944,25 @@ export default function KaliyugaArena() {
       }
     });
 
+    if (sim.narayanastraTrial.active) {
+      sim.narayanastraTrial.escalationStacks += 1;
+      sim.narayanastraTrial.calmTimerSec = 0;
+      const penDmg = 18 * sim.narayanastraTrial.escalationStacks;
+      p.hp = Math.max(1, p.hp - penDmg);
+      sim.cameraShakeTrauma = Math.min(1, sim.cameraShakeTrauma + 0.45);
+      spawnShockwave(p.x, p.y, 135, '#ff3b30', 0.34);
+      spawnFloatingText(
+        p.x,
+        p.y - 96,
+        `NARAYANASTRA ESCALATES (-${penDmg} HP)!`,
+        '#ff4d3b',
+        1.15,
+        'CEASE ATTACKING FOR 1.75s TO BOW & PASS THE TRIAL!'
+      );
+    }
+
     if (hitAny) {
+      gainAstraEnergy(ASTRA_ENERGY_GAINS.HEAVY_HIT);
       soundEngine.playHit('heavy');
       soundEngine.playSpatialMaterialFoley(
         'flesh_cleave',
@@ -3629,7 +3999,7 @@ export default function KaliyugaArena() {
         130
       );
     }
-  }, [addStylePoints, damagePropsNearPoint, recordQuestEvent, spawnAfterimage, spawnFloatingText, spawnParticles, spawnShockwave]);
+  }, [addStylePoints, damagePropsNearPoint, gainAstraEnergy, recordQuestEvent, spawnAfterimage, spawnFloatingText, spawnParticles, spawnShockwave]);
 
   const triggerLightAttack = useCallback(() => {
     const sim = simRef.current;
@@ -3974,7 +4344,25 @@ export default function KaliyugaArena() {
       }
     });
 
+    if (sim.narayanastraTrial.active) {
+      sim.narayanastraTrial.escalationStacks += 1;
+      sim.narayanastraTrial.calmTimerSec = 0;
+      const penDmg = 14 * sim.narayanastraTrial.escalationStacks;
+      p.hp = Math.max(1, p.hp - penDmg);
+      sim.cameraShakeTrauma = Math.min(1, sim.cameraShakeTrauma + 0.35);
+      spawnShockwave(p.x, p.y, 115, '#ff3b30', 0.28);
+      spawnFloatingText(
+        p.x,
+        p.y - 92,
+        `NARAYANASTRA ESCALATES (-${penDmg} HP)!`,
+        '#ff4d3b',
+        1.1,
+        'CEASE ATTACKING FOR 1.75s TO BOW & PASS THE TRIAL!'
+      );
+    }
+
     if (hitAny) {
+      gainAstraEnergy(ASTRA_ENERGY_GAINS.LIGHT_HIT);
       soundEngine.playHit(
         p.comboStep === 4 || isDashStrike || isRiposteStrike ? 'crit' : 'light'
       );
@@ -4001,7 +4389,7 @@ export default function KaliyugaArena() {
     } else {
       addStylePoints(10);
     }
-  }, [addStylePoints, damagePropsNearPoint, recordQuestEvent, spawnAfterimage, spawnFloatingText, spawnParticles, spawnShockwave]);
+  }, [addStylePoints, damagePropsNearPoint, gainAstraEnergy, recordQuestEvent, spawnAfterimage, spawnFloatingText, spawnParticles, spawnShockwave]);
 
   const triggerCloudStepDodge = useCallback(() => {
     const sim = simRef.current;
@@ -4016,16 +4404,17 @@ export default function KaliyugaArena() {
 
     const boonMods = computeBoonModifiers(sim.activeBoons);
 
-    // 2-Charge Dash Stamina Discipline (initializes recharge timer on first consumed charge)
+    // Stamina & 2-Charge Dash Stamina Discipline
     const dashRes = consumeDashStamina({
       currentCharges: p.dashCharges,
       maxCharges: p.maxDashCharges,
       currentRechargeTimer: p.dashRechargeTimer,
     });
-    if (!dashRes.canDash) {
-      spawnFloatingText(p.x, p.y - 76, 'QI DEPLETED · DASH RECHARGING!', '#9adce8', 0.9);
+    if (!dashRes.canDash && p.stamina < 25) {
+      spawnFloatingText(p.x, p.y - 76, 'STAMINA DEPLETED · RECHARGING!', '#9adce8', 0.9);
       return;
     }
+    p.stamina = Math.max(0, p.stamina - 25);
     p.dashCharges = dashRes.nextCharges;
     p.dashRechargeTimer = dashRes.nextRechargeTimer;
     p.dashStrikeWindowTimer = 0.38;
@@ -4197,11 +4586,13 @@ export default function KaliyugaArena() {
     spawnParticles(sim.decoy.x, sim.decoy.y - 14, 14, '#ff384c', 185, 3.5, 15);
 
     if (perfectWindow) {
-      // KALA-MIRAGE: Trigger 0.28x Time Dilation Slow-Mo + Refund 1 Dash Charge + Grant +1 Focus Orb!
+      // KALA-MIRAGE: Trigger 0.28x Time Dilation Slow-Mo + Refund 1 Dash Charge + Grant +1 Focus Orb & +14 Astra Energy!
       p.dashCharges = Math.min(p.maxDashCharges, p.dashCharges + 1);
+      p.stamina = Math.min(p.maxStamina, p.stamina + 20);
       if (p.focusOrbs < 4) {
         p.focusOrbs = Math.min(4, p.focusOrbs + 1);
       }
+      gainAstraEnergy(ASTRA_ENERGY_GAINS.PERFECT_DODGE);
       if (boonMods.perfectDodgeHeal > 0) {
         p.hp = Math.min(p.maxHp, p.hp + boonMods.perfectDodgeHeal);
       }
@@ -4227,12 +4618,12 @@ export default function KaliyugaArena() {
       spawnFloatingText(
         p.x,
         p.y - 78,
-        'KALA-MIRAGE · PERFECT DODGE! (+1 FOCUS)',
+        `KALA-MIRAGE · PERFECT DODGE! (+${ASTRA_ENERGY_GAINS.PERFECT_DODGE} ASTRA)`,
         '#63f2ff',
         1.18
       );
     }
-  }, [damagePropsNearPoint, spawnAfterimage, spawnFloatingText, spawnParticles, spawnShockwave]);
+  }, [damagePropsNearPoint, gainAstraEnergy, spawnAfterimage, spawnFloatingText, spawnParticles, spawnShockwave]);
 
   // Global keyboard & window focus listeners
   useEffect(() => {
@@ -4328,15 +4719,35 @@ export default function KaliyugaArena() {
         e.preventDefault();
         triggerSwitchStance();
       } else if (e.code === 'Digit1') {
-        triggerSwitchWeapon('twin_blades');
+        if (e.altKey) triggerSwitchWeapon('twin_blades');
+        else triggerSwitchStance('smash');
       } else if (e.code === 'Digit2') {
-        triggerSwitchWeapon('jingu_bang');
+        if (e.altKey) triggerSwitchWeapon('jingu_bang');
+        else triggerSwitchStance('pillar');
       } else if (e.code === 'Digit3') {
-        triggerSwitchWeapon('dragon_glaive');
-      } else if (e.code === 'KeyR') {
+        if (e.altKey) triggerSwitchWeapon('dragon_glaive');
+        else triggerSwitchStance('thrust');
+      } else if (e.code === 'KeyH') {
+        e.preventDefault();
         triggerGourdHeal();
       } else if (e.code === 'KeyQ') {
-        // [Q] -> God of War / Sekiro Kalaripayattu Parry & Riposte!
+        // [Q] -> Agneyastra (Fire Invocation / Second-Press Upasamhara Withdrawal)
+        e.preventDefault();
+        triggerAstraInvocation('agneyastra');
+      } else if (e.code === 'KeyE') {
+        // [E] -> Contextual Look when near artifact, else Vayavyastra (Wind Invocation / Second-Press Upasamhara Withdrawal)
+        e.preventDefault();
+        if (sim.activeLookObject || sim.nearestLookObject) {
+          triggerLookOrMirage();
+        } else {
+          triggerAstraInvocation('vayavyastra');
+        }
+      } else if (e.code === 'KeyR') {
+        // [R] -> Vajrastra (Lightning Invocation)
+        e.preventDefault();
+        triggerAstraInvocation('vajrastra');
+      } else if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
+        // [Shift] -> Kalaripayattu Parry & Riposte
         e.preventDefault();
         triggerRockSolidParry();
       } else if (e.code === 'KeyT') {
@@ -4348,25 +4759,20 @@ export default function KaliyugaArena() {
         e.preventDefault();
         triggerShadowBlinkAssassinate();
       } else if (e.code === 'KeyF') {
-        // [F] -> God of War Brutal Execute (or Agneyastra Blood-Cast if no broken target)
+        // [F] -> Context Action: Brutal Execute on Staggered Enemy, Look if near artifact, or Blood-Shard Cast
         const hasBroken = sim.enemies.some(
           (en) => en.aiState !== 'ko' && en.postureBrokenTimer > 0
         );
         if (hasBroken) {
           triggerExecuteBrokenTarget();
+        } else if (sim.nearestLookObject) {
+          triggerLookOrMirage();
         } else {
           triggerImmobilizeSpell();
         }
-      } else if (e.code === 'KeyE') {
-        triggerLookOrMirage();
       } else if (e.code === 'KeyZ') {
         triggerRedTidesTransform();
-      } else if (
-        e.code === 'Space' ||
-        e.code === 'ShiftLeft' ||
-        e.code === 'ShiftRight' ||
-        e.code === 'KeyK'
-      ) {
+      } else if (e.code === 'Space' || e.code === 'KeyK') {
         e.preventDefault();
         triggerCloudStepDodge();
       } else if (e.code === 'KeyJ') {
@@ -4405,6 +4811,7 @@ export default function KaliyugaArena() {
     triggerSwitchStance,
     triggerSwitchWeapon,
     triggerGourdHeal,
+    triggerAstraInvocation,
     triggerStanceHeavyUnleash,
     triggerExecuteBrokenTarget,
     triggerImmobilizeSpell,
@@ -4762,9 +5169,16 @@ export default function KaliyugaArena() {
           }
         }
 
-        // Cooldowns & timers
+        // Cooldowns, Stamina regeneration, Astra timers & Persistent Astra Zone ticks
         p.immobilizeCd = Math.max(0, p.immobilizeCd - simDt);
+        p.agneyastraCd = Math.max(0, p.agneyastraCd - simDt);
+        p.vayavyastraCd = Math.max(0, p.vayavyastraCd - simDt);
+        p.vajrastraCd = Math.max(0, p.vajrastraCd - simDt);
         p.parryCd = Math.max(0, p.parryCd - simDt);
+        const diffMod = DIFFICULTY_MODIFIERS[sim.difficulty] || DIFFICULTY_MODIFIERS.normal;
+        if (p.action !== 'dodge') {
+          p.stamina = Math.min(p.maxStamina, p.stamina + 28 * diffMod.staminaRegenMult * simDt);
+        }
         if (p.action === 'parry') {
           p.parryElapsedSec += simDt;
         }
@@ -4816,6 +5230,106 @@ export default function KaliyugaArena() {
           if (p.dashRechargeTimer <= 0) {
             p.dashCharges += 1;
             p.dashRechargeTimer = p.dashCharges < p.maxDashCharges ? 1.15 : 0;
+          }
+        }
+
+        // Update Persistent Astra Zones (Agneyastra Crater & Vayavyastra Cyclone Shield)
+        for (let zi = sim.activeAstraZones.length - 1; zi >= 0; zi--) {
+          const z = sim.activeAstraZones[zi];
+          z.remainingSec -= simDt;
+          if (z.followsPlayer) {
+            z.x = p.x;
+            z.y = p.y;
+          }
+          if (z.astraId === 'vayavyastra') {
+            // Deflect enemy projectiles entering Vayavyastra Cyclone Shield
+            sim.projectiles.forEach((proj) => {
+              if (!proj.active || proj.deflected) return;
+              if (Math.hypot(proj.x - z.x, proj.y - z.y) <= z.radius) {
+                proj.deflected = true;
+                proj.vx = -proj.vx * 1.9;
+                proj.vy = -proj.vy * 1.9;
+                proj.damage = Math.round(proj.damage * 2.2);
+                proj.color = '#38bdf8';
+                proj.life = 2.0;
+                spawnParticles(proj.x, proj.y, 8, '#38bdf8', 130, 3.2, 40);
+              }
+            });
+          } else if (z.astraId === 'agneyastra') {
+            z.tickTimer += simDt;
+            if (z.tickTimer >= 0.5) {
+              z.tickTimer -= 0.5;
+              sim.enemies.forEach((e) => {
+                if (e.aiState === 'ko') return;
+                if (Math.hypot(e.x - z.x, e.y - z.y) <= z.radius) {
+                  e.hp = Math.max(0, e.hp - 22);
+                  e.scorchTimer = Math.max(e.scorchTimer, 2.5);
+                  e.hitFlashTimer = 0.06;
+                  spawnParticles(e.x, e.y - 24, 5, '#ff5e36', 90, 3.0, -30);
+                  spawnFloatingText(e.x, e.y - 48, 'AGNI CRATER -22', '#ff7849', 0.85);
+                }
+              });
+            }
+          }
+          if (z.remainingSec <= 0) {
+            sim.activeAstraZones.splice(zi, 1);
+          }
+        }
+
+        // Update Narayanastra Cease-Attack Special Encounter Trial
+        if (sim.narayanastraTrial.active) {
+          sim.narayanastraTrial.remainingWindowSec -= simDt;
+          const isPlayerCalm =
+            p.action === 'idle' && Math.hypot(p.vx, p.vy) < 45;
+          if (isPlayerCalm) {
+            sim.narayanastraTrial.calmTimerSec += simDt;
+          }
+          if (sim.narayanastraTrial.calmTimerSec >= sim.narayanastraTrial.requiredCalmSec) {
+            const invoker = sim.enemies.find(
+              (en) => String(en.id) === sim.narayanastraTrial.invokerEnemyId && en.aiState !== 'ko'
+            );
+            if (invoker) {
+              invoker.posture = 0;
+              invoker.postureBrokenTimer = 5.0;
+              invoker.aiState = 'recover';
+              invoker.aiTimer = 5.0;
+            }
+            p.hp = Math.min(p.maxHp, p.hp + 45);
+            gainAstraEnergy(35);
+            sim.ashenKarma += 120;
+            sim.karmaRunDelta += 120;
+            setAshenKarma(sim.ashenKarma);
+            sim.runNarayanastraPassed += 1;
+            sim.narayanastraTrial.active = false;
+            sim.narayanastraTrial.resolved = 'surrendered_passed';
+            soundEngine.playSpell('gourd');
+            spawnShockwave(p.x, p.y, 240, '#ffd86b', 0.52);
+            spawnParticles(p.x, p.y - 28, 32, '#ffd86b', 210, 4.8, -50);
+            spawnFloatingText(
+              p.x,
+              p.y - 96,
+              'NARAYANASTRA PASSED BY STILLNESS! (+45 HP · +35 ASTRA · +120 KARMA)',
+              '#ffd86b',
+              1.28,
+              'WEAPON SHEATHED BEFORE THE CELESTIAL VOLLEY · FOE POSTURE SHATTERED!'
+            );
+          } else if (sim.narayanastraTrial.remainingWindowSec <= 0) {
+            const burstDmg = Math.round((32 + sim.narayanastraTrial.escalationStacks * 18) * diffMod.enemyDamageMult);
+            if (p.invulnTimer <= 0) {
+              p.hp = Math.max(1, p.hp - burstDmg);
+              p.hitFlashTimer = 0.16;
+            }
+            sim.narayanastraTrial.active = false;
+            sim.narayanastraTrial.resolved = 'violated_escalated';
+            sim.cameraShakeTrauma = Math.min(1, sim.cameraShakeTrauma + 0.65);
+            spawnShockwave(p.x, p.y, 185, '#ff3b30', 0.45);
+            spawnFloatingText(
+              p.x,
+              p.y - 88,
+              `NARAYANASTRA VOLLEY (-${burstDmg} HP)`,
+              '#ff5252',
+              1.18
+            );
           }
         }
 
@@ -5384,7 +5898,21 @@ export default function KaliyugaArena() {
           }
         }
 
-        // Coordinated Multi-Attacker Pressure (up to 4 simultaneous attackers for relentless Hades/Sekiro pressure)
+        // Coordinated Group Attack Slot System: 1 Melee + 1 Ranged + 1 Heavy simultaneous attacker tokens
+        const attackTokenHolders = assignGroupAttackTokens(
+          sim.enemies.map((en) => ({
+            id: String(en.id),
+            type: en.type,
+            trait: en.trait,
+            isBoss: en.isBoss,
+            x: en.x,
+            y: en.y,
+            hp: en.hp,
+            aiState: en.aiState,
+          })),
+          p.x,
+          p.y
+        );
         let activeAttackers = sim.enemies.filter(
           (e) => e.aiState === 'windup' || e.aiState === 'attack'
         ).length;
@@ -5399,6 +5927,40 @@ export default function KaliyugaArena() {
           e.hitFlashTimer = Math.max(0, e.hitFlashTimer - simDt);
           e.slashArcAlpha = Math.max(0, e.slashArcAlpha - simDt * 3.8);
           e.parryStanceTimer = Math.max(0, (e.parryStanceTimer || 0) - simDt);
+          e.soakedTimer = Math.max(0, (e.soakedTimer || 0) - simDt);
+          e.markedTimer = Math.max(0, (e.markedTimer || 0) - simDt);
+
+          // Narayanastra Cease-Attack Special Encounter Trigger (Elite drops below 65% HP once per chamber)
+          if (
+            !e.isBoss &&
+            !e.narayanastraChantUsed &&
+            !sim.narayanastraTrial.active &&
+            (e.type === 'furnace_titan' || e.trait === 'agni_aura') &&
+            e.hp > 0 &&
+            e.hp <= e.maxHp * 0.65
+          ) {
+            e.narayanastraChantUsed = true;
+            sim.narayanastraTrial = {
+              active: true,
+              invokerEnemyId: String(e.id),
+              invokerName: e.name,
+              calmTimerSec: 0,
+              requiredCalmSec: 1.75,
+              escalationStacks: 0,
+              remainingWindowSec: 4.2,
+              resolved: 'none',
+            };
+            soundEngine.playGong('chamber');
+            spawnShockwave(e.x, e.y, 195, '#ffd86b', 0.48);
+            spawnFloatingText(
+              e.x,
+              e.y - 96,
+              'NARAYANASTRA INVOKED! · CEASE ATTACKING FOR 1.75s TO BOW!',
+              '#ffd86b',
+              1.24,
+              'STRIKING ESCALATES THE VOLLEY · STAND STILL TO SHATTER FOE POSTURE'
+            );
+          }
           const targetGrowth = e.isBoss ? (e.phase === 3 ? 1.10 : e.phase === 2 ? 1.05 : 1.0) : 1.0;
           e.growthScale = (e.growthScale || 1.0) + (targetGrowth - (e.growthScale || 1.0)) * (1 - Math.exp(-3.5 * simDt));
           e.scaleX = 1;
@@ -5775,11 +6337,11 @@ export default function KaliyugaArena() {
             const triggerDist =
               e.type === 'fire_monk' ? 375 : e.isBoss ? 150 : e.type === 'wolf_guai' ? 102 : 112;
 
-            // Aggressive, Coordinated Sekiro / Hades Attack Pacing: up to 4 simultaneous attackers, predictive aim, multi-hit combos, ZERO sliding corridors on regular foes
+            // Coordinated Group Attack Pacing: 1 Melee + 1 Ranged + 1 Heavy token holders (plus Boss)
             if (
               e.aiTimer <= 0 &&
               dist <= triggerDist &&
-              (activeAttackers < 4 || e.isBoss)
+              (attackTokenHolders.has(String(e.id)) || activeAttackers < 3 || e.isBoss)
             ) {
               activeAttackers++;
               e.aiState = 'windup';
@@ -6173,6 +6735,7 @@ export default function KaliyugaArena() {
 
                   if (parryRes.tier === 'perfect_golden') {
                     sim.runParriesLanded += 1;
+                    gainAstraEnergy(ASTRA_ENERGY_GAINS.PERFECT_PARRY);
                     e.comboHitsRemaining = 0;
                     e.aiState = 'recover';
                     e.aiTimer = 1.35;
@@ -6194,7 +6757,7 @@ export default function KaliyugaArena() {
                       parryRes.calloutTitle,
                       '#ffd86b',
                       1.18,
-                      parryRes.calloutSubtitle
+                      `${parryRes.calloutSubtitle} · +${ASTRA_ENERGY_GAINS.PERFECT_PARRY} ASTRA`
                     );
                   } else if (parryRes.tier === 'standard_guard') {
                     sim.runParriesLanded += 1;
@@ -6370,6 +6933,20 @@ export default function KaliyugaArena() {
             if (sim.deathTimer <= 0) {
               sim.state = 'gameover';
               document.body.dataset.state = 'gameover';
+              setLastRunSummary({
+                chambersCleared: sim.chamberIndex,
+                enemiesDefeated: sim.runEnemiesDefeated,
+                damageDealt: sim.runDamageDealt,
+                parriesLanded: sim.runParriesLanded,
+                dodgesExecuted: sim.runDodgesCompleted,
+                postureBreaks: sim.runPostureBreaks,
+                astrasInvoked: sim.runAstrasInvoked,
+                upasamharaWithdrawals: sim.runUpasamharaWithdrawals,
+                discoveriesUnlocked: sim.storyFlags.looks.length,
+                narayanastraTrialsPassed: sim.runNarayanastraPassed,
+                outcome: 'defeat',
+                timestamp: Date.now(),
+              });
               setGameState('gameover');
               setOutcomeMode('defeat');
             }
@@ -6476,6 +7053,20 @@ export default function KaliyugaArena() {
             if (sim.chamberIndex === CHAMBERS.length - 1) {
               if (sim.chamberClearTimer >= 1.1) {
                 soundEngine.playGong('victory');
+                setLastRunSummary({
+                  chambersCleared: CHAMBERS.length,
+                  enemiesDefeated: sim.runEnemiesDefeated,
+                  damageDealt: sim.runDamageDealt,
+                  parriesLanded: sim.runParriesLanded,
+                  dodgesExecuted: sim.runDodgesCompleted,
+                  postureBreaks: sim.runPostureBreaks,
+                  astrasInvoked: sim.runAstrasInvoked,
+                  upasamharaWithdrawals: sim.runUpasamharaWithdrawals,
+                  discoveriesUnlocked: sim.storyFlags.looks.length,
+                  narayanastraTrialsPassed: sim.runNarayanastraPassed,
+                  outcome: 'victory',
+                  timestamp: Date.now(),
+                });
                 setSliceStage('shard1_memory');
               }
             } else if (enteredRightGate) {
@@ -6988,7 +7579,40 @@ export default function KaliyugaArena() {
       }
       ctx.restore();
 
-      // 2.5. Draw Expanding Ground Shockwave Rings (Fast Decay — Low Persistence to Prevent Visual Interference)
+      // 2.5. Draw Expanding Ground Shockwave Rings & Active Persistent Astra Zones (Upasamhara-Ready)
+      for (let zi = 0; zi < sim.activeAstraZones.length; zi++) {
+        const az = sim.activeAstraZones[zi];
+        ctx.save();
+        ctx.globalCompositeOperation = 'screen';
+        ctx.translate(az.x, az.y);
+        ctx.scale(1, 0.56);
+        const zoneColor = az.astraId === 'agneyastra' ? '#ff5e36' : '#38bdf8';
+        ctx.fillStyle = az.astraId === 'agneyastra' ? 'rgba(255, 94, 54, 0.16)' : 'rgba(56, 189, 248, 0.16)';
+        ctx.strokeStyle = zoneColor;
+        ctx.lineWidth = 2.4;
+        ctx.beginPath();
+        ctx.arc(0, 0, az.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      if (sim.narayanastraTrial.active) {
+        const calmProg = Math.min(
+          1,
+          sim.narayanastraTrial.calmTimerSec / Math.max(0.1, sim.narayanastraTrial.requiredCalmSec)
+        );
+        ctx.save();
+        ctx.translate(sim.player.x, sim.player.y);
+        ctx.scale(1, 0.56);
+        ctx.strokeStyle = '#ffd86b';
+        ctx.lineWidth = 3.2;
+        ctx.beginPath();
+        ctx.arc(0, 0, 92, -Math.PI * 0.5, -Math.PI * 0.5 + calmProg * Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+
       for (let i = 0; i < sim.shockwaves.length; i++) {
         const sw = sim.shockwaves[i];
         if (!sw.active) continue;
@@ -8734,6 +9358,15 @@ export default function KaliyugaArena() {
           playerHp: Math.max(0, Math.round(p.hp)),
           playerDisplayHp: Math.max(0, Math.round(p.displayHp)),
           playerMaxHp: p.maxHp,
+          stamina: Math.max(0, Math.round(p.stamina)),
+          maxStamina: p.maxStamina,
+          astraEnergy: Math.max(0, Math.round(p.astraEnergy)),
+          maxAstraEnergy: p.maxAstraEnergy,
+          agneyastraCd: p.agneyastraCd,
+          vayavyastraCd: p.vayavyastraCd,
+          vajrastraCd: p.vajrastraCd,
+          activeUpasamharaZones: sim.activeAstraZones.map((z) => z.astraId),
+          narayanastraTrial: { ...sim.narayanastraTrial },
           focusOrbs: p.focusOrbs,
           focusProgress: p.focusProgress,
           stance: p.stance,
@@ -8794,6 +9427,7 @@ export default function KaliyugaArena() {
   }, [
     createEnemyFromSpec,
     damagePropsNearPoint,
+    gainAstraEnergy,
     loadChamber,
     recordQuestEvent,
     spawnAfterimage,
@@ -9515,43 +10149,102 @@ export default function KaliyugaArena() {
           </div>
         </div>
 
-        {/* BOTTOM PERIMETER: CONSOLIDATED COMPACT VITALS & COMBAT HOTBAR */}
+        {/* NARAYANASTRA CEASE-ATTACK TRIAL BANNER */}
+        {gameState === 'playing' && sliceStage === 'combat_arena' && hud.narayanastraTrial.active && (
+          <div className="pointer-events-none self-center mb-1 px-4 py-2 bg-[#1a1106]/95 border-2 border-[#ffd86b] shadow-[0_0_28px_rgba(255,216,107,0.45)] text-center max-w-xl">
+            <div className="text-xs font-display font-bold tracking-wider text-[#ffd86b] uppercase">
+              NARAYANASTRA INVOKED BY {hud.narayanastraTrial.invokerName.toUpperCase()} — CEASE ATTACKING TO PASS!
+            </div>
+            <div className="text-[11px] font-mono-num text-[#f5ebd6] mt-0.5">
+              Stand still &amp; sheathe weapon:{' '}
+              <strong className="text-[#3ee0a8]">
+                {hud.narayanastraTrial.calmTimerSec.toFixed(2)}s / {hud.narayanastraTrial.requiredCalmSec.toFixed(2)}s
+              </strong>{' '}
+              · Striking escalates damage!
+            </div>
+          </div>
+        )}
+
+        {/* BOTTOM PERIMETER: CONSOLIDATED 4-RESOURCE VITALS, SAVITRI LANTERN & 3-ASTRA COMBAT HOTBAR */}
         {gameState === 'playing' && sliceStage === 'combat_arena' && (
           <div
             data-testid="pc-combat-hotbar"
-            className="pointer-events-auto self-center mb-1.5 px-3.5 py-2 bg-[#0c0a0e]/94 border border-[#c89d46]/60 shadow-[0_10px_28px_rgba(0,0,0,0.9)] flex flex-wrap items-center justify-center gap-2.5 sm:gap-3.5 text-xs font-mono-num text-[#dfd3be]"
+            className="pointer-events-auto self-center mb-1.5 px-3.5 py-2 bg-[#0c0a0e]/95 border border-[#c89d46]/65 shadow-[0_10px_28px_rgba(0,0,0,0.92)] flex flex-wrap items-center justify-center gap-2 sm:gap-3 text-xs font-mono-num text-[#dfd3be]"
           >
-            {/* Compact Inline HP Bar + Tapas Diamonds + Chamber/Foes */}
-            <div className="flex items-center gap-2 pr-2 border-r border-[#c89d46]/30">
-              <span className="font-display font-bold text-[#f7efe0]">RUDRA</span>
-              <div className="w-24 h-3 bg-[#18221e] border border-[#2f5244] relative overflow-hidden">
-                <div
-                  className="h-full bg-gradient-to-r from-[#229e74] via-[#35d49c] to-[#68f5c4]"
-                  style={{
-                    width: `${Math.max(0, Math.min(100, (hud.playerHp / hud.playerMaxHp) * 100))}%`,
-                  }}
-                />
-              </div>
-              <span className="text-[#3ee0a8] font-bold">
-                {hud.playerHp}/{hud.playerMaxHp}
-              </span>
-              <div className="flex items-center gap-1 ml-1" title="Tapas Focus Diamonds">
-                {[0, 1, 2, 3].map((orbIdx) => (
+            {/* Savitri's 3-State Corner Lantern + Health + Stamina + Astra Energy + Karma */}
+            {(() => {
+              const lantern = getLanternLightState(storyFlags);
+              return (
+                <div className="flex flex-wrap items-center gap-2 pr-2 border-r border-[#c89d46]/30">
                   <div
-                    key={orbIdx}
-                    className={`w-2.5 h-2.5 rotate-45 border ${
-                      hud.focusOrbs > orbIdx
-                        ? 'bg-[#f5c451] border-[#fff2b2]'
-                        : 'bg-[#1a181e] border-[#594e36]'
-                    }`}
-                  />
-                ))}
-              </div>
-              <span className="text-[#f2c45a] font-bold ml-1">
-                CH {hud.chamberId}/{CHAMBERS.length}
-              </span>
-              <span className="text-[#b8ab96]">· {hud.foesRemaining} FOES</span>
-            </div>
+                    className="flex items-center gap-1.5 px-1.5 py-0.5 bg-[#141118] border border-[#c89d46]/35"
+                    title={`Savitri's Lantern: ${lantern.label} (${lantern.savitriVoiceTone})`}
+                  >
+                    <span
+                      className="w-2.5 h-2.5 rounded-full shrink-0"
+                      style={{
+                        backgroundColor: lantern.flameColor,
+                        boxShadow: `0 0 10px ${lantern.flameColor}`,
+                      }}
+                    />
+                    <span className="text-[10px] font-bold text-[#f5dca0] hidden md:inline">
+                      {lantern.label.toUpperCase()}
+                    </span>
+                  </div>
+
+                  {/* Health Bar */}
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-display font-bold text-[#f7efe0]">HP</span>
+                    <div className="w-20 h-2.5 bg-[#18221e] border border-[#2f5244] relative overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-[#229e74] via-[#35d49c] to-[#68f5c4]"
+                        style={{
+                          width: `${Math.max(0, Math.min(100, (hud.playerHp / hud.playerMaxHp) * 100))}%`,
+                        }}
+                      />
+                    </div>
+                    <span className="text-[#3ee0a8] font-bold">
+                      {hud.playerHp}/{hud.playerMaxHp}
+                    </span>
+                  </div>
+
+                  {/* Stamina Bar (0-100) */}
+                  <div className="flex items-center gap-1" title="Stamina (Dodge & Sprint)">
+                    <span className="text-[10px] text-[#63f2ff] font-bold">STA</span>
+                    <div className="w-14 h-2 bg-[#101e26] border border-[#28536b] relative overflow-hidden">
+                      <div
+                        className="h-full bg-[#38bdf8]"
+                        style={{
+                          width: `${Math.max(0, Math.min(100, (hud.stamina / hud.maxStamina) * 100))}%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Astra Energy Meter (0-100, Combat-Generated Only) */}
+                  <div
+                    className="flex items-center gap-1"
+                    title="Astra Energy (Built by Light/Heavy Hits, Parries, Perfect Dodges & Executions)"
+                  >
+                    <span className="text-[10px] text-[#ffd86b] font-bold">ASTRA</span>
+                    <div className="w-16 h-2.5 bg-[#241a0b] border border-[#8c6422] relative overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-[#d97706] via-[#f59e0b] to-[#fde68a]"
+                        style={{
+                          width: `${Math.max(0, Math.min(100, (hud.astraEnergy / hud.maxAstraEnergy) * 100))}%`,
+                        }}
+                      />
+                    </div>
+                    <span className="text-[#ffd86b] font-bold">{hud.astraEnergy}</span>
+                  </div>
+
+                  <span className="text-[#f2c45a] font-bold">
+                    CH {hud.chamberId}/{CHAMBERS.length}
+                  </span>
+                  <span className="text-[#b8ab96] hidden sm:inline">· {hud.foesRemaining} FOES</span>
+                </div>
+              );
+            })()}
 
             <button
               type="button"
@@ -9590,7 +10283,7 @@ export default function KaliyugaArena() {
                 SPACE
               </span>
               <span className="font-semibold">
-                DASH ({hud.dashCharges}/{hud.maxDashCharges})
+                DODGE ({hud.dashCharges}/{hud.maxDashCharges})
               </span>
             </button>
             <button
@@ -9607,10 +10300,76 @@ export default function KaliyugaArena() {
                     : 'bg-[#141218] border-[#453d30] text-[#7a6f5d]'
                 }`}
               >
-                Q
+                SHIFT
               </span>
               <span className="font-semibold">PARRY</span>
             </button>
+
+            {/* [Q] AGNEYASTRA (Fire Invocation + Upasamhara Withdrawal) */}
+            <button
+              type="button"
+              onClick={() => triggerAstraInvocation('agneyastra')}
+              className="flex items-center gap-1 hover:text-white cursor-pointer"
+              title="Agneyastra (35 Astra Energy) — Press again while crater is active for Upasamhara Withdrawal (+10 Astra Energy)"
+            >
+              <span
+                className={`px-1.5 py-0.5 border font-bold ${
+                  hud.activeUpasamharaZones.includes('agneyastra')
+                    ? 'bg-[#3b150c] border-[#ffd86b] text-[#ffd86b] animate-pulse'
+                    : hud.astraEnergy >= 35 && hud.agneyastraCd <= 0
+                    ? 'bg-[#2b120c] border-[#ff5e36] text-[#ff8a66]'
+                    : 'bg-[#141218] border-[#453d30] text-[#7a6f5d]'
+                }`}
+              >
+                Q
+              </span>
+              <span className="font-semibold text-[#ff8a66]">
+                {hud.activeUpasamharaZones.includes('agneyastra') ? 'WITHDRAW (+10)' : 'AGNI'}
+              </span>
+            </button>
+
+            {/* [E] VAYAVYASTRA (Wind Invocation + Upasamhara Withdrawal) */}
+            <button
+              type="button"
+              onClick={() => triggerAstraInvocation('vayavyastra')}
+              className="flex items-center gap-1 hover:text-white cursor-pointer"
+              title="Vayavyastra (30 Astra Energy) — Press again while wind shield is active for Upasamhara Withdrawal (+10 Astra Energy)"
+            >
+              <span
+                className={`px-1.5 py-0.5 border font-bold ${
+                  hud.activeUpasamharaZones.includes('vayavyastra')
+                    ? 'bg-[#0c2636] border-[#ffd86b] text-[#ffd86b] animate-pulse'
+                    : hud.astraEnergy >= 30 && hud.vayavyastraCd <= 0
+                    ? 'bg-[#0d1f29] border-[#38bdf8] text-[#63f2ff]'
+                    : 'bg-[#141218] border-[#453d30] text-[#7a6f5d]'
+                }`}
+              >
+                E
+              </span>
+              <span className="font-semibold text-[#63f2ff]">
+                {hud.activeUpasamharaZones.includes('vayavyastra') ? 'WITHDRAW (+10)' : 'VAYU'}
+              </span>
+            </button>
+
+            {/* [R] VAJRASTRA (Lightning Invocation) */}
+            <button
+              type="button"
+              onClick={() => triggerAstraInvocation('vajrastra')}
+              className="flex items-center gap-1 hover:text-white cursor-pointer"
+              title="Vajrastra (45 Astra Energy) — Shatters shields & chains +60% bonus damage on Soaked enemies"
+            >
+              <span
+                className={`px-1.5 py-0.5 border font-bold ${
+                  hud.astraEnergy >= 45 && hud.vajrastraCd <= 0
+                    ? 'bg-[#2b210a] border-[#ffd86b] text-[#ffd86b]'
+                    : 'bg-[#141218] border-[#453d30] text-[#7a6f5d]'
+                }`}
+              >
+                R
+              </span>
+              <span className="font-semibold text-[#ffd86b]">VAJRA</span>
+            </button>
+
             <button
               type="button"
               onClick={() => {
@@ -9631,7 +10390,7 @@ export default function KaliyugaArena() {
                 F
               </span>
               <span className="font-semibold">
-                {hud.hasBrokenTarget ? 'EXECUTE' : 'ASTRA'}
+                {hud.hasBrokenTarget ? 'EXECUTE' : 'CAST'}
               </span>
             </button>
             <button
@@ -9647,7 +10406,7 @@ export default function KaliyugaArena() {
                     : 'bg-[#141218] border-[#453d30] text-[#7a6f5d]'
                 }`}
               >
-                R
+                H
               </span>
               <span className={hud.gourdSips > 0 ? 'font-semibold text-[#3ee0a8]' : 'text-[#7a6f5d]'}>
                 KALASHA {hud.gourdSips}/{hud.maxGourdSips}
@@ -9714,14 +10473,20 @@ export default function KaliyugaArena() {
           stage={sliceStage}
           storyFlags={storyFlags}
           activeLookModal={activeLookModal}
+          difficulty={combatDifficulty}
+          onChangeDifficulty={(d) => {
+            setCombatDifficulty(d);
+            simRef.current.difficulty = d;
+          }}
+          lastRunSummary={lastRunSummary}
           onCloseLookModal={() => {
             simRef.current.activeLookObject = null;
             setActiveLookModal(null);
           }}
           onOpenShrine={() => setShrineOpen(true)}
-          onStartAct1Run={() => {
+          onStartAct1Run={(startIdx) => {
             setSliceStage('combat_arena');
-            startGameAtChamber(0);
+            startGameAtChamber(startIdx ?? 0);
           }}
           onCompleteSlice={() => {
             setSliceStage('combat_arena');
