@@ -28,11 +28,11 @@ dist/
 
 # Large Archives & Binaries
 *.zip
-!Meshy_AI_*.zip
-!untitled*.zip
 *.tar.gz
 *.dmg
 *.iso
+*.mov
+screen test/
 
 # Local Environment
 .env*.local
