@@ -780,11 +780,40 @@ export function loadAndProcessSprite(
                 comps.sort((a, b) => b.score - a.score);
                 const mainComp = comps[0];
                 const validPixels = new Set<number>(mainComp.pixels);
+                let mainMinX = x1;
+                let mainMaxX = x0;
+                let mainMinY = y1;
+                let mainMaxY = y0;
+                for (const p of mainComp.pixels) {
+                  const px = p % w;
+                  const py = (p - px) / w;
+                  mainMinX = Math.min(mainMinX, px);
+                  mainMaxX = Math.max(mainMaxX, px);
+                  mainMinY = Math.min(mainMinY, py);
+                  mainMaxY = Math.max(mainMaxY, py);
+                }
 
-                // Keep secondary components ONLY if they touch the core and don't hang off the outer frame border
+                // Keep close, complete weapon/limb pieces even when they do not touch the torso core.
+                // Components near the cell edge remain excluded to prevent neighboring-frame bleed.
                 for (let ci = 1; ci < comps.length; ci++) {
                   const c = comps[ci];
-                  if (c.touchesCore && !c.touchesBorder && c.pixels.length >= 24) {
+                  if (c.touchesBorder || c.pixels.length < 24) continue;
+                  let partMinX = x1;
+                  let partMaxX = x0;
+                  let partMinY = y1;
+                  let partMaxY = y0;
+                  for (const p of c.pixels) {
+                    const px = p % w;
+                    const py = (p - px) / w;
+                    partMinX = Math.min(partMinX, px);
+                    partMaxX = Math.max(partMaxX, px);
+                    partMinY = Math.min(partMinY, py);
+                    partMaxY = Math.max(partMaxY, py);
+                  }
+                  const gapX = Math.max(0, mainMinX - partMaxX, partMinX - mainMaxX);
+                  const gapY = Math.max(0, mainMinY - partMaxY, partMinY - mainMaxY);
+                  const isCloseAccessory = gapX <= fw * 0.16 && gapY <= fh * 0.16;
+                  if (c.touchesCore || (c.pixels.length >= 36 && isCloseAccessory)) {
                     for (const p of c.pixels) validPixels.add(p);
                   }
                 }
@@ -828,10 +857,12 @@ export function loadAndProcessSprite(
                   r = Math.min(255, Math.max(0, Math.round(luma + (r - luma) * satBoost)));
                   g = Math.min(255, Math.max(0, Math.round(luma + (g - luma) * satBoost)));
                   b = Math.min(255, Math.max(0, Math.round(luma + (b - luma) * satBoost)));
-                  if (luma < 56) {
-                    r = Math.min(255, Math.round(r * 1.22 + 10));
-                    g = Math.min(255, Math.round(g * 1.22 + 8));
-                    b = Math.min(255, Math.round(b * 1.22 + 12));
+                  if (luma < 92) {
+                    const shadowLift = luma < 56 ? 1.22 : 1.12;
+                    const shadowFill = luma < 56 ? 10 : 6;
+                    r = Math.min(255, Math.round(r * shadowLift + shadowFill));
+                    g = Math.min(255, Math.round(g * shadowLift + shadowFill - 2));
+                    b = Math.min(255, Math.round(b * shadowLift + shadowFill + 2));
                   }
 
                   const dIdx = lIdx * 4;
@@ -1767,11 +1798,11 @@ export function loadAndProcessSprite(
             const colorDist = Math.abs(r - bgR) + Math.abs(g - bgG) + Math.abs(b - bgB);
 
             if (isVfxMode) {
-              // For VFX sheets, flood-fill dark/charcoal/grey/checkerboard cell backgrounds and cell divider lines
-              // while preserving all colored, warm/earthy, or bright (>150 luma) VFX pixels
+              // For VFX sheets, flood-fill dark/charcoal/grey/checkerboard cell backgrounds and cell divider lines.
+              // Bright neutral checker squares are still background; only saturated/colorful highlights are ink.
               return (
                 (maxC < 48 && luma < 44) ||
-                (sat <= 22 && luma < 152) ||
+                (sat <= 18 && luma < 248) ||
                 (sat <= 26 && colorDist <= 64 && luma < 168)
               );
             }

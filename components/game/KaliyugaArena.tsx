@@ -1000,8 +1000,6 @@ export default function KaliyugaArena() {
   useEffect(() => {
     const r3d = new Rudra3DRenderer(256);
     rudra3dRef.current = r3d;
-    const b3d = new Boss3DRenderer(288);
-    boss3dRef.current = b3d;
 
     let ticks = 0;
     const preloadTimer = window.setInterval(() => {
@@ -1726,9 +1724,6 @@ export default function KaliyugaArena() {
       const sim = simRef.current;
       const clampedIdx = Math.max(0, Math.min(CHAMBERS.length - 1, index));
       const spec = CHAMBERS[clampedIdx];
-      if ((spec.isBossChamber || clampedIdx >= 2) && !boss3dRef.current) {
-        boss3dRef.current = new Boss3DRenderer(288);
-      }
       const cw = typeof window !== 'undefined' ? window.innerWidth || sim.viewportW || 1440 : sim.viewportW || 1440;
       const ch = typeof window !== 'undefined' ? window.innerHeight || sim.viewportH || 900 : sim.viewportH || 900;
       sim.viewportW = cw;
@@ -1778,6 +1773,10 @@ export default function KaliyugaArena() {
           loadAndProcessSprite(GAME_ASSETS.bossSheets.vrikodaraDemonicKingSheet, {
             mode: 'character',
             gridLayout: 'multirow',
+          });
+          loadAndProcessSprite(GAME_ASSETS.bossSheets.vrikodaraPhase2Sheet2x2, {
+            mode: 'character',
+            gridLayout: '2x2',
           });
         }
       });
@@ -8590,14 +8589,16 @@ export default function KaliyugaArena() {
           const enemySkewX = 0;
 
           if (e.type === 'xuemo' || e.type === 'vrikodara') {
-            // HADES-GRADE 3D-TO-2D CEL-SHADED, INK-OUTLINED BOSS SPRITE SHEET PIPELINE
+            // Bosses use the hand-painted 2D sprite sheets to match the rest of the arena art.
             if (!boss3dRef.current) {
               boss3dRef.current = new Boss3DRenderer(288);
             }
             const boss3d = boss3dRef.current;
             const bossType = e.type === 'xuemo' ? 'dundubhi' : 'vrikodara';
             const growthMult = e.growthScale || 1.0;
+            const usePaintedBossSprites = true;
             const renderedBoss3D =
+              !usePaintedBossSprites &&
               boss3d &&
               boss3d.updateAndRender({
                 kind: bossType,
@@ -8680,7 +8681,9 @@ export default function KaliyugaArena() {
                   gridLayout: 'multirow',
                 });
                 dundubhiAsset = getProcessedSpriteSync(
-                  GAME_ASSETS.bossSheets.dundubhiPhase1SheetA2x2
+                  e.phase >= 2
+                    ? GAME_ASSETS.bossSheets.dundubhiPhase2Sheet2x2
+                    : GAME_ASSETS.bossSheets.dundubhiPhase1SheetA2x2
                 );
               }
               const explicitBossFrame = getMultiRowFrameBounds(
@@ -8689,7 +8692,7 @@ export default function KaliyugaArena() {
                 e.animTime,
                 bossStateProgress
               );
-              const bossTargetH = Math.round(108 * growthMult);
+              const bossTargetH = Math.round(164 * growthMult);
               drawSpriteFrame(
                 ctx,
                 dundubhiAsset,
@@ -8711,15 +8714,20 @@ export default function KaliyugaArena() {
                 explicitBossFrame
               );
             } else {
-              const vrikodaraSheetUrl = GAME_ASSETS.enemySheets.kaliyugaAvatarSheet2x2;
+              const vrikodaraSheetUrl =
+                e.phase >= 2
+                  ? GAME_ASSETS.bossSheets.vrikodaraPhase2Sheet2x2
+                  : GAME_ASSETS.bossSheets.vrikodaraDemonicKingSheet;
               let vrikodaraAsset = getProcessedSpriteSync(vrikodaraSheetUrl);
               if (!vrikodaraAsset) {
                 loadAndProcessSprite(vrikodaraSheetUrl, {
                   mode: 'character',
-                  gridLayout: 'multirow',
+                  gridLayout: e.phase >= 2 ? '2x2' : 'multirow',
                 });
                 vrikodaraAsset = getProcessedSpriteSync(
-                  GAME_ASSETS.bossSheets.vrikodaraPhase1Sheet2x2
+                  e.phase >= 2
+                    ? GAME_ASSETS.bossSheets.vrikodaraPhase2Sheet2x2
+                    : GAME_ASSETS.bossSheets.vrikodaraPhase1Sheet2x2
                 );
               }
               const explicitBossFrame = getMultiRowFrameBounds(
@@ -8728,7 +8736,7 @@ export default function KaliyugaArena() {
                 e.animTime,
                 bossStateProgress
               );
-              const bossTargetH = Math.round(132 * growthMult);
+              const bossTargetH = Math.round((e.phase >= 2 ? 194 : 184) * growthMult);
               drawSpriteFrame(
                 ctx,
                 vrikodaraAsset,
@@ -8810,15 +8818,15 @@ export default function KaliyugaArena() {
                 ? Math.floor(e.animTime * 8.0) % 4
                 : Math.floor(e.animTime * 3.2) % 2;
 
-            // Regular enemies are 82–90px, Elite Wardens slightly taller (96px)
+            // Keep regular enemies large enough to read at full-arena camera distance.
             const targetH =
               e.type === 'furnace_titan'
-                ? 96
+                ? 120
                 : e.type === 'stone_golem'
-                ? 88
+                ? 110
                 : e.type === 'fire_monk'
-                ? 82
-                : 82;
+                ? 102
+                : 102;
 
             // Grounded enemy visibility ring so enemies never disappear against dark chamber stone floors
             if (e.aiState !== 'ko') {

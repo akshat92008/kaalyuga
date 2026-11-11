@@ -48,3 +48,7 @@ next-env.d.ts
 /public/audio/
 /public/cutscenes/
 /public/videos/
+
+# Local archival checkouts inside the Desktop export are not part of the game build.
+/wukong-master-guide-—-technical-code-audit-&-sandbox/
+/wukong-master-guide-—-technical-code-audit-&-sandbox (1)/
