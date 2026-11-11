@@ -12,7 +12,6 @@
 // ============================================================================
 
 import * as THREE from 'three';
-import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { IS_SOFTWARE_WEBGL } from '../../engine/ue5GraphicsEngine';
 import { loadFbxCached } from './meshSimplifier';
 import {
@@ -264,6 +263,7 @@ export class Boss3DRenderer {
   private clipAnimTime = 0;
   private lastRenderTime = -999;
   private disposed = false;
+  private loadingStarted = false;
 
   // Real-time 3D Boss Weapon Trail Ribbon
   private trailGeometry: THREE.BufferGeometry;
@@ -302,21 +302,19 @@ export class Boss3DRenderer {
     this.camera.position.set(0, 154, 300);
     this.camera.lookAt(0, 84, 0);
 
-    // Atmospheric Vedic Battlefield Lighting Rig (Warm golden torchlight + infernal crimson rim, zero cold office glare)
-    const ambient = new THREE.AmbientLight(0x42261a, 1.25);
+    // Flat 2D Illustration Lighting Rig (zero glossy specular hotspots, preserves true painted boss colors)
+    const ambient = new THREE.AmbientLight(0xf2ece4, 2.15);
     this.scene.add(ambient);
 
-    this.keyLight = new THREE.DirectionalLight(0xffb86c, 1.35);
+    this.keyLight = new THREE.DirectionalLight(0xfff6e8, 1.18);
     this.keyLight.position.set(-140, 245, 215);
     this.scene.add(this.keyLight);
 
-    // Fierce Infernal Rim Light (highlights horns, spines, and silhouettes in mythic crimson)
-    this.rimLight = new THREE.DirectionalLight(0xff3814, 2.2);
+    this.rimLight = new THREE.DirectionalLight(0xffe6a8, 0.72);
     this.rimLight.position.set(150, 200, -215);
     this.scene.add(this.rimLight);
 
-    // Deep Volcanic Ground Bounce Fill Light
-    this.fillLight = new THREE.DirectionalLight(0x6e2416, 0.85);
+    this.fillLight = new THREE.DirectionalLight(0xc8c0b8, 0.85);
     this.fillLight.position.set(165, 70, 135);
     this.scene.add(this.fillLight);
 
@@ -368,18 +366,10 @@ export class Boss3DRenderer {
       this.renderer.setSize(size, size, false);
       this.renderer.setPixelRatio(1);
       this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-      this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-      this.renderer.toneMappingExposure = 1.05;
-      this.renderer.shadowMap.enabled = !IS_SOFTWARE_WEBGL;
-      this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-
-      if (!IS_SOFTWARE_WEBGL) {
-        const pmremGenerator = new THREE.PMREMGenerator(this.renderer);
-        this.scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
-        pmremGenerator.dispose();
-      }
-
-      this.loadAllBossAssets();
+      this.renderer.toneMapping = THREE.NoToneMapping;
+      this.renderer.toneMappingExposure = 1.0;
+      this.renderer.shadowMap.enabled = false;
+      this.scene.environment = null;
     } catch {
       this.renderer = null;
     }
@@ -471,18 +461,23 @@ export class Boss3DRenderer {
         }
       });
 
+      void dunRough;
+      void dunMet;
+      void vrikRough;
+      void vrikMet;
+      void wepRoughTex;
+      void wepMetTex;
+
       const createWepMat = () =>
         new THREE.MeshStandardMaterial({
           map: wepBaseTex || undefined,
           normalMap: wepNormTex || undefined,
-          normalScale: new THREE.Vector2(1.2, 1.2),
-          roughnessMap: wepRoughTex || undefined,
-          metalnessMap: wepMetTex || undefined,
-          roughness: 0.72,
-          metalness: 0.32,
-          envMapIntensity: 0.15,
+          normalScale: new THREE.Vector2(0.45, 0.45),
+          roughness: 0.92,
+          metalness: 0.0,
+          envMapIntensity: 0.0,
           emissive: new THREE.Color(0x38080c),
-          emissiveIntensity: 0.22,
+          emissiveIntensity: 0.14,
         });
 
       // ======================================================================
@@ -501,20 +496,18 @@ export class Boss3DRenderer {
         if ((obj as THREE.Mesh).isMesh) {
           const mesh = obj as THREE.Mesh;
           mesh.frustumCulled = false;
-          mesh.castShadow = !IS_SOFTWARE_WEBGL;
-          mesh.receiveShadow = !IS_SOFTWARE_WEBGL;
+          mesh.castShadow = false;
+          mesh.receiveShadow = false;
           const mat = new THREE.MeshStandardMaterial({
             color: new THREE.Color(0xffffff),
             map: gradedDunBase || undefined,
             normalMap: dunNorm || undefined,
-            normalScale: new THREE.Vector2(1.08, 1.08),
-            roughnessMap: dunRough || undefined,
-            metalnessMap: dunMet || undefined,
-            roughness: 0.84,
-            metalness: 0.08,
-            envMapIntensity: 0.12,
-            emissive: new THREE.Color(0x180504),
-            emissiveIntensity: 0.18,
+            normalScale: new THREE.Vector2(0.35, 0.35),
+            roughness: 0.96,
+            metalness: 0.0,
+            envMapIntensity: 0.0,
+            emissive: new THREE.Color(0x000000),
+            emissiveIntensity: 0.0,
           });
           mesh.material = mat;
           dundubhiMaterials.push(mat);
@@ -599,7 +592,7 @@ export class Boss3DRenderer {
 
       // ======================================================================
       // 2. CONFIGURE VRIKODARA (Crimson Skull Warlord — Native Meshy Biped Rig)
-      //    Exact same native scale (1, 1, 1), Hades cel/toon shader, and Meshy Biped
+      //    Exact same native scale (1, 1, 1), flat-matte 2D cel shader, and Meshy Biped
       //    animations as Rudra so Vrikodara looks 100% like an ink-outlined Hades boss!
       // ======================================================================
       const vrikodaraRoot = new THREE.Group();
@@ -615,14 +608,12 @@ export class Boss3DRenderer {
         color: new THREE.Color(0xffffff),
         map: gradedVrikBase || undefined,
         normalMap: vrikNorm || undefined,
-        normalScale: new THREE.Vector2(1.08, 1.08),
-        roughnessMap: vrikRough || undefined,
-        metalnessMap: vrikMet || undefined,
-        roughness: 0.82,
-        metalness: 0.10,
-        envMapIntensity: 0.12,
-        emissive: new THREE.Color(0x280504),
-        emissiveIntensity: 0.22,
+        normalScale: new THREE.Vector2(0.35, 0.35),
+        roughness: 0.96,
+        metalness: 0.0,
+        envMapIntensity: 0.0,
+        emissive: new THREE.Color(0x000000),
+        emissiveIntensity: 0.0,
       });
       vrikMaterials.push(vrikCharMat);
 
@@ -869,7 +860,12 @@ export class Boss3DRenderer {
   }
 
   public updateAndRender(params: Boss3DUpdateParams): boolean {
-    if (!this.isReady || !this.renderer) return false;
+    if (!this.renderer) return false;
+    if (!this.loadingStarted) {
+      this.loadingStarted = true;
+      this.loadAllBossAssets();
+    }
+    if (!this.isReady) return false;
     const rig = this.rigs[params.kind];
     if (!rig) return false;
 

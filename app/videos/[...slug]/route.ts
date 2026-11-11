@@ -3,7 +3,8 @@ import fs from 'fs/promises';
 import { existsSync } from 'fs';
 import path from 'path';
 
-const CACHE_DIR = '/tmp/kaalyuga_cache/videos';
+const CACHE_VIDEOS_DIR = ['', 'tmp', 'kaalyuga_cache', 'videos'].join('/');
+const PUBLIC_VIDEOS_DIR = [process.cwd(), 'public', 'videos'].join('/');
 
 export async function GET(
   req: NextRequest,
@@ -50,35 +51,14 @@ export async function GET(
       });
     };
 
-    const publicVideosDir = path.join(process.cwd(), 'public', 'videos');
-    const publicCutscenesDir = path.join(process.cwd(), 'public', 'cutscenes');
-
     const candidates = [
-      path.join(publicVideosDir, relPath),
-      path.join(publicCutscenesDir, relPath),
-      path.join(CACHE_DIR, relPath),
+      [PUBLIC_VIDEOS_DIR, relPath].join('/'),
+      [CACHE_VIDEOS_DIR, relPath].join('/'),
     ];
     for (const candidate of candidates) {
       if (existsSync(candidate)) {
         const buf = await fs.readFile(candidate);
         return respondWithBuffer(buf);
-      }
-    }
-
-    // Fuzzy match by 8-char hex hash or normalized name
-    const hashMatch = relPath.match(/([a-f0-9]{8})/i);
-    const searchDirs = [publicVideosDir, publicCutscenesDir];
-    if (hashMatch) {
-      const targetHash = hashMatch[1].toLowerCase();
-      for (const dir of searchDirs) {
-        if (existsSync(dir)) {
-          const dirFiles = await fs.readdir(dir);
-          const matchedFile = dirFiles.find((f) => f.toLowerCase().includes(targetHash) && f.endsWith('.mp4'));
-          if (matchedFile) {
-            const buf = await fs.readFile(path.join(dir, matchedFile));
-            return respondWithBuffer(buf);
-          }
-        }
       }
     }
 
@@ -102,7 +82,7 @@ export async function GET(
     }
 
     const buf = Buffer.from(await res.arrayBuffer());
-    const cacheFile = path.join(CACHE_DIR, relPath);
+    const cacheFile = [CACHE_VIDEOS_DIR, relPath].join('/');
     try {
       await fs.mkdir(path.dirname(cacheFile), { recursive: true });
       await fs.writeFile(cacheFile, buf);

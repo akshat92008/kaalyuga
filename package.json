@@ -3,10 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "node scripts/ensure-assets.mjs",
     "dev": "next dev",
+    "prebuild": "node scripts/ensure-assets.mjs",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint app components lib hooks",
+    "lint": "tsc --noEmit",
     "clean": "next clean"
   },
   "dependencies": {

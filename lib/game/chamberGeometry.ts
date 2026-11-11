@@ -368,6 +368,8 @@ let offscreenVideoCtx: CanvasRenderingContext2D | null = null;
 let lastVideoBlitTimeMs = 0;
 let lastBlittedVideoUrl: string | null = null;
 
+const arenaVideoPlayPending = new Set<string>();
+
 export function getOrStartArenaVideo(videoUrl: string | undefined, paused: boolean = false): HTMLVideoElement | null {
   if (typeof window === 'undefined' || typeof document === 'undefined' || !videoUrl) {
     return null;
@@ -375,13 +377,19 @@ export function getOrStartArenaVideo(videoUrl: string | undefined, paused: boole
   let video = arenaVideoPool.get(videoUrl);
   if (!video) {
     video = document.createElement('video');
-    video.src = videoUrl;
     video.muted = true;
     video.defaultMuted = true;
     video.loop = true;
     video.playsInline = true;
-    video.crossOrigin = 'anonymous';
     video.preload = 'auto';
+    video.src = videoUrl;
+    const targetVid = video;
+    targetVid.addEventListener('canplay', () => {
+      if (currentPlayingVideoUrl === videoUrl && targetVid.paused) {
+        targetVid.play().catch(() => {});
+      }
+    });
+    targetVid.load();
     arenaVideoPool.set(videoUrl, video);
   }
 
@@ -403,10 +411,14 @@ export function getOrStartArenaVideo(videoUrl: string | undefined, paused: boole
         video.pause();
       } catch {}
     }
-  } else if (video.paused && video.readyState >= 1) {
-    video.play().catch(() => {});
-  } else if (video.paused && video.networkState !== 3) {
-    video.play().catch(() => {});
+  } else if (video.paused && video.readyState >= 2 && !arenaVideoPlayPending.has(videoUrl)) {
+    arenaVideoPlayPending.add(videoUrl);
+    video
+      .play()
+      .catch(() => {})
+      .finally(() => {
+        arenaVideoPlayPending.delete(videoUrl);
+      });
   }
 
   return video;

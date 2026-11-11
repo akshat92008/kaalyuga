@@ -39,16 +39,14 @@ yarn-error.log*
 
 # typescript
 *.tsbuildinfo
-next-env.d.ts
 
-# Large binary game assets (kept on local disk for Next.js serving, excluded from RPC sync)
-/public/assets/*.png
-/public/assets/*.jpg
+# large binary media (synced on disk, excluded from snapshot timeout)
+/public/videos/
 /public/models/
 /public/audio/
+/public/animations/
+/public/images/
+/public/assets/
+/public/new_3d_assets/
 /public/cutscenes/
-/public/videos/
 
-# Local archival checkouts inside the Desktop export are not part of the game build.
-/wukong-master-guide-—-technical-code-audit-&-sandbox/
-/wukong-master-guide-—-technical-code-audit-&-sandbox (1)/

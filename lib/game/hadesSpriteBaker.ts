@@ -216,10 +216,11 @@ export class Hades2DSpriteBaker {
   }
 
   /**
-   * Stylizes the rendered 3D `webglCanvas` into a crisp 2D Hades sprite on `targetCanvas`
+   * Stylizes the rendered 3D `webglCanvas` into a true 2D Hades hand-painted sprite on `targetCanvas`
    * with:
-   *  1. Clean 8-way dark obsidian comic ink contour (`#0d080b`)
-   *  2. Crisp original colors without warm yellow-orange rim smears or oiled specular wash
+   *  1. Zero 3D plastic/metallic shine (specular glare suppression + 5-band cel shading quantization)
+   *  2. Interior comic-ink crease lines detected from luminance gradients
+   *  3. Warm golden-amber upper-edge rim highlight + 2px dark obsidian comic ink outer contour (#0b070d)
    */
   public bakeSpriteFrame(
     webglCanvas: HTMLCanvasElement,
@@ -232,48 +233,135 @@ export class Hades2DSpriteBaker {
       cacheFrame?: boolean;
     }
   ): void {
-    const outCtx = targetCanvas.getContext('2d');
+    const outCtx = targetCanvas.getContext('2d', { willReadFrequently: true });
     if (!outCtx || !this.inkCtx) return;
 
     const s = this.size;
-    const outlinePx = Math.min(1.65, options.outlinePx ?? 1.5);
 
-    // 1. Prepare solid dark-ink silhouette stamp
+    // 1. Draw raw WebGL render into inkCanvas and read pixels for 2D Cel-Shader + Ink Outline pass
     this.inkCtx.clearRect(0, 0, s, s);
     this.inkCtx.globalCompositeOperation = 'source-over';
     this.inkCtx.drawImage(webglCanvas, 0, 0, s, s);
-    this.inkCtx.globalCompositeOperation = 'source-in';
-    this.inkCtx.fillStyle = '#0d080b';
-    this.inkCtx.fillRect(0, 0, s, s);
+    const srcImg = this.inkCtx.getImageData(0, 0, s, s);
+    const sData = srcImg.data;
 
-    // 2. Composite onto output 2D Sprite Canvas
-    outCtx.clearRect(0, 0, s, s);
-    outCtx.save();
+    const outImg = outCtx.createImageData(s, s);
+    const dData = outImg.data;
+    const total = s * s;
+    const fgMask = new Uint8Array(total);
+    const lumaBuf = new Float32Array(total);
 
-    // Pass A: Crisp 8-direction dark ink outer contour
-    const diag = outlinePx * 0.72;
-    const offsets: readonly [number, number][] = [
-      [-outlinePx, 0],
-      [outlinePx, 0],
-      [0, -outlinePx],
-      [0, outlinePx],
-      [-diag, -diag],
-      [diag, -diag],
-      [-diag, diag],
-      [diag, diag],
-    ];
-    for (const [dx, dy] of offsets) {
-      outCtx.drawImage(this.inkCanvas, dx, dy);
+    for (let p = 0; p < total; p++) {
+      const idx = p * 4;
+      const a = sData[idx + 3];
+      if (a > 40) {
+        fgMask[p] = 1;
+        lumaBuf[p] = 0.299 * sData[idx] + 0.587 * sData[idx + 1] + 0.114 * sData[idx + 2];
+      }
     }
 
-    // Pass B: Crisp character body preserving original hues
-    outCtx.filter = options.isHurt
-      ? 'contrast(1.22) saturate(1.18) brightness(1.35)'
-      : 'contrast(1.08) saturate(1.10) brightness(1.02)';
-    outCtx.drawImage(webglCanvas, 0, 0, s, s);
-    outCtx.filter = 'none';
+    // 2. Shade interior character pixels with flat-matte cel quantization + interior ink creases + warm rim
+    for (let y = 2; y < s - 2; y++) {
+      const rOff = y * s;
+      for (let x = 2; x < s - 2; x++) {
+        const p = rOff + x;
+        const idx = p * 4;
+        if (fgMask[p] === 1) {
+          if (options.isHurt) {
+            dData[idx] = 255;
+            dData[idx + 1] = 242;
+            dData[idx + 2] = 205;
+            dData[idx + 3] = 255;
+            continue;
+          }
 
-    outCtx.restore();
+          let r = sData[idx];
+          let g = sData[idx + 1];
+          let b = sData[idx + 2];
+          const rawLuma = lumaBuf[p];
+
+          // Suppress 3D specular glare hotspots (>195 luma) so armor/skin never shines like plastic or oil
+          const matteLuma =
+            rawLuma > 190 ? 190 + (rawLuma - 190) * 0.25 : rawLuma;
+          // Lift muddy darks & quantize into 2D hand-painted cel bands (blend 55% smooth + 45% posterized cel)
+          const liftedLuma = Math.pow(Math.max(0, Math.min(1, matteLuma / 255)), 0.78) * 245;
+          const celBand = Math.round(liftedLuma / 38) * 38;
+          const finalLuma = liftedLuma * 0.58 + celBand * 0.42;
+          const lumaScale = rawLuma > 4 ? finalLuma / rawLuma : 1.25;
+
+          r = clampByte(r * lumaScale);
+          g = clampByte(g * lumaScale);
+          b = clampByte(b * lumaScale);
+
+          // Boost true pigment vibrancy so 3D-baked sprites match the rich 2D hand-painted palette
+          const newL = 0.299 * r + 0.587 * g + 0.114 * b;
+          const sat = 1.28;
+          r = clampByte(newL + (r - newL) * sat + 5);
+          g = clampByte(newL + (g - newL) * sat + 2);
+          b = clampByte(newL + (b - newL) * sat);
+
+          // Interior comic-ink crease detection (Sobel gradient across muscle/armor plates)
+          const gx = Math.abs(lumaBuf[p + 1] - lumaBuf[p - 1]);
+          const gy = Math.abs(lumaBuf[p + s] - lumaBuf[p - s]);
+          const grad = gx + gy;
+
+          // Upper/side silhouette rim test
+          const isRim =
+            fgMask[p - s] === 0 ||
+            fgMask[p - 1] === 0 ||
+            fgMask[p + 1] === 0;
+
+          if (isRim) {
+            // Crisp 2D warm golden-amber rim highlight
+            r = clampByte(r * 0.58 + 255 * 0.42);
+            g = clampByte(g * 0.58 + 226 * 0.42);
+            b = clampByte(b * 0.58 + 136 * 0.42);
+          } else if (grad > 54 && fgMask[p - 1] === 1 && fgMask[p + 1] === 1 && fgMask[p - s] === 1 && fgMask[p + s] === 1) {
+            // Crisp dark interior comic ink line
+            const inkMix = Math.min(0.72, (grad - 54) / 70);
+            r = clampByte(r * (1 - inkMix) + 16 * inkMix);
+            g = clampByte(g * (1 - inkMix) + 10 * inkMix);
+            b = clampByte(b * (1 - inkMix) + 18 * inkMix);
+          }
+
+          dData[idx] = r;
+          dData[idx + 1] = g;
+          dData[idx + 2] = b;
+          dData[idx + 3] = 255;
+        } else {
+          // Exterior 2px Hades dark-ink outline (#0b070d)
+          const n1 =
+            fgMask[p - 1] === 1 ||
+            fgMask[p + 1] === 1 ||
+            fgMask[p - s] === 1 ||
+            fgMask[p + s] === 1 ||
+            fgMask[p - s - 1] === 1 ||
+            fgMask[p - s + 1] === 1 ||
+            fgMask[p + s - 1] === 1 ||
+            fgMask[p + s + 1] === 1;
+          if (n1) {
+            dData[idx] = 11;
+            dData[idx + 1] = 7;
+            dData[idx + 2] = 13;
+            dData[idx + 3] = 255;
+            continue;
+          }
+          const n2 =
+            fgMask[p - 2] === 1 ||
+            fgMask[p + 2] === 1 ||
+            fgMask[p - s * 2] === 1 ||
+            fgMask[p + s * 2] === 1;
+          if (n2) {
+            dData[idx] = 24;
+            dData[idx + 1] = 14;
+            dData[idx + 2] = 20;
+            dData[idx + 3] = 215;
+          }
+        }
+      }
+    }
+
+    outCtx.putImageData(outImg, 0, 0);
     this.lastFrameKey = options.frameKey;
 
     if (options.cacheFrame !== false && !options.isHurt) {
@@ -294,3 +382,122 @@ export class Hades2DSpriteBaker {
     }
   }
 }
+
+/**
+ * Applies Hades-grade stylized matte material adjustments and warm rim-lighting to a 3D hierarchy
+ * so baked 2D sprites have crisp contrast, zero plastic/oiled specular blowout, and vibrant colors.
+ */
+export function applyHadesCelShadingToHierarchy(
+  root: THREE.Object3D,
+  _options?: {
+    rimColor?: number;
+    rimIntensity?: number;
+  }
+): void {
+  root.traverse((child) => {
+    if (!(child as THREE.Mesh).isMesh) return;
+    const mesh = child as THREE.Mesh;
+    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+
+    const updated = mats.map((m) => {
+      if (!m) return m;
+      const std = m as THREE.MeshStandardMaterial;
+      if ('roughness' in std) {
+        std.roughness = 0.88;
+      }
+      if ('metalness' in std) {
+        std.metalness = 0.06;
+      }
+      if ('emissive' in std && std.emissive) {
+        std.emissive.setHex(0x000000);
+        std.emissiveIntensity = 0.0;
+      }
+      std.needsUpdate = true;
+      return std;
+    });
+
+    mesh.material = Array.isArray(mesh.material) ? updated : updated[0];
+  });
+}
+
+const sharedFrameCache = new Map<string, HTMLCanvasElement>();
+
+/**
+ * Fast GPU-accelerated 2D Sprite Baker that converts a rendered 3D WebGL frame into a crisp
+ * Hades-style 2D sprite with dark comic-ink silhouette outlines, warm upper rim highlight,
+ * and optional 3-frame white hit-flash.
+ */
+export function bake2DSpriteFrameFromCanvas(
+  sourceCanvas: HTMLCanvasElement,
+  cacheKey: string,
+  options?: {
+    outlineColor?: string;
+    outlineThickness?: number;
+    hitFlash?: boolean;
+    cacheFrame?: boolean;
+  }
+): HTMLCanvasElement {
+  if (options?.cacheFrame !== false && sharedFrameCache.has(cacheKey)) {
+    return sharedFrameCache.get(cacheKey)!;
+  }
+
+  const w = sourceCanvas.width || 256;
+  const h = sourceCanvas.height || 256;
+  const outCanvas = document.createElement('canvas');
+  outCanvas.width = w;
+  outCanvas.height = h;
+  const ctx = outCanvas.getContext('2d');
+  if (!ctx) return sourceCanvas;
+
+  const thickness = options?.outlineThickness ?? 2;
+  const outlineColor = options?.outlineColor ?? '#120907';
+
+  // 1. Draw crisp 2D silhouette outline using GPU-composited directional offsets
+  const silhouetteCanvas = document.createElement('canvas');
+  silhouetteCanvas.width = w;
+  silhouetteCanvas.height = h;
+  const sCtx = silhouetteCanvas.getContext('2d');
+  if (sCtx) {
+    sCtx.drawImage(sourceCanvas, 0, 0, w, h);
+    sCtx.globalCompositeOperation = 'source-in';
+    sCtx.fillStyle = outlineColor;
+    sCtx.fillRect(0, 0, w, h);
+
+    const offsets = [
+      [-thickness, 0],
+      [thickness, 0],
+      [0, -thickness],
+      [0, thickness],
+      [-thickness * 0.7, -thickness * 0.7],
+      [thickness * 0.7, -thickness * 0.7],
+      [-thickness * 0.7, thickness * 0.7],
+      [thickness * 0.7, thickness * 0.7],
+    ];
+    for (let i = 0; i < offsets.length; i++) {
+      ctx.drawImage(silhouetteCanvas, offsets[i][0], offsets[i][1], w, h);
+    }
+  }
+
+  // 2. Draw crisp character sprite over the dark ink outline
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.drawImage(sourceCanvas, 0, 0, w, h);
+
+  // 3. Apply 3-frame Hades white hit-flash when struck
+  if (options?.hitFlash) {
+    ctx.globalCompositeOperation = 'source-atop';
+    ctx.fillStyle = 'rgba(255, 248, 225, 0.82)';
+    ctx.fillRect(0, 0, w, h);
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
+  if (options?.cacheFrame !== false) {
+    if (sharedFrameCache.size > 1800) {
+      const oldest = sharedFrameCache.keys().next().value;
+      if (oldest) sharedFrameCache.delete(oldest);
+    }
+    sharedFrameCache.set(cacheKey, outCanvas);
+  }
+
+  return outCanvas;
+}
+
