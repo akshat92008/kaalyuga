@@ -1,6 +1,21 @@
 import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
+  // Keep standalone tracing scoped to this game despite the parent Desktop lockfile.
+  outputFileTracingRoot: process.cwd(),
+  outputFileTracingExcludes: {
+    '/*': [
+      './wukong-master-guide*/**',
+      './Meshy_*/**',
+      './creature_animations/**',
+      './screen test/**',
+      './cutscene/**',
+      './cutscenes/**',
+      './sfx/**',
+      './soundtracks/**',
+      './videos/**',
+    ],
+  },
   reactStrictMode: true,
   eslint: {
     ignoreDuringBuilds: true,
