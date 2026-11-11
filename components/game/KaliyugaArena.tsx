@@ -1076,7 +1076,7 @@ export default function KaliyugaArena() {
       duration: number = 0.32,
       angle: number = 0,
       scaleY: number = 1,
-      composite: GlobalCompositeOperation = 'screen'
+      composite: GlobalCompositeOperation = 'lighter'
     ) => {
       const pool = simRef.current.flipbookVfx;
       for (let i = 0; i < pool.length; i++) {
@@ -5181,7 +5181,7 @@ export default function KaliyugaArena() {
     hitFlash: boolean,
     elevationY: number = 0,
     shadowRadius: number = 32,
-    rimTint: 'none' | 'gold' | 'jade' = 'none',
+    rimTint: 'none' | 'gold' | 'jade' | 'crimson' = 'none',
     skewX: number = 0,
     lightSourceX?: number,
     explicitFrame?: SpriteFrameBounds | null
@@ -5244,17 +5244,14 @@ export default function KaliyugaArena() {
     const frame = explicitFrame || asset.frames[safeIdx];
     const baseH = Math.max(16, asset.baseFrameHeight || frame.sh);
 
-    // Constant per-sheet pixel scale + wide pose support so enemy lunges, spears, and knockdowns never clip or jump
-    const maxAspect = 2.4;
-    const effSw = Math.min(frame.sw, Math.round(frame.sh * maxAspect));
-    const trimLeft = frame.sw > effSw ? Math.round((frame.sw - effSw) * 0.5) : 0;
-    const effSx = frame.sx + trimLeft;
+    // Constant per-sheet pixel scale with ZERO clipping / half-cut artifacts
+    const effSw = frame.sw;
+    const effSx = frame.sx;
     const pixelScale = targetHeight / baseH;
     const drawW = effSw * pixelScale;
     const drawH = frame.sh * pixelScale;
-    const rawAnchorX = frame.anchorX !== undefined ? frame.anchorX - trimLeft : effSw * 0.5;
-    const anchorXRatio =
-      effSw > 0 ? Math.max(0.22, Math.min(0.78, rawAnchorX / effSw)) : 0.5;
+    const rawAnchorX = frame.anchorX !== undefined ? frame.anchorX : effSw * 0.5;
+    const anchorXRatio = effSw > 0 ? Math.max(0.18, Math.min(0.82, rawAnchorX / effSw)) : 0.5;
     const drawOffsetX = -drawW * anchorXRatio;
     const groundY = (frame.groundOffsetY ?? frame.sh) * pixelScale;
     const drawOffsetY = -groundY + 4;
@@ -5291,28 +5288,34 @@ export default function KaliyugaArena() {
     }
     ctx.scale(facing * scaleX, scaleY);
 
-    // Optional celestial backlight rim silhouette
+    // 2. High-Visibility Hades-Style Emissive Silhouette Outline Pass (4-way offset)
     if (rimTint !== 'none' && !hitFlash) {
       const rimCanvas = rimTint === 'jade' ? asset.jadeCanvas : asset.goldCanvas;
       if (rimCanvas) {
         ctx.save();
-        ctx.globalCompositeOperation = 'screen';
-        ctx.globalAlpha = 0.38;
-        ctx.drawImage(
-          rimCanvas,
-          effSx,
-          frame.sy,
-          effSw,
-          frame.sh,
-          drawOffsetX - 2,
-          drawOffsetY - 2,
-          drawW + 4,
-          drawH + 2
-        );
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = rimTint === 'crimson' ? 0.92 : 0.76;
+        const rimOffsets = [[-2, 0], [2, 0], [0, -2], [0, 2]];
+        for (const [ox, oy] of rimOffsets) {
+          ctx.drawImage(
+            rimCanvas,
+            effSx,
+            frame.sy,
+            effSw,
+            frame.sh,
+            drawOffsetX + ox,
+            drawOffsetY + oy,
+            drawW,
+            drawH
+          );
+        }
         ctx.restore();
       }
     }
 
+    // Main High-Definition Character Sprite Pass (Sharp, High-DPI image smoothing)
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
     const sourceCanvas = hitFlash ? asset.flashCanvas : asset.cleanCanvas;
     ctx.drawImage(
       sourceCanvas,
@@ -5325,6 +5328,27 @@ export default function KaliyugaArena() {
       drawW,
       drawH
     );
+
+    // Glowing Menacing Eye / Chakra Beacon (Instant Visual Focus)
+    if (!hitFlash && targetHeight >= 36) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const eyeBeaconColor =
+        rimTint === 'jade'
+          ? '#5ce6ff'
+          : rimTint === 'crimson'
+          ? '#ff2a2a'
+          : '#ffc107';
+      ctx.fillStyle = eyeBeaconColor;
+      ctx.shadowColor = eyeBeaconColor;
+      ctx.shadowBlur = 8;
+      const eyeX = drawOffsetX + drawW * (facing >= 0 ? 0.58 : 0.42);
+      const eyeY = drawOffsetY + drawH * 0.22;
+      ctx.beginPath();
+      ctx.arc(eyeX, eyeY, Math.max(2.2, targetHeight * 0.035), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
     ctx.restore();
   };
 
@@ -8917,7 +8941,7 @@ export default function KaliyugaArena() {
                 isFlash,
                 bob,
                 targetH * 0.26,
-                e.trait === 'vajra_shield' ? 'jade' : 'gold',
+                e.trait === 'vajra_shield' ? 'jade' : e.aiState === 'windup' ? 'crimson' : 'gold',
                 enemySkewX,
                 primaryLightX,
                 explicitEnemyFrame
@@ -9478,8 +9502,8 @@ export default function KaliyugaArena() {
         const drawH = fx.size * (0.9 + prog * 0.2);
         const drawW = (ff.sw / Math.max(1, ff.sh)) * drawH;
         ctx.save();
-        ctx.globalCompositeOperation = fx.composite;
-        ctx.globalAlpha = Math.max(0, Math.min(1, 0.92 * fadeOut));
+        ctx.globalCompositeOperation = fx.composite === 'source-over' ? 'source-over' : 'lighter';
+        ctx.globalAlpha = Math.max(0, Math.min(1, 0.95 * fadeOut));
         ctx.translate(fx.x, fx.y);
         if (fx.scaleY !== 1) {
           ctx.scale(1, fx.scaleY);

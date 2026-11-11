@@ -1919,31 +1919,35 @@ export function loadAndProcessSprite(
               const minChannel = Math.min(r, g, b);
               const chroma = maxChannel - minChannel;
 
-              // Clean any remaining interior neutral dark/checkerboard background squares (strictly low-chroma neutral grey/charcoal)
-              // while preserving earthy dust (warm R>B), stone fragments, white/silver slashes (luma >= 145), and glowing energy!
-              if (maxChannel < 34 && luma < 30) {
+              // 1. Pure Black & Dark Charcoal Background Hard Cutoff
+              if (maxChannel < 42 && luma < 38) {
                 data[idx + 3] = 0;
                 continue;
-              } else if (chroma <= 16 && luma < 145 && Math.abs(r - b) <= 12) {
-                data[idx + 3] = 0;
-                continue;
-              } else if (chroma <= 26 && luma < 130 && Math.abs(r - b) <= 16) {
-                const factor = Math.max(0, Math.min(1, (chroma - 14) / 12));
-                a = Math.round(a * factor);
-                data[idx + 3] = a;
-                if (a < 24) continue;
-              } else {
-                // Boost VFX color vibrancy and luminance so new VFX sheets look crisp and punchy in-game
-                const vfxSat = 1.25;
-                r = Math.min(255, Math.max(0, Math.round(luma + (r - luma) * vfxSat)));
-                g = Math.min(255, Math.max(0, Math.round(luma + (g - luma) * vfxSat)));
-                b = Math.min(255, Math.max(0, Math.round(luma + (b - luma) * vfxSat)));
-                data[idx] = r;
-                data[idx + 1] = g;
-                data[idx + 2] = b;
-                data[idx + 3] = Math.min(255, Math.round(a * 1.15));
-                a = data[idx + 3];
               }
+              // 2. Neutral Grey/Checkerboard Background Elimination
+              if (chroma <= 24 && luma < 155 && Math.abs(r - b) <= 18) {
+                data[idx + 3] = 0;
+                continue;
+              }
+
+              // 3. Smooth Non-Linear Luminance-to-Alpha Falloff (Completely eliminates rectangular box edges)
+              const alphaRatio = Math.min(1, Math.max(0, (luma - 30) / 135));
+              const vfxAlpha = Math.round(255 * Math.pow(alphaRatio, 1.35));
+              a = Math.min(a, vfxAlpha);
+              data[idx + 3] = a;
+              if (a < 10) {
+                data[idx + 3] = 0;
+                continue;
+              }
+
+              // 4. Boost VFX Fire & Energy Glow Vibrancy
+              const vfxSat = 1.38;
+              r = Math.min(255, Math.max(0, Math.round(luma + (r - luma) * vfxSat + 8)));
+              g = Math.min(255, Math.max(0, Math.round(luma + (g - luma) * vfxSat + 5)));
+              b = Math.min(255, Math.max(0, Math.round(luma + (b - luma) * vfxSat + 4)));
+              data[idx] = r;
+              data[idx + 1] = g;
+              data[idx + 2] = b;
             } else if (removeBlack) {
               if (bgMask[p] === 1) {
                 data[idx + 3] = 0;
@@ -1955,10 +1959,15 @@ export function loadAndProcessSprite(
                   r = Math.round(r * 0.38 + 24);
                   g = Math.round(g * 0.31 + 17);
                   b = Math.round(b * 0.24 + 12);
-                  data[idx] = r;
-                  data[idx + 1] = g;
-                  data[idx + 2] = b;
+                } else if (!isPropMode) {
+                  // High-Definition Character Contrast & Color Luma Lift (Enemies pop in HD)
+                  r = Math.min(255, Math.max(0, Math.round(r * 1.18 + 8)));
+                  g = Math.min(255, Math.max(0, Math.round(g * 1.18 + 6)));
+                  b = Math.min(255, Math.max(0, Math.round(b * 1.18 + 4)));
                 }
+                data[idx] = r;
+                data[idx + 1] = g;
+                data[idx + 2] = b;
                 data[idx + 3] = 255;
               }
             }
@@ -2032,6 +2041,14 @@ export function loadAndProcessSprite(
           // For boxed VFX flipbooks, zero out the outer frame border lines outside [scanXStart..scanXEnd, scanYStart..scanYEnd]
           // and return a consistent centered square/aspect box so sequential frames animate without jumping or stretching!
           if (isBoxedVfxSheet) {
+            for (let y = yStart; y < yEnd; y++) {
+              const rOff = y * w;
+              for (let x = xStart; x < xEnd; x++) {
+                if (x < scanXStart || x >= scanXEnd || y < scanYStart || y >= scanYEnd) {
+                  data[(rOff + x) * 4 + 3] = 0;
+                }
+              }
+            }
             const cellW = Math.max(1, scanXEnd - scanXStart);
             const cellH = Math.max(1, scanYEnd - scanYStart);
             return {

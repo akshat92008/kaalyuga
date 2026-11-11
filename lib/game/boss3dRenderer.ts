@@ -302,19 +302,21 @@ export class Boss3DRenderer {
     this.camera.position.set(0, 154, 300);
     this.camera.lookAt(0, 84, 0);
 
-    // Balanced Studio Lighting Rig (preserves true painted boss colors without warm/oiled wash)
-    const ambient = new THREE.AmbientLight(0xd8dde8, 1.38);
+    // Atmospheric Vedic Battlefield Lighting Rig (Warm golden torchlight + infernal crimson rim, zero cold office glare)
+    const ambient = new THREE.AmbientLight(0x42261a, 1.25);
     this.scene.add(ambient);
 
-    this.keyLight = new THREE.DirectionalLight(0xfffaf2, 2.45);
+    this.keyLight = new THREE.DirectionalLight(0xffb86c, 1.35);
     this.keyLight.position.set(-140, 245, 215);
     this.scene.add(this.keyLight);
 
-    this.rimLight = new THREE.DirectionalLight(0xe4ecff, 1.55);
+    // Fierce Infernal Rim Light (highlights horns, spines, and silhouettes in mythic crimson)
+    this.rimLight = new THREE.DirectionalLight(0xff3814, 2.2);
     this.rimLight.position.set(150, 200, -215);
     this.scene.add(this.rimLight);
 
-    this.fillLight = new THREE.DirectionalLight(0x9aa8bc, 0.98);
+    // Deep Volcanic Ground Bounce Fill Light
+    this.fillLight = new THREE.DirectionalLight(0x6e2416, 0.85);
     this.fillLight.position.set(165, 70, 135);
     this.scene.add(this.fillLight);
 
@@ -473,14 +475,14 @@ export class Boss3DRenderer {
         new THREE.MeshStandardMaterial({
           map: wepBaseTex || undefined,
           normalMap: wepNormTex || undefined,
-          normalScale: new THREE.Vector2(1.35, 1.35),
+          normalScale: new THREE.Vector2(1.2, 1.2),
           roughnessMap: wepRoughTex || undefined,
           metalnessMap: wepMetTex || undefined,
-          roughness: 0.34,
-          metalness: 0.85,
-          envMapIntensity: 1.55,
+          roughness: 0.72,
+          metalness: 0.32,
+          envMapIntensity: 0.15,
           emissive: new THREE.Color(0x38080c),
-          emissiveIntensity: 0.14,
+          emissiveIntensity: 0.22,
         });
 
       // ======================================================================
@@ -508,11 +510,11 @@ export class Boss3DRenderer {
             normalScale: new THREE.Vector2(1.08, 1.08),
             roughnessMap: dunRough || undefined,
             metalnessMap: dunMet || undefined,
-            roughness: 0.64,
-            metalness: 0.22,
-            envMapIntensity: 0.82,
-            emissive: new THREE.Color(0x000000),
-            emissiveIntensity: 0.0,
+            roughness: 0.84,
+            metalness: 0.08,
+            envMapIntensity: 0.12,
+            emissive: new THREE.Color(0x180504),
+            emissiveIntensity: 0.18,
           });
           mesh.material = mat;
           dundubhiMaterials.push(mat);
@@ -616,11 +618,11 @@ export class Boss3DRenderer {
         normalScale: new THREE.Vector2(1.08, 1.08),
         roughnessMap: vrikRough || undefined,
         metalnessMap: vrikMet || undefined,
-        roughness: 0.62,
-        metalness: 0.24,
-        envMapIntensity: 0.84,
-        emissive: new THREE.Color(0x000000),
-        emissiveIntensity: 0.0,
+        roughness: 0.82,
+        metalness: 0.10,
+        envMapIntensity: 0.12,
+        emissive: new THREE.Color(0x280504),
+        emissiveIntensity: 0.22,
       });
       vrikMaterials.push(vrikCharMat);
 
