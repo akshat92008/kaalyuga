@@ -302,19 +302,19 @@ export class Boss3DRenderer {
     this.camera.position.set(0, 154, 300);
     this.camera.lookAt(0, 84, 0);
 
-    // High-Contrast Hades Dark-Mythology Rim & Key Lighting (deep wine shadows, fiery golden rim)
-    const ambient = new THREE.AmbientLight(0x784638, 1.18);
+    // Balanced Studio Lighting Rig (preserves true painted boss colors without warm/oiled wash)
+    const ambient = new THREE.AmbientLight(0xd8dde8, 1.38);
     this.scene.add(ambient);
 
-    this.keyLight = new THREE.DirectionalLight(0xffebd0, 3.65);
+    this.keyLight = new THREE.DirectionalLight(0xfffaf2, 2.45);
     this.keyLight.position.set(-140, 245, 215);
     this.scene.add(this.keyLight);
 
-    this.rimLight = new THREE.DirectionalLight(0xffa638, 3.35);
+    this.rimLight = new THREE.DirectionalLight(0xe4ecff, 1.55);
     this.rimLight.position.set(150, 200, -215);
     this.scene.add(this.rimLight);
 
-    this.fillLight = new THREE.DirectionalLight(0xb83848, 1.55);
+    this.fillLight = new THREE.DirectionalLight(0x9aa8bc, 0.98);
     this.fillLight.position.set(165, 70, 135);
     this.scene.add(this.fillLight);
 
@@ -367,7 +367,7 @@ export class Boss3DRenderer {
       this.renderer.setPixelRatio(1);
       this.renderer.outputColorSpace = THREE.SRGBColorSpace;
       this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-      this.renderer.toneMappingExposure = 1.18;
+      this.renderer.toneMappingExposure = 1.05;
       this.renderer.shadowMap.enabled = !IS_SOFTWARE_WEBGL;
       this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
@@ -502,17 +502,17 @@ export class Boss3DRenderer {
           mesh.castShadow = !IS_SOFTWARE_WEBGL;
           mesh.receiveShadow = !IS_SOFTWARE_WEBGL;
           const mat = new THREE.MeshStandardMaterial({
-            color: new THREE.Color(0xffe4c4),
+            color: new THREE.Color(0xffffff),
             map: gradedDunBase || undefined,
             normalMap: dunNorm || undefined,
-            normalScale: new THREE.Vector2(1.3, 1.3),
+            normalScale: new THREE.Vector2(1.08, 1.08),
             roughnessMap: dunRough || undefined,
             metalnessMap: dunMet || undefined,
-            roughness: 0.42,
-            metalness: 0.52,
-            envMapIntensity: 1.48,
-            emissive: new THREE.Color(0x241008),
-            emissiveIntensity: 0.16,
+            roughness: 0.64,
+            metalness: 0.22,
+            envMapIntensity: 0.82,
+            emissive: new THREE.Color(0x000000),
+            emissiveIntensity: 0.0,
           });
           mesh.material = mat;
           dundubhiMaterials.push(mat);
@@ -528,26 +528,16 @@ export class Boss3DRenderer {
         leftArm: dundubhiGroup.getObjectByName('mixamorigLeftArm') || null,
       };
 
+      // Dundubhi already has his sculpted weapon in his native FBX mesh; attach trail nodes only
       const dunTipNode = new THREE.Object3D();
       const dunBaseNode = new THREE.Object3D();
       let dunRightSocket: THREE.Group | null = null;
-      if (dunBones.rightHand && rawWeaponMesh) {
+      if (dunBones.rightHand) {
         dunRightSocket = new THREE.Group();
-        const dunMesh = (rawWeaponMesh as THREE.Mesh).clone();
-        dunMesh.material = dunWepMat;
-        dunMesh.frustumCulled = false;
-        dunMesh.scale.setScalar(42);
-        dunMesh.rotation.set(0, 0, -Math.PI / 2);
-        dunMesh.position.set(0, 0, 14);
-
-        dunTipNode.position.set(0, 0, 0.92);
-        dunBaseNode.position.set(0, 0, 0.34);
-        dunMesh.add(dunTipNode);
-        dunMesh.add(dunBaseNode);
-
-        dunRightSocket.add(dunMesh);
-        dunRightSocket.position.set(0, 7.5, 1.0);
-        dunRightSocket.rotation.set(0, Math.PI / 2, 0.28);
+        dunTipNode.position.set(0, 0, 52);
+        dunBaseNode.position.set(0, 0, 14);
+        dunRightSocket.add(dunTipNode);
+        dunRightSocket.add(dunBaseNode);
         dunBones.rightHand.add(dunRightSocket);
       }
 
@@ -620,17 +610,17 @@ export class Boss3DRenderer {
       const gradedVrikBase = regradeTextureToHadesPalette(vrikBase, 'vrikodara_crimson');
 
       const vrikCharMat = new THREE.MeshStandardMaterial({
-        color: new THREE.Color(0xffe0c8),
+        color: new THREE.Color(0xffffff),
         map: gradedVrikBase || undefined,
         normalMap: vrikNorm || undefined,
-        normalScale: new THREE.Vector2(1.3, 1.3),
+        normalScale: new THREE.Vector2(1.08, 1.08),
         roughnessMap: vrikRough || undefined,
         metalnessMap: vrikMet || undefined,
-        roughness: 0.40,
-        metalness: 0.50,
-        envMapIntensity: 1.48,
-        emissive: new THREE.Color(0x28080a),
-        emissiveIntensity: 0.16,
+        roughness: 0.62,
+        metalness: 0.24,
+        envMapIntensity: 0.84,
+        emissive: new THREE.Color(0x000000),
+        emissiveIntensity: 0.0,
       });
       vrikMaterials.push(vrikCharMat);
 
@@ -1054,37 +1044,37 @@ export class Boss3DRenderer {
     );
 
     // Clean Rim Light & Hit-Flash Response (preserves true painted texture colors!)
-    let rimHexCss = params.kind === 'vrikodara' ? '#ff6a42' : '#ffbe55';
+    let rimHexCss = '#dce6f7';
     if (params.isParrying) {
       this.rimLight.color.setHex(0xffe082);
-      this.rimLight.intensity = 3.6;
+      this.rimLight.intensity = 2.1;
       rimHexCss = '#ffe484';
     } else if (params.aiState === 'attack' || params.aiState === 'windup') {
-      this.rimLight.color.setHex(0xff5238);
-      this.rimLight.intensity = 3.5;
-      rimHexCss = '#ff5838';
+      this.rimLight.color.setHex(0xffd0c0);
+      this.rimLight.intensity = 1.85;
+      rimHexCss = '#ffd0c0';
     } else {
-      this.rimLight.color.setHex(0xffb858);
-      this.rimLight.intensity = 3.2;
+      this.rimLight.color.setHex(0xe4ecff);
+      this.rimLight.intensity = 1.55;
     }
 
     for (const mat of rig.materials) {
       if (params.isHitFlash) {
         mat.emissive.setHex(0xfff0d0);
-        mat.emissiveIntensity = 0.68;
+        mat.emissiveIntensity = 0.52;
       } else if (params.isParrying) {
         mat.emissive.setHex(0xffd86b);
-        mat.emissiveIntensity = 0.36;
+        mat.emissiveIntensity = 0.24;
       } else {
-        mat.emissive.setHex(params.kind === 'vrikodara' ? 0x28080a : 0x241008);
-        mat.emissiveIntensity = 0.16;
+        mat.emissive.setHex(0x000000);
+        mat.emissiveIntensity = 0.0;
       }
     }
 
     for (const wMat of rig.weaponMaterials) {
-      wMat.emissive.setHex(0x4a0c10);
+      wMat.emissive.setHex(0x3a0c10);
       wMat.emissiveIntensity =
-        params.aiState === 'attack' ? 0.38 : params.aiState === 'windup' ? 0.22 : 0.12;
+        params.aiState === 'attack' ? 0.28 : params.aiState === 'windup' ? 0.14 : 0.06;
     }
 
     this.scene.updateMatrixWorld(true);
@@ -1100,7 +1090,7 @@ export class Boss3DRenderer {
     this.spriteBaker.bakeSpriteFrame(this.webglCanvas, this.canvas, {
       frameKey,
       rimColor: rimHexCss,
-      outlinePx: 2.5,
+      outlinePx: 1.6,
       isHurt: params.isHitFlash,
       cacheFrame: !isBossAction && this.trailSamples.length === 0,
     });
@@ -1111,37 +1101,23 @@ export class Boss3DRenderer {
     bones: BossUpperBodyBones,
     spineYaw: number,
     spinePitch: number,
-    armSweep: number,
-    foreArmBend: number,
-    wristPitch: number
+    _armSweep: number,
+    _foreArmBend: number,
+    _wristPitch: number
   ): void {
     const rotQ = this.scratchRotQ;
     const euler = this.scratchEuler;
 
+    // Gentle torso lean only — preserves natural Mixamo shoulder/elbow/wrist animations
     if (bones.spine1) {
-      euler.set(spinePitch * 0.5, spineYaw * 0.5, 0, 'XYZ');
+      euler.set(spinePitch * 0.4, spineYaw * 0.4, 0, 'XYZ');
       rotQ.setFromEuler(euler);
       bones.spine1.quaternion.multiply(rotQ);
     }
     if (bones.spine2) {
-      euler.set(spinePitch * 0.5, spineYaw * 0.6, 0, 'XYZ');
+      euler.set(spinePitch * 0.45, spineYaw * 0.45, 0, 'XYZ');
       rotQ.setFromEuler(euler);
       bones.spine2.quaternion.multiply(rotQ);
-    }
-    if (bones.rightArm) {
-      euler.set(armSweep * 0.55, armSweep * 0.7, -0.15, 'XYZ');
-      rotQ.setFromEuler(euler);
-      bones.rightArm.quaternion.multiply(rotQ);
-    }
-    if (bones.rightForeArm) {
-      euler.set(foreArmBend, 0, 0, 'XYZ');
-      rotQ.setFromEuler(euler);
-      bones.rightForeArm.quaternion.multiply(rotQ);
-    }
-    if (bones.rightHand) {
-      euler.set(wristPitch, 0, 0, 'XYZ');
-      rotQ.setFromEuler(euler);
-      bones.rightHand.quaternion.multiply(rotQ);
     }
   }
 

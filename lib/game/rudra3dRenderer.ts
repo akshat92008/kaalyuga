@@ -143,23 +143,23 @@ export class Rudra3DRenderer {
     this.weaponTipNode = new THREE.Object3D();
     this.weaponBaseNode = new THREE.Object3D();
 
-    // High-Contrast Hades Dark-Mythology Rim & Key Lighting Rig (warm mahogany shadows, gleaming bronze highlights)
-    const ambient = new THREE.AmbientLight(0x7a4836, 1.15);
+    // Clean Balanced Studio Lighting Rig (preserves Rudra's original colors without warm/oiled orange wash)
+    const ambient = new THREE.AmbientLight(0xd8dde8, 1.35);
     this.scene.add(ambient);
 
-    this.keyLight = new THREE.DirectionalLight(0xffebd0, 3.65);
+    this.keyLight = new THREE.DirectionalLight(0xfffaf2, 2.35);
     this.keyLight.position.set(-145, 250, 210);
     this.scene.add(this.keyLight);
 
-    this.rimLight = new THREE.DirectionalLight(0xffa838, 3.35);
+    this.rimLight = new THREE.DirectionalLight(0xe4ecff, 1.45);
     this.rimLight.position.set(150, 205, -220);
     this.scene.add(this.rimLight);
 
-    this.fillLight = new THREE.DirectionalLight(0xb83848, 1.55);
+    this.fillLight = new THREE.DirectionalLight(0x9aa8bc, 0.95);
     this.fillLight.position.set(165, 65, 135);
     this.scene.add(this.fillLight);
 
-    this.axeGlowLight = new THREE.PointLight(0xff5e24, 1.55, 185);
+    this.axeGlowLight = new THREE.PointLight(0xff6b38, 0.45, 160);
     this.axeGlowLight.position.set(0, 92, 48);
     this.rootGroup.add(this.axeGlowLight);
 
@@ -206,7 +206,7 @@ export class Rudra3DRenderer {
       this.renderer.setPixelRatio(1);
       this.renderer.outputColorSpace = THREE.SRGBColorSpace;
       this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-      this.renderer.toneMappingExposure = 1.16;
+      this.renderer.toneMappingExposure = 1.04;
       this.renderer.shadowMap.enabled = false;
 
       // UE5 Lumen-Style Studio IBL Environment Map for Gleaming Bronze Skin & Broken Gada Reflections
@@ -384,21 +384,21 @@ export class Rudra3DRenderer {
 
       if (this.disposed) return;
 
-      // 1. Re-grade Rudra's pale grey skin texture into gleaming oiled bronze & royal crimson
+      // 1. Preserve Rudra's authentic original colors with crisp matte-satin surface (no oiled specular sheen)
       const gradedCharAlbedo = regradeTextureToHadesPalette(charAlbedo, 'rudra_bronze');
 
       const charMat = new THREE.MeshStandardMaterial({
-        color: new THREE.Color(0xffe0be),
-        roughness: 0.34,
-        metalness: 0.44,
-        envMapIntensity: 1.48,
-        emissive: new THREE.Color(0x2e1206),
-        emissiveIntensity: 0.22,
+        color: new THREE.Color(0xffffff),
+        roughness: 0.68,
+        metalness: 0.14,
+        envMapIntensity: 0.72,
+        emissive: new THREE.Color(0x000000),
+        emissiveIntensity: 0.0,
       });
       if (gradedCharAlbedo) charMat.map = gradedCharAlbedo;
       if (charNormal) {
         charMat.normalMap = charNormal;
-        charMat.normalScale.set(1.28, 1.28);
+        charMat.normalScale.set(1.05, 1.05);
       }
       if (charRough) charMat.roughnessMap = charRough;
       if (charMetal) charMat.metalnessMap = charMetal;
@@ -906,50 +906,47 @@ export class Rudra3DRenderer {
     // Keep character grounded inside the 3D orthographic frustum (2D elevationY is applied in screen space)
     this.rootGroup.position.y = 0;
 
-    // 4. Authentic Warm Kurukshetra Rim & Specular Bronze Response
-    let rimHexCss = '#ffbe55';
+    // 4. Clean Neutral Rim & Surface Response (no warm orange/oiled wash)
+    let rimHexCss = '#dce6f7';
     if (params.isParrying) {
-      this.rimLight.color.setHex(0xffe074);
-      this.rimLight.intensity = 3.8;
-      rimHexCss = '#ffe484';
+      this.rimLight.color.setHex(0xffe89e);
+      this.rimLight.intensity = 2.0;
+      rimHexCss = '#ffe89e';
     } else if (params.isDodging) {
-      this.rimLight.color.setHex(0xffc258);
-      this.rimLight.intensity = 3.5;
-      rimHexCss = '#ffc65c';
+      this.rimLight.color.setHex(0xd4e8ff);
+      this.rimLight.intensity = 1.75;
+      rimHexCss = '#d4e8ff';
     } else if (this.attackHoldTimer > 0) {
-      this.rimLight.color.setHex(0xff772e);
-      this.rimLight.intensity = 3.6;
-      rimHexCss = '#ff8838';
+      this.rimLight.color.setHex(0xfff0dc);
+      this.rimLight.intensity = 1.7;
+      rimHexCss = '#fff0dc';
     } else {
-      this.rimLight.color.setHex(0xffaa3b);
-      this.rimLight.intensity = 3.25;
-      rimHexCss = '#ffbe55';
+      this.rimLight.color.setHex(0xe4ecff);
+      this.rimLight.intensity = 1.45;
+      rimHexCss = '#dce6f7';
     }
 
     for (const mat of this.charMaterials) {
       if (params.isHurt) {
         mat.emissive.setHex(0xd42a22);
-        mat.emissiveIntensity = 0.56;
+        mat.emissiveIntensity = 0.42;
       } else if (params.isParrying) {
-        mat.emissive.setHex(0x9a6418);
-        mat.emissiveIntensity = 0.34;
-      } else if (params.isDodging) {
-        mat.emissive.setHex(0x683a14);
-        mat.emissiveIntensity = 0.28;
+        mat.emissive.setHex(0x6e5218);
+        mat.emissiveIntensity = 0.16;
       } else {
-        mat.emissive.setHex(0x2e1206);
-        mat.emissiveIntensity = 0.22;
+        mat.emissive.setHex(0x000000);
+        mat.emissiveIntensity = 0.0;
       }
     }
 
     for (const mat of this.wepMaterials) {
-      mat.emissive.setHex(0x581808);
-      mat.emissiveIntensity = this.attackHoldTimer > 0 ? 0.42 : 0.18;
+      mat.emissive.setHex(0x381208);
+      mat.emissiveIntensity = this.attackHoldTimer > 0 ? 0.28 : 0.08;
     }
 
     this.scene.updateMatrixWorld(true);
 
-    // 5. Update 3D Parashu Axe Blade Trail Ribbon (warm golden-vermilion Agni arc)
+    // 5. Update 3D Parashu Axe Blade Trail Ribbon
     const trailActive = this.attackHoldTimer > 0.05;
     const trailColor =
       this.activeStrikeKind === 'heavy' || this.activeStrikeKind === 'combo4'
@@ -964,7 +961,7 @@ export class Rudra3DRenderer {
       this.spriteBaker.bakeSpriteFrame(this.webglCanvas, this.canvas, {
         frameKey,
         rimColor: rimHexCss,
-        outlinePx: 2.25,
+        outlinePx: 1.5,
         isHurt: params.isHurt,
         cacheFrame: !isActionSwing && this.trailSamples.length === 0,
       });

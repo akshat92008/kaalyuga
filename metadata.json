@@ -1,7 +1,6 @@
 {
   "name": "Kaliyuga: The Bleeding Crown",
-  "description": "A 2.5D isometric mythological action roguelike set in the aftermath of the Kurukshetra War. Master three stances, invoke celestial Astras, and uncover the five memory shards across the Charnel Plains.",
+  "description": "A mythic 2.5D isometric action roguelite set across the ash-choked battlefields of Mount Meru.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
-

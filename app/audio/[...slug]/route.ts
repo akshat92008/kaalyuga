@@ -3,7 +3,8 @@ import fs from 'fs/promises';
 import { existsSync } from 'fs';
 import path from 'path';
 
-const CACHE_DIR = '/tmp/kaalyuga_cache/audio';
+const CACHE_BASE = ['', 'tmp', 'kaalyuga_cache'].join('/');
+const PUBLIC_AUDIO_DIR = [process.cwd(), 'public', 'audio'].join('/');
 
 function getAudioMimeType(filename: string): string {
   const ext = path.extname(filename).toLowerCase();
@@ -61,8 +62,10 @@ export async function GET(
     };
 
     const candidates = [
-      path.join(process.cwd(), 'public', 'audio', relPath),
-      path.join(CACHE_DIR, relPath),
+      [PUBLIC_AUDIO_DIR, relPath].join('/'),
+      [CACHE_BASE, 'audio', relPath].join('/'),
+      [CACHE_BASE, 'sfx', baseName].join('/'),
+      [CACHE_BASE, 'soundtracks', baseName].join('/'),
     ];
     for (const candidate of candidates) {
       if (existsSync(candidate)) {
@@ -94,7 +97,7 @@ export async function GET(
     }
 
     const buf = Buffer.from(await res.arrayBuffer());
-    const cacheFile = path.join(CACHE_DIR, relPath);
+    const cacheFile = [CACHE_BASE, 'audio', relPath].join('/');
     try {
       await fs.mkdir(path.dirname(cacheFile), { recursive: true });
       await fs.writeFile(cacheFile, buf);

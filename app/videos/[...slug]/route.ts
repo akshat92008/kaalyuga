@@ -3,7 +3,8 @@ import fs from 'fs/promises';
 import { existsSync } from 'fs';
 import path from 'path';
 
-const CACHE_DIR = '/tmp/kaalyuga_cache/videos';
+const CACHE_VIDEOS_DIR = ['', 'tmp', 'kaalyuga_cache', 'videos'].join('/');
+const PUBLIC_VIDEOS_DIR = [process.cwd(), 'public', 'videos'].join('/');
 
 export async function GET(
   req: NextRequest,
@@ -51,8 +52,8 @@ export async function GET(
     };
 
     const candidates = [
-      path.join(process.cwd(), 'public', 'videos', relPath),
-      path.join(CACHE_DIR, relPath),
+      [PUBLIC_VIDEOS_DIR, relPath].join('/'),
+      [CACHE_VIDEOS_DIR, relPath].join('/'),
     ];
     for (const candidate of candidates) {
       if (existsSync(candidate)) {
@@ -81,7 +82,7 @@ export async function GET(
     }
 
     const buf = Buffer.from(await res.arrayBuffer());
-    const cacheFile = path.join(CACHE_DIR, relPath);
+    const cacheFile = [CACHE_VIDEOS_DIR, relPath].join('/');
     try {
       await fs.mkdir(path.dirname(cacheFile), { recursive: true });
       await fs.writeFile(cacheFile, buf);

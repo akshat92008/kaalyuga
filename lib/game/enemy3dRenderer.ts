@@ -27,6 +27,7 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { IS_SOFTWARE_WEBGL } from '../../engine/ue5GraphicsEngine';
 import { loadFbxCached } from './meshSimplifier';
+import { Hades2DSpriteBaker } from './hadesSpriteBaker';
 import type { EnemyTrait, Warden3DRigKey } from './assets';
 
 export type RegularEnemy3DKind = 'wolf_guai' | 'fire_monk' | 'stone_golem' | 'furnace_titan';
@@ -92,6 +93,8 @@ export class Enemy3DRenderer {
   public isReady = false;
 
   private readonly size: number;
+  private webglCanvas: HTMLCanvasElement;
+  private spriteBaker: Hades2DSpriteBaker;
   private renderer: THREE.WebGLRenderer | null = null;
   private scene: THREE.Scene;
   private camera: THREE.OrthographicCamera;
@@ -108,6 +111,10 @@ export class Enemy3DRenderer {
 
   constructor(size = 320) {
     this.size = size;
+    this.webglCanvas = document.createElement('canvas');
+    this.webglCanvas.width = size;
+    this.webglCanvas.height = size;
+    this.spriteBaker = new Hades2DSpriteBaker(size);
     this.canvas = document.createElement('canvas');
     this.canvas.width = size;
     this.canvas.height = size;
@@ -128,28 +135,28 @@ export class Enemy3DRenderer {
     this.camera.position.set(0, 148, 285);
     this.camera.lookAt(0, 76, 0);
 
-    const ambient = new THREE.AmbientLight(0xe4dff0, 1.9);
+    const ambient = new THREE.AmbientLight(0xffffff, 2.35);
     this.scene.add(ambient);
 
-    this.keyLight = new THREE.DirectionalLight(0xfff4df, 3.35);
+    this.keyLight = new THREE.DirectionalLight(0xffffff, 3.1);
     this.keyLight.position.set(-135, 240, 215);
     this.scene.add(this.keyLight);
 
-    this.rimLight = new THREE.DirectionalLight(0xffc258, 2.95);
+    this.rimLight = new THREE.DirectionalLight(0xf8fafc, 2.25);
     this.rimLight.position.set(145, 195, -205);
     this.scene.add(this.rimLight);
 
-    this.fillLight = new THREE.DirectionalLight(0x78a4d8, 1.55);
+    this.fillLight = new THREE.DirectionalLight(0xe2e8f0, 1.45);
     this.fillLight.position.set(150, 75, 140);
     this.scene.add(this.fillLight);
 
-    this.traitPointLight = new THREE.PointLight(0xff6a2b, 1.65, 250);
+    this.traitPointLight = new THREE.PointLight(0xffffff, 0.9, 250);
     this.traitPointLight.position.set(0, 88, 60);
     this.scene.add(this.traitPointLight);
 
     try {
       this.renderer = new THREE.WebGLRenderer({
-        canvas: this.canvas,
+        canvas: this.webglCanvas,
         alpha: true,
         antialias: !IS_SOFTWARE_WEBGL,
         powerPreference: 'high-performance',
@@ -157,8 +164,8 @@ export class Enemy3DRenderer {
       this.renderer.setSize(size, size, false);
       this.renderer.setPixelRatio(1);
       this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-      this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-      this.renderer.toneMappingExposure = 1.18;
+      this.renderer.toneMapping = THREE.LinearToneMapping;
+      this.renderer.toneMappingExposure = 1.08;
 
       if (!IS_SOFTWARE_WEBGL) {
         const pmremGenerator = new THREE.PMREMGenerator(this.renderer);
@@ -1096,6 +1103,23 @@ export class Enemy3DRenderer {
     }
 
     this.renderer.render(this.scene, this.camera);
+
+    const rimColor =
+      params.trait === 'vajra_shield'
+        ? '#5ce6ff'
+        : params.trait === 'rakshasa_frenzy'
+        ? '#e879f9'
+        : params.aiState === 'windup' || params.aiState === 'attack'
+        ? '#ff5a36'
+        : '#f6d379';
+
+    this.spriteBaker.bakeSpriteFrame(this.webglCanvas, this.canvas, {
+      frameKey: `${params.id}:${params.aiState}:${Math.round(params.animTime * 24)}`,
+      rimColor,
+      outlinePx: 1.65,
+      isHurt: params.isHitFlash,
+      cacheFrame: false,
+    });
 
     if (cacheEntry) {
       cacheEntry.ctx.clearRect(0, 0, this.size, this.size);
