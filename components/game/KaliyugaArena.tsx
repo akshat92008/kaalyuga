@@ -1085,6 +1085,15 @@ export default function KaliyugaArena() {
       scaleY: number = 1,
       composite: GlobalCompositeOperation = 'screen'
     ) => {
+      // Never spawn cartoon white dust/puff clouds
+      if (
+        url.includes('dust') ||
+        url.includes('Dust') ||
+        url.includes('damage_hit_burst') ||
+        url.includes('2n0p172n0p172n0p')
+      ) {
+        return;
+      }
       const pool = simRef.current.flipbookVfx;
       for (let i = 0; i < pool.length; i++) {
         if (!pool[i].active) {
@@ -1266,31 +1275,36 @@ export default function KaliyugaArena() {
       }
 
       const pool = simRef.current.floatingTexts;
-      let adjustedY = y - 16;
+      const fanSlot = (simRef.current.nextScarId++ % 7) - 3;
+      const popAngle = -Math.PI * 0.5 + fanSlot * 0.28 + (Math.random() - 0.5) * 0.14;
+      let spawnX = x + Math.cos(popAngle) * 18;
+      let adjustedY = y - 18 + Math.sin(popAngle) * 10;
+
       for (let i = 0; i < pool.length; i++) {
         if (
           pool[i].active &&
-          pool[i].life > 0.22 &&
-          Math.abs(pool[i].x - x) < 76 &&
-          Math.abs(pool[i].y - adjustedY) < 24
+          pool[i].life > 0.16 &&
+          Math.abs(pool[i].x - spawnX) < 54 &&
+          Math.abs(pool[i].y - adjustedY) < 26
         ) {
-          adjustedY = Math.min(adjustedY, pool[i].y - 20);
+          spawnX += (fanSlot >= 0 ? 1 : -1) * 24;
+          adjustedY = Math.min(adjustedY, pool[i].y - 24);
         }
       }
 
       for (let i = 0; i < pool.length; i++) {
         if (!pool[i].active) {
           pool[i].active = true;
-          pool[i].x = x + (Math.random() - 0.5) * 12;
+          pool[i].x = spawnX;
           pool[i].y = adjustedY;
-          pool[i].vx = (Math.random() - 0.5) * 22;
-          pool[i].vy = -54 - Math.random() * 12;
+          pool[i].vx = Math.cos(popAngle) * (64 + Math.random() * 24);
+          pool[i].vy = Math.sin(popAngle) * 68 - 32;
           pool[i].text = cleanText;
           pool[i].subtext = undefined;
           pool[i].color = color;
-          pool[i].maxLife = 0.52;
-          pool[i].life = 0.52;
-          pool[i].scale = Math.min(1.15, scale * 0.92);
+          pool[i].maxLife = 0.62;
+          pool[i].life = 0.62;
+          pool[i].scale = Math.min(1.18, scale * 0.96);
           return;
         }
       }
@@ -5434,18 +5448,8 @@ export default function KaliyugaArena() {
           p.actionTimer -= simDt;
           if (p.actionTimer <= 0) {
             if (prevAction === 'dodge') {
-              // Grounded arrival plant shockwave ring, hand-painted dust burst & ember puff
+              // Grounded arrival plant shockwave ring & directional golden ember sparks (zero cartoon dust puff clouds)
               spawnShockwave(p.x, p.y, 64, '#38bdf8', 0.22);
-              spawnFlipbookVfx(
-                GAME_ASSETS.vfxFlipbooks.handPaintedDust2K,
-                p.x,
-                p.y + 2,
-                114,
-                0.24,
-                0,
-                0.85,
-                'screen'
-              );
               spawnParticles(p.x, p.y - 6, 8, '#ffd86b', 95, 3.0, 40);
             }
             p.action = 'idle';
@@ -6455,9 +6459,17 @@ export default function KaliyugaArena() {
               soundEngine.playTelegraph();
             }
           } else if (e.aiState === 'windup') {
-            // Relentless gap-closing advance during windup so melee foes and bosses press Rudra instead of freezing in place
-            if (e.type !== 'fire_monk' && dist > 48 && e.attackKind !== 'corridor') {
-              const lungeSpd = e.isBoss ? 115 : 85;
+            // Relentless gap-closing lunge for melee Reavers & Bosses; evasive backstep for Ashen Oracles when rushed
+            if (e.type === 'fire_monk') {
+              if (dist < 160) {
+                e.vx = -(dx / dist) * 125;
+                e.vy = -(dy / dist) * 105;
+              } else {
+                e.vx = 0;
+                e.vy = 0;
+              }
+            } else if (dist > 44 && e.attackKind !== 'corridor') {
+              const lungeSpd = e.isBoss ? 125 : 108;
               e.vx = (dx / dist) * lungeSpd;
               e.vy = (dy / dist) * lungeSpd * 0.82;
             } else {
@@ -7655,35 +7667,119 @@ export default function KaliyugaArena() {
         ctx.restore();
       }
 
-      // 3. Minimal Hostile Ground Telegraph (Only for Boss or Heavy Shockwave Attacks)
+      // 3. Unmistakable Enemy & Boss Windup Ground Telegraphs (Melee Cleave Sectors, Ashen Oracle Vedic Yantra Rings, Boss Shockwaves & Charge Tracks)
       sim.enemies.forEach((e) => {
-        if (e.aiState === 'windup' && (e.isBoss || e.attackKind === 'shockwave')) {
+        if (e.aiState === 'windup' || (e.type === 'fire_monk' && e.aiState === 'attack')) {
           const totalDur = Math.max(0.15, e.windupDuration || 0.6);
-          const progress = Math.max(0, Math.min(1, 1 - e.aiTimer / totalDur));
-          const isImminent = e.aiTimer <= 0.18;
-          const borderStroke = isImminent ? '#ffd86b' : 'rgba(255, 56, 72, 0.72)';
+          const progress =
+            e.aiState === 'attack'
+              ? 1
+              : Math.max(0, Math.min(1, 1 - e.aiTimer / totalDur));
+          const isImminent = e.aiTimer <= 0.45;
 
           ctx.save();
-          if (e.attackKind === 'shockwave') {
+          if (e.type === 'fire_monk') {
+            // Ashen Oracle: Glowing rotating Vedic Yantra ring + 8-spoke lotus mandala beneath feet while channeling fire orbs
+            const yantraR = 38 + Math.sin(now * 0.012) * 3;
+            ctx.translate(e.x, e.y + 2);
+            ctx.save();
+            ctx.scale(1, 0.54);
+            const yGrad = ctx.createRadialGradient(0, 0, 4, 0, 0, yantraR);
+            yGrad.addColorStop(0, 'rgba(255, 138, 36, 0.46)');
+            yGrad.addColorStop(0.65, 'rgba(255, 48, 56, 0.28)');
+            yGrad.addColorStop(1, 'rgba(255, 48, 56, 0)');
+            ctx.fillStyle = yGrad;
+            ctx.beginPath();
+            ctx.arc(0, 0, yantraR, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.strokeStyle = isImminent ? '#ffd86b' : '#ff6a2b';
+            ctx.lineWidth = isImminent ? 2.4 : 1.8;
+            ctx.beginPath();
+            ctx.arc(0, 0, yantraR * (0.45 + progress * 0.55), 0, Math.PI * 2);
+            ctx.stroke();
+
+            ctx.strokeStyle = 'rgba(255, 224, 130, 0.78)';
+            ctx.lineWidth = 1.3;
+            ctx.beginPath();
+            ctx.arc(0, 0, yantraR * 0.68, 0, Math.PI * 2);
+            ctx.stroke();
+
+            ctx.rotate(now * 0.004);
+            for (let k = 0; k < 8; k++) {
+              const a = (k * Math.PI) / 4;
+              ctx.beginPath();
+              ctx.moveTo(Math.cos(a) * (yantraR * 0.25), Math.sin(a) * (yantraR * 0.25));
+              ctx.lineTo(Math.cos(a) * (yantraR * 0.92), Math.sin(a) * (yantraR * 0.92));
+              ctx.stroke();
+            }
+            ctx.restore();
+
+            // Subtle ranged mantra aim trajectory line
+            ctx.strokeStyle = isImminent ? 'rgba(255, 216, 107, 0.62)' : 'rgba(255, 92, 48, 0.42)';
+            ctx.lineWidth = 1.6;
+            ctx.setLineDash([6, 5]);
+            ctx.beginPath();
+            ctx.moveTo(0, -18);
+            ctx.lineTo(Math.cos(e.aimAngle) * 145, -18 + Math.sin(e.aimAngle) * 145 * 0.72);
+            ctx.stroke();
+            ctx.setLineDash([]);
+          } else if (e.attackKind === 'shockwave') {
             const maxR = e.telegraphRadius;
             ctx.translate(e.x, e.y);
             ctx.scale(1, 0.56);
-            ctx.strokeStyle = borderStroke;
-            ctx.lineWidth = isImminent ? 2.0 : 1.4;
+            const swGrad = ctx.createRadialGradient(0, 0, maxR * 0.1, 0, 0, maxR);
+            swGrad.addColorStop(0, 'rgba(255, 42, 60, 0.14)');
+            swGrad.addColorStop(0.75, 'rgba(255, 42, 60, 0.34)');
+            swGrad.addColorStop(1, 'rgba(255, 216, 107, 0.52)');
+            ctx.fillStyle = swGrad;
             ctx.beginPath();
-            ctx.arc(0, 0, maxR * (0.25 + progress * 0.75), 0, Math.PI * 2);
+            ctx.arc(0, 0, maxR * (0.28 + progress * 0.72), 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.strokeStyle = isImminent ? '#ffd86b' : '#ff2a3c';
+            ctx.lineWidth = isImminent ? 2.6 : 1.9;
+            ctx.beginPath();
+            ctx.arc(0, 0, maxR, 0, Math.PI * 2);
             ctx.stroke();
-          } else if (e.isBoss) {
-            const maxR = Math.min(115, e.telegraphRadius);
-            const halfArc = 0.68;
+          } else if (e.attackKind === 'corridor') {
+            // Dundubhi pillar-shattering horn charge corridor telegraph
+            const cDx = e.corridorEndX - e.x;
+            const cDy = e.corridorEndY - e.y;
+            const cLen = Math.max(40, Math.hypot(cDx, cDy));
+            const cAng = Math.atan2(cDy, cDx);
+            const halfW = 36;
+            ctx.translate(e.x, e.y);
+            ctx.rotate(cAng);
+            ctx.fillStyle = isImminent ? 'rgba(255, 56, 72, 0.34)' : 'rgba(255, 42, 60, 0.22)';
+            ctx.fillRect(0, -halfW, cLen * (0.25 + progress * 0.75), halfW * 2);
+            ctx.strokeStyle = isImminent ? '#ffd86b' : '#ff3848';
+            ctx.lineWidth = 2.2;
+            ctx.strokeRect(0, -halfW, cLen, halfW * 2);
+          } else {
+            // Melee Reavers, Heavy Brutes & Bosses: Bright crimson ground cleave sector 0.45s before striking
+            const maxR = e.isBoss ? Math.min(124, e.telegraphRadius) : Math.min(92, e.telegraphRadius || 84);
+            const halfArc = e.isBoss ? 0.72 : 0.62;
             ctx.translate(e.x, e.y);
             ctx.scale(1, 0.58);
             ctx.rotate(e.aimAngle);
-            ctx.strokeStyle = borderStroke;
-            ctx.lineWidth = isImminent ? 2.0 : 1.4;
+
+            const secGrad = ctx.createRadialGradient(0, 0, 6, 0, 0, maxR);
+            secGrad.addColorStop(0, 'rgba(255, 42, 60, 0.12)');
+            secGrad.addColorStop(0.7, isImminent ? 'rgba(255, 42, 60, 0.38)' : 'rgba(255, 42, 60, 0.22)');
+            secGrad.addColorStop(1, isImminent ? 'rgba(255, 216, 107, 0.56)' : 'rgba(255, 56, 72, 0.36)');
+            ctx.fillStyle = secGrad;
             ctx.beginPath();
             ctx.moveTo(0, 0);
-            ctx.arc(0, 0, maxR * (0.3 + progress * 0.7), -halfArc, halfArc);
+            ctx.arc(0, 0, maxR * (0.35 + progress * 0.65), -halfArc, halfArc);
+            ctx.closePath();
+            ctx.fill();
+
+            ctx.strokeStyle = isImminent ? '#ffd86b' : 'rgba(255, 56, 72, 0.85)';
+            ctx.lineWidth = isImminent ? 2.4 : 1.7;
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.arc(0, 0, maxR, -halfArc, halfArc);
             ctx.closePath();
             ctx.stroke();
           }
@@ -8586,12 +8682,12 @@ export default function KaliyugaArena() {
             );
           }
 
-          // 7. Minimal Clean Weapon Slash Ribbon (Only during active weapon swing frames 0.25..0.78)
-          if (p.slashArcAlpha > 0.02 && p.weaponSwingProgress >= 0.25 && p.weaponSwingProgress <= 0.78) {
+          // 7. Razor-Sharp Chola-Gold / Agni-Crimson Crescent Slash Arc aligned to Parashu swing angle
+          if (p.slashArcAlpha > 0.02 && p.weaponSwingProgress >= 0.12 && p.weaponSwingProgress <= 0.88) {
             const isHeavy = p.action === 'heavy_unleash' || p.action === 'execute';
             const isSpin = !isHeavy && p.comboStep === 3;
-            const swingProg = Math.max(0.25, Math.min(0.78, p.weaponSwingProgress));
-            const smearRadius = isHeavy ? 82 : isSpin ? 68 : 58;
+            const swingProg = Math.max(0.12, Math.min(0.88, p.weaponSwingProgress));
+            const smearRadius = isHeavy ? 88 : isSpin ? 74 : 64;
             const reverseFlip = !isHeavy && p.comboStep === 2 ? -1 : 1;
             const dynamicSweepAngle =
               p.slashAngle +
@@ -8601,7 +8697,7 @@ export default function KaliyugaArena() {
 
             const ribbonMesh = computeWeaponSlashRibbon({
               originX: p.x,
-              originY: p.y - 20,
+              originY: p.y - 22,
               aimAngle: dynamicSweepAngle,
               swingProgress: swingProg,
               radius: smearRadius,
@@ -8610,7 +8706,7 @@ export default function KaliyugaArena() {
               isRiposte: p.riposteWindowTimer > 0,
               comboStep: p.comboStep,
             });
-            renderWeaponBoneSlashRibbon(ctx, ribbonMesh, Math.min(0.65, p.slashArcAlpha * 0.65));
+            renderWeaponBoneSlashRibbon(ctx, ribbonMesh, Math.min(0.95, p.slashArcAlpha * 0.92));
           }
         }
       });
@@ -8809,24 +8905,26 @@ export default function KaliyugaArena() {
         ctx.restore();
       }
 
-      // 9. Draw World-Space Floating Combat Text & Callout Banners
+      // 9. Draw World-Space Floating Combat Text & Callout Banners (Non-overlapping radial pop-out + crisp #120806 dark ink outline)
       sim.floatingTexts.forEach((ft) => {
         if (!ft.active) return;
         ctx.save();
-        ctx.globalAlpha = Math.min(1, ft.life * 1.6);
+        ctx.globalAlpha = Math.min(1, ft.life * 1.75);
         ctx.textAlign = 'center';
-        ctx.font = `bold ${Math.round(13 * ft.scale)}px 'Plus Jakarta Sans', 'Noto Sans SC', sans-serif`;
-        ctx.strokeStyle = 'rgba(0,0,0,0.92)';
-        ctx.lineWidth = 3.5;
+        ctx.lineJoin = 'round';
+        ctx.font = `800 ${Math.round(14 * ft.scale)}px 'Plus Jakarta Sans', 'Noto Sans SC', sans-serif`;
+        ctx.strokeStyle = '#120806';
+        ctx.lineWidth = 4.4;
         ctx.strokeText(ft.text, ft.x, ft.y);
         ctx.fillStyle = ft.color;
         ctx.fillText(ft.text, ft.x, ft.y);
 
         if (ft.subtext) {
-          ctx.font = "600 10px 'Plus Jakarta Sans', 'Noto Sans SC', sans-serif";
-          ctx.strokeText(ft.subtext, ft.x, ft.y + 15);
-          ctx.fillStyle = '#e5dac5';
-          ctx.fillText(ft.subtext, ft.x, ft.y + 15);
+          ctx.font = "700 10.5px 'Plus Jakarta Sans', 'Noto Sans SC', sans-serif";
+          ctx.lineWidth = 3.4;
+          ctx.strokeText(ft.subtext, ft.x, ft.y + 16);
+          ctx.fillStyle = '#f5ebd6';
+          ctx.fillText(ft.subtext, ft.x, ft.y + 16);
         }
         ctx.restore();
       });
@@ -8892,38 +8990,56 @@ export default function KaliyugaArena() {
         }
       }
 
-      // 10. Sleek Borderless Top-Center Cinematic Chamber Inscription & Sanjaya Palimpsest Dialogue (ZERO RECTANGLE BOX!)
+      // 10. Top-Center Cinematic Chamber Inscription & Sanjaya Palimpsest Dialogue with Feathered Obsidian Ink-Wash Backing
       if (sim.chamberBannerTimer > 0 && sim.state === 'playing') {
         const bannerAlpha = Math.min(1, sim.chamberBannerTimer * 1.2);
         ctx.save();
         ctx.globalAlpha = bannerAlpha;
         const by = chamberSpec.isBossChamber ? Math.max(118, ch * 0.165) : ch * 0.10;
 
+        // Feathered dark obsidian ink-wash backing (no hard rectangle borders, 100% legible over bright arenas)
+        ctx.save();
+        ctx.translate(cw * 0.5, by + 44);
+        ctx.scale(1, 0.22);
+        const inkWash = ctx.createRadialGradient(0, 0, 28, 0, 0, Math.min(460, cw * 0.42));
+        inkWash.addColorStop(0, 'rgba(10, 4, 6, 0.90)');
+        inkWash.addColorStop(0.62, 'rgba(12, 5, 7, 0.72)');
+        inkWash.addColorStop(1, 'rgba(10, 4, 6, 0)');
+        ctx.fillStyle = inkWash;
+        ctx.beginPath();
+        ctx.arc(0, 0, Math.min(460, cw * 0.42), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
         ctx.textAlign = 'center';
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = '#120806';
 
-        ctx.fillStyle = '#e0b354';
         ctx.font = "600 11px 'Cinzel', Georgia, serif";
-        ctx.fillText(
-          chamberSpec.isBossChamber ? chamberSpec.chapterTitle.toUpperCase() : chamberSpec.chineseSubtitle,
-          cw * 0.5,
-          by
-        );
+        ctx.lineWidth = 3.6;
+        const subTitleStr = chamberSpec.isBossChamber
+          ? chamberSpec.chapterTitle.toUpperCase()
+          : chamberSpec.chineseSubtitle;
+        ctx.strokeText(subTitleStr, cw * 0.5, by);
+        ctx.fillStyle = '#f2c45a';
+        ctx.fillText(subTitleStr, cw * 0.5, by);
 
-        ctx.fillStyle = '#f9e79f';
         ctx.font = "bold 24px 'Cinzel', Georgia, serif";
-        ctx.fillText(
-          chamberSpec.isBossChamber ? chamberSpec.chineseSubtitle : chamberSpec.name,
-          cw * 0.5,
-          by + 26
-        );
+        ctx.lineWidth = 4.8;
+        const mainTitleStr = chamberSpec.isBossChamber
+          ? chamberSpec.chineseSubtitle
+          : chamberSpec.name;
+        ctx.strokeText(mainTitleStr, cw * 0.5, by + 26);
+        ctx.fillStyle = '#fff3c4';
+        ctx.fillText(mainTitleStr, cw * 0.5, by + 26);
 
-        // Tapered golden calligraphy brush-divider (no box!)
+        // Tapered golden calligraphy brush-divider
         const lineGrad = ctx.createLinearGradient(cw * 0.34, 0, cw * 0.66, 0);
         lineGrad.addColorStop(0, 'rgba(212, 165, 72, 0)');
-        lineGrad.addColorStop(0.5, 'rgba(242, 196, 90, 0.78)');
+        lineGrad.addColorStop(0.5, 'rgba(242, 196, 90, 0.88)');
         lineGrad.addColorStop(1, 'rgba(212, 165, 72, 0)');
         ctx.strokeStyle = lineGrad;
-        ctx.lineWidth = 1.5;
+        ctx.lineWidth = 1.6;
         ctx.beginPath();
         ctx.moveTo(cw * 0.34, by + 35);
         ctx.lineTo(cw * 0.66, by + 35);
@@ -8933,33 +9049,42 @@ export default function KaliyugaArena() {
         const strikeTxt = chamberSpec.sanjayaStrikethrough || chamberSpec.strikethroughLie;
         const corrTxt = chamberSpec.sanjayaCorrection || chamberSpec.sanjayaQuote;
         if (chamberSpec.dialogueSpeaker || strikeTxt || corrTxt) {
+          ctx.strokeStyle = '#120806';
+          ctx.lineWidth = 3.4;
           ctx.font = "bold 10px 'Plus Jakarta Sans', sans-serif";
-          ctx.fillStyle = '#ff8a66';
-          ctx.fillText(
-            chamberSpec.dialogueSpeaker || 'SANJAYA · PALIMPSEST OF KURUKSHETRA',
-            cw * 0.5,
-            by + 52
-          );
+          const speakerStr = chamberSpec.dialogueSpeaker || 'SANJAYA · PALIMPSEST OF KURUKSHETRA';
+          ctx.strokeText(speakerStr, cw * 0.5, by + 52);
+          ctx.fillStyle = '#ff9470';
+          ctx.fillText(speakerStr, cw * 0.5, by + 52);
 
           if (strikeTxt && corrTxt) {
             ctx.font = "italic 12px 'Plus Jakarta Sans', sans-serif";
-            ctx.fillStyle = '#9c8f80';
+            ctx.lineWidth = 3.6;
+            ctx.strokeText(strikeTxt, cw * 0.5, by + 69);
+            ctx.fillStyle = '#c4b5a2';
             ctx.fillText(strikeTxt, cw * 0.5, by + 69);
             const tw = ctx.measureText(strikeTxt).width;
             ctx.strokeStyle = '#ff3848';
-            ctx.lineWidth = 1.8;
+            ctx.lineWidth = 2.0;
             ctx.beginPath();
             ctx.moveTo(cw * 0.5 - tw * 0.52, by + 65);
             ctx.lineTo(cw * 0.5 + tw * 0.52, by + 65);
             ctx.stroke();
 
-            ctx.font = "600 12.5px 'Plus Jakarta Sans', sans-serif";
-            ctx.fillStyle = '#ffd86b';
+            ctx.strokeStyle = '#120806';
+            ctx.lineWidth = 4.0;
+            ctx.font = "700 12.5px 'Plus Jakarta Sans', sans-serif";
+            ctx.strokeText(corrTxt, cw * 0.5, by + 87);
+            ctx.fillStyle = '#ffe082';
             ctx.fillText(corrTxt, cw * 0.5, by + 87);
           } else if (chamberSpec.dialogueLine || corrTxt) {
+            const lineStr = (chamberSpec.dialogueLine || corrTxt)!;
+            ctx.strokeStyle = '#120806';
+            ctx.lineWidth = 3.8;
             ctx.font = "italic 12.5px 'Plus Jakarta Sans', sans-serif";
-            ctx.fillStyle = '#f2e8d5';
-            ctx.fillText((chamberSpec.dialogueLine || corrTxt)!, cw * 0.5, by + 70);
+            ctx.strokeText(lineStr, cw * 0.5, by + 70);
+            ctx.fillStyle = '#f5ebd6';
+            ctx.fillText(lineStr, cw * 0.5, by + 70);
           }
         }
 
@@ -8971,28 +9096,52 @@ export default function KaliyugaArena() {
         ctx.globalAlpha = bpAlpha;
         const by = ch * 0.11;
 
-        ctx.textAlign = 'center';
+        ctx.save();
+        ctx.translate(cw * 0.5, by + 34);
+        ctx.scale(1, 0.22);
+        const inkWash = ctx.createRadialGradient(0, 0, 28, 0, 0, Math.min(460, cw * 0.42));
+        inkWash.addColorStop(0, 'rgba(10, 4, 6, 0.90)');
+        inkWash.addColorStop(0.62, 'rgba(12, 5, 7, 0.72)');
+        inkWash.addColorStop(1, 'rgba(10, 4, 6, 0)');
+        ctx.fillStyle = inkWash;
+        ctx.beginPath();
+        ctx.arc(0, 0, Math.min(460, cw * 0.42), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
 
-        ctx.fillStyle = '#ff6a33';
+        ctx.textAlign = 'center';
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = '#120806';
+
         ctx.font = "bold 11px 'Cinzel', Georgia, serif";
+        ctx.lineWidth = 3.6;
+        ctx.strokeText(bp.speaker, cw * 0.5, by);
+        ctx.fillStyle = '#ff7b47';
         ctx.fillText(bp.speaker, cw * 0.5, by);
 
-        ctx.fillStyle = '#ffd86b';
         ctx.font = "bold 20px 'Cinzel', Georgia, serif";
+        ctx.lineWidth = 4.4;
+        ctx.strokeText(bp.title, cw * 0.5, by + 23);
+        ctx.fillStyle = '#ffe082';
         ctx.fillText(bp.title, cw * 0.5, by + 23);
 
         ctx.font = "italic 12px 'Plus Jakarta Sans', sans-serif";
-        ctx.fillStyle = '#a69888';
+        ctx.lineWidth = 3.6;
+        ctx.strokeText(bp.strikethrough, cw * 0.5, by + 44);
+        ctx.fillStyle = '#c4b5a2';
         ctx.fillText(bp.strikethrough, cw * 0.5, by + 44);
         const stw = ctx.measureText(bp.strikethrough).width;
         ctx.strokeStyle = '#ff3848';
-        ctx.lineWidth = 1.8;
+        ctx.lineWidth = 2.0;
         ctx.beginPath();
         ctx.moveTo(cw * 0.5 - stw * 0.52, by + 40);
         ctx.lineTo(cw * 0.5 + stw * 0.52, by + 40);
         ctx.stroke();
 
+        ctx.strokeStyle = '#120806';
+        ctx.lineWidth = 4.0;
         ctx.font = "bold 13px 'Plus Jakarta Sans', sans-serif";
+        ctx.strokeText(bp.correction, cw * 0.5, by + 64);
         ctx.fillStyle = '#fff0d4';
         ctx.fillText(bp.correction, cw * 0.5, by + 64);
 

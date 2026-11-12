@@ -157,11 +157,11 @@ export function computeSpriteSheetFrameKey(params: {
   quantizedTimeStep: number;
 } {
   const dur = Math.max(0.2, params.clipDuration ?? 1.0);
-  const steps = Math.max(6, params.stepsPerClip ?? (params.isAttacking ? 16 : 14));
+  const steps = Math.max(6, params.stepsPerClip ?? (params.isAttacking ? 60 : 30));
   const normPhase = ((Math.max(0, params.animTime) % dur) / dur);
   const quantizedTimeStep = Math.min(steps - 1, Math.floor(normPhase * steps));
 
-  const dirSteps = Math.max(8, params.yawDirections ?? 16);
+  const dirSteps = Math.max(8, params.yawDirections ?? 36);
   const twoPi = Math.PI * 2;
   const normYaw = ((params.yawRad % twoPi) + twoPi) % twoPi;
   const yawIdx = Math.round((normYaw / twoPi) * dirSteps) % dirSteps;
@@ -222,10 +222,7 @@ export class Hades2DSpriteBaker {
 
   /**
    * Stylizes the rendered 3D `webglCanvas` into a true 2D Hades hand-painted sprite on `targetCanvas`
-   * with:
-   *  1. Zero 3D plastic/metallic shine (specular glare suppression + 5-band cel shading quantization)
-   *  2. Interior comic-ink crease lines detected from luminance gradients
-   *  3. Warm golden-amber upper-edge rim highlight + 2px dark obsidian comic ink outer contour (#0b070d)
+   * with crisp #120806 silhouette outline and clean color-true sRGB diffuse rendering.
    */
   public bakeSpriteFrame(
     webglCanvas: HTMLCanvasElement,
@@ -238,159 +235,25 @@ export class Hades2DSpriteBaker {
       cacheFrame?: boolean;
     }
   ): void {
-    const outCtx = targetCanvas.getContext('2d', { willReadFrequently: true });
-    if (!outCtx || !this.inkCtx) return;
+    const outCtx = targetCanvas.getContext('2d');
+    if (!outCtx) return;
 
-    const s = this.size;
-
-    // 1. Draw raw WebGL render into inkCanvas and read pixels for 2D Cel-Shader + Ink Outline pass
-    this.inkCtx.clearRect(0, 0, s, s);
-    this.inkCtx.globalCompositeOperation = 'source-over';
-    this.inkCtx.drawImage(webglCanvas, 0, 0, s, s);
-    const srcImg = this.inkCtx.getImageData(0, 0, s, s);
-    const sData = srcImg.data;
-
-    const outImg = outCtx.createImageData(s, s);
-    const dData = outImg.data;
-    const total = s * s;
-    const fgMask = new Uint8Array(total);
-    const lumaBuf = new Float32Array(total);
-
-    for (let p = 0; p < total; p++) {
-      const idx = p * 4;
-      const a = sData[idx + 3];
-      if (a > 40) {
-        fgMask[p] = 1;
-        lumaBuf[p] = 0.299 * sData[idx] + 0.587 * sData[idx + 1] + 0.114 * sData[idx + 2];
-      }
-    }
-
-    // 2. Shade interior character pixels with flat-matte cel quantization + interior ink creases + warm rim
-    for (let y = 2; y < s - 2; y++) {
-      const rOff = y * s;
-      for (let x = 2; x < s - 2; x++) {
-        const p = rOff + x;
-        const idx = p * 4;
-        if (fgMask[p] === 1) {
-          if (options.isHurt) {
-            dData[idx] = 255;
-            dData[idx + 1] = 242;
-            dData[idx + 2] = 205;
-            dData[idx + 3] = 255;
-            continue;
-          }
-
-          let r = sData[idx];
-          let g = sData[idx + 1];
-          let b = sData[idx + 2];
-          const rawLuma = lumaBuf[p];
-
-          // Suppress 3D specular glare hotspots (>195 luma) so armor/skin never shines like plastic or oil
-          const matteLuma =
-            rawLuma > 190 ? 190 + (rawLuma - 190) * 0.25 : rawLuma;
-          // Lift muddy darks & quantize into 2D hand-painted cel bands (blend 55% smooth + 45% posterized cel)
-          const liftedLuma = Math.pow(Math.max(0, Math.min(1, matteLuma / 255)), 0.78) * 245;
-          const celBand = Math.round(liftedLuma / 38) * 38;
-          const finalLuma = liftedLuma * 0.58 + celBand * 0.42;
-          const lumaScale = rawLuma > 4 ? finalLuma / rawLuma : 1.25;
-
-          r = clampByte(r * lumaScale);
-          g = clampByte(g * lumaScale);
-          b = clampByte(b * lumaScale);
-
-          // Boost true pigment vibrancy so 3D-baked sprites match the rich 2D hand-painted palette
-          const newL = 0.299 * r + 0.587 * g + 0.114 * b;
-          const sat = 1.28;
-          r = clampByte(newL + (r - newL) * sat + 5);
-          g = clampByte(newL + (g - newL) * sat + 2);
-          b = clampByte(newL + (b - newL) * sat);
-
-          // Interior comic-ink crease detection (Sobel gradient across muscle/armor plates)
-          const gx = Math.abs(lumaBuf[p + 1] - lumaBuf[p - 1]);
-          const gy = Math.abs(lumaBuf[p + s] - lumaBuf[p - s]);
-          const grad = gx + gy;
-
-          // Upper/side silhouette rim test
-          const isRim =
-            fgMask[p - s] === 0 ||
-            fgMask[p - 1] === 0 ||
-            fgMask[p + 1] === 0;
-
-          if (isRim) {
-            // Crisp 2D warm golden-amber rim highlight
-            r = clampByte(r * 0.58 + 255 * 0.42);
-            g = clampByte(g * 0.58 + 226 * 0.42);
-            b = clampByte(b * 0.58 + 136 * 0.42);
-          } else if (grad > 54 && fgMask[p - 1] === 1 && fgMask[p + 1] === 1 && fgMask[p - s] === 1 && fgMask[p + s] === 1) {
-            // Crisp dark interior comic ink line
-            const inkMix = Math.min(0.72, (grad - 54) / 70);
-            r = clampByte(r * (1 - inkMix) + 16 * inkMix);
-            g = clampByte(g * (1 - inkMix) + 10 * inkMix);
-            b = clampByte(b * (1 - inkMix) + 18 * inkMix);
-          }
-
-          dData[idx] = r;
-          dData[idx + 1] = g;
-          dData[idx + 2] = b;
-          dData[idx + 3] = 255;
-        } else {
-          // Exterior 2px Hades dark-ink outline (#0b070d)
-          const n1 =
-            fgMask[p - 1] === 1 ||
-            fgMask[p + 1] === 1 ||
-            fgMask[p - s] === 1 ||
-            fgMask[p + s] === 1 ||
-            fgMask[p - s - 1] === 1 ||
-            fgMask[p - s + 1] === 1 ||
-            fgMask[p + s - 1] === 1 ||
-            fgMask[p + s + 1] === 1;
-          if (n1) {
-            dData[idx] = 11;
-            dData[idx + 1] = 7;
-            dData[idx + 2] = 13;
-            dData[idx + 3] = 255;
-            continue;
-          }
-          const n2 =
-            fgMask[p - 2] === 1 ||
-            fgMask[p + 2] === 1 ||
-            fgMask[p - s * 2] === 1 ||
-            fgMask[p + s * 2] === 1;
-          if (n2) {
-            dData[idx] = 24;
-            dData[idx + 1] = 14;
-            dData[idx + 2] = 20;
-            dData[idx + 3] = 215;
-          }
-        }
-      }
-    }
-
-    outCtx.putImageData(outImg, 0, 0);
+    const baked = bake2DSpriteFrameFromCanvas(webglCanvas, options.frameKey, {
+      outlineColor: options.isHurt ? '#ffffff' : '#120806',
+      outlineThickness: options.outlinePx ?? 2,
+      hitFlash: Boolean(options.isHurt),
+      cacheFrame: options.cacheFrame,
+    });
+    outCtx.clearRect(0, 0, this.size, this.size);
+    outCtx.drawImage(baked, 0, 0, this.size, this.size);
     this.lastFrameKey = options.frameKey;
-
-    if (options.cacheFrame !== false && !options.isHurt) {
-      if (this.cache.has(options.frameKey)) {
-        this.cache.delete(options.frameKey);
-      } else if (this.cache.size >= this.maxCacheFrames) {
-        const oldestKey = this.cache.keys().next().value;
-        if (oldestKey) this.cache.delete(oldestKey);
-      }
-      const snapshot = document.createElement('canvas');
-      snapshot.width = s;
-      snapshot.height = s;
-      const snapCtx = snapshot.getContext('2d');
-      if (snapCtx) {
-        snapCtx.drawImage(targetCanvas, 0, 0);
-        this.cache.set(options.frameKey, snapshot);
-      }
-    }
   }
 }
 
 /**
- * Applies Hades-grade stylized matte material adjustments and warm rim-lighting to a 3D hierarchy
- * so baked 2D sprites have crisp contrast, zero plastic/oiled specular blowout, and vibrant colors.
+ * Applies clean, color-true sRGB diffuse material settings to a 3D hierarchy
+ * (zero muddy step-shader banding, zero plastic specular glare) so models show
+ * the exact colors of their uploaded .png textures.
  */
 export function applyHadesCelShadingToHierarchy(
   root: THREE.Object3D,
@@ -408,10 +271,10 @@ export function applyHadesCelShadingToHierarchy(
       if (!m) return m;
       const std = m as THREE.MeshStandardMaterial;
       if ('roughness' in std) {
-        std.roughness = 0.88;
+        std.roughness = 0.85;
       }
       if ('metalness' in std) {
-        std.metalness = 0.06;
+        std.metalness = 0.08;
       }
       if ('emissive' in std && std.emissive) {
         std.emissive.setHex(0x000000);
@@ -448,8 +311,8 @@ function getSharedSilhouetteCanvas(w: number, h: number): {
 
 /**
  * Fast GPU-accelerated 2D Sprite Baker that converts a rendered 3D WebGL frame into a crisp
- * Hades-style 2D sprite with dark comic-ink silhouette outlines, warm upper rim highlight,
- * and optional 3-frame white hit-flash.
+ * Hades-style 2D sprite with #120806 dark comic-ink silhouette outlines, warm upper rim highlight,
+ * and optional 3-frame white-gold hit-flash.
  */
 export function bake2DSpriteFrameFromCanvas(
   sourceCanvas: HTMLCanvasElement,
@@ -474,7 +337,7 @@ export function bake2DSpriteFrameFromCanvas(
   if (!ctx) return sourceCanvas;
 
   const thickness = options?.outlineThickness ?? 2;
-  const outlineColor = options?.outlineColor ?? '#120907';
+  const outlineColor = options?.outlineColor ?? '#120806';
 
   // 1. Draw crisp 2D silhouette outline using GPU-composited directional offsets on reused scratch canvas
   const { canvas: silhouetteCanvas, ctx: sCtx } = getSharedSilhouetteCanvas(w, h);

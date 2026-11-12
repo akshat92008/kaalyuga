@@ -14,42 +14,8 @@ import * as THREE from 'three';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 import { IS_SOFTWARE_WEBGL } from '../../engine/ue5GraphicsEngine';
 
-const LITE_SKINNED_BIN_MAP: Record<string, string> = {
-  '/models/Meshy_AI_Ashen_Warborn_biped/Meshy_AI_Ashen_Warborn_biped_Animation_Idle_withSkin.fbx':
-    '/models_lite/rudra.skinned.bin',
-  '/models/Meshy_AI_Ashen_Warborn_biped/Meshy_AI_Ashen_Warborn_biped_Meshy_Merged_Animations.fbx':
-    '/models_lite/rudra.skinned.bin',
-  '/new_3d_assets/Animations/Pro Melee Axe Pack/Meshy_AI_Ashen_Warborn_20261025_generate.fbx':
-    '/models_lite/rudra.skinned.bin',
-  '/new_3d_assets/Animations/Meshy_AI_Runebound_Minotaur_Warlord_Animations.fbx':
-    '/models_lite/dundubhi.skinned.bin',
-  '/models/Meshy_AI_Runebound_Minotaur_Warlord_20261025_texture_fbx/Meshy_AI_Runebound_Minotaur_Warlord_Animations.fbx':
-    '/models_lite/dundubhi.skinned.bin',
-  '/models/Meshy_AI_Crimson_Skull_Warlord_biped/Meshy_AI_Crimson_Skull_Warlord_biped_Animation_Walking_withSkin.fbx':
-    '/models_lite/vrikodara.skinned.bin',
-  '/models/Meshy_AI_Crimson_Skull_Warlord_biped/Meshy_AI_Crimson_Skull_Warlord_biped_Animation_Running_withSkin.fbx':
-    '/models_lite/vrikodara.skinned.bin',
-  '/new_3d_assets/Animations/Great Sword Pack/Meshy_AI_Bleeding_Crown_Ghoul_20261111_generate.fbx':
-    '/models_lite/grunt_ghoul.skinned.bin',
-  '/new_3d_assets/Animations/Creature Pack/Meshy_AI_Horned_Warlord_20261111_generate.fbx':
-    '/models_lite/axe_guardian.skinned.bin',
-  '/new_3d_assets/Animations/Pro Melee Axe Pack/Meshy_AI_Ironhide_Brute_20261111_generate.fbx':
-    '/models_lite/club_brute.skinned.bin',
-  '/new_3d_assets/Animations/Creature Pack/Meshy_AI_Boneclaw_Warlord_20261111_generate.fbx':
-    '/models_lite/archer_reaver.skinned.bin',
-  '/new_3d_assets/Animations/Pro Magic Pack/Meshy_AI_Ashen_Oracle_20261111_generate.fbx':
-    '/models_lite/witch_oracle.skinned.bin',
-  '/new_3d_assets/Animations/Pro Melee Axe Pack/Meshy_AI_Ironhide_Warlord_20261111_generate.fbx':
-    '/models_lite/ironhide_warlord.skinned.bin',
-  '/new_3d_assets/Animations/Pro Melee Axe Pack/Meshy_AI_Gorthak_the_Horned_Warlord_20261111_generate.fbx':
-    '/models_lite/brute_warbringer.skinned.bin',
-  '/new_3d_assets/3D Models/Weapons/Bloodforged_Trident_Axe_20261025/Meshy_AI_Bloodforged_Trident_Axe_20261025_texture.fbx':
-    '/models_lite/trident_axe.mesh.bin',
-  '/models/Meshy_AI_Bloodforged_Trident_A_1025041928_texture_fbx/Meshy_AI_Bloodforged_Trident_A_1025041928_texture.fbx':
-    '/models_lite/trident_axe.mesh.bin',
-  '/new_3d_assets/3D Models/Weapons/Minotaur_War_Axe_20261111/Meshy_AI_Minotaur_War_Axe_20261111_texture.fbx':
-    '/models_lite/minotaur_axe.mesh.bin',
-};
+// Disabled .skinned.bin overrides so all characters and weapons use their true FBX geometry & 1:1 UV maps
+const LITE_SKINNED_BIN_MAP: Record<string, string> = {};
 
 interface FloatChunkRef {
   offsetFloats: number;
@@ -239,7 +205,7 @@ export async function loadFbxCached(url: string, _unusedShared = false): Promise
     loader.load(
       url,
       (group) => {
-        simplifyGroupGeometries(group, IS_SOFTWARE_WEBGL ? 18 : 38, 32000);
+        simplifyGroupGeometries(group, 56, 32000);
         resolve(group);
       },
       undefined,
@@ -250,7 +216,7 @@ export async function loadFbxCached(url: string, _unusedShared = false): Promise
 
 export function simplifyGroupGeometries(
   group: THREE.Object3D,
-  gridRes = 38,
+  gridRes = 56,
   minVertexThreshold = 32000
 ): void {
   group.traverse((obj) => {
@@ -268,7 +234,7 @@ export function simplifyGroupGeometries(
 
 export function simplifyBufferGeometry(
   geo: THREE.BufferGeometry,
-  gridRes = 38,
+  gridRes = 56,
   minVertexThreshold = 32000
 ): THREE.BufferGeometry {
   const posAttr = geo.attributes.position as THREE.BufferAttribute | undefined;

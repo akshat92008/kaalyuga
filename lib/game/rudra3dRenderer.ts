@@ -169,7 +169,7 @@ export class Rudra3DRenderer {
 
     Promise.all([
       loadFbxCached(RUDRA_RIGGED_FBX_URL).catch(() => loadFbx(RUDRA_RIGGED_FBX_URL)),
-      Promise.resolve(null),
+      loadFbx(RUDRA_TEXTURE_FBX_URL),
       loadFbxCached(PARASHU_WEAPON_FBX_URL).catch(() => loadFbx(PARASHU_WEAPON_FBX_URL)),
       loadTex(RUDRA_DIFFUSE_URL),
       loadTex(PARASHU_DIFFUSE_URL),
@@ -196,8 +196,8 @@ export class Rudra3DRenderer {
         const mat = new THREE.MeshStandardMaterial({
           color: 0xffffff,
           map: diffuseMap || null,
-          roughness: 0.88,
-          metalness: 0.06,
+          roughness: 0.86,
+          metalness: 0.08,
         });
 
         if (riggedGroup) {
@@ -228,13 +228,13 @@ export class Rudra3DRenderer {
           const wepMat = new THREE.MeshStandardMaterial({
             color: 0xffffff,
             map: weaponDiffuseMap || null,
-            roughness: 0.85,
-            metalness: 0.08,
+            roughness: 0.82,
+            metalness: 0.12,
           });
           weaponGroup.traverse((c) => {
             if ((c as THREE.Mesh).isMesh) {
               const wm = c as THREE.Mesh;
-              wm.geometry = simplifyBufferGeometry(wm.geometry, 32, 32000);
+              wm.geometry = simplifyBufferGeometry(wm.geometry, 56, 32000);
               wm.material = wepMat;
               wm.frustumCulled = false;
             }
@@ -247,7 +247,7 @@ export class Rudra3DRenderer {
           const wepSize = new THREE.Vector3();
           wepBox.getSize(wepSize);
           const maxDim = Math.max(0.001, wepSize.x, wepSize.y, wepSize.z);
-          const desiredWorldLen = 1.02;
+          const desiredWorldLen = 1.04;
           const localWepScale = desiredWorldLen / (maxDim * handScale);
 
           const weaponSocket = new THREE.Group();
@@ -408,7 +408,7 @@ export class Rudra3DRenderer {
     this.renderer.render(this.scene, this.camera);
 
     const baked = bake2DSpriteFrameFromCanvas(this.renderer.domElement, cacheKey, {
-      outlineColor: hitFlash ? '#ffffff' : '#140b07',
+      outlineColor: hitFlash ? '#ffffff' : '#120806',
       outlineThickness: 2,
       hitFlash,
       cacheFrame: false,

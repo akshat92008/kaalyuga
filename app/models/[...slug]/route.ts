@@ -46,6 +46,8 @@ export async function GET(
 
     const candidateLocalPaths = [
       [PUBLIC_MODELS_DIR, relPath].join('/'),
+      ['/tmp/kaalyuga/public/models', relPath].join('/'),
+      ['/tmp/kaalyuga/cutscenes/assets', relPath].join('/'),
       [CACHE_MODELS_DIR, relPath].join('/'),
     ];
 

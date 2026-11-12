@@ -37,7 +37,7 @@ export interface Enemy3DRenderInput {
   isParrying: boolean;
 }
 
-type EnemyWeaponKind = 'greatsword' | 'minotaur_axe' | 'trident_axe' | 'stone_club' | 'war_bow' | 'none';
+type EnemyWeaponKind = 'minotaur_axe' | 'trident_axe' | 'none';
 
 interface EnemyModelSlot {
   key: string;
@@ -63,9 +63,9 @@ const TRIDENT_AXE_FBX_URL = `${MODEL_BASE}/Weapons/Bloodforged_Trident_Axe_20261
 const TRIDENT_AXE_TEX_URL = `/models/Meshy_AI_Bloodforged_Trident_A_1025041928_texture_fbx/Meshy_AI_Bloodforged_Trident_A_1025041928_texture.png`;
 
 /**
- * Every `generateFbxUrl` below points to a verified Mixamo-rigged enemy SkinnedMesh (`hasSkin: true`)
- * paired with its enemy texture mesh (`*_texture.fbx`) and original sRGB diffuse texture map.
- * Rudra (`Ashen_Warborn`) is NEVER used as an enemy.
+ * Curated, zero-lag roster of verified 3D enemy models with 1:1 UV texture maps
+ * and real 3D weapons (Minotaur_War_Axe or Bloodforged_Trident_Axe).
+ * Only the 1-2 enemy rigs present in the current chamber are lazy-loaded.
  */
 const ENEMY_MODEL_SLOTS: Record<
   string,
@@ -74,26 +74,8 @@ const ENEMY_MODEL_SLOTS: Record<
   grunt_ghoul: {
     key: 'grunt_ghoul',
     generateFbxUrl: `${ANIM_BASE}/Great Sword Pack/Meshy_AI_Bleeding_Crown_Ghoul_20261111_generate.fbx`,
-    textureFbxUrl: '',
+    textureFbxUrl: `${MODEL_BASE}/Bleeding_Crown_Ghoul/Meshy_AI_Bleeding_Crown_Ghoul_20261111_texture_fbx/Meshy_AI_Bleeding_Crown_Ghoul_20261111_texture.fbx`,
     diffuseUrl: `${MODEL_BASE}/Bleeding_Crown_Ghoul/Meshy_AI_Bleeding_Crown_Ghoul_20261111_texture_fbx/Meshy_AI_Bleeding_Crown_Ghoul_20261111_texture.png`,
-    weaponKind: 'greatsword',
-    animUrls: {
-      idle: `${ANIM_BASE}/Great Sword Pack/great sword idle.fbx`,
-      chase: `${ANIM_BASE}/Great Sword Pack/great sword run.fbx`,
-      windup: `${ANIM_BASE}/Great Sword Pack/great sword attack.fbx`,
-      attack: `${ANIM_BASE}/Great Sword Pack/great sword slash.fbx`,
-      hurt: `${ANIM_BASE}/Great Sword Pack/great sword impact.fbx`,
-      death: `${ANIM_BASE}/Great Sword Pack/two handed sword death.fbx`,
-    },
-    rimColor: 0xffffff,
-    rimIntensity: 0.0,
-    scaleMultiplier: 1.0,
-  },
-  axe_guardian: {
-    key: 'axe_guardian',
-    generateFbxUrl: `${ANIM_BASE}/Creature Pack/Meshy_AI_Horned_Warlord_20261111_generate.fbx`,
-    textureFbxUrl: '',
-    diffuseUrl: `${MODEL_BASE}/Kaliyuga_the_Bleeding_Guardian/Meshy_AI_Kaliyuga_the_Bleeding_Guardian_20261111_texture_fbx/Meshy_AI_Kaliyuga_the_Bleeding_Guardian_20261111_texture.png`,
     weaponKind: 'minotaur_axe',
     animUrls: {
       idle: `${ANIM_BASE}/Pro Melee Axe Pack/standing idle.fbx`,
@@ -105,48 +87,12 @@ const ENEMY_MODEL_SLOTS: Record<
     },
     rimColor: 0xffffff,
     rimIntensity: 0.0,
-    scaleMultiplier: 1.04,
-  },
-  club_brute: {
-    key: 'club_brute',
-    generateFbxUrl: `${ANIM_BASE}/Pro Melee Axe Pack/Meshy_AI_Ironhide_Brute_20261111_generate.fbx`,
-    textureFbxUrl: '',
-    diffuseUrl: `${MODEL_BASE}/Bloodmaw_Brute/Meshy_AI_Bloodmaw_Brute_20261111_texture_fbx/Meshy_AI_Bloodmaw_Brute_20261111_texture.png`,
-    weaponKind: 'stone_club',
-    animUrls: {
-      idle: `${ANIM_BASE}/Pro Melee Axe Pack/standing idle.fbx`,
-      chase: `${ANIM_BASE}/Pro Melee Axe Pack/standing walk forward.fbx`,
-      windup: `${ANIM_BASE}/Pro Melee Axe Pack/standing melee attack horizontal.fbx`,
-      attack: `${ANIM_BASE}/Pro Melee Axe Pack/standing melee attack downward.fbx`,
-      hurt: `${ANIM_BASE}/Pro Melee Axe Pack/standing react large gut.fbx`,
-      death: `${ANIM_BASE}/Pro Magic Pack/Standing React Death Forward.fbx`,
-    },
-    rimColor: 0xffffff,
-    rimIntensity: 0.0,
-    scaleMultiplier: 1.06,
-  },
-  archer_reaver: {
-    key: 'archer_reaver',
-    generateFbxUrl: `${ANIM_BASE}/Creature Pack/Meshy_AI_Boneclaw_Warlord_20261111_generate.fbx`,
-    textureFbxUrl: '',
-    diffuseUrl: `${MODEL_BASE}/Crescent_Reaver/Meshy_AI_Crescent_Reaver_20261111_texture_fbx/Meshy_AI_Crescent_Reaver_20261111_texture.png`,
-    weaponKind: 'war_bow',
-    animUrls: {
-      idle: `${ANIM_BASE}/Pro Longbow Pack/standing idle 01.fbx`,
-      chase: `${ANIM_BASE}/Pro Longbow Pack/standing walk forward.fbx`,
-      windup: `${ANIM_BASE}/Pro Longbow Pack/standing draw arrow.fbx`,
-      attack: `${ANIM_BASE}/Pro Longbow Pack/standing aim recoil.fbx`,
-      hurt: `${ANIM_BASE}/Pro Longbow Pack/standing react small from front.fbx`,
-      death: `${ANIM_BASE}/Pro Longbow Pack/standing death backward 01.fbx`,
-    },
-    rimColor: 0xffffff,
-    rimIntensity: 0.0,
     scaleMultiplier: 1.02,
   },
   witch_oracle: {
     key: 'witch_oracle',
     generateFbxUrl: `${ANIM_BASE}/Pro Magic Pack/Meshy_AI_Ashen_Oracle_20261111_generate.fbx`,
-    textureFbxUrl: '',
+    textureFbxUrl: `${MODEL_BASE}/Ashen_Oracle/Meshy_AI_Ashen_Oracle_20261111_texture_fbx/Meshy_AI_Ashen_Oracle_20261111_texture.fbx`,
     diffuseUrl: `${MODEL_BASE}/Ashen_Oracle/Meshy_AI_Ashen_Oracle_20261111_texture_fbx/Meshy_AI_Ashen_Oracle_20261111_texture.png`,
     weaponKind: 'none',
     animUrls: {
@@ -164,7 +110,7 @@ const ENEMY_MODEL_SLOTS: Record<
   shield_gladiator: {
     key: 'shield_gladiator',
     generateFbxUrl: `${ANIM_BASE}/Pro Melee Axe Pack/Meshy_AI_Ironhide_Warlord_20261111_generate.fbx`,
-    textureFbxUrl: '',
+    textureFbxUrl: `${MODEL_BASE}/Ironmaw_Gladiator/Meshy_AI_Ironmaw_Gladiator_20261111_texture_fbx/Meshy_AI_Ironmaw_Gladiator_20261111_texture.fbx`,
     diffuseUrl: `${MODEL_BASE}/Ironmaw_Gladiator/Meshy_AI_Ironmaw_Gladiator_20261111_texture_fbx/Meshy_AI_Ironmaw_Gladiator_20261111_texture.png`,
     weaponKind: 'trident_axe',
     animUrls: {
@@ -177,229 +123,52 @@ const ENEMY_MODEL_SLOTS: Record<
     },
     rimColor: 0xffffff,
     rimIntensity: 0.0,
-    scaleMultiplier: 1.06,
-  },
-  bomber_guardian: {
-    key: 'bomber_guardian',
-    generateFbxUrl: `${ANIM_BASE}/Pro Melee Axe Pack/Meshy_AI_Ironhide_Warlord_20261111_generate.fbx`,
-    textureFbxUrl: '',
-    diffuseUrl: `/models/Meshy_AI_Molten_Warlord_20261031_texture_fbx/Meshy_AI_Molten_Warlord_20261031_texture.png`,
-    weaponKind: 'minotaur_axe',
-    animUrls: {
-      idle: `${ANIM_BASE}/Pro Melee Axe Pack/standing idle.fbx`,
-      chase: `${ANIM_BASE}/Pro Melee Axe Pack/standing run forward.fbx`,
-      windup: `${ANIM_BASE}/Pro Melee Axe Pack/standing melee combo attack ver. 2.fbx`,
-      attack: `${ANIM_BASE}/Pro Melee Axe Pack/standing melee attack 360 high.fbx`,
-      hurt: `${ANIM_BASE}/Pro Melee Axe Pack/standing react large from left.fbx`,
-      death: `${ANIM_BASE}/Pro Magic Pack/Standing React Death Backward.fbx`,
-    },
-    rimColor: 0xffffff,
-    rimIntensity: 0.0,
-    scaleMultiplier: 1.08,
-  },
-  brute_warbringer: {
-    key: 'brute_warbringer',
-    generateFbxUrl: `${ANIM_BASE}/Pro Melee Axe Pack/Meshy_AI_Gorthak_the_Horned_Warlord_20261111_generate.fbx`,
-    textureFbxUrl: '',
-    diffuseUrl: `${MODEL_BASE}/Horned_Warbringer/Meshy_AI_Horned_Warbringer_20261111_texture_fbx/Meshy_AI_Horned_Warbringer_20261111_texture.png`,
-    weaponKind: 'minotaur_axe',
-    animUrls: {
-      idle: `${ANIM_BASE}/Pro Melee Axe Pack/standing idle.fbx`,
-      chase: `${ANIM_BASE}/Pro Melee Axe Pack/standing walk forward.fbx`,
-      windup: `${ANIM_BASE}/Pro Melee Axe Pack/standing melee attack backhand.fbx`,
-      attack: `${ANIM_BASE}/Pro Melee Axe Pack/standing melee attack downward.fbx`,
-      hurt: `${ANIM_BASE}/Pro Melee Axe Pack/standing react large from left.fbx`,
-      death: `${ANIM_BASE}/Pro Magic Pack/Standing React Death Backward.fbx`,
-    },
-    rimColor: 0xffffff,
-    rimIntensity: 0.0,
-    scaleMultiplier: 1.12,
+    scaleMultiplier: 1.10,
   },
 };
 
 function selectSlotKeyFromInput(
   kind: RegularEnemy3DKind,
-  id: number,
+  _id: number,
   wardenRigKey?: Warden3DRigKey,
   trait?: EnemyTrait
 ): string {
-  const absId = Math.abs(id);
-  if (wardenRigKey === 'sovereign_titan') return 'bomber_guardian';
-  if (wardenRigKey === 'furnace_titan') return 'brute_warbringer';
-  if (wardenRigKey === 'stone_golem') return 'shield_gladiator';
-  if (wardenRigKey === 'fire_monk') return 'witch_oracle';
-
+  if (wardenRigKey === 'sovereign_titan' || wardenRigKey === 'furnace_titan' || wardenRigKey === 'stone_golem') {
+    return 'shield_gladiator';
+  }
+  if (wardenRigKey === 'fire_monk') {
+    return 'witch_oracle';
+  }
   if (trait === 'vajra_shield') return 'shield_gladiator';
   if (trait === 'agni_aura') return 'witch_oracle';
 
   switch (kind) {
-    case 'wolf_guai': {
-      // Distribute grunts across Great Sword, Battle Axe, and Spiked War-Club (zero bare-handed Creature waving)
-      const mod = absId % 3;
-      if (mod === 0) return 'grunt_ghoul';
-      if (mod === 1) return 'axe_guardian';
-      return 'club_brute';
-    }
+    case 'wolf_guai':
+      return 'grunt_ghoul';
     case 'fire_monk':
-      return absId % 2 === 0 ? 'witch_oracle' : 'archer_reaver';
+      return 'witch_oracle';
     case 'stone_golem':
-      return absId % 2 === 0 ? 'shield_gladiator' : 'club_brute';
-    case 'furnace_titan': {
-      const mod = absId % 3;
-      if (mod === 0) return 'brute_warbringer';
-      if (mod === 1) return 'bomber_guardian';
-      return 'axe_guardian';
-    }
+    case 'furnace_titan':
+      return 'shield_gladiator';
     default:
       return 'grunt_ghoul';
   }
 }
 
-function selectSlotKey(archetype: EnemyArchetype, idHash: number): string {
-  const absId = Math.abs(idHash);
+function selectSlotKey(archetype: EnemyArchetype, _idHash: number): string {
   switch (archetype) {
     case 'grunt':
-      return absId % 2 === 0 ? 'grunt_ghoul' : 'axe_guardian';
+      return 'grunt_ghoul';
     case 'archer':
-      return 'archer_reaver';
-    case 'brute':
-      return absId % 2 === 0 ? 'club_brute' : 'brute_warbringer';
     case 'witch':
       return 'witch_oracle';
+    case 'brute':
     case 'shield':
-      return 'shield_gladiator';
     case 'bomber':
-      return 'bomber_guardian';
+      return 'shield_gladiator';
     default:
       return 'grunt_ghoul';
   }
-}
-
-function buildProceduralGreatSwordMesh(): THREE.Group {
-  const group = new THREE.Group();
-  const steelMat = new THREE.MeshStandardMaterial({
-    color: 0xd4d8de,
-    roughness: 0.35,
-    metalness: 0.75,
-  });
-  const bloodEdgeMat = new THREE.MeshStandardMaterial({
-    color: 0x8b1e24,
-    roughness: 0.45,
-    metalness: 0.4,
-  });
-  const bronzeMat = new THREE.MeshStandardMaterial({
-    color: 0xc8963e,
-    roughness: 0.42,
-    metalness: 0.68,
-  });
-  const gripMat = new THREE.MeshStandardMaterial({
-    color: 0x2b1812,
-    roughness: 0.85,
-    metalness: 0.1,
-  });
-
-  // Heavy two-handed broadsword blade extending along +Y
-  const bladeGeo = new THREE.BoxGeometry(3.2, 86, 10.5);
-  const blade = new THREE.Mesh(bladeGeo, steelMat);
-  blade.position.set(0, 52, 0);
-  group.add(blade);
-
-  const fullerGeo = new THREE.BoxGeometry(3.8, 68, 3.6);
-  const fuller = new THREE.Mesh(fullerGeo, bloodEdgeMat);
-  fuller.position.set(0, 48, 0);
-  group.add(fuller);
-
-  const guardGeo = new THREE.BoxGeometry(6.5, 4.5, 28);
-  const guard = new THREE.Mesh(guardGeo, bronzeMat);
-  guard.position.set(0, 8, 0);
-  group.add(guard);
-
-  const gripGeo = new THREE.CylinderGeometry(2.4, 2.6, 22, 8);
-  const grip = new THREE.Mesh(gripGeo, gripMat);
-  grip.position.set(0, -4, 0);
-  group.add(grip);
-
-  const pommelGeo = new THREE.SphereGeometry(4.2, 8, 8);
-  const pommel = new THREE.Mesh(pommelGeo, bronzeMat);
-  pommel.position.set(0, -16, 0);
-  group.add(pommel);
-
-  // Rotate +Y blade axis onto +X of mixamorigRightHand (thumb-up/forward axis!)
-  group.rotation.set(0, 0, -Math.PI * 0.5);
-  group.position.set(16, 0, 0);
-  return group;
-}
-
-function buildProceduralStoneClubMesh(): THREE.Group {
-  const group = new THREE.Group();
-  const ironWoodMat = new THREE.MeshStandardMaterial({
-    color: 0x4a3222,
-    roughness: 0.82,
-    metalness: 0.15,
-  });
-  const obsidianIronMat = new THREE.MeshStandardMaterial({
-    color: 0x3b3d42,
-    roughness: 0.55,
-    metalness: 0.62,
-  });
-  const bronzeStudMat = new THREE.MeshStandardMaterial({
-    color: 0xd49b3b,
-    roughness: 0.4,
-    metalness: 0.72,
-  });
-
-  // Shaft
-  const shaftGeo = new THREE.CylinderGeometry(2.6, 2.2, 48, 8);
-  const shaft = new THREE.Mesh(shaftGeo, ironWoodMat);
-  shaft.position.set(0, 16, 0);
-  group.add(shaft);
-
-  // Heavy bulbous Gada / War-Club head
-  const headGeo = new THREE.CylinderGeometry(8.5, 12.5, 42, 10);
-  const head = new THREE.Mesh(headGeo, obsidianIronMat);
-  head.position.set(0, 56, 0);
-  group.add(head);
-
-  // Bronze spiked rings around the club head
-  for (const ringY of [44, 58, 70]) {
-    const bandGeo = new THREE.TorusGeometry(10.8, 1.8, 6, 12);
-    const band = new THREE.Mesh(bandGeo, bronzeStudMat);
-    band.rotation.x = Math.PI * 0.5;
-    band.position.set(0, ringY, 0);
-    group.add(band);
-  }
-
-  // Rotate +Y club head axis onto +X of mixamorigRightHand (thumb-up/forward axis!)
-  group.rotation.set(0, 0, -Math.PI * 0.5);
-  group.position.set(16, 0, 0);
-  return group;
-}
-
-function buildProceduralWarBowMesh(): THREE.Group {
-  const group = new THREE.Group();
-  const bowMat = new THREE.MeshStandardMaterial({
-    color: 0x9e6b30,
-    roughness: 0.52,
-    metalness: 0.35,
-  });
-  const stringMat = new THREE.MeshStandardMaterial({
-    color: 0xe2d5b5,
-    roughness: 0.6,
-    metalness: 0.1,
-  });
-
-  const arcGeo = new THREE.TorusGeometry(38, 2.2, 8, 20, Math.PI * 0.88);
-  const arc = new THREE.Mesh(arcGeo, bowMat);
-  arc.rotation.z = -Math.PI * 0.44;
-  group.add(arc);
-
-  const strGeo = new THREE.CylinderGeometry(0.45, 0.45, 72, 6);
-  const str = new THREE.Mesh(strGeo, stringMat);
-  str.position.set(-6, 0, 0);
-  group.add(str);
-
-  group.position.set(0, 6, 6);
-  return group;
 }
 
 /**
@@ -490,57 +259,161 @@ export function buildStabilizedInPlaceClip(
 }
 
 /**
- * Generates clean normalized body-aligned planar UVs on a simplified native `SkinnedMesh`
- * geometry that was exported from Mixamo without a `uv` attribute, preserving 100% of the
- * native `position`, `normal`, `skinIndex`, and `skinWeight` buffers so the mesh NEVER twists!
+ * Transfers `skinIndex` and `skinWeight` from `rGeo` onto a decimated `tGeo` (which retains 100%
+ * of its native hand-painted UV islands) after normalizing any meter-to-centimeter scale difference,
+ * using a fast 48×48×48 3D BFS spatial grid so every vertex binds cleanly without twisting.
  */
-function ensureCleanPlanarUvs(geo: THREE.BufferGeometry): void {
-  const existingUv = geo.attributes.uv as THREE.BufferAttribute | undefined;
-  if (existingUv && existingUv.count > 0) {
-    let hasNonZero = false;
-    for (let i = 0; i < Math.min(64, existingUv.count); i++) {
-      if (Math.abs(existingUv.getX(i)) > 1e-4 || Math.abs(existingUv.getY(i)) > 1e-4) {
-        hasNonZero = true;
-        break;
-      }
+function transferSkinWeightsViaSpatialGrid(
+  rGeo: THREE.BufferGeometry,
+  tGeo: THREE.BufferGeometry
+): THREE.BufferGeometry {
+  rGeo.computeBoundingBox();
+  tGeo.computeBoundingBox();
+  const rBB = rGeo.boundingBox!;
+  const tBB = tGeo.boundingBox!;
+
+  const rSpanX = Math.max(1e-5, rBB.max.x - rBB.min.x);
+  const rSpanY = Math.max(1e-5, rBB.max.y - rBB.min.y);
+  const rSpanZ = Math.max(1e-5, rBB.max.z - rBB.min.z);
+
+  const tSpanX = Math.max(1e-5, tBB.max.x - tBB.min.x);
+  const tSpanY = Math.max(1e-5, tBB.max.y - tBB.min.y);
+  const tSpanZ = Math.max(1e-5, tBB.max.z - tBB.min.z);
+
+  const rMaxSpan = Math.max(rSpanX, rSpanY, rSpanZ);
+  const tMaxSpan = Math.max(tSpanX, tSpanY, tSpanZ);
+  const scaleRatio = rMaxSpan / tMaxSpan;
+
+  const tPosAttr = tGeo.attributes.position as THREE.BufferAttribute;
+  const tCount = tPosAttr.count;
+  const tArr = tPosAttr.array as Float32Array;
+
+  // Apply 100x meter-to-centimeter coordinate scale alignment if needed before skin transfer
+  if (Math.abs(scaleRatio - 1.0) > 0.25) {
+    const rCenterX = (rBB.min.x + rBB.max.x) * 0.5;
+    const rCenterY = (rBB.min.y + rBB.max.y) * 0.5;
+    const rCenterZ = (rBB.min.z + rBB.max.z) * 0.5;
+    const tCenterX = (tBB.min.x + tBB.max.x) * 0.5;
+    const tCenterY = (tBB.min.y + tBB.max.y) * 0.5;
+    const tCenterZ = (tBB.min.z + tBB.max.z) * 0.5;
+
+    for (let i = 0; i < tCount; i++) {
+      const i3 = i * 3;
+      tArr[i3] = (tArr[i3] - tCenterX) * scaleRatio + rCenterX;
+      tArr[i3 + 1] = (tArr[i3 + 1] - tCenterY) * scaleRatio + rCenterY;
+      tArr[i3 + 2] = (tArr[i3 + 2] - tCenterZ) * scaleRatio + rCenterZ;
     }
-    if (hasNonZero) return;
+    tPosAttr.needsUpdate = true;
+    tGeo.computeBoundingBox();
+    tGeo.computeBoundingSphere();
   }
 
-  const pos = geo.attributes.position as THREE.BufferAttribute | undefined;
-  if (!pos || pos.count === 0) return;
+  const G = 48;
+  const totalCells = G * G * G;
+  const cellVertex = new Int32Array(totalCells).fill(-1);
+  const queue = new Int32Array(totalCells);
+  let qHead = 0;
+  let qTail = 0;
 
-  geo.computeBoundingBox();
-  const bb = geo.boundingBox;
-  if (!bb) return;
+  const rPosAttr = rGeo.attributes.position as THREE.BufferAttribute;
+  const rArr = rPosAttr.array as Float32Array;
+  const rCount = rPosAttr.count;
 
-  const spanX = Math.max(1e-4, bb.max.x - bb.min.x);
-  const spanY = Math.max(1e-4, bb.max.y - bb.min.y);
-  const spanZ = Math.max(1e-4, bb.max.z - bb.min.z);
-  const zIsHeight = spanZ > spanY * 1.15;
+  const sx = rSpanX / G;
+  const sy = rSpanY / G;
+  const sz = rSpanZ / G;
 
-  const uvs = new Float32Array(pos.count * 2);
-  for (let i = 0; i < pos.count; i++) {
-    const u = 0.15 + ((pos.getX(i) - bb.min.x) / spanX) * 0.7;
-    const vRaw = zIsHeight
-      ? (pos.getZ(i) - bb.min.z) / spanZ
-      : (pos.getY(i) - bb.min.y) / spanY;
-    const v = 0.1 + vRaw * 0.8;
-    uvs[i * 2] = u;
-    uvs[i * 2 + 1] = v;
+  for (let i = 0; i < rCount; i++) {
+    const i3 = i * 3;
+    const gx = Math.min(G - 1, Math.max(0, ((rArr[i3] - rBB.min.x) / sx) | 0));
+    const gy = Math.min(G - 1, Math.max(0, ((rArr[i3 + 1] - rBB.min.y) / sy) | 0));
+    const gz = Math.min(G - 1, Math.max(0, ((rArr[i3 + 2] - rBB.min.z) / sz) | 0));
+    const cid = gx + gy * G + gz * G * G;
+    if (cellVertex[cid] === -1) {
+      cellVertex[cid] = i;
+      queue[qTail++] = cid;
+    }
   }
-  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+
+  const G2 = G * G;
+  while (qHead < qTail) {
+    const cid = queue[qHead++];
+    const vIdx = cellVertex[cid];
+    const gz = (cid / G2) | 0;
+    const rem = cid - gz * G2;
+    const gy = (rem / G) | 0;
+    const gx = rem - gy * G;
+
+    if (gx > 0 && cellVertex[cid - 1] === -1) {
+      cellVertex[cid - 1] = vIdx;
+      queue[qTail++] = cid - 1;
+    }
+    if (gx + 1 < G && cellVertex[cid + 1] === -1) {
+      cellVertex[cid + 1] = vIdx;
+      queue[qTail++] = cid + 1;
+    }
+    if (gy > 0 && cellVertex[cid - G] === -1) {
+      cellVertex[cid - G] = vIdx;
+      queue[qTail++] = cid - G;
+    }
+    if (gy + 1 < G && cellVertex[cid + G] === -1) {
+      cellVertex[cid + G] = vIdx;
+      queue[qTail++] = cid + G;
+    }
+    if (gz > 0 && cellVertex[cid - G2] === -1) {
+      cellVertex[cid - G2] = vIdx;
+      queue[qTail++] = cid - G2;
+    }
+    if (gz + 1 < G && cellVertex[cid + G2] === -1) {
+      cellVertex[cid + G2] = vIdx;
+      queue[qTail++] = cid + G2;
+    }
+  }
+
+  const rSkinIdx = rGeo.attributes.skinIndex as THREE.BufferAttribute;
+  const rSkinWgt = rGeo.attributes.skinWeight as THREE.BufferAttribute;
+  const siSrc = rSkinIdx.array as Uint16Array | Float32Array;
+  const swSrc = rSkinWgt.array as Float32Array;
+
+  const outSkinIdx = new Uint16Array(tCount * 4);
+  const outSkinWgt = new Float32Array(tCount * 4);
+
+  for (let i = 0; i < tCount; i++) {
+    const i3 = i * 3;
+    const gx = Math.min(G - 1, Math.max(0, ((tArr[i3] - rBB.min.x) / sx) | 0));
+    const gy = Math.min(G - 1, Math.max(0, ((tArr[i3 + 1] - rBB.min.y) / sy) | 0));
+    const gz = Math.min(G - 1, Math.max(0, ((tArr[i3 + 2] - rBB.min.z) / sz) | 0));
+    const cid = gx + gy * G + gz * G * G;
+    const rv = Math.max(0, cellVertex[cid]);
+    const rv4 = rv * 4;
+    const dst4 = i * 4;
+
+    outSkinIdx[dst4] = siSrc[rv4];
+    outSkinIdx[dst4 + 1] = siSrc[rv4 + 1];
+    outSkinIdx[dst4 + 2] = siSrc[rv4 + 2];
+    outSkinIdx[dst4 + 3] = siSrc[rv4 + 3];
+
+    outSkinWgt[dst4] = swSrc[rv4];
+    outSkinWgt[dst4 + 1] = swSrc[rv4 + 1];
+    outSkinWgt[dst4 + 2] = swSrc[rv4 + 2];
+    outSkinWgt[dst4 + 3] = swSrc[rv4 + 3];
+  }
+
+  tGeo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(outSkinIdx, 4));
+  tGeo.setAttribute('skinWeight', new THREE.Float32BufferAttribute(outSkinWgt, 4));
+  return tGeo;
 }
 
 /**
- * Pairs a Mixamo-rigged `SkinnedMesh` (`*_generate.fbx`) with its UV texture:
- *  - NEVER replaces `rMesh.geometry` with vertices from a different mesh (mathematically eliminating
- *    any possibility of "snake" skinning distortion!).
- *  - Path 1 (Exact 1:1 Vertex Match, e.g. Rudra `Ashen_Warborn`, `Bleeding_Crown_Ghoul`, `Ashen_Oracle`):
- *    Copies `tUv` directly onto `rGeo` in `0.01ms` and simplifies `rGeo`.
- *  - Path 2 (Native `SkinnedMesh` with its own UVs or untextured Mixamo rig):
- *    Simplifies `rGeo` directly and ensures clean UVs while keeping 100% of `rGeo`'s factory-authored
- *    `position`, `skinIndex`, and `skinWeight` untouched!
+ * Pairs a Mixamo-rigged `SkinnedMesh` (`*_generate.fbx`) with its UV texture mesh (`*_texture.fbx`)
+ * using a fine 56×56×56 decimation grid:
+ *  - Path 1 (Exact 1:1 Vertex Match — Rudra `Ashen_Warborn`, `Bleeding_Crown_Ghoul`, `Ashen_Oracle`):
+ *    Copies `tUv` directly onto `rGeo` and simplifies with a 56×56×56 grid.
+ *  - Path 2 (Separate `*_texture.fbx` mesh — Ironmaw Heavy Brute):
+ *    Simplifies `tGeo` with a 56×56×56 grid (preserving 100% of its native UV islands), normalizes
+ *    coordinate scale if needed, and transfers `skinIndex` & `skinWeight` from `rGeo` via 3D BFS grid.
+ *  - Path 3 (Native `SkinnedMesh` with its own UVs — Dundubhi & Vrikodara):
+ *    Simplifies `rGeo` with a 56×56×56 grid while preserving native UVs and skinning untouched.
  */
 export function bindTexturedGeometryToSkeleton(
   riggedRoot: THREE.Group,
@@ -554,7 +427,7 @@ export function bindTexturedGeometryToSkeleton(
     }
   });
 
-  const simpGrid = IS_SOFTWARE_WEBGL ? 18 : 30;
+  const simpGrid = 56;
   const simpMin = 32000;
 
   if (!riggedSkinned) {
@@ -563,7 +436,6 @@ export function bindTexturedGeometryToSkeleton(
         const m = child as THREE.Mesh;
         m.frustumCulled = false;
         m.geometry = simplifyBufferGeometry(m.geometry, simpGrid, simpMin);
-        ensureCleanPlanarUvs(m.geometry);
         m.material = material;
       }
     });
@@ -586,16 +458,26 @@ export function bindTexturedGeometryToSkeleton(
       const tGeo = (texMesh as THREE.Mesh).geometry;
       const tPos = tGeo.attributes.position;
       const tUv = tGeo.attributes.uv;
-      // PATH 1: Exact 1:1 vertex count match — direct UV attribute copy onto native SkinnedMesh!
-      if (tPos && tUv && rPos.count === tPos.count) {
-        rGeo.setAttribute('uv', tUv);
+      if (tPos && tUv) {
+        if (rPos.count === tPos.count) {
+          // PATH 1: Exact 1:1 vertex count match — direct UV attribute copy onto native SkinnedMesh!
+          rGeo.setAttribute('uv', tUv);
+          rMesh.geometry = simplifyBufferGeometry(rGeo, simpGrid, simpMin);
+          rMesh.material = material;
+          return;
+        } else if (rGeo.attributes.skinIndex && rGeo.attributes.skinWeight) {
+          // PATH 2: Bind the simplified *_texture.fbx mesh (keeping 100% of its native UV islands)
+          const simpTexGeo = simplifyBufferGeometry(tGeo, simpGrid, simpMin);
+          rMesh.geometry = transferSkinWeightsViaSpatialGrid(rGeo, simpTexGeo);
+          rMesh.material = material;
+          return;
+        }
       }
     }
   }
 
-  const simplifiedRigGeo = simplifyBufferGeometry(rGeo, simpGrid, simpMin);
-  ensureCleanPlanarUvs(simplifiedRigGeo);
-  rMesh.geometry = simplifiedRigGeo;
+  // PATH 3: Native SkinnedMesh with its own embedded UVs (Dundubhi & Vrikodara)
+  rMesh.geometry = simplifyBufferGeometry(rGeo, simpGrid, simpMin);
   rMesh.material = material;
 }
 
@@ -624,15 +506,15 @@ export class Enemy3DRenderer {
     this.camera.position.set(0, 2.1, 4.4);
     this.camera.lookAt(0, 0.82, 0);
 
-    // Neutral, color-true studio lighting so 3D diffuse textures match the user's original models 1:1
-    const ambient = new THREE.AmbientLight(0xffffff, 2.35);
+    // Bright, color-true neutral sRGB studio lighting so 3D diffuse textures match the uploaded .png files 1:1
+    const ambient = new THREE.AmbientLight(0xffffff, 2.45);
     this.scene.add(ambient);
 
-    const keyLight = new THREE.DirectionalLight(0xfffaf2, 1.45);
+    const keyLight = new THREE.DirectionalLight(0xfffaf2, 1.55);
     keyLight.position.set(3.2, 5.5, 4.0);
     this.scene.add(keyLight);
 
-    const fillLight = new THREE.DirectionalLight(0xf1f5f9, 0.65);
+    const fillLight = new THREE.DirectionalLight(0xf1f5f9, 0.75);
     fillLight.position.set(-3.5, 2.5, 2.0);
     this.scene.add(fillLight);
 
@@ -684,15 +566,15 @@ export class Enemy3DRenderer {
                 tex.colorSpace = THREE.SRGBColorSpace;
                 tex.needsUpdate = true;
                 const wepMat = new THREE.MeshStandardMaterial({
-                  color: kind === 'minotaur_axe' ? 0xd99b52 : 0xffffff,
+                  color: kind === 'minotaur_axe' ? 0xe0a85c : 0xffffff,
                   map: tex,
-                  roughness: 0.55,
-                  metalness: 0.45,
+                  roughness: 0.72,
+                  metalness: 0.22,
                 });
                 group.traverse((c) => {
                   if ((c as THREE.Mesh).isMesh) {
                     const wm = c as THREE.Mesh;
-                    wm.geometry = simplifyBufferGeometry(wm.geometry, 24, 32000);
+                    wm.geometry = simplifyBufferGeometry(wm.geometry, 56, 32000);
                     wm.material = wepMat;
                     wm.frustumCulled = false;
                   }
@@ -729,22 +611,6 @@ export class Enemy3DRenderer {
       return matched;
     };
 
-    if (slot.weaponKind === 'war_bow') {
-      const leftHand = findBone(['mixamorigLeftHand', 'LeftHand']);
-      if (leftHand) {
-        const handScaleVec = new THREE.Vector3();
-        leftHand.getWorldScale(handScaleVec);
-        const handScale = Math.max(1e-5, handScaleVec.x);
-        const bowMesh = buildProceduralWarBowMesh();
-        const localScale = (0.82 * slot.scaleMultiplier) / (76 * handScale);
-        bowMesh.scale.setScalar(localScale);
-        bowMesh.position.set(0, 6 * localScale, 6 * localScale);
-        applyHadesCelShadingToHierarchy(bowMesh);
-        leftHand.add(bowMesh);
-      }
-      return;
-    }
-
     const rightHand = findBone(['mixamorigRightHand', 'RightHand']);
     if (!rightHand) return;
 
@@ -752,52 +618,36 @@ export class Enemy3DRenderer {
     rightHand.getWorldScale(handScaleVec);
     const handScale = Math.max(1e-5, handScaleVec.x);
 
-    if (slot.weaponKind === 'greatsword') {
-      const swordMesh = buildProceduralGreatSwordMesh();
-      const localScale = (0.96 * slot.scaleMultiplier) / (110 * handScale);
-      swordMesh.scale.setScalar(localScale);
-      swordMesh.position.set(16 * localScale, 0, 0);
-      applyHadesCelShadingToHierarchy(swordMesh);
-      rightHand.add(swordMesh);
-    } else if (slot.weaponKind === 'stone_club') {
-      const clubMesh = buildProceduralStoneClubMesh();
-      const localScale = (0.90 * slot.scaleMultiplier) / (85 * handScale);
-      clubMesh.scale.setScalar(localScale);
-      clubMesh.position.set(16 * localScale, 0, 0);
-      applyHadesCelShadingToHierarchy(clubMesh);
-      rightHand.add(clubMesh);
-    } else if (slot.weaponKind === 'minotaur_axe' || slot.weaponKind === 'trident_axe') {
-      this.getSharedWeaponTemplate(slot.weaponKind).then((template) => {
-        if (!template) return;
-        const clonedWep = template.clone(true);
-        const wepBox = new THREE.Box3().setFromObject(clonedWep);
-        const wepSize = new THREE.Vector3();
-        wepBox.getSize(wepSize);
-        const maxDim = Math.max(0.001, wepSize.x, wepSize.y, wepSize.z);
-        const desiredWorldLen = 0.98 * slot.scaleMultiplier;
-        const localWepScale = desiredWorldLen / (maxDim * handScale);
+    this.getSharedWeaponTemplate(slot.weaponKind).then((template) => {
+      if (!template) return;
+      const clonedWep = template.clone(true);
+      const wepBox = new THREE.Box3().setFromObject(clonedWep);
+      const wepSize = new THREE.Vector3();
+      wepBox.getSize(wepSize);
+      const maxDim = Math.max(0.001, wepSize.x, wepSize.y, wepSize.z);
+      const desiredWorldLen = 1.02 * slot.scaleMultiplier;
+      const localWepScale = desiredWorldLen / (maxDim * handScale);
 
-        const weaponSocket = new THREE.Group();
-        clonedWep.scale.setScalar(localWepScale);
-        if (slot.weaponKind === 'minotaur_axe') {
-          // Minotaur_War_Axe blade is already along +X (thumb-up/forward axis of RightHand)
-          clonedWep.rotation.set(0, 0, 0);
-        } else {
-          // Bloodforged_Trident_Axe blade is along +Y of group -> rotate onto +X of RightHand
-          clonedWep.rotation.set(-Math.PI * 0.5, 0, -Math.PI * 0.5);
+      const weaponSocket = new THREE.Group();
+      clonedWep.scale.setScalar(localWepScale);
+      if (slot.weaponKind === 'minotaur_axe') {
+        // Minotaur_War_Axe blade is already along +X (thumb-up/forward axis of RightHand)
+        clonedWep.rotation.set(0, 0, 0);
+      } else {
+        // Bloodforged_Trident_Axe blade is along +Y of group -> rotate onto +X of RightHand
+        clonedWep.rotation.set(-Math.PI * 0.5, 0, -Math.PI * 0.5);
+      }
+      clonedWep.position.set(0.26 * maxDim * localWepScale, 0, 0);
+      weaponSocket.add(clonedWep);
+      applyHadesCelShadingToHierarchy(weaponSocket);
+      rightHand.add(weaponSocket);
+      const prefix = `${slot.key}:`;
+      for (const cacheKey of Array.from(this.atlasFrameCache.keys())) {
+        if (cacheKey.startsWith(prefix)) {
+          this.atlasFrameCache.delete(cacheKey);
         }
-        clonedWep.position.set(0.26 * maxDim * localWepScale, 0, 0);
-        weaponSocket.add(clonedWep);
-        applyHadesCelShadingToHierarchy(weaponSocket);
-        rightHand.add(weaponSocket);
-        const prefix = `${slot.key}:`;
-        for (const cacheKey of Array.from(this.atlasFrameCache.keys())) {
-          if (cacheKey.startsWith(prefix)) {
-            this.atlasFrameCache.delete(cacheKey);
-          }
-        }
-      });
-    }
+      }
+    });
   }
 
   private ensureSlotLoaded(slotKey: string): void {
@@ -827,13 +677,10 @@ export class Enemy3DRenderer {
         );
       });
 
-    const loadFbx = (url: string, cacheableAnim = false): Promise<THREE.Group | null> => {
+    const loadRawFbx = (url: string, cacheableAnim = false): Promise<THREE.Group | null> => {
       if (!url) return Promise.resolve(null);
       if (cacheableAnim && sharedAnimFbxCache.has(url)) {
         return sharedAnimFbxCache.get(url)!;
-      }
-      if (!cacheableAnim) {
-        return loadFbxCached(url).catch(() => null);
       }
       const p = new Promise<THREE.Group | null>((resolve) => {
         fbxLoader.load(
@@ -849,13 +696,13 @@ export class Enemy3DRenderer {
       return p;
     };
 
-    // STAGE 1: Load character rig, diffuse texture, idle & chase clips first so enemy renders in ~250ms
+    // STAGE 1: Load character rig, 1:1 texture FBX, diffuse PNG, and idle & chase clips first
     Promise.all([
-      loadFbx(slot.generateFbxUrl),
-      slot.textureFbxUrl ? loadFbx(slot.textureFbxUrl) : Promise.resolve(null),
+      loadRawFbx(slot.generateFbxUrl),
+      slot.textureFbxUrl ? loadRawFbx(slot.textureFbxUrl) : Promise.resolve(null),
       loadTex(slot.diffuseUrl),
-      loadFbx(slot.animUrls.idle, true),
-      loadFbx(slot.animUrls.chase, true),
+      loadRawFbx(slot.animUrls.idle, true),
+      loadRawFbx(slot.animUrls.chase, true),
     ]).then(([riggedGroup, texturedGroup, diffuseMap, idleAnimGroup, chaseAnimGroup]) => {
       const baseGroup = riggedGroup || texturedGroup;
       if (!baseGroup) return;
@@ -865,8 +712,8 @@ export class Enemy3DRenderer {
       const pbrMat = new THREE.MeshStandardMaterial({
         color: 0xffffff,
         map: diffuseMap || null,
-        roughness: 0.88,
-        metalness: 0.06,
+        roughness: 0.86,
+        metalness: 0.08,
       });
 
       if (riggedGroup) {
@@ -884,7 +731,7 @@ export class Enemy3DRenderer {
       // Compute raw height from bind box BEFORE attaching weapon so weapon bounds do not shrink character
       const rawBox = new THREE.Box3().setFromObject(baseGroup);
       const rawHeight = Math.max(0.001, rawBox.max.y - rawBox.min.y);
-      const targetHeight = 1.52 * slot.scaleMultiplier;
+      const targetHeight = 1.54 * slot.scaleMultiplier;
       const scale = targetHeight / rawHeight;
       baseGroup.scale.setScalar(scale);
       baseGroup.position.set(0, -0.06, 0);
@@ -928,10 +775,10 @@ export class Enemy3DRenderer {
 
       // STAGE 2: Stream windup, attack, hurt, and death clips in the background and refresh cache
       Promise.all([
-        loadFbx(slot.animUrls.windup, true),
-        loadFbx(slot.animUrls.attack, true),
-        loadFbx(slot.animUrls.hurt, true),
-        loadFbx(slot.animUrls.death, true),
+        loadRawFbx(slot.animUrls.windup, true),
+        loadRawFbx(slot.animUrls.attack, true),
+        loadRawFbx(slot.animUrls.hurt, true),
+        loadRawFbx(slot.animUrls.death, true),
       ]).then(([windupAnimGroup, attackAnimGroup, hurtAnimGroup, deathAnimGroup]) => {
         registerClip('windup', windupAnimGroup);
         registerClip('attack', attackAnimGroup);
@@ -1044,7 +891,7 @@ export class Enemy3DRenderer {
 
     this.renderer.render(this.scene, this.camera);
 
-    const outlineHex = hitFlash ? '#ffffff' : isElite ? '#ffd166' : '#120907';
+    const outlineHex = hitFlash ? '#ffffff' : isElite ? '#ffd166' : '#120806';
 
     const bakedCanvas = bake2DSpriteFrameFromCanvas(this.renderer.domElement, cacheKey, {
       outlineColor: outlineHex,

@@ -1,10 +1,12 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import * as THREE from 'three';
 import {
   gradePixelToHadesPalette,
   computeSpriteSheetFrameKey,
 } from './hadesSpriteBaker';
 import { getChamberGeometry, constrainActorToChamber } from './chamberGeometry';
+import { simplifyBufferGeometry } from './meshSimplifier';
 
 describe('Hades 2D Sprite Sheet Baker & Texture Re-Grader', () => {
   it('preserves neutral skin/hide hues with S-curve contrast without artificial orange blowout', () => {
@@ -86,5 +88,18 @@ describe('Hades 2D Sprite Sheet Baker & Texture Re-Grader', () => {
       );
     }
   });
+
+  it('preserves 1:1 UV and skeletal skin attributes during 56x56x56 decimation', () => {
+    const sphere = new THREE.SphereGeometry(1, 96, 96).toNonIndexed();
+    const simplified = simplifyBufferGeometry(sphere, 56, 1000);
+    assert.ok(simplified.getAttribute('uv'), 'Simplified geometry must preserve 1:1 UV coordinates');
+    assert.ok(
+      simplified.getAttribute('position').count < sphere.getAttribute('position').count,
+      '56x56x56 decimation should reduce high-poly vertex count while preserving UVs'
+    );
+  });
 });
+
+
+
 

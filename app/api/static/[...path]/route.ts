@@ -4,6 +4,7 @@ import fs from 'fs';
 import crypto from 'crypto';
 
 const GITHUB_RAW_BASE = 'https://raw.githubusercontent.com/akshat92008/kaalyuga/main';
+const LOCAL_REPO_DIR = '/tmp/kaalyuga';
 const DISK_CACHE_DIR = '/tmp/kaliyuga_static_cache';
 
 try {
@@ -86,6 +87,41 @@ async function fetchFromGitHub(segments: string[]): Promise<Buffer | null> {
     return memoryCache.get(cacheKey)!;
   }
   try {
+    const roots = [LOCAL_REPO_DIR, '/tmp/kaalyuga_repo', process.cwd()];
+    const relVariants: string[][] = [repoRel];
+    if (decoded[0] !== 'new_3d_assets') {
+      relVariants.push(decoded);
+    }
+    const lastSeg = repoRel[repoRel.length - 1];
+    if (lastSeg) {
+      if (lastSeg.includes('...') || lastSeg.includes('…')) {
+        const altLast = lastSeg.includes('...')
+          ? lastSeg.replace(/\.\.\./g, '…')
+          : lastSeg.replace(/…/g, '...');
+        relVariants.push([...repoRel.slice(0, -1), altLast]);
+      }
+      if (lastSeg.includes('enviro_')) {
+        relVariants.push([
+          ...repoRel.slice(0, -1),
+          lastSeg.replace('enviro_', 'enviro…_'),
+        ]);
+      }
+    }
+    for (const rootDir of roots) {
+      for (const relParts of relVariants) {
+        const localPath = path.join(rootDir, ...relParts);
+        if (fs.existsSync(localPath) && fs.statSync(localPath).isFile()) {
+          const localBuf = fs.readFileSync(localPath);
+          if (localBuf.byteLength > 0) {
+            if (localBuf.byteLength <= 45 * 1024 * 1024) {
+              memoryCache.set(cacheKey, localBuf);
+            }
+            return localBuf;
+          }
+        }
+      }
+    }
+
     const diskPath = getDiskCachePath(cacheKey);
     if (fs.existsSync(diskPath)) {
       const diskBuf = fs.readFileSync(diskPath);

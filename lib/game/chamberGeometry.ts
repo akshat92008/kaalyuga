@@ -481,22 +481,8 @@ export function renderIsometricChamberPlatform(
       lastBlittedVideoUrl = resolvedVideoUrl || null;
     }
     ctx.drawImage(offscreenVideoCanvas || activeVideo, 0, 0, worldW, worldH);
-    if (floorTint) {
-      ctx.save();
-      ctx.globalAlpha = 0.08;
-      ctx.fillStyle = floorTint;
-      ctx.fillRect(0, 0, worldW, worldH);
-      ctx.restore();
-    }
   } else if (bgImg && bgImg.complete && bgImg.naturalWidth > 0) {
     ctx.drawImage(bgImg, 0, 0, worldW, worldH);
-    if (floorTint) {
-      ctx.save();
-      ctx.globalAlpha = 0.12;
-      ctx.fillStyle = floorTint;
-      ctx.fillRect(0, 0, worldW, worldH);
-      ctx.restore();
-    }
   } else {
     // Instant Painted-Style Vedic Stone Sanctuary Floor Fallback while high-res PNG finishes streaming
     const floorGrad = ctx.createRadialGradient(
@@ -530,6 +516,54 @@ export function renderIsometricChamberPlatform(
     ctx.stroke();
     ctx.restore();
   }
+
+  // 1.5. Kurukshetra Blood-Eclipse Grade: Hades-level value hierarchy (Dark Floors 30-42% -> Bright Characters 75-90% -> Luminous VFX 100%)
+  ctx.save();
+  // Warm obsidian-amber dusk multiply pass that tames overly bright cream/sandstone floors (especially Chamber 1)
+  ctx.globalCompositeOperation = 'multiply';
+  const isBrightSandstoneChamber = chamberIndex === 0 || chamberIndex === 2;
+  const eclipseTone = ctx.createRadialGradient(
+    worldW * 0.5,
+    worldH * 0.56,
+    worldW * 0.08,
+    worldW * 0.5,
+    worldH * 0.54,
+    worldW * 0.66
+  );
+  if (isBrightSandstoneChamber) {
+    eclipseTone.addColorStop(0, 'rgba(138, 102, 78, 0.92)');
+    eclipseTone.addColorStop(0.55, 'rgba(98, 66, 52, 0.95)');
+    eclipseTone.addColorStop(1, 'rgba(42, 22, 20, 0.98)');
+  } else {
+    eclipseTone.addColorStop(0, 'rgba(176, 142, 118, 0.92)');
+    eclipseTone.addColorStop(0.6, 'rgba(128, 92, 76, 0.95)');
+    eclipseTone.addColorStop(1, 'rgba(56, 30, 28, 0.98)');
+  }
+  ctx.fillStyle = eclipseTone;
+  ctx.fillRect(0, 0, worldW, worldH);
+
+  // Subtle atmospheric obsidian-crimson perimeter vignette + top canopy shadow for crisp HUD & character contrast
+  ctx.globalCompositeOperation = 'source-over';
+  const vignette = ctx.createRadialGradient(
+    worldW * 0.5,
+    worldH * 0.56,
+    worldW * 0.24,
+    worldW * 0.5,
+    worldH * 0.54,
+    worldW * 0.68
+  );
+  vignette.addColorStop(0, isBrightSandstoneChamber ? 'rgba(18, 8, 10, 0.18)' : 'rgba(14, 6, 8, 0.10)');
+  vignette.addColorStop(0.68, 'rgba(14, 6, 8, 0.34)');
+  vignette.addColorStop(1, 'rgba(8, 3, 5, 0.66)');
+  ctx.fillStyle = vignette;
+  ctx.fillRect(0, 0, worldW, worldH);
+
+  if (floorTint) {
+    ctx.globalAlpha = 0.14;
+    ctx.fillStyle = floorTint;
+    ctx.fillRect(0, 0, worldW, worldH);
+  }
+  ctx.restore();
 
   // 2. Surface decals, craters, and ambient brazier floor pools
   renderSurfaceDetailsCallback();
