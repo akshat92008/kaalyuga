@@ -136,27 +136,32 @@ export function regradeTextureToHadesPalette(
 }
 
 /**
- * Quantizes continuous animation time and 360° yaw into responsive Hades 2D sprite-sheet steps
- * (30 FPS for locomotion, 60 FPS for strikes, and 36 isometric directions for silky-smooth turns).
+ * Quantizes continuous animation time and 360° yaw into bounded cyclic Hades 2D sprite-sheet steps
+ * so every character animation loop hits the GPU-baked frame cache after 1 cycle with zero stutter.
  */
 export function computeSpriteSheetFrameKey(params: {
   id: string;
   animName: string;
   animTime: number;
+  clipDuration?: number;
   yawRad: number;
   isAttacking: boolean;
   isHurt: boolean;
   isParrying: boolean;
   phase?: number;
+  yawDirections?: number;
+  stepsPerClip?: number;
 }): {
   frameKey: string;
   quantizedYaw: number;
   quantizedTimeStep: number;
 } {
-  const fps = params.isAttacking ? 60 : 30;
-  const quantizedTimeStep = Math.floor(Math.max(0, params.animTime) * fps);
+  const dur = Math.max(0.2, params.clipDuration ?? 1.0);
+  const steps = Math.max(6, params.stepsPerClip ?? (params.isAttacking ? 16 : 14));
+  const normPhase = ((Math.max(0, params.animTime) % dur) / dur);
+  const quantizedTimeStep = Math.min(steps - 1, Math.floor(normPhase * steps));
 
-  const dirSteps = 36;
+  const dirSteps = Math.max(8, params.yawDirections ?? 16);
   const twoPi = Math.PI * 2;
   const normYaw = ((params.yawRad % twoPi) + twoPi) % twoPi;
   const yawIdx = Math.round((normYaw / twoPi) * dirSteps) % dirSteps;
@@ -485,10 +490,6 @@ export function bake2DSpriteFrameFromCanvas(
       [thickness, 0],
       [0, -thickness],
       [0, thickness],
-      [-thickness * 0.7, -thickness * 0.7],
-      [thickness * 0.7, -thickness * 0.7],
-      [-thickness * 0.7, thickness * 0.7],
-      [thickness * 0.7, thickness * 0.7],
     ];
     for (let i = 0; i < offsets.length; i++) {
       ctx.drawImage(silhouetteCanvas, offsets[i][0], offsets[i][1], w, h);

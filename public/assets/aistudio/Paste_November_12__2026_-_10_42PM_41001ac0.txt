@@ -1,0 +1,1768 @@
+# Hades: Complete Game Development Research
+
+Supergiant Games · Development, game design, combat, level design, art direction, animation, progression, narrative, audio and production
+
+["Hades" Breathes New Life Into Death • The Daily Fandom](https://images.openai.com/static-rsc-4/0l1E5V_lOGNKZqtGH8_Zf2VPnm0UV5qPfjPfLauZ4ifEvdPJm9aUpgymRayP885Fhcqt0Qo6edYLZjjwyEeJ-u1Iv3nh_ekk1LAJqPRpW3OGjKqtHyiZegkdSXkiXRecQs4Rb7z7EL3SVgl0pBEPsDny0bgqotBdHQ-PrYk9_KY?purpose=inline)
+
+[Hades: Elizjum - GRYOnline.pl](https://images.openai.com/static-rsc-4/67vsJsPAvqyLu5EVuCnpP0RK1pw65jniLmt05u6OQR1an_Bs9e6QbNoMvbH3dWSlHSmgf-wnfIQR3iS19X2ZQELgds5vdv_f7Pg75EkgrcHmoHqTTPIsE9f2OOaVG_WJh2sO4Tv8LSGn9hK75UvpJ9pXaMj9O2lnG7zJQwYVNOk?purpose=inline)
+
+[《哈迪斯》评测：失败和胜利同样有趣 - GameRes游资网](https://images.openai.com/static-rsc-4/nPPIVUZXeMBIp2lhEZOjFnqWosp7DfaDvA5vx24dAeU7nddSP3opcNY8yj3kET65rfI2FCEu6peo3wDiCkj-ZXABXAJ-JT_uUQ6GC-9EeJzBgKPrd5JOaAKJipAl5ZDP1MWaAPk6xR5L6DVs3EK8bhMzL-z5aZjPBhNYlnW4V4A?purpose=inline)
+
+10
+
+The objective of this research is to understand how Hades was actually constructed, not simply what features it contains.
+
+I want to examine it from two perspectives:
+
+1. Game design and development: How Supergiant designed, programmed, animated, balanced and produced Hades.
+2. Practical implementation: What made its combat feel so good, how its systems work together, and what development techniques can be adapted to Kaliyuga: The Bleeding Crown.
+
+An important distinction: Hades isn't successful simply because it is a roguelike with excellent combat. Its strength comes from how its individual systems reinforce each other. Combat, progression, room design, narrative, animation, sound, visual effects and replayability form one interconnected experience.
+
+## 1. How Hades was developed
+
+[Supergiant Games' Designer Explains Hades' Level Design](https://images.openai.com/static-rsc-4/HPRyFUIGDr2o51LJrV_-aOvieYt3H76vSySJ0EkQoFNH1A174TttUuofVzStPeQhKJzB8pU8yxTuDerq_0OjVDjpP0skB2f2iFHlPXt_Y_N8Zk4uC57zK1STqq5MltRKAZhX0QUGsFl8NncEQc2EVoENcJZ-rLZJdlnOWlLz9sA?purpose=inline)
+
+[Hades - Noclip's 'Developing Hell': The Making of Hades Blu-ray - Fangamer Europe](https://images.openai.com/static-rsc-4/f0nH3oL01omSQI0Wv-Q1nEWcoJdxPIKipyADW7Jlm9m1eamHRy9wl_rfPWj_LdQh3yMKd8Zqi5WUCDMZXexe4voGrxfRx3omjDwG31LNkqBFAxgoqoIJOw_OcByydtCjjjLh8-L2ALndfs1Hf5bY4c1mYZN_2GuSLNIpw9vYgYg?purpose=inline)
+
+[Zagreus Concept Art - Hades Art Gallery](https://images.openai.com/static-rsc-4/2gOgh5ptrzZOPTtYXmEMRihg21mBQR7EUh9gASbG7sgPkvePoWGqdvlf-uI55FB6m_84qxxgATzq4YN20PehtbHNFmmlvOIltGgCDNBuYsN2TBP8MGPsJmjhTcPy8tq6ZoX4C0Gz1rvIUvlKd0AX0Io9zIkLKtgKDY2nCARncvg?purpose=inline)
+
+10
+
+### Development timeline
+
+| Period             | Development                                               |
+| ------------------ | --------------------------------------------------------- |
+| July 2017          | Pyre released                                             |
+| Late 2017          | Hades concept and pre-production                          |
+| December 2018      | Early Access launch                                       |
+| 2019–2020          | Major gameplay, content, narrative and visual development |
+| September 17, 2020 | Hades 1.0 release                                         |
+
+Supergiant spent a little over three years reaching version 1.0, with development continuing for subsequent platform releases.
+
+One particularly important decision was that Early Access wasn't an afterthought. The game was designed from the beginning to evolve through player feedback. That influenced its modular structure, narrative delivery and development schedule.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://www.supergiantgames.com\&sz=32)
+
+Supergiant Games+2
+
+
+
+### The development philosophy
+
+Supergiant had previously developed:
+
+- Bastion
+- Transistor
+- Pyre
+
+Hades combined and evolved ideas from these earlier games rather than treating every previous design decision as something that had to be discarded.
+
+For example:
+
+- Bastion contributed ideas around an evolving central world.
+- Transistor contributed ideas around abilities and build customization.
+- Pyre contributed dialogue choices, character relationships and narrative systems.
+
+Hades brought these ideas into a replayable action game.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://www.gamespot.com\&sz=32)
+
+GameSpot+1
+
+
+
+The major lesson: Supergiant didn't build every system in isolation. It reused proven design knowledge and adapted it to a new gameplay structure.
+
+### Team and production
+
+Supergiant was a relatively small studio. Its original seven team members remained involved, with the team expanding as development progressed.
+
+Some important responsibilities:
+
+| Person       | Responsibility                                           |
+| ------------ | -------------------------------------------------------- |
+| Greg Kasavin | Creative direction, writing and design                   |
+| Amir Rao     | Studio direction                                         |
+| Jen Zee      | Art direction and character/environment art              |
+| Darren Korb  | Audio direction, music, sound design and voice direction |
+| Josh Barnett | Visual effects, UI and animation                         |
+
+The team also brought in additional artists, animators and contractors.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://www.sfchronicle.com\&sz=32)
+
+San Francisco Chronicle+2
+
+
+
+## 2. The fundamental game design philosophy
+
+This is arguably the most important part of Hades.
+
+Greg Kasavin described three central design goals:
+
+1. Immediate, responsive action.
+2. Depth through interconnected systems and surprising combinations.
+3. A character-driven story without a conventional game-over state.
+
+These weren't separate features. They were the foundation of the entire game.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://blog.playstation.com\&sz=32)
+
+PlayStation.Blog+1
+
+
+
+### 2.1 Immediate gameplay
+
+Hades doesn't make the player spend 20 minutes learning complicated systems before enjoying combat.
+
+The player can:
+
+- Move immediately.
+- Attack immediately.
+- Dash through enemies.
+- Use a special attack.
+- Pick up upgrades that change how these actions work.
+
+The basic controls are simple, but their interactions become increasingly complicated.
+
+This is an important distinction:
+
+Simple controls do not mean simple combat.
+
+### 2.2 Interconnected systems
+
+Supergiant wanted the game to generate interesting combinations rather than rely on individually powerful abilities.
+
+For example:
+
+- A weapon has its own attack and special.
+- A god modifies one of those abilities.
+- Another boon introduces a status effect.
+- A third boon modifies that status effect.
+- A Daedalus Hammer changes the weapon's fundamental behaviour.
+
+These systems can create builds that feel substantially different despite using the same underlying weapon.
+
+### 2.3 Every run counts
+
+This was one of the team's most important principles.
+
+Greg Kasavin explicitly described the design philosophy as "every run counts."
+
+Death doesn't erase everything. It advances the narrative, gives the player resources and creates opportunities to become stronger.
+
+Supergiant deliberately designed the moments after death to be interesting, including the characters who welcome Zagreus back.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://www.tomsguide.com\&sz=32)
+
+Tom's Guide+1
+
+
+
+This philosophy is particularly important for understanding why Hades feels different from many other roguelikes.
+
+# 3. Combat system — the heart of Hades
+
+[Hades: Stygian Blade - gamepressure.com](https://images.openai.com/static-rsc-4/P-oQglkJn63_2lnRCtx7-Ov1WL0BzNUMskLqkXctQ2eASbhIYSyibtVZTACHX17xN104p-6oWaIk6a4heAtgII9G9laFCsf07HFNCRJRcHDxB4Idi3FLapEj_JHwa_6Gc_JVq-3sQoYlX72x49C30aylYen5PWecqwENq7qEXSo?purpose=inline)
+
+[Hades: Twin Fists - gamepressure.com](https://images.openai.com/static-rsc-4/1YIOO1hURtrPcOxP4DpEwRGGMy3U3nswZQLX5obvFeBKbqtbpVp7GzASP-HZ2yeyTr5UgiZaL-g4HjADffo0L486KXZlqI7GcsRxp4jD3af9o5HcMubV9mo-UVQHp31vFZi-A4bobAbqSzqw_b1BpjgvO7HejDdo1mZpDkGoapo?purpose=inline)
+
+[Hades: Adamant Rail - gamepressure.com](https://images.openai.com/static-rsc-4/Noam-I7_90xBDbBEmYC-cHmGt4yikzEq_0e96N-MnP14oWl0G41q325UV-4A6spho09PelHvLoYpIJKtBgqV_LpbEx0ezyY3tKrwk_XQm6qgxOkKjFqxRyiqNdtQ45vk__8LNmqkMDhqZMY-6uJeKplDnYQO3M2Op0-SPBPGhzI?purpose=inline)
+
+9
+
+Hades is fundamentally an action game. Its progression systems are important, but if the combat isn't enjoyable, the entire experience falls apart.
+
+The combat system has several interconnected layers.
+
+## 3.1 The five fundamental combat actions
+
+Almost the entire combat system is built around five primary actions.
+
+[Combat | Hades Wiki](https://images.openai.com/static-rsc-4/fSmVlssjQMjVQJNMmZwopeYW3sA5g_lcz5NCoRgih_Awn1IQlKf-Zj7dfppddawG5a5Xp_rEb1sszj4vEuG3LYrylYsitB0d4ExSHzW3TSy8e7-b20mNlfzf0E7MKpybL0HkGO7p_Kf0_smjWRhKkw7FE9oPZN88KMdb7qNsb4I?purpose=inline)
+
+1\. Attack
+
+Your weapon's primary offensive action. Determines the basic combat rhythm and damage pattern.
+
+[Hades: Eternal Spear - gamepressure.com](https://images.openai.com/static-rsc-4/0IoDruvz4Y5AxxMg2mkg7pYZUwxQVRmy7GjDsbihGWJK1ZNmn0eTfBjxvCTQYfM9B0c2uLbbnta25W40iPPGbp5bK6LPp0evRos5hItQc_XZ1l1ruvRd6G3l74zHY0p2hYMAkIz4ZIDc755YJW0uMuP6DNOzLh87dttdyEKyl7s?purpose=inline)
+
+2\. Special
+
+A secondary weapon ability. Depending on the weapon, it may be a projectile, area attack, shield throw or another attack pattern.
+
+[Hades review: A revolution in rogue-like design and storytelling - The Washington Post](https://images.openai.com/static-rsc-4/gpW79pZd-8xhqEejzy3jpgthjFe5nlyi2PW53R0xmkE_4IpLWhffqrejpix4IkanUHurK4DkXeCPY_eil2JuFjUZ_NZ84IfX98upi_NdpY5LauyDR4lsXPQGwN3V09iVlcquW228vwAYjO3FsyChPzTKIm8fE2SgIycJgKL2dB8?purpose=inline)
+
+3\. Cast
+
+A ranged or tactical ability that can deal damage, control enemies and interact with other boons.
+
+[Critique de Hades : chef d’oeuvre de l’action – Etoile et champignon](https://images.openai.com/static-rsc-4/fdrvcMgEwxCikT795Y9SwRBm6M7SJ5lyuhhBzO_giNuA0rsRsm-4LdMmh8cwjMHBmVGfKUWdb2DYIh7J0zPwjgpscybT-TEI4nxG5I6DXBUwK4NDvm2YzTsNWcH0jGTlePHAssunXPOkI3wtPwqQxEJ7dHss9AeGGxNy1y8e-cU?purpose=inline)
+
+4\. Dash
+
+An essential movement and defensive action. It can also become an offensive tool through dash-strike mechanics and boons.
+
+[《哈迪斯》评测：失败和胜利同样有趣 - GameRes游资网](https://images.openai.com/static-rsc-4/nPPIVUZXeMBIp2lhEZOjFnqWosp7DfaDvA5vx24dAeU7nddSP3opcNY8yj3kET65rfI2FCEu6peo3wDiCkj-ZXABXAJ-JT_uUQ6GC-9EeJzBgKPrd5JOaAKJipAl5ZDP1MWaAPk6xR5L6DVs3EK8bhMzL-z5aZjPBhNYlnW4V4A?purpose=inline)
+
+5\. Call
+
+A powerful god-granted ability charged during combat. It provides a high-impact offensive or defensive moment.
+
+The interesting thing is that these five actions also function as upgrade slots.
+
+A boon doesn't necessarily introduce an entirely new button. It can fundamentally transform something the player already knows how to use.
+
+This makes the combat system easier to understand while allowing enormous build variation.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://teemo.dev\&sz=32)
+
+Game Design Lab+1
+
+
+
+## 3.2 The six weapons
+
+Hades contains six primary weapons, called the Infernal Arms.
+
+[Hades: Stygian Blade - gamepressure.com](https://images.openai.com/static-rsc-4/P-oQglkJn63_2lnRCtx7-Ov1WL0BzNUMskLqkXctQ2eASbhIYSyibtVZTACHX17xN104p-6oWaIk6a4heAtgII9G9laFCsf07HFNCRJRcHDxB4Idi3FLapEj_JHwa_6Gc_JVq-3sQoYlX72x49C30aylYen5PWecqwENq7qEXSo?purpose=inline)
+
+1\. Stygian Blade
+
+Melee weapon.
+
+- Fast, close-range attacks.
+- Combo-based attack pattern.
+- Special provides an area attack.
+- Good baseline for understanding the combat system.
+
+[Hades: Heart-Seeking Bow - gamepressure.com](https://images.openai.com/static-rsc-4/9QcAk1HtD_-_ZieYLtz55sOsJf56uqtdY2ajTR6Sd8-wNUwGMVQENkIOLULGiOMiN_dRKW6pfwwQNqg3G6U8R-N_HPSFSQ4E3K4AjjmBhVzVoVI0uKvZR0K2oDlw5HSU7jDsiJNYd49nlC7wg2_fmRfJjATMvti0IT9XbH6MHL8?purpose=inline)
+
+2\. Heart-Seeking Bow
+
+Ranged weapon.
+
+- Charged attacks.
+- Long-range precision.
+- Special fires multiple arrows.
+- Rewards positioning and timing.
+
+[Hades: Shield of Chaos - gamepressure.com](https://images.openai.com/static-rsc-4/f0HuvTBMIl2TJPnPtOx2x0FZ8MPhsBw4Yb7oLdlImF8X3pcKQspd0OG7uVWO6b68LL_c_A8-qZ-hqdISpXXQMAR8jEuKjRnEzHCE9qlLv7kHSIG5QvzmQcQl2vflVvy5y6uCpVjMX77edAYCIlIHZajX8CzJbaiLdqYetjq85q8?purpose=inline)
+
+3\. Shield of Chaos
+
+Defensive and offensive hybrid.
+
+- Blocks incoming attacks.
+- Bull Rush attack.
+- Shield can bounce between enemies.
+- Encourages defensive positioning and counterattacks.
+
+[Hades : Tout savoir sur Varatha, la Lance Éternelle et ses aspects - Millenium](https://images.openai.com/static-rsc-4/QCYgYgKuJP0WugtM0ffvbnDeCs7-iFHBsOeH-qvk3buS0UaE6qRxsK4bHYNFu6hNe9ILz4mb5gCHDiH3vFHUJBlij9SJpB9yYS5IFCy_EJZ0wiEL89th4eFBOd2AuA4kZkwF7x0GDmPehguVeipEnGzLPiE9YtREmyIBOcOdwZM?purpose=inline)
+
+4\. Eternal Spear
+
+Mid-range weapon.
+
+- Thrusting attacks.
+- Spin attack.
+- Special throws the spear.
+- Can attack from different distances.
+
+[Hades: Twin Fists - gamepressure.com](https://images.openai.com/static-rsc-4/1YIOO1hURtrPcOxP4DpEwRGGMy3U3nswZQLX5obvFeBKbqtbpVp7GzASP-HZ2yeyTr5UgiZaL-g4HjADffo0L486KXZlqI7GcsRxp4jD3af9o5HcMubV9mo-UVQHp31vFZi-A4bobAbqSzqw_b1BpjgvO7HejDdo1mZpDkGoapo?purpose=inline)
+
+5\. Twin Fists of Malphon
+
+Fast melee weapon.
+
+- Rapid punches.
+- Close-range aggression.
+- High attack frequency.
+- Excellent for builds based on repeated hits.
+
+[Hades: Adamant Rail - gamepressure.com](https://images.openai.com/static-rsc-4/Noam-I7_90xBDbBEmYC-cHmGt4yikzEq_0e96N-MnP14oWl0G41q325UV-4A6spho09PelHvLoYpIJKtBgqV_LpbEx0ezyY3tKrwk_XQm6qgxOkKjFqxRyiqNdtQ45vk__8LNmqkMDhqZMY-6uJeKplDnYQO3M2Op0-SPBPGhzI?purpose=inline)
+
+6\. Adamant Rail
+
+Ranged firearm.
+
+- Continuous projectile attacks.
+- Reload mechanic.
+- Explosive special.
+- Creates a very different combat rhythm.
+
+The weapons are not merely different damage values. Each one changes how the player approaches combat.
+
+A sword encourages close-range combinations. The bow rewards distance and timing. The shield introduces blocking. The fists encourage aggression.
+
+This is an excellent example of creating replayability through different combat behaviours rather than simply adding more enemies.
+
+## 3.3 Weapon Aspects
+
+Every weapon has four Aspects:
+
+- Zagreus
+- A weapon-specific mythological character
+- Another mythological character
+- A hidden Aspect
+
+These modify the weapon's behaviour, not just its appearance.
+
+For example, an Aspect might change attack speed, projectile behaviour, damage scaling or introduce a completely different mechanic.
+
+The player can therefore have multiple substantially different experiences with the same weapon.
+
+## 3.4 Daedalus Hammer
+
+[Społeczność Steam :: Poradnik :: Pro Tips To Escape The Underworld](https://images.openai.com/static-rsc-4/kexpsk9ovFrtqn64nIo3zyaN_PwL7iiKmEzTU6wDJg4uunbIZyVCjNz1nRtGbMV00hQrKdRgCU5Ias8i5Y5H2Qv98uSe4NPEo6FJgZAdDgY4VrA9pNnrps2x5Jlo74xvgOa6CCJboi82SCmYP8XHX5GfV49I2mTAwZuahiTlvwU?purpose=inline)
+
+[Hades: Daedalus Hammer Tipps](https://images.openai.com/static-rsc-4/lEsCkUygvt7fTsEDJWr11UCTU84KFx1CWyYtBCZBRHaSUs9cjWcyYB3roWARg_Lt-yZkNqwgjfKTw29Cu2Hccn5H5wxCwROqtMiChmJUxNmmdL5zTSdci34Adb3259Xj5H1xYcttuuC3TBwVBDP9WKwHi6IDTOvceDdkhoLDFWo?purpose=inline)
+
+[Hades: Adamant Rail - gamepressure.com](https://images.openai.com/static-rsc-4/dlqXEDhYE-nMokAEvzVzYB70bfOL5G2efk7VcC4w0bv4fgX6GrJbZKBoqykJlAhKVc8Y74isHDvcVt0n9DImrmnIr9kgwsp8CK1MLy9ri7o90grZS_6lrjSEbFvjqqW5Gc8nXZSG4E7TussuRgEQ58TAkecqBgkjThL2zZqlkSo?purpose=inline)
+
+6
+
+This is one of Hades' smartest systems.
+
+The Daedalus Hammer provides weapon-specific upgrades during a run.
+
+These aren't ordinary stat improvements. Some change the mechanics of the weapon.
+
+Examples include:
+
+- Changing the number of projectiles.
+- Increasing attack range.
+- Modifying attack combinations.
+- Changing the special attack.
+- Altering how a weapon deals damage.
+
+The important design decision is that Hammer upgrades are tied to the equipped weapon.
+
+This means that choosing a weapon also changes the pool of possible upgrades.
+
+The system creates another layer of randomness and build specialization without requiring the player to learn an entirely new combat interface.
+
+## 3.5 The importance of the dash
+
+[Hades - 로그라이크? 갓-라이크!](https://images.openai.com/static-rsc-4/kw1cUDaOQ6V-FdZlnvrlLVPREEVVJftt3gpI7sXtPHuKqWBkcpQjFDQHAMK5vMS84mupv1Ng0SOBWGNJaaHlgmer3ysxwoDcLXcQHYizvqSlqtiioZEIucAoGmu8yD0k9xK8XDwMUSvcXMjnsDq-jkskXRim23DvnVnnlVpI12w?purpose=inline)
+
+[thiepriest.tistory.com](https://thiepriest.tistory.com/184?utm_source=chatgpt.com)
+
+The dash deserves special attention.
+
+It is not simply a movement animation.
+
+It is a fundamental part of the combat language.
+
+It allows the player to:
+
+- Escape telegraphed attacks.
+- Reposition behind enemies.
+- Cross dangerous areas.
+- Maintain offensive pressure.
+- Combine movement and attack.
+- Activate dash-specific upgrades.
+
+Hades' dash also provides a brief defensive window, so its timing is important. However, it isn't an unlimited solution to every incoming attack.
+
+Why this matters: Good action combat doesn't separate movement from fighting. Movement itself becomes a combat decision.
+
+## 3.6 Combat feedback and responsiveness
+
+This is where Hades becomes particularly interesting from a development perspective.
+
+The player should understand what happened whenever an attack connects.
+
+Consider the following feedback layers:
+
+| Layer          | Purpose                                      |
+| -------------- | -------------------------------------------- |
+| Animation      | Shows the attack physically connecting       |
+| Hit reaction   | Communicates enemy impact                    |
+| VFX            | Makes the hit visually apparent              |
+| Screen shake   | Adds impact and weight                       |
+| Sound          | Communicates the type and strength of impact |
+| Damage numbers | Provide numerical confirmation               |
+| Enemy response | Makes the world react to the player's action |
+
+These layers need to work together.
+
+A powerful attack should feel powerful before the player even reads the damage number.
+
+But there is an important balance: too many effects can obscure the actual combat.
+
+Hades uses a highly stylized presentation, but the player must still distinguish their character, enemies, projectiles and attack indicators.
+
+## 3.7 Enemy attacks and combat readability
+
+The combat system works because enemies don't simply attack randomly.
+
+They have recognizable behaviours.
+
+An effective enemy encounter usually communicates:
+
+1. The enemy has noticed the player.
+2. The enemy is preparing an attack.
+3. The attack is about to happen.
+4. The attack has a defined area or direction.
+5. The player has an opportunity to respond.
+6. The enemy recovers or changes behaviour.
+
+This creates a readable combat loop.
+
+The player isn't merely reacting to damage. They're learning enemy patterns.
+
+My analysis: This is one of the most transferable principles from Hades. Enemy telegraphs, recovery windows and recognizable attack patterns are often more important than adding complex enemy AI.
+
+# 4. Boon system — how Hades creates build variety
+
+[『HADES（ハデス）』攻略ガイド。ゲーム序盤のおすすめ“功徳”や、重要アイテムの効果などを解説！ | ゲーム・エンタメ最新情報のファミ通.com](https://images.openai.com/static-rsc-4/QP51cIRDAHZmyufkHsPbU0nchs4Pz6Fm2l7-Lt_5_f__cUucI1WlSft72cicEmWLt_LAzJsklw0__FNNqCD5UBKUQafE-T08gTOa5yu54yvlvYbQMEvxWqL5o9FBge7sy-cq2mS_F0U_lYnmZWp5EeHArwI-19y8O7UIe3ds3qE?purpose=inline)
+
+[Hades on Xbox Series X is the game I needed in 2021 | Windows Central](https://images.openai.com/static-rsc-4/ndBvaw81i6_n4CPFLq6oJFmbJGaom3a0NDr6UvyKCKM7nVxN4a1dCDvZBIFFOGaXQh1nHgvikGwivN4o8NhpebzWrN4n6nnK7bqQDwo7uvWTmgPTDR3Y_UWJfGiOPyRWeO1aym26EMiSbTgaxevPl3dGObOi73agz_ROFaM5PRs?purpose=inline)
+
+[In the Name of Hades! I Accept This Message](https://images.openai.com/static-rsc-4/v6GIYN8ARUPrIQrUvB-V5sKJ7F2lOUFCpEeMhEX4gxUXA05eB3PKic3JYhkKHYOSvlkgLcLehtdGqe3sAiAuEP5bWVpUvCLgmuU7te7VKR_9NmUKlMylFctnJB3y7ArGTCSd-e-fkv86AzyGP6pKJ0_PjeR3XpUsf_dsWjpLm-k?purpose=inline)
+
+8
+
+The boon system is arguably the biggest reason Hades remains interesting across repeated runs.
+
+There are multiple Olympian gods, each with their own gameplay identity.
+
+| God       | General gameplay identity                     |
+| --------- | --------------------------------------------- |
+| Zeus      | Lightning and chain damage                    |
+| Poseidon  | Knockback and area control                    |
+| Athena    | Deflection and defensive capabilities         |
+| Ares      | Doom and damage-over-time effects             |
+| Aphrodite | Weakening enemies and powerful damage bonuses |
+| Artemis   | Critical damage                               |
+| Dionysus  | Hangover damage over time                     |
+| Demeter   | Chill and slowing                             |
+| Hermes    | Speed and mobility                            |
+
+### How the system works
+
+The player encounters a god and receives a selection of boons.
+
+Typically, the player chooses one of three offered upgrades.
+
+A boon can modify:
+
+- Attack
+- Special
+- Cast
+- Dash
+- Call
+
+It can also introduce passive effects or additional synergies.
+
+### The most important part: Synergies
+
+Imagine a hypothetical build:
+
+1. Zeus modifies the player's attack to produce lightning.
+2. A second boon improves lightning damage.
+3. Another upgrade increases the effectiveness of lightning against multiple enemies.
+4. The player combines this with a weapon that hits multiple enemies rapidly.
+
+The result is more interesting than simply adding 20% attack damage.
+
+The individual systems reinforce one another.
+
+### Duo Boons
+
+[Hades: 10 Best Duo Boons & Their Requirements – FandomSpot](https://images.openai.com/static-rsc-4/NvU84rg6CZL58s86ZBTWuwCzj0uDrofH3QEjsD-ENibUhQki7eXblyiApBbZxRFTpD_IZs4EhkC7ZIeyp0bWoIWWOgGpQmtdGH_y0_gzNZE5vpxmGsDGioAedzDJ5l0crSARtu88N4EjkqwYEXx1bwkrnf7T8RlTiBDq_DRg0xM?purpose=inline)
+
+[fandomspot.com](https://www.fandomspot.com/hades-best-duo-boons/?utm_source=chatgpt.com)
+
+Duo Boons are especially important.
+
+They combine the abilities of two different gods.
+
+These create special build combinations that encourage players to experiment with different Olympian combinations.
+
+The design lesson is that a strong build system should reward players for understanding relationships between upgrades, not simply collecting the highest numbers.
+
+### Rarity and upgrade levels
+
+Boons also have different rarities.
+
+A higher rarity generally provides a stronger effect.
+
+The player can additionally upgrade existing boons using Poms of Power.
+
+This produces an interesting decision:
+
+- Should I take a new ability?
+- Should I improve an existing ability?
+- Should I focus on a particular combination?
+
+The player is constantly making small build decisions.
+
+# 5. Level design and procedural room generation
+
+[EarlyGame | 15 Video Games With Near-Perfect Scores Everywhere](https://images.openai.com/static-rsc-4/nma8Ffq36NBYC5civgs0sdkZzvigdV0JE-Nm5J72YIVkYw7pHr78YzQXimM3CsYFxYxQZRU4zEWo9PQGJZtGDmVllBGb9mU0qXmW7K2Ja-R1gQMytmDcywp6gXqRcU0f05T5VvM77wAFQCLvn2WVPXOrR5zCSRC5XHajFXeDJCA?purpose=inline)
+
+[Hades: Asphodel - gamepressure.com](https://images.openai.com/static-rsc-4/p-3qaB1jdLHKv4hbdwkERFajg3LdgD2EZRDX6rIIZak-Ons28CZXCWFAYmG4f0N_rnMK71C1oVkmcTzKcNg-xm5dQV06x_o6ZuImraSh3zpxel5sUgnLDqnvKrMwC-R_H3G1kBXKw8B4NDdSR56ZCvEFv8_CN8zAdi2ZqXbQ7LM?purpose=inline)
+
+[Hades: Elysium - gamepressure.com](https://images.openai.com/static-rsc-4/iJi_ekf7sYsp-PieIyC9IH0ISwkS_nTTEOhzSzVDfJIs6Yd75K3hW4kVOKIosGcy_LVDHvZpzBLViyD1LZ0N2BIPDtf-AYwQS56T_Jboan8gPyYOdYAAmPTBynpixcNP3G25ZQlwNJ2rfZvIiKXX0lGZbPvxZ7tMgI1J3vDFHJk?purpose=inline)
+
+12
+
+Hades doesn't generate an entirely new world from scratch every time the player starts a run.
+
+Instead, it uses a structured collection of designed environments, chambers, encounters and rewards to produce variation.
+
+This distinction is important.
+
+## 5.1 The four main biomes
+
+[Hades: Tartarus - gamepressure.com](https://images.openai.com/static-rsc-4/WAdcE9QcLFc-5Wj0PwdVKWnToUibnNz5KQaEABc2YFdzuYvzsHEGvcYTASef-zjhbELo0v-O2cZE6QtnUeVTGoKlw0jRn2V93rhi1Qz3hv1hnw25UAyBx3inXkq6h-tDwlEJPpsCq8_eC7FKyIhmSkyHHGPG45Y1ydBL5nAy8E8?purpose=inline)
+
+Tartarus
+
+The opening biome.
+
+- Dark, enclosed chambers.
+- Introduces basic enemies.
+- Establishes the combat language.
+- Ends with a Fury boss encounter.
+
+[Hades: Keeping Players Invested – Frostilyte Writes](https://images.openai.com/static-rsc-4/DRf5f9xlVgI9Q2WEvcbP7p9vhbK0rGX4dX0wnjRxQkptkPxTSR7raA5YQKWl8GPDVrTgmeNo3k66Y8tR_AuZ2QhUmw_pYBOJtVXzJsKee8OJjSXYYVXf4gFSfJWCE-QbhM8zeXrDq6km_aws-QuNQeVzA32yIZrgsTkfXk7PRNk?purpose=inline)
+
+Asphodel
+
+A dangerous volcanic region.
+
+- Lava hazards.
+- More demanding enemy combinations.
+- Different environmental positioning.
+- Ends with the Bone Hydra.
+
+[Hades: Elysium - gamepressure.com](https://images.openai.com/static-rsc-4/iJi_ekf7sYsp-PieIyC9IH0ISwkS_nTTEOhzSzVDfJIs6Yd75K3hW4kVOKIosGcy_LVDHvZpzBLViyD1LZ0N2BIPDtf-AYwQS56T_Jboan8gPyYOdYAAmPTBynpixcNP3G25ZQlwNJ2rfZvIiKXX0lGZbPvxZ7tMgI1J3vDFHJk?purpose=inline)
+
+Elysium
+
+A visually distinctive battlefield.
+
+- Open, bright environments.
+- Armoured enemies.
+- More complicated encounters.
+- Ends with Theseus and Asterius.
+
+[Hades Temple Of Styx Guide: Unravelling the Toughest Floor Of The Underworld - Indie Game Culture](https://images.openai.com/static-rsc-4/fV4cBqOpgkNsdOgQNMB8XWOwUZ6GJc0FVw7IsEqCknVXH0BDfUzaffwiel8RQUbQIOp26IwW2nM6D3jC9ByWcur3TNM36om-yvQqt9VzyeGTu4kvcNduqXU-r4kEWCpijw_rpmJ3CyquzWGFEAttZ0m6xVq0ciZonLZvKTDM7tQ?purpose=inline)
+
+Temple of Styx
+
+The final major region.
+
+- Smaller interconnected chambers.
+- Poison hazards.
+- More dangerous enemy combinations.
+- Search for the Satyr Sack before the final encounter.
+
+Each biome has its own visual identity, enemies, environmental hazards, music and encounter structure.
+
+The player feels like they're travelling through different parts of the Underworld rather than repeatedly fighting in interchangeable rooms.
+
+## 5.2 How the chamber system works
+
+The fundamental structure is:
+
+Enter a chamber
+
+Room layout and encounter configuration
+
+Fight enemies
+
+Enemy waves, attacks and environmental hazards
+
+Complete the encounter
+
+Reward becomes available
+
+Choose your next chamber
+
+Select between available reward paths
+
+Repeat until boss encounter
+
+The game uses designed chambers rather than depending on unlimited random geometry.
+
+The important design components are:
+
+- Chamber selection.
+- Encounter selection.
+- Enemy composition.
+- Reward selection.
+- Difficulty progression.
+- Boss placement.
+
+This is a useful distinction when thinking about procedural generation: you can create replayability through combinations of authored content without procedurally generating every environment.
+
+## 5.3 Reward-based room selection
+
+One of the most effective ideas in Hades is allowing the player to see the reward associated with the next chamber.
+
+For example:
+
+- Darkness.
+- Keys.
+- Nectar.
+- Gemstones.
+- Olympian boons.
+- Health.
+- Coins.
+- Special encounters.
+
+The player isn't simply selecting the next room. They're making a strategic decision about their build and future progression.
+
+A player who needs health might choose a healing reward over a potentially more powerful offensive upgrade.
+
+This gives the player some control over the randomness.
+
+## 5.4 Enemy encounter composition
+
+The difficulty of a room is not determined exclusively by enemy health.
+
+It also depends on the combination of enemies.
+
+For example:
+
+- A ranged enemy pressures the player from a distance.
+- A melee enemy forces the player to move.
+- A charging enemy punishes staying stationary.
+- A support or armoured enemy increases encounter complexity.
+
+Combining these behaviours creates more interesting encounters than simply increasing the number of enemies.
+
+A good encounter tests multiple skills simultaneously.
+
+## 5.5 Environmental hazards
+
+[Hades: Asphodel - gamepressure.com](https://images.openai.com/static-rsc-4/p-3qaB1jdLHKv4hbdwkERFajg3LdgD2EZRDX6rIIZak-Ons28CZXCWFAYmG4f0N_rnMK71C1oVkmcTzKcNg-xm5dQV06x_o6ZuImraSh3zpxel5sUgnLDqnvKrMwC-R_H3G1kBXKw8B4NDdSR56ZCvEFv8_CN8zAdi2ZqXbQ7LM?purpose=inline)
+
+[Hades: Elysium - gamepressure.com](https://images.openai.com/static-rsc-4/iJi_ekf7sYsp-PieIyC9IH0ISwkS_nTTEOhzSzVDfJIs6Yd75K3hW4kVOKIosGcy_LVDHvZpzBLViyD1LZ0N2BIPDtf-AYwQS56T_Jboan8gPyYOdYAAmPTBynpixcNP3G25ZQlwNJ2rfZvIiKXX0lGZbPvxZ7tMgI1J3vDFHJk?purpose=inline)
+
+[Hades: Poison - how to cure it? - gamepressure.com](https://images.openai.com/static-rsc-4/xFNkZ8h7C7GxBzI9oiEXdvVrtee2m9c2pCOBmTl9plgYo2AgIIZAFZ3FhBN6ExF_UdA4LblrbK_c0qTCLHFbw3OAe2zlW8DfajUIJ-NbYx4AxEieXOSe0wbhhfGrbEVXrRpOsLFHokj0wtoN1GzKr5Ammbbxqrf9ES57zCojoV0?purpose=inline)
+
+12
+
+Hades makes its environments part of combat.
+
+Environmental hazards include:
+
+- Lava.
+- Traps.
+- Poison.
+- Dangerous enemy projectiles.
+- Special chamber mechanics.
+
+The environment changes how players position themselves.
+
+This is particularly important because the player must consider both enemy attacks and the surrounding space.
+
+# 6. Enemy design and boss encounters
+
+[Designing Overpowered Builds | Hades Design Lessons](https://images.openai.com/static-rsc-4/R70W9s9KaZmtYtRTmno01q09mMei0PSfUAUFeD_3drG9TI5bivJ5CneTPooK2Akf8FypPevBY7zthpdyCmKOUl5VkEXlnYgjzbmo6iOm11WDz6yK2Va_cUBjBhSRicJFNjqoDNx9cKA06NLLMPVxaM19abgXrSvkQz6V5HmqgT4?purpose=inline)
+
+[12 Best Single-Player Nintendo Switch Games 2026 | Eneba Hub](https://images.openai.com/static-rsc-4/YCZBMHKB6L454GQYQ3sePXLQRIZ-ORokpgHY80SZ7fD7iWU7Y3oauy7W4qfRi4fxpF-ZgoeKHdzknESFcLMORxlRfKHC0jy4uNh5x4KXn1AX-R81WP5bFGh-yiculIXiAcAIqjmVsQ5y84gvwAzIp8m4glegyZ4cSpMarelM5Dg?purpose=inline)
+
+[Apa Itu Genre Game Roguelike dan Bagaimana Sejarahnya? – Kepedia.co.id](https://images.openai.com/static-rsc-4/4xa17FLvShVSpSlMbMWfrCAPAnAAwLRey6fygXE_0XKruiwg0eizIvV8EtUqJZ7J7JpLw6IfNSLiDfcD9zok-opoalI7Xf7ytRAku9anHhUhjLM38kX5W-7oEwzC5NW3TegIpshqlZtKEtMxLXGROXYa-AYSzl2841lHh0lnzCU?purpose=inline)
+
+9
+
+One of Hades' strengths is that its bosses are not simply enemies with enormous health bars.
+
+Each boss is designed around a different combat challenge.
+
+## 6.1 Megaera and the Furies
+
+The first major boss encounter teaches the player to:
+
+- Recognize attack patterns.
+- Maintain awareness of the arena.
+- Dodge area attacks.
+- Deal with additional enemies.
+- Attack during recovery windows.
+
+The Furies can also have different attacks and variations.
+
+## 6.2 Bone Hydra
+
+The Hydra encounter introduces multiple targets and arena-management challenges.
+
+The player must deal with the central boss and additional heads that appear during the encounter.
+
+This changes the encounter from a straightforward duel into a more spatially complicated fight.
+
+## 6.3 Theseus and Asterius
+
+[Apa Itu Genre Game Roguelike dan Bagaimana Sejarahnya? – Kepedia.co.id](https://images.openai.com/static-rsc-4/4xa17FLvShVSpSlMbMWfrCAPAnAAwLRey6fygXE_0XKruiwg0eizIvV8EtUqJZ7J7JpLw6IfNSLiDfcD9zok-opoalI7Xf7ytRAku9anHhUhjLM38kX5W-7oEwzC5NW3TegIpshqlZtKEtMxLXGROXYa-AYSzl2841lHh0lnzCU?purpose=inline)
+
+[kepedia.co.id](https://kepedia.co.id/apa-itu-genre-game-roguelike-dan-bagaimana-sejarahnya?utm_source=chatgpt.com)
+
+This is one of the best examples of encounter design in the game.
+
+The player fights two bosses simultaneously.
+
+They have different attack behaviours:
+
+- Asterius is a direct physical threat.
+- Theseus attacks from range and has defensive mechanics.
+
+The player must manage both threats while deciding which enemy to prioritize.
+
+This creates a more complicated encounter without requiring an enormous number of different mechanics.
+
+## 6.4 Hades
+
+[Started on my playthrough and have made... questionable choices... : r/HadesTheGame](https://images.openai.com/static-rsc-4/XSDgliv6dq6D2DJeo3zoYZcoFZkhzqVSaO0bcnpagxosMgKv2QaGQnYu5dKGaJ_hj-r94pX1NjIzF62DKVjwBGnQ5I58un2ghSM2cyZ0G0YU9-fZfz2sMwXiWiV7cNrZvBxAFNoDYuHOYAxGk-1NwSu0UjQplNnhxoXUgTyMkZM?purpose=inline)
+
+[reddit.com](https://www.reddit.com/r/HadesTheGame/comments/iz6e6x/started_on_my_playthrough_and_have_made/?utm_source=chatgpt.com)
+
+The final encounter tests almost everything the player has learned.
+
+It combines:
+
+- Multiple attack patterns.
+- Arena awareness.
+- Area attacks.
+- Defensive timing.
+- Damage management.
+- Phase transitions.
+
+The boss changes behaviour as the fight progresses.
+
+The important design lesson is that a final boss should test previously learned mechanics in combinations, rather than introducing an entirely unrelated combat system.
+
+# 7. Progression and the death loop
+
+[Hades Guide: How to Play and Everything You Need to Know | Push Square](https://images.openai.com/static-rsc-4/6pHhMtpW_dEkAAocTdNpT6wWCSyjoczMnVIUhzTL9LwjwH8uGnU0tkkQEik00GbBERFakhe0eV95JX4HLZu-0GJb-s8fd6d_-mTeKXe-6t-RLCt18HPnkG39jc5QOjDe8RuQ2F3weAJHOYtyJOYp7FJz48bCK3k3ckqrNtckJQ8?purpose=inline)
+
+[Comunidad de Steam :: Guía :: \[HADES\] A Complete Guide for Coronacht - Aspect of Chiron](https://images.openai.com/static-rsc-4/9b3Kbzx3_14yitn5ZoOT2MiJf8q-FgJtmiqxvkaAAcFf6g1wL_C5AAxl8yUMZ5QzSMmzbk6ly-egIoE9BpI0BPCpcG_lPvuVdFqRnS-MWVg_N8Tg24kOy9w-KFN8306iHbzbPcO0rid_79brAVWYT7qVB-_44949peO8uya2xuw?purpose=inline)
+
+[Hades](https://images.openai.com/static-rsc-4/g78gx4kXvyWST2hnLPfBCj3gO6rd8cRZH0NX5lwiGq9sORXRndrpx0JGBvx_8XJhpifzYn_Xz2DJgZCSjCsPlWaijmmS0feKCHqKAwdGe6PnFHaAA9xhsQTwUJGAH2aU9j7-m-38VcNkMOQW06mGmRcuA2Eg5j9ZGjd8KOtLJag?purpose=inline)
+
+7
+
+This is the system that holds the entire roguelike structure together.
+
+A conventional roguelike may remove most of the player's progress upon death.
+
+Hades takes a different approach.
+
+It has several progression systems operating simultaneously.
+
+## 7.1 The House of Hades
+
+The House is the central hub.
+
+After dying, Zagreus returns to it.
+
+The player can:
+
+- Speak with characters.
+- Upgrade permanent abilities.
+- Purchase renovations.
+- Give gifts.
+- Unlock weapons.
+- Interact with the environment.
+- Discover new narrative events.
+
+The hub is not merely a menu disguised as a room.
+
+It is a place that changes as the game progresses.
+
+## 7.2 Mirror of Night
+
+[Comunidad de Steam :: Guía :: \[HADES\] A Complete Guide for Coronacht - Aspect of Chiron](https://images.openai.com/static-rsc-4/9b3Kbzx3_14yitn5ZoOT2MiJf8q-FgJtmiqxvkaAAcFf6g1wL_C5AAxl8yUMZ5QzSMmzbk6ly-egIoE9BpI0BPCpcG_lPvuVdFqRnS-MWVg_N8Tg24kOy9w-KFN8306iHbzbPcO0rid_79brAVWYT7qVB-_44949peO8uya2xuw?purpose=inline)
+
+[steamcommunity.com](https://steamcommunity.com/sharedfiles/filedetails/?id=2311762896\&l=spanish\&utm_source=chatgpt.com)
+
+The Mirror provides permanent player upgrades.
+
+Examples include:
+
+- Increased maximum health.
+- Additional revival opportunities.
+- Improved damage.
+- Additional starting resources.
+- Improved reward opportunities.
+
+The Mirror gives Darkness a permanent progression purpose.
+
+It also provides alternative talent choices, letting the player adjust their preferred playstyle.
+
+## 7.3 House Contractor
+
+The House Contractor lets players spend resources to improve the hub and unlock additional features.
+
+Some upgrades are cosmetic, while others have meaningful gameplay effects.
+
+This system creates an additional use for resources collected during runs.
+
+## 7.4 Keepsakes
+
+[Hades Guide: How to Play and Everything You Need to Know | Push Square](https://images.openai.com/static-rsc-4/VNBJYWi09PKy7JCsZNwgNbSNVChXRVvDoePkzrVgYJcaPqSnQ-8fHS4rlQzKZZRi9GnZyZkeF6pvdG2taP_0vlm2Nx-96LW0OxDhUwaAIIK_yUwnmXYqPXclQor15r_gtCghQTvQwVF4gVJ4RSXYdP7l3vbZ60Y7ZyYdAiMXJkU?purpose=inline)
+
+[pushsquare.com](https://www.pushsquare.com/guides/hades-guide-how-to-play-and-everything-you-need-to-know?utm_source=chatgpt.com)
+
+Keepsakes are items obtained through character relationships and gifts.
+
+They provide passive bonuses and can influence the player's strategy for an upcoming run.
+
+For example, a keepsake might:
+
+- Encourage encounters with a particular god.
+- Improve survivability.
+- Increase the value of specific rewards.
+- Provide a combat advantage.
+
+This gives the player another strategic decision before starting a run.
+
+## 7.5 The Pact of Punishment
+
+[Hades review: Godlike roguelike | Shacknews](https://images.openai.com/static-rsc-4/MMDIAOK-ORZDVnTjm4GhemCPUeyR4DPv5lFBwwT1e_7Np6gLOkidhSCfhoDzL89CMezn-FgtGxTTkdTMise2x-UTY8pC1D4iOo4BTwRh4qQ1ttwDDm_Z8NqdBAotlZ3BXwb9d1EQ7DdWoeztDDn-x75TuPIZRqwvftm5iH0R5Oo?purpose=inline)
+
+[shacknews.com](https://www.shacknews.com/article/120582/hades-review-godlike-roguelike?utm_source=chatgpt.com)
+
+Once the player progresses far enough, the Pact of Punishment provides optional difficulty modifiers.
+
+These can make enemies:
+
+- Stronger.
+- More numerous.
+- More aggressive.
+- More complicated to fight.
+
+It also offers modifiers that change the rules of encounters and progression.
+
+This is how Hades supports experienced players after their initial completion.
+
+Greg Kasavin has discussed Slay the Spire's Ascension system as an inspiration for this aspect of Hades.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://www.tomsguide.com\&sz=32)
+
+Tom's Guide+1
+
+
+
+# 8. Narrative design — how Hades makes repeated runs meaningful
+
+[Best Video Game Genres: Top Picks and Recommendations](https://images.openai.com/static-rsc-4/yQZlIc-xTEN5fXTZtyZyB0pIGM2CdqkbbM3JR4gJyZQk3iDqD--X075d547pIlTNio6TjMRJrw0tSUm19OjP0gUhhmCPK8iX1NWJ_wT_vXR4ffAyXtaB2ZOu83eFwZ050A7vac9RyHXDEmtUW_veGGamhwEJFjDOXRSqzfSYp3A?purpose=inline)
+
+[Hades Discussion, Lore, Feats & Analysis Thread | One Last Forum - Last But Not Least](https://images.openai.com/static-rsc-4/dgaJxzPasU7QJgeTKlJX3QuUTfdsQOu_SPYdsJ0kMEIINvRMTsoP-LIMaYX03n0OPymnnBhMljcNsEQEa1dy6sXVrH2fIJttWh0V5Ig8wvieTy96fNilLpC8n4Q71B8CiS8jNN8VE7mMKXU7GpTlCcinZJ9AYzbc9XWCQ1KmzuM?purpose=inline)
+
+[Failure is Death, and Death is Progress: The use of repetition/replayability and narrative progression in Hades | by Natalia Nazeem Ahmed | Medium](https://images.openai.com/static-rsc-4/Q_DRxVePCYfOApb_3cFfMeek266GuajNtsfyhO4Fzdn5jbMLAptNhKxq7GkngEk0wLOr8Daxdxp549KoN2nFngBIb8Np4xfZRMys_1xovHeO0Nrw140juXphwNaItiQsJW5QxpxYvBlTLgnqTojTObuXAF3-gyLcK-pj22ethCM?purpose=inline)
+
+8
+
+This is one of the most impressive parts of the entire project.
+
+Normally, roguelikes and long-form narratives have conflicting structures.
+
+A traditional narrative moves forward.
+
+A roguelike repeatedly returns the player to an earlier state.
+
+Hades uses death itself as a narrative mechanism.
+
+## 8.1 Death is part of the story
+
+When Zagreus dies, he returns to the House of Hades.
+
+Characters respond to his death and his accomplishments.
+
+For example:
+
+- Hypnos comments on how he died.
+- Achilles provides encouragement.
+- Nyx offers guidance.
+- Hades responds to the player's repeated attempts to escape.
+
+This creates continuity.
+
+The characters don't behave as if the player has simply restarted a video game.
+
+They behave as if they have witnessed another event in Zagreus' ongoing life.
+
+## 8.2 Reactive dialogue
+
+The game contains more than 22,000 lines of dialogue and is fully voiced.
+
+This is an extraordinary amount of narrative content for a relatively small development team.
+
+Supergiant discussed the process in its GDC 2021 talk, Breathing Life into Greek Myth: The Dialogue of Hades.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://gdcvault.com\&sz=32)
+
+gdcvault.com+1
+
+
+
+The important principle is that dialogue reacts to gameplay.
+
+Examples of things that can affect conversations:
+
+- Whether the player defeated a particular boss.
+- How many attempts have been made.
+- Which character the player recently encountered.
+- Whether a character has received a gift.
+- Whether a particular narrative event has occurred.
+- What has happened during the latest run.
+
+The result is a world that feels aware of the player's actions.
+
+## 8.3 Data-driven narrative
+
+A useful technical interpretation of Hades' approach is that narrative events are treated as data rather than hardcoded sequences that must be manually rewritten whenever the story changes.
+
+Greg Kasavin explained that the team could add narrative events and adjust voice-over data even during periods when the code was locked down for milestone testing.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://www.gamedeveloper.com\&sz=32)
+
+Game Developer+1
+
+
+
+This is a very important production technique.
+
+It allows writers to continue expanding narrative content without constantly requiring fundamental code changes.
+
+## 8.4 Relationships and gifts
+
+Nectar and Ambrosia support character relationships.
+
+Players give gifts, unlock keepsakes and gradually deepen relationships.
+
+This provides a reason to interact with characters beyond merely collecting dialogue.
+
+It also gives the player a personal connection to the world.
+
+# 9. Art direction and visual production
+
+[Hades Is a Must-Play Indie Dungeon Crawler | Tom's Guide](https://images.openai.com/static-rsc-4/ye9LyT5zncY00TU000i_xu6BI73CmMVcBkU5oJZfnX2ITl4qMTdeOZNAC1ga6FNV2mxl9MX19jws_1zdqs_-nAs0QS7LOL1a9LV6vledQo5DFkt-5FDwAuxDMbWX1T-4o9npkUm_Oby6CTQ086hez6Eix2zUpIPK7QHIPXROdfY?purpose=inline)
+
+[Hades characters - lore, boons, keepsakes, and companions](https://images.openai.com/static-rsc-4/jjVjv1GuEBtwRCznDkWiiCMze_hna92E9WZN59Juauul4TFDNBzgRX83wYJqq1j4CkxH-Kl_ss1pp0-ZOJy-HkmcW-dyEdOGyEs1Wh27oF0ub7eBTG7lpaAI8zv0ponN3jtT1jhLKOegpUX-cSRj4j63cgUHTG2RTXyebXk6xOo?purpose=inline)
+
+[Tüm Zamanların En İyi 100 Video Oyunu](https://images.openai.com/static-rsc-4/94_p4vZTNWpljCx3Yl63P9dPN5idWRHVLUBYdIOExyfaZUEZe4YQYcX6wGu2zJl6XoSt-AL8ioLEdSGTmeia9WjD6Aq07DadPcKp-3-uZjEMZRS9I47M1wu7C5y6WBmhdjVVnegrCanb-1i-oNCeVzgv5RK8QzOpORsUceWxZH4?purpose=inline)
+
+11
+
+This is another area where Hades is worth studying very closely.
+
+Art director Jen Zee made a particularly interesting decision.
+
+The original direction was more painterly.
+
+During pre-production, the art direction shifted toward a pen-and-ink aesthetic.
+
+The shift was driven partly by the narrative's changing tone, but also by production realities: pen-and-ink assets were faster to produce than painterly assets.
+
+That was important because Hades was going to be Supergiant's largest game.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://mcvuk.com\&sz=32)
+
+MCV/DEVELOP+1
+
+
+
+## 9.1 Art production pipeline
+
+Supergiant described its tools as:
+
+| Tool               | Production use             |
+| ------------------ | -------------------------- |
+| Photoshop          | 2D artwork                 |
+| Maya               | 3D modelling and animation |
+| After Effects      | Post-processing            |
+| ZBrush             | 3D sculpting               |
+| Substance Painter  | Texturing                  |
+| Marvelous Designer | Clothing and fabric        |
+
+The team also used motion capture as a basis for a substantial portion of its animation work.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://mcvuk.com\&sz=32)
+
+MCV/DEVELOP
+
+
+
+## 9.2 Scale of the art production
+
+Jen Zee shared some particularly impressive production figures:
+
+# 59
+
+Character portraits
+
+# 68
+
+Models
+
+# 194
+
+Boon icons
+
+# 1,400
+
+Environment textures
+
+# 32,494
+
+FX animation frames
+
+# 942,489
+
+Character and enemy animation frames
+
+Figures supplied by art director Jen Zee in the MCV/Develop interview.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://mcvuk.com\&sz=32)
+
+MCV/DEVELOP
+
+
+
+These numbers show the scale of the production.
+
+## 9.3 Why the art style works
+
+The visual identity has several important characteristics:
+
+- Strong silhouettes.
+- Distinctive character proportions.
+- Hand-drawn-looking outlines.
+- Controlled colour palettes.
+- Strong contrast.
+- Stylized character portraits.
+- Consistent visual language across environments and characters.
+
+Characters are visually recognizable even when the screen is filled with enemies, projectiles and effects.
+
+The style also allows mythology-inspired characters to feel related to one another without looking identical.
+
+## 9.4 Environment art
+
+Each biome has a distinct colour identity.
+
+[Steam Community :: Guide :: Hades | Гайд для начинающих игроков](https://images.openai.com/static-rsc-4/q3GvdIGSIb-T1U2MO754l8U6v-FMncPb3paru22UKREmx7ettScXgcR3uD7WU11ahJIec86DMiysQXXzBvX08cnPdvMR1khawf6WOt_y_mCqqNsisgdq1shW4y9rrueMlXa8gM_n7zZwsttNIHMhyd0BVteurXeQlgrGjX2NvpY?purpose=inline)
+
+Tartarus
+
+Dark, oppressive and enclosed.
+
+[Steam Workshop::Hades Asphodel](https://images.openai.com/static-rsc-4/2zLupJe85DqwcVrcvdaG11GD2-oLHXYzWxwyQ2MTTNoBwhatyO3b8DsQgN7R8ZvtQ6YejTborBbJcbCqNzyqBMuTO6TgqSuiWpfjXOmDtUIsp5ZoyQ48j4z-qxjU8I1b9gmiL8Ce9hd5Lq93LheRLJ-ecwkGtqoPW6LUjJWcuD8?purpose=inline)
+
+Asphodel
+
+Hot, volcanic and dangerous.
+
+[Atmosphere in Games (Hades and Hollow Knight) – The Otaku Exhibition](https://images.openai.com/static-rsc-4/2veiEL_hsjFkKq9uryWCTcnvY-aP3iBP7AnJHE1gGdPcnOYtakIR6TFQPFDTtlPYqpEmGGHor_SIbm2K97Kmj8SG6L57qloLjbsd8WfBZtcae2feQHNg1-eW1JCyY8ceeKNnNl-6DZ2PESffwTJHyRyTvmEy5LpSZlU1GmW19sY?purpose=inline)
+
+Elysium
+
+Bright, green and golden.
+
+[Steam Community :: Screenshot :: Temple of Styx](https://images.openai.com/static-rsc-4/QUvFNa9j6nO-I1h9D9DrbReJWQqRPYt73vINJU1zkplfsOHSgsHU4DeVy6vwXFX_1HkfWmHiScmbuHY1azLpp-2VMpZ2HjR6jJtXZw49DMfVhO4jnByifedpdVlW_JWhuCtn_YvuppzKSQhRvVx1vi0rzc1NV_1qkl_AJUegork?purpose=inline)
+
+Styx
+
+Dark, claustrophobic and hostile.
+
+The colour progression helps players feel the transition between regions.
+
+The environments are not just decorative backdrops. Their colours, shapes and lighting support the atmosphere and combat readability.
+
+# 10. Animation and visual effects
+
+[Hades](https://images.openai.com/static-rsc-4/oSPAqRPVtAPgPI59wlUNVvL0WYruDkyTJt8CJMIIphcruCJ2VAD9xnzJJx03N4WFcVWHIZ98O8XsWW1xUV7daMtKz1JJ1hMIWZuruR0RqU0M2CaNnAQc-I55n05BpcP02xVLR6krghNnczKu_I9sOo6SDTecVXm0kUZeptFjkZU?purpose=inline)
+
+[Critique de Hades : chef d’oeuvre de l’action – Etoile et champignon](https://images.openai.com/static-rsc-4/fdrvcMgEwxCikT795Y9SwRBm6M7SJ5lyuhhBzO_giNuA0rsRsm-4LdMmh8cwjMHBmVGfKUWdb2DYIh7J0zPwjgpscybT-TEI4nxG5I6DXBUwK4NDvm2YzTsNWcH0jGTlePHAssunXPOkI3wtPwqQxEJ7dHss9AeGGxNy1y8e-cU?purpose=inline)
+
+[Hades Review](https://images.openai.com/static-rsc-4/eKALJ1Qwfm2Xk0q1NSsuTMeOAJelxvL9iCh4HhieqB567pSLGfwh5h7xKNWvoOjJM9At6dfWPsz7HNpopAMrBkuW1UFTcdHRbGu0mjDVWM_oKAJVNrbLXjmH5i1cKLsZ-fzikvyjnbLsOhIB2bCkefcBEkzn5ehDZBT-xJ0WdOg?purpose=inline)
+
+15
+
+One of the most important aspects of Hades is how much information its animations communicate.
+
+## 10.1 Character animation
+
+Character animation needs to communicate:
+
+- Idle state.
+- Movement.
+- Attack preparation.
+- Attack execution.
+- Attack recovery.
+- Damage reaction.
+- Knockback.
+- Death.
+- Special abilities.
+
+The important thing is that each animation serves gameplay.
+
+For example, an enemy preparing a powerful attack needs to visually communicate its intention before the attack connects.
+
+The player must have enough information to react.
+
+## 10.2 Animation timing
+
+The feeling of responsiveness comes from the relationship between:
+
+- Input recognition.
+- Startup frames.
+- Active frames.
+- Recovery frames.
+- Movement.
+- Hit reactions.
+
+A player should feel that their actions are being recognized immediately.
+
+However, attacks also need commitment. If every action can be interrupted at any moment, combat loses weight.
+
+This balance between responsiveness and commitment is fundamental.
+
+## 10.3 Visual effects
+
+Hades uses effects for:
+
+- Weapon trails.
+- Projectiles.
+- Explosions.
+- Lightning.
+- Fire.
+- Poison.
+- Magical attacks.
+- Dash effects.
+- Enemy death.
+- Boss abilities.
+
+The effects are designed to reinforce the attack's identity.
+
+For instance, lightning should feel different from a sword strike, and a large area explosion should be visually distinguishable from a small projectile.
+
+## 10.4 Screen shake and impact
+
+Screen shake, flashes, hit sparks and sound work together to reinforce impact.
+
+However, visual feedback must be controlled.
+
+Too much screen shake can make combat uncomfortable.
+
+Too many particles can hide enemies.
+
+Too many simultaneous flashes can make the combat unreadable.
+
+The strongest effects should be reserved for the moments that deserve them.
+
+# 11. Sound design and music
+
+[How Rock Band influenced Hades' soundtrack  – Laced Records](https://images.openai.com/static-rsc-4/QsPqPw4MS5wkbMA-tVWfTSSnBu1sZdNOXcycf9sEBQZg0ao87OBlCZPga9CWF0BmE4LJmZYVJn04c2Ey3QAs5dWvFj0cVctMZ1rqcsVVzhX5GLKDmK9AZkz3-Eyju_OsLhdCe95vuqMBzzvDOETpphcfQ562RNB79OwqwYZNqJw?purpose=inline)
+
+[lacedrecords.co](https://www.lacedrecords.co/blogs/blog/how-rock-band-influenced-hades-soundtrack?utm_source=chatgpt.com)
+
+Darren Korb was responsible for the music, sound design and audio direction, as well as substantial voice-over work.
+
+His work is particularly interesting because Hades is a game that players can replay hundreds of times.
+
+Music that works during the first run might become repetitive during the hundredth.
+
+Supergiant needed a solution.
+
+## 11.1 Adaptive music
+
+The music system uses multiple layers and arrangements.
+
+According to Korb's 2026 interview, the implementation includes:
+
+- Different musical stems that can be randomized between chambers.
+- Drums that become active when enemies are present.
+- Drums that stop when the final enemy dies.
+- Musical sections that progress as encounters become more intense.
+- Stronger arrangements for minibosses and bosses.
+
+The same musical composition can therefore change according to what is happening in the game.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://www.rpgsite.net\&sz=32)
+
+RPG Site+1
+
+
+
+Illustrative adaptive music structure
+
+Exploration
+
+Low intensity
+
+Ambient instrumentation and lighter arrangement.
+
+Combat
+
+Medium intensity
+
+Percussion and additional musical layers become active.
+
+Boss encounter
+
+High intensity
+
+More aggressive arrangement and stronger musical energy.
+
+## 11.2 Sound effects
+
+Sound effects reinforce every important action.
+
+For example:
+
+- Sword attacks have distinct impact sounds.
+- Dashes have recognizable movement sounds.
+- Projectiles have their own audio identity.
+- Enemy attacks provide warnings.
+- Boss encounters have unique musical and audio identities.
+
+A particularly important principle is that audio can communicate combat information even when the player isn't directly looking at an enemy.
+
+## 11.3 Voice acting
+
+Hades contains more than 22,000 lines of dialogue.
+
+The developers discussed their voice production and implementation process at GDC.
+
+This was a substantial undertaking for a studio with fewer than 20 employees.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://gdcvault.com\&sz=32)
+
+gdcvault.com
+
+
+
+# 12. Technical architecture and game systems
+
+This is where we need to distinguish between publicly documented development information and observations from the game's released files.
+
+Supergiant used its own technology rather than building Hades entirely around a conventional off-the-shelf game engine.
+
+Community technical analysis of the released PC game identifies the proprietary Aquarius engine, Lua scripting and FMOD audio middleware. This is reverse-engineering evidence, not a complete official engineering document.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://github.com\&sz=32)
+
+GitHub+1
+
+
+
+### 12.1 Data-driven systems
+
+A major architectural advantage is the ability to define gameplay content through structured data.
+
+Conceptually, a boon might be represented like this:
+
+```
+Boon =
+{
+    Name = "Lightning Strike",
+
+    Slot = "Attack",
+
+    God = "Zeus",
+
+    Effects =
+    {
+        LightningDamage = 10,
+        ChainTargets = 2
+    }
+}
+```
+
+This is illustrative pseudocode, not Hades' original source code.
+
+The important idea is that the gameplay system can interpret the data instead of requiring a separate implementation for every boon.
+
+This is especially useful for:
+
+- Boons.
+- Enemy configuration.
+- Weapon upgrades.
+- Room rewards.
+- Dialogue events.
+- Character interactions.
+- Difficulty modifiers.
+
+### 12.2 Why this architecture matters
+
+Imagine having 100 different upgrades.
+
+If each upgrade requires completely separate combat code, maintaining the game becomes increasingly difficult.
+
+But if upgrades use shared systems, you can add more content without rebuilding the entire combat architecture.
+
+The best approach is to build a small number of reusable mechanics and let content configure them.
+
+### 12.3 Procedural systems
+
+The game combines authored content with controlled randomization.
+
+A useful conceptual model is:
+
+```
+RUN GENERATOR
+    |
+    |-- Select biome
+    |
+    |-- Select available chamber
+    |
+    |-- Select encounter configuration
+    |
+    |-- Select enemy composition
+    |
+    |-- Determine reward
+    |
+    |-- Apply difficulty rules
+    |
+    |-- Validate progression
+    |
+    |-- Generate next choices
+```
+
+This is an architectural illustration rather than a claim about the exact internal algorithm.
+
+### 12.4 Why controlled randomness matters
+
+Completely random generation can create:
+
+- Unfair encounters.
+- Poor room transitions.
+- Repetitive enemy combinations.
+- Unbalanced reward sequences.
+- Impossible or frustrating situations.
+
+Controlled randomness allows developers to preserve the feeling of unpredictability while maintaining design quality.
+
+# 13. How Supergiant actually organized development
+
+This is particularly valuable if you're interested in understanding how a relatively small team can produce a game with this much content.
+
+## 13.1 Monthly milestone system
+
+Supergiant adopted a more disciplined production schedule for Hades.
+
+Greg Kasavin described a monthly milestone system divided into phases.
+
+| Phase     | Main activity                                        |
+| --------- | ---------------------------------------------------- |
+| Beginning | Major code and feature changes                       |
+| Middle    | Code stabilization and content development           |
+| Later     | Balancing, testing and bug fixing                    |
+| End       | Final playtesting, polishing and release preparation |
+
+One particularly clever decision was separating data changes from fundamental code changes.
+
+Writers could continue adding narrative events while the programmers worked with a more stable codebase.
+
+This reduced the amount of coordination needed for every content change.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://www.gamedeveloper.com\&sz=32)
+
+Game Developer+1
+
+
+
+## 13.2 Early Access as a development strategy
+
+[Supergiant Games' Designer Explains Hades' Level Design](https://images.openai.com/static-rsc-4/HPRyFUIGDr2o51LJrV_-aOvieYt3H76vSySJ0EkQoFNH1A174TttUuofVzStPeQhKJzB8pU8yxTuDerq_0OjVDjpP0skB2f2iFHlPXt_Y_N8Zk4uC57zK1STqq5MltRKAZhX0QUGsFl8NncEQc2EVoENcJZ-rLZJdlnOWlLz9sA?purpose=inline)
+
+[Hades - Noclip's 'Developing Hell': The Making of Hades Blu-ray - Fangamer Europe](https://images.openai.com/static-rsc-4/f0nH3oL01omSQI0Wv-Q1nEWcoJdxPIKipyADW7Jlm9m1eamHRy9wl_rfPWj_LdQh3yMKd8Zqi5WUCDMZXexe4voGrxfRx3omjDwG31LNkqBFAxgoqoIJOw_OcByydtCjjjLh8-L2ALndfs1Hf5bY4c1mYZN_2GuSLNIpw9vYgYg?purpose=inline)
+
+[Tüm Zamanların En İyi 100 Video Oyunu](https://images.openai.com/static-rsc-4/94_p4vZTNWpljCx3Yl63P9dPN5idWRHVLUBYdIOExyfaZUEZe4YQYcX6wGu2zJl6XoSt-AL8ioLEdSGTmeia9WjD6Aq07DadPcKp-3-uZjEMZRS9I47M1wu7C5y6WBmhdjVVnegrCanb-1i-oNCeVzgv5RK8QzOpORsUceWxZH4?purpose=inline)
+
+11
+
+Hades entered Early Access on December 6, 2018.
+
+Its final 1.0 release came on September 17, 2020.
+
+The studio used Early Access to collect feedback about:
+
+- Combat.
+- Difficulty.
+- Weapon balance.
+- Boon combinations.
+- Narrative.
+- Art.
+- Progression.
+- Replayability.
+
+The team also used the opportunity to develop its story incrementally.
+
+This was important because Hades was designed to support an evolving narrative rather than requiring every story event to be completed before the first public release.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://www.supergiantgames.com\&sz=32)
+
+Supergiant Games+2
+
+
+
+## 13.3 The documentary you should watch
+
+[Now Available: Developing Hell on Blu-ray | Supergiant Games](https://images.openai.com/static-rsc-4/S11KYO9d1JKq3FSm7IRc9oiQJmTqvwFGZhtls8Rqj9jkjlh7MTcv1nGfsnAGB-rJkX0PBsVcdnycLh-VpPy4sWGylwfaOh4y83PL9YRs315HHgUDRUrvQE3B706Xm0yig3tshU_SjTSHuBHwmMvqVI3qjvd7DnhwiZ_mhhF23i0?purpose=inline)
+
+[supergiantgames.com](https://www.supergiantgames.com/blog/hades-noclip-bluray/?utm_source=chatgpt.com)
+
+Developing Hell — Noclip
+
+Highest-priority research material
+
+This is a six-episode documentary series following the development of Hades.
+
+It provides insight into:
+
+- Early development decisions.
+- Studio collaboration.
+- Gameplay development.
+- Art production.
+- Early Access updates.
+- The transition to full release.
+
+Supergiant itself recommends this documentary as the best way to understand how the original Hades was made.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://www.supergiantgames.com\&sz=32)
+
+supergiantgames.com+1
+
+
+
+[Watch Developing Hell on YouTube](https://www.youtube.com/results?search_query=Noclip+Developing+Hell+Hades+full+documentary\&utm_source=chatgpt.com)
+
+I would prioritize this over watching random Hades gameplay analysis videos.
+
+# 14. What actually makes Hades so successful?
+
+After examining the systems, I think there are seven particularly important reasons.
+
+| Design decision                    | Result                                          |
+| ---------------------------------- | ----------------------------------------------- |
+| Responsive combat                  | Immediate enjoyment                             |
+| Five interconnected combat actions | Simple controls, deep possibilities             |
+| Weapon variety                     | Different playstyles                            |
+| Boon combinations                  | Build experimentation                           |
+| Permanent progression              | Death remains rewarding                         |
+| Reactive narrative                 | Emotional attachment                            |
+| Controlled randomness              | Replayability without complete unpredictability |
+
+But there's a deeper principle.
+
+Hades makes its systems reinforce one another.
+
+Consider a complete run:
+
+1. You choose a weapon.
+2. That weapon determines your basic combat behaviour.
+3. You receive boons that change how the weapon works.
+4. You select rooms based on rewards.
+5. You encounter enemies that test your current build.
+6. You defeat bosses and earn resources.
+7. You return to the House.
+8. Characters react to what happened.
+9. You improve your character.
+10. You begin another run with different possibilities.
+
+Every system has a reason to exist within the larger loop.
+
+This is what separates a collection of features from a coherent game.
+
+# 15. Applying Hades' design philosophy to Kaliyuga: The Bleeding Crown
+
+Now, this is the section I consider most important for our project.
+
+Your game has a different identity.
+
+Hades is a fast, room-based roguelike with a large amount of procedural variation. Kaliyuga is a dark Indian mythological action game with a more cinematic presentation, a central hub, boss-focused progression and a different visual direction.
+
+We should not copy Hades mechanically.
+
+We should understand why its design works and adapt the underlying principles.
+
+[Save 51% on Hades + Hades II on Steam](https://images.openai.com/static-rsc-4/0l1E5V_lOGNKZqtGH8_Zf2VPnm0UV5qPfjPfLauZ4ifEvdPJm9aUpgymRayP885Fhcqt0Qo6edYLZjjwyEeJ-u1Iv3nh_ekk1LAJqPRpW3OGjKqtHyiZegkdSXkiXRecQs4Rb7z7EL3SVgl0pBEPsDny0bgqotBdHQ-PrYk9_KY?purpose=inline)
+
+[【Hades 】攻略 THESEUS & ASTERIUSの倒し方 - 猫様の下僕姉弟の生活](https://images.openai.com/static-rsc-4/I4omPkEomTRqyyLw6P8AxhAvho9xnS4a9j3E_fXvIH1ewegk0vutfbzmss12byHANZG7t1tQYGXOiyur9eYz9Dh4EgEvyLx6F3zb0jjJdPHFM1yUej0fr7sc7I7zwUj1HyZ4DFBWgowxuHYDNjQJnOYKFIY3Zc_uih3fmjF-S_8?purpose=inline)
+
+[Raji: Kaliyuga](https://images.openai.com/static-rsc-4/JgeH0fmyYK9-UM-6DDkJFhVt3wxy64ivzrzqccpakB2KGsQvspn-LhCJ44YzZq3-q1jsO8CyY6ZlqHeXZXQbFd5mIOMJAji0MGkjlX3jMD-rGICdwGRH8QrDq2F_IhqPmSlP_pDIz4mGd5pPzjv0HWOHsKlB2PGcr3-6KTD6V0U?purpose=inline)
+
+11
+
+## 15.1 Combat: What we should borrow
+
+High priority
+
+| Hades principle               | Application to Kaliyuga                         |
+| ----------------------------- | ----------------------------------------------- |
+| Responsive movement           | Rudra should feel immediately responsive        |
+| Strong attack feedback        | Distinct impact, hit reactions and sound        |
+| Recognizable enemy telegraphs | Clear enemy attack preparation                  |
+| Weapon-specific behaviours    | Different weapon identities                     |
+| Attack combinations           | Meaningful light/heavy/special interactions     |
+| Dash as a combat action       | Dodging should be part of offensive positioning |
+| Enemy recovery windows        | Reward well-timed aggression                    |
+| Boss pattern progression      | Bosses should test learned mechanics            |
+
+For Kaliyuga, I would prioritize combat responsiveness before adding a large number of abilities.
+
+A small collection of extremely satisfying attacks is better than 20 mediocre abilities.
+
+## 15.2 Build variety: What we should borrow
+
+Hades has an enormous boon system.
+
+But Kaliyuga doesn't necessarily need hundreds of boons.
+
+We can use the same philosophy at a smaller scale.
+
+For example:
+
+- Weapon-specific upgrades.
+- Divine blessings.
+- Passive relics.
+- Combat modifiers.
+- Temporary abilities.
+- Synergistic upgrades.
+
+The important thing is that upgrades should change how the player approaches combat.
+
+A blessing that changes an attack's behaviour is more interesting than one that simply increases damage by 5%.
+
+## 15.3 Enemy design
+
+High priority
+
+We should adopt Hades' approach to enemy behaviour.
+
+Every enemy should have a clear combat identity.
+
+For example:
+
+| Enemy archetype | Combat purpose                      |
+| --------------- | ----------------------------------- |
+| Basic infantry  | Tests basic combat                  |
+| Heavy warrior   | Forces attack timing                |
+| Ranged enemy    | Pressures positioning               |
+| Charging enemy  | Punishes stationary play            |
+| Elite enemy     | Combines multiple mechanics         |
+| Mini-boss       | Tests mastery of a particular skill |
+
+Rather than making every enemy more powerful, we should make encounters more interesting through combinations.
+
+## 15.4 Boss design
+
+This is especially important for Kaliyuga.
+
+Hades demonstrates that a boss encounter should be designed around mechanics, not just appearance.
+
+For our game, each major boss should have:
+
+1. A distinctive entrance.
+2. A recognizable silhouette.
+3. A defined combat identity.
+4. Several attack patterns.
+5. Telegraphs.
+6. Recovery opportunities.
+7. Phase transitions where appropriate.
+8. A satisfying defeat sequence.
+
+And importantly, each boss should demand something different from the player.
+
+## 15.5 Visual presentation
+
+High priority
+
+We have already established a distinct visual direction for Kaliyuga:
+
+- Isometric 2.5D presentation.
+- 3D Rudra.
+- 2D enemy sprites.
+- Painterly environments.
+- Animated environmental backgrounds.
+- Cinematic illustrated cutscenes.
+- Dark Indian mythological atmosphere.
+
+Hades teaches us something important here:
+
+Visual consistency is more important than visual complexity.
+
+We don't need to make every object extremely detailed.
+
+We need characters, enemies, environments, VFX and UI to look like they belong to the same world.
+
+For our project, I would also study Hades' visual hierarchy very closely. In particular, how the player remains visible during crowded combat.
+
+## 15.6 Audio
+
+The adaptive music system is worth borrowing conceptually.
+
+For Kaliyuga, we could have:
+
+- Ambient environmental music.
+- Combat percussion.
+- Stronger arrangements during elite encounters.
+- Dedicated boss themes.
+- A different musical arrangement during boss phases.
+- Brief musical transitions during cinematic moments.
+
+This could work particularly well with the Indian orchestral and mythological musical identity we've been developing.
+
+## 15.7 Hub design and progression
+
+The House of Hades is not just a place to upgrade weapons.
+
+It's a living narrative space.
+
+Our hub can follow the same philosophy.
+
+For example:
+
+- Savitri provides missions through interaction and text.
+- The weaponsmith provides weapon-related services.
+- Other characters provide progression and lore.
+- The environment evolves as the story progresses.
+- New interactions become available after important encounters.
+
+The important principle is that the hub should have a purpose beyond being a menu.
+
+# 16. What we should NOT copy from Hades
+
+This is just as important as understanding what to borrow.
+
+| Hades design                         | Why we shouldn't automatically copy it            |
+| ------------------------------------ | ------------------------------------------------- |
+| Large number of random chambers      | Kaliyuga has a different level structure          |
+| Six fully developed weapons          | Could unnecessarily expand production             |
+| Hundreds of boons                    | Requires extensive balancing and testing          |
+| 22,000+ dialogue lines               | Not necessary for our narrative approach          |
+| Extensive NPC relationship systems   | Could distract from the core experience           |
+| Large-scale procedural content       | Our handcrafted encounters may be more suitable   |
+| Full roguelike progression structure | Our story and progression structure are different |
+
+The objective isn't to make a smaller Hades.
+
+The objective is to make Kaliyuga a better version of itself by learning from Hades.
+
+# 17. The most valuable lessons for our development
+
+I would rank the lessons this way:
+
+## Priority 1 — Combat foundation
+
+Essential
+
+- Movement responsiveness.
+- Attack timing.
+- Dash behaviour.
+- Hit detection.
+- Enemy reactions.
+- Combat feedback.
+  ## Priority 2 — Enemy and boss design
+- Enemy archetypes.
+- Telegraphs.
+- Attack patterns.
+- Recovery windows.
+- Boss phases.
+  ## Priority 3 — Visual polish
+- Consistent art direction.
+- Readable silhouettes.
+- Attack VFX.
+- Hit effects.
+- Animation quality.
+  ## Priority 4 — Progression
+- Weapon upgrades.
+- Permanent progression.
+- Meaningful rewards.
+- Hub interactions.
+  ## Priority 5 — Audio and atmosphere
+- Combat audio.
+- Environmental sound.
+- Adaptive music.
+- Boss themes.
+- Cinematic transitions.
+
+## 18. My recommended research library
+
+These are the resources I would keep as our reference material.
+
+[Noclip's Developing Hell: The Making of Hades (Blu-Ray Disc) | PixelCrib](https://images.openai.com/static-rsc-4/bHDZhzGs2h4z5vxflK4j6eCiSKguMUF3_9sOK2ukm4A0IiiGcYI7siz4PcH5P53pjnLOjKOL6ZkQbv2QjRLu81S8GEv6KXx37ipelHef4ra755zlFcDh6ZL6nb8TCGkYCXiQMHNsec8rb3rKVOuQMGzNntsmWDfWFCClGdAPv5I?purpose=inline)
+
+1\. Developing Hell — Noclip
+
+Watch first
+
+The actual development documentary.
+
+[Watch documentary](https://www.youtube.com/results?search_query=Noclip+Developing+Hell+Hades\&utm_source=chatgpt.com)
+
+[Купить Hades — ключ Steam на ПК от 260₽ | IGM.GG](https://images.openai.com/static-rsc-4/m2QIwa9Umn40sTneppY9c22kEjIzZcgv9FwsjJ8zU62zwYJ-PEr00ksy-oBeFjSVYGkfugpUFo4yGQV8SIMo_QCrKH6CBXNS4KoR5dGAr6JhORm9wF0NIlhyYfyZz47yE23qTq79lULXo3SgSJ6Po_Ye-3r6SnvAFNUJ1hcXlZI?purpose=inline)
+
+2\. The Origins of Hades — Greg Kasavin
+
+First-party account of the game's original design philosophy.
+
+[Read PlayStation interview](https://blog.playstation.com/?p=351740\&utm_source=chatgpt.com)
+
+[Hades review: a sexy, scintillating sojourn in the Greek underworld | Games | The Guardian](https://images.openai.com/static-rsc-4/eqk82k8pkmMO_zJMP604cpPPnbF59ysQz_hZ2dhm8xRZDsAjblgS0Y3HCuZ9d61481l7HwIe6Z6IS6o5to9F7oZ5OfekWHk8AKlKjdtQdBoNHNSOGaIVoqd0zo_IiyRQbMxmF_8K-96LWJ1tnhJz4bIr4_EuoRjsd-II5-8zjbQ?purpose=inline)
+
+3\. Behind the Art of Hades — Jen Zee
+
+Production techniques, artistic decisions, tools and asset quantities.
+
+[Read art direction interview](https://mcvuk.com/business-news/behind-the-art-of-hades-we-value-artistic-integrity-and-excellence-in-artistic-craft-at-supergiant-however-were-first-and-foremost-a-game-design-lead-team/?utm_source=chatgpt.com)
+
+[GDC (Game Developers Conference) Talk: Breathing Life into Greek Myth - The Dialogue of Hades from GDC | Class Central](https://images.openai.com/static-rsc-4/MgJKYa_i0Pbl5H96BS0c038VsA-AswojVWVUfE8h8WXRDSbQy0PzvNarFpbR0eK_L2wwNuR-NvvucL6ygJGwMD-dBQl5GNKNo84bSUm8W0ZGf8eRm1GYM_Y_CTv6MpN-04bZ2n5U3DgkG-DYaL6lSJ02CTOuLqJjG7de49lp3FU?purpose=inline)
+
+4\. Breathing Life into Greek Myth — GDC 2021
+
+Dialogue production, voice recording and narrative implementation.
+
+[View GDC session](https://gdcvault.com/play/1027149/Breathing-Life-into-Greek-Myth?utm_source=chatgpt.com)
+
+[HADES ORIGINAL SOUNDTRACK (2020) MP3 - Download Soundtracks for FREE!](https://images.openai.com/static-rsc-4/duDxz2BWRXi5giHPdd6ecek0awn7-_hfHjD43DfHPSZiUiU-Lgrz94luVvhhDsohLS7YwJYB4uJtlFvAf_Xgaj3b5fah5rE8scwbpiSiejinQZcbPqBZ_pymPq05vBDeoylQWUZWwUgntFPIL-qeA7JPpDHX6gi3CpJEhBzZIH0?purpose=inline)
+
+5\. Darren Korb interview
+
+Adaptive music, composition and sound design.
+
+[Read audio interview](https://www.rpgsite.net/interview/20348-supergiant-games-interview-2026-greg-kasavin-darren-korb-hades-2-ending-music-future-coffee?utm_source=chatgpt.com)
+
+[Chơi lại bom tấn indie Hades (2020): Vẫn cuốn như ngày mới ra](https://images.openai.com/static-rsc-4/jewRBbfaIvQWOxthJ1dgYNYv2A2VULOwR0LA5VNFikzfUu3nDrUX36dzUgWWpicvCrnkkf2AS8LSV12xYEm0eKyXCjrVnYIB_tAmfIbV1YciE_I2GEVYCUaIeCJKrfzjIhKlV4p4EGV3ThtjT0djGlCT1Y_llgDq0Gy-ZDvhsgI?purpose=inline)
+
+6\. Hades roguelike design interview
+
+Every-run progression, difficulty, design inspirations and replayability.
+
+[Read Greg Kasavin interview](https://www.tomsguide.com/features/hades-exclusive-interview-supergiant?utm_source=chatgpt.com)
+
+# 19. Final assessment
+
+My biggest takeaway from studying Hades is that Supergiant didn't try to make an enormous game by simply producing an enormous amount of content.
+
+They built a relatively small number of fundamental systems that could interact in many different ways.
+
+That is the real genius of the design.
+
+The five combat actions are simple. The weapons give them different identities. Boons transform them. Enemies challenge them. Rooms create different situations. Progression gives players reasons to return. The narrative gives those repeated attempts meaning.
+
+Everything connects.
+
+For Kaliyuga, I would adopt this same development philosophy:
+
+Build a small number of exceptionally polished systems, then extract as much depth as possible from their interactions.
+
+That is a much more achievable and sustainable approach than trying to compete with the sheer quantity of content in a game like Hades.
+
+One final recommendation: when studying Hades, don't just watch a complete run. Watch the same weapon being played with different builds, observe the same enemy against different weapons, and study boss encounters frame by frame. That's where the real design knowledge becomes apparent.
+
+## What I recommend doing next
+
+I would turn this research into a dedicated Hades vs. Kaliyuga development blueprint, covering combat architecture, movement, hitboxes, enemy AI, boss phases, VFX, animation states, progression and the actual implementation priorities for our vertical slice. That would translate these lessons into concrete development tasks rather than leaving them as general inspiration.

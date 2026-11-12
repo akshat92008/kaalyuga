@@ -181,6 +181,7 @@ import {
   createChamberTrapsRuntime,
   constrainActorToChamber,
   getChamberGeometry,
+  getOrStartArenaVideo,
   renderParallaxAbyss,
   renderIsometricChamberPlatform,
   updateAndRenderPressureTraps,
@@ -1545,7 +1546,11 @@ export default function KaliyugaArena() {
       };
 
       const cfg = configs[type];
-      if (typeof window !== 'undefined' && isMultiRowSpriteUrl(cfg.sheet)) {
+      if (
+        typeof window !== 'undefined' &&
+        simRef.current.enemyRenderMode !== 'all_3d' &&
+        isMultiRowSpriteUrl(cfg.sheet)
+      ) {
         loadAndProcessSprite(cfg.sheet, {
           mode: 'character',
           gridLayout: 'multirow',
@@ -1732,8 +1737,29 @@ export default function KaliyugaArena() {
       const sim = simRef.current;
       const clampedIdx = Math.max(0, Math.min(CHAMBERS.length - 1, index));
       const spec = CHAMBERS[clampedIdx];
-      if (!boss3dRef.current) {
-        boss3dRef.current = new Boss3DRenderer(288);
+      // Start chamber background image & MP4 arena video FIRST so they never queue behind 3D FBX downloads
+      if (typeof window !== 'undefined') {
+        if (spec.backgroundUrl && !bgImagesRef.current.has(spec.backgroundUrl)) {
+          const img = new Image();
+          img.src = spec.backgroundUrl;
+          bgImagesRef.current.set(spec.backgroundUrl, img);
+        }
+        if (spec.videoUrl && sim.videoBgEnabled) {
+          getOrStartArenaVideo(spec.videoUrl, false);
+        }
+      }
+      if (clampedIdx === 3 || clampedIdx === 7) {
+        if (!boss3dRef.current) {
+          boss3dRef.current = new Boss3DRenderer(288);
+        }
+        const bossKind = clampedIdx === 3 ? 'dundubhi' : 'vrikodara';
+        if (typeof window !== 'undefined') {
+          window.setTimeout(() => {
+            boss3dRef.current?.ensureBossLoaded(bossKind);
+          }, 60);
+        } else {
+          boss3dRef.current.ensureBossLoaded(bossKind);
+        }
       }
       const cw = typeof window !== 'undefined' ? window.innerWidth || sim.viewportW || 1440 : sim.viewportW || 1440;
       const ch = typeof window !== 'undefined' ? window.innerHeight || sim.viewportH || 900 : sim.viewportH || 900;
@@ -1758,7 +1784,7 @@ export default function KaliyugaArena() {
       sim.gateWipeTimer = 0.32;
       sim.chasmVaultCalloutCd = 0;
 
-      // Lazy-load current & next chamber backgrounds and multi-row enemy/boss sheets on demand
+      // Lazy-load current & next chamber backgrounds and (when 2D fallback mode is used) multi-row sheets
       [clampedIdx, Math.min(CHAMBERS.length - 1, clampedIdx + 1)].forEach((idxToLoad) => {
         const chToLoad = CHAMBERS[idxToLoad];
         if (!chToLoad) return;
@@ -1771,20 +1797,22 @@ export default function KaliyugaArena() {
             }
           }
         );
-        if (chToLoad.id === 4) {
-          loadAndProcessSprite(GAME_ASSETS.bossSheets.dundubhiMinotaurSheetP1, {
-            mode: 'character',
-            gridLayout: 'multirow',
-          });
-          loadAndProcessSprite(GAME_ASSETS.bossSheets.dundubhiMinotaurSheetP2, {
-            mode: 'character',
-            gridLayout: 'multirow',
-          });
-        } else if (chToLoad.id === 8) {
-          loadAndProcessSprite(GAME_ASSETS.bossSheets.vrikodaraDemonicKingSheet, {
-            mode: 'character',
-            gridLayout: 'multirow',
-          });
+        if (sim.enemyRenderMode !== 'all_3d') {
+          if (chToLoad.id === 4) {
+            loadAndProcessSprite(GAME_ASSETS.bossSheets.dundubhiMinotaurSheetP1, {
+              mode: 'character',
+              gridLayout: 'multirow',
+            });
+            loadAndProcessSprite(GAME_ASSETS.bossSheets.dundubhiMinotaurSheetP2, {
+              mode: 'character',
+              gridLayout: 'multirow',
+            });
+          } else if (chToLoad.id === 8) {
+            loadAndProcessSprite(GAME_ASSETS.bossSheets.vrikodaraDemonicKingSheet, {
+              mode: 'character',
+              gridLayout: 'multirow',
+            });
+          }
         }
       });
 
@@ -2155,188 +2183,107 @@ export default function KaliyugaArena() {
       bgImagesRef.current.set(url, img);
     };
 
-    // Lightweight startup asset loading: preload only Title Screen + Chamber 1 & 2 backgrounds (other chambers lazy-load on transition)
-    loadBgWithRetry(GAME_ASSETS.titleBackdrop);
-    loadBgWithRetry(GAME_ASSETS.deathBackdrop);
-    loadBgWithRetry(GAME_ASSETS.eclipsePortrait);
-
-    CHAMBERS.slice(0, 2).forEach((c) => {
-      loadBgWithRetry(c.backgroundUrl);
-      if (c.unlockedBackgroundUrl) {
-        loadBgWithRetry(c.unlockedBackgroundUrl);
+    // Prioritize active starting chamber background & video so 3D models and arena video never queue behind 2D decal sheets
+    const startParams =
+      typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+    const rawStartCh = Number(startParams?.get('chamber'));
+    const initialChIdx =
+      Number.isFinite(rawStartCh) && rawStartCh >= 1 && rawStartCh <= CHAMBERS.length
+        ? rawStartCh - 1
+        : 0;
+    const initialChamber = CHAMBERS[initialChIdx] || CHAMBERS[0];
+    if (initialChamber) {
+      loadBgWithRetry(initialChamber.backgroundUrl);
+      if (initialChamber.videoUrl) {
+        getOrStartArenaVideo(initialChamber.videoUrl, false);
       }
+    }
+    loadBgWithRetry(GAME_ASSETS.titleBackdrop);
+
+    // Preload Kurukshetra Pillar prop immediately for Chamber 4/8 pillar mechanics & test snapshot
+    loadAndProcessSprite(GAME_ASSETS.kaliyugaProps.kurukshetraPillar, {
+      removeBlackBg: true,
+      stripCornerWatermark: true,
+      frameCount: 1,
+      mode: 'prop',
+      gridLayout: '1xN',
     });
 
-    // Preload 5 bespoke 3D architectural prop sprites with 'prop' mode to preserve full aspect ratio
-    Object.values(GAME_ASSETS.kaliyugaProps).forEach((url) => {
-      loadAndProcessSprite(url, {
-        removeBlackBg: true,
-        stripCornerWatermark: true,
-        frameCount: 1,
-        mode: 'prop',
-        gridLayout: '1xN',
-      });
-    });
-
-    // Lazy-load 2D fallback enemy sheets on demand via getProcessedSpriteSync so 3D enemy FBXs get 100% network priority
     const staggerTimers: number[] = [];
-
-    // Preload 4x1 Animated Roaring Agni Brazier Flame Flipbook
-    loadAndProcessSprite(GAME_ASSETS.brazierFlame4x1, {
-      removeBlackBg: true,
-      stripCornerWatermark: true,
-      frameCount: 4,
-      mode: 'vfx',
-      gridLayout: '1xN',
-    });
-
-    // Preload Bespoke Uploaded AAA Combat Slash Arcs, Molten Crater Decal & Blazing Agneyastra Fire-Arrow Sprites
-    loadAndProcessSprite(GAME_ASSETS.bespokeSlashArc, {
-      removeBlackBg: true,
-      stripCornerWatermark: true,
-      frameCount: 1,
-      mode: 'vfx',
-      gridLayout: '1xN',
-    });
-    loadAndProcessSprite(GAME_ASSETS.agniSlashArcAlt, {
-      removeBlackBg: true,
-      stripCornerWatermark: true,
-      frameCount: 1,
-      mode: 'vfx',
-      gridLayout: '1xN',
-    });
-    loadAndProcessSprite(GAME_ASSETS.moltenCraterDecal, {
-      removeBlackBg: true,
-      stripCornerWatermark: true,
-      frameCount: 1,
-      mode: 'vfx',
-      gridLayout: '1xN',
-    });
-    loadAndProcessSprite(GAME_ASSETS.agneyastraArrow, {
-      removeBlackBg: true,
-      stripCornerWatermark: true,
-      frameCount: 1,
-      mode: 'vfx',
-      gridLayout: '1xN',
-    });
-
-    // Load ground telegraphs, 2x2 Vedic Combat VFX, Aghori Skull/Lotus VFX, Ground Ruptures, Lion Pillar/Traps, impacts & gates
-    loadAndProcessSprite(GAME_ASSETS.vedicCombatVfx2x2, {
-      removeBlackBg: true,
-      stripCornerWatermark: true,
-      frameCount: 4,
-      mode: 'vfx',
-      gridLayout: '2x2',
-    });
-    loadAndProcessSprite(GAME_ASSETS.vfxSkullAndLotus2x2, {
-      removeBlackBg: true,
-      stripCornerWatermark: true,
-      frameCount: 4,
-      mode: 'vfx',
-      gridLayout: '2x2',
-    });
-    loadAndProcessSprite(GAME_ASSETS.groundDecals2x2, {
-      removeBlackBg: true,
-      stripCornerWatermark: true,
-      frameCount: 4,
-      mode: 'vfx',
-      gridLayout: '2x2',
-    });
-    loadAndProcessSprite(GAME_ASSETS.groundRuptures2x2, {
-      removeBlackBg: true,
-      stripCornerWatermark: true,
-      frameCount: 4,
-      mode: 'vfx',
-      gridLayout: '2x2',
-    });
-    loadAndProcessSprite(GAME_ASSETS.lionPillarAndTraps2x2, {
-      removeBlackBg: true,
-      stripCornerWatermark: true,
-      frameCount: 4,
-      mode: 'prop',
-      gridLayout: '2x2',
-    });
-    loadAndProcessSprite(GAME_ASSETS.vfxSlash2x2, {
-      removeBlackBg: true,
-      stripCornerWatermark: true,
-      frameCount: 4,
-      mode: 'vfx',
-      gridLayout: '2x2',
-    });
-    loadAndProcessSprite(GAME_ASSETS.combatImpacts2x2, {
-      removeBlackBg: true,
-      stripCornerWatermark: true,
-      frameCount: 4,
-      mode: 'vfx',
-      gridLayout: '2x2',
-    });
-    loadAndProcessSprite(GAME_ASSETS.floorTraps2x2, {
-      removeBlackBg: true,
-      stripCornerWatermark: true,
-      frameCount: 4,
-      mode: 'prop',
-      gridLayout: '2x2',
-    });
-    loadAndProcessSprite(GAME_ASSETS.exitGateArchways2x1, {
-      removeBlackBg: true,
-      stripCornerWatermark: true,
-      frameCount: 2,
-      mode: 'prop',
-      gridLayout: '1xN',
-    });
-    loadAndProcessSprite(GAME_ASSETS.gateOverlays2x2, {
-      removeBlackBg: true,
-      stripCornerWatermark: true,
-      frameCount: 4,
-      mode: 'vfx',
-      gridLayout: '2x2',
-    });
-    loadAndProcessSprite(GAME_ASSETS.rewardOrbs2x2, {
-      removeBlackBg: true,
-      stripCornerWatermark: true,
-      frameCount: 4,
-      mode: 'vfx',
-      gridLayout: '2x2',
-    });
-    loadAndProcessSprite(GAME_ASSETS.foregroundOverhangsA2x2, {
-      removeBlackBg: true,
-      stripCornerWatermark: true,
-      frameCount: 4,
-      mode: 'prop',
-      gridLayout: '2x2',
-    });
-    loadAndProcessSprite(GAME_ASSETS.foregroundOverhangsB2x2, {
-      removeBlackBg: true,
-      stripCornerWatermark: true,
-      frameCount: 4,
-      mode: 'prop',
-      gridLayout: '2x2',
-    });
-
-    // Preload new hand-painted 8-frame & 6-frame VFX flipbook sprite sheets (staggered so initial paint is instant)
-    Object.values(GAME_ASSETS.vfxFlipbooks).forEach((vfxUrl, vfxIdx) => {
-      const timerId = window.setTimeout(() => {
-        const is1x6 = vfxUrl.includes('Ground_slam_impact_sprite_sheet_');
-        const is1x8 =
-          vfxUrl.includes('Axe_slash_trail_sprite_sheet_') ||
-          vfxUrl.includes('Weapon_slash_animation_sprite_sheet_') ||
-          vfxUrl.includes('Hand-painted_enemy_damage_hit_burst_') ||
-          vfxUrl.includes('Boss_charge_dust_trail_sprite_') ||
-          vfxUrl.includes('Earthy_dust_burst_sprite_sheet_') ||
-          vfxUrl.includes('Hand-painted_dust_burst_animation_') ||
-          vfxUrl.includes('Dust_burst_sprite_sheet_animation_') ||
-          vfxUrl.includes('05d4d912') ||
-          vfxUrl.includes('Gemini_Generated_Image_ckan5eckan5eckan') ||
-          vfxUrl.includes('Gemini_Generated_Image_g4k6rg4k6rg4k6rg');
-        loadAndProcessSprite(vfxUrl, {
+    const deferredTasks: Array<() => void> = [
+      () =>
+        loadAndProcessSprite(GAME_ASSETS.brazierFlame4x1, {
           removeBlackBg: true,
           stripCornerWatermark: true,
-          frameCount: is1x6 ? 6 : 8,
+          frameCount: 4,
           mode: 'vfx',
-          gridLayout: is1x6 || is1x8 ? '1xN' : '4x2',
-        });
-      }, vfxIdx * 28);
-      staggerTimers.push(timerId);
+          gridLayout: '1xN',
+        }),
+      () =>
+        loadAndProcessSprite(GAME_ASSETS.bespokeSlashArc, {
+          removeBlackBg: true,
+          stripCornerWatermark: true,
+          frameCount: 1,
+          mode: 'vfx',
+          gridLayout: '1xN',
+        }),
+      () =>
+        loadAndProcessSprite(GAME_ASSETS.agneyastraArrow, {
+          removeBlackBg: true,
+          stripCornerWatermark: true,
+          frameCount: 1,
+          mode: 'vfx',
+          gridLayout: '1xN',
+        }),
+      () =>
+        loadAndProcessSprite(GAME_ASSETS.floorTraps2x2, {
+          removeBlackBg: true,
+          stripCornerWatermark: true,
+          frameCount: 4,
+          mode: 'prop',
+          gridLayout: '2x2',
+        }),
+      () =>
+        loadAndProcessSprite(GAME_ASSETS.exitGateArchways2x1, {
+          removeBlackBg: true,
+          stripCornerWatermark: true,
+          frameCount: 2,
+          mode: 'prop',
+          gridLayout: '1xN',
+        }),
+      () =>
+        loadAndProcessSprite(GAME_ASSETS.rewardOrbs2x2, {
+          removeBlackBg: true,
+          stripCornerWatermark: true,
+          frameCount: 4,
+          mode: 'vfx',
+          gridLayout: '2x2',
+        }),
+      () =>
+        loadAndProcessSprite(GAME_ASSETS.vfxFlipbooks.undeadSpawn4x2, {
+          removeBlackBg: true,
+          stripCornerWatermark: true,
+          frameCount: 8,
+          mode: 'vfx',
+          gridLayout: '4x2',
+        }),
+      () =>
+        loadAndProcessSprite(GAME_ASSETS.vfxFlipbooks.healingPulse4x2, {
+          removeBlackBg: true,
+          stripCornerWatermark: true,
+          frameCount: 8,
+          mode: 'vfx',
+          gridLayout: '4x2',
+        }),
+      () => {
+        loadBgWithRetry(GAME_ASSETS.deathBackdrop);
+        loadBgWithRetry(GAME_ASSETS.eclipsePortrait);
+      },
+    ];
+
+    deferredTasks.forEach((fn, idx) => {
+      const tid = window.setTimeout(fn, 2400 + idx * 220);
+      staggerTimers.push(tid);
     });
 
     // Expose frozen read-only diagnostic hook when not in strict production lock
@@ -8117,8 +8064,9 @@ export default function KaliyugaArena() {
                 : GAME_ASSETS.enemySheets.demonicOgreSheet ||
                   GAME_ASSETS.bossSheets.vrikodaraDemonicKingSheet;
 
-            let boss2DAsset = getProcessedSpriteSync(bossSheetUrl);
-            if (!boss2DAsset) {
+            let boss2DAsset =
+              sim.enemyRenderMode !== 'all_3d' ? getProcessedSpriteSync(bossSheetUrl) : undefined;
+            if (!boss2DAsset && sim.enemyRenderMode !== 'all_3d') {
               loadAndProcessSprite(bossSheetUrl, {
                 mode: 'character',
                 gridLayout: 'multirow',
@@ -8133,7 +8081,7 @@ export default function KaliyugaArena() {
             const use3DBakedBoss = sim.enemyRenderMode === 'all_3d' || !boss2DAsset;
             let drew3DBakedBoss = false;
 
-            if (use3DBakedBoss) {
+            if (use3DBakedBoss && sim.state !== 'title') {
               if (!boss3dRef.current) {
                 boss3dRef.current = new Boss3DRenderer(288);
               }
@@ -8232,8 +8180,9 @@ export default function KaliyugaArena() {
                 ? GAME_ASSETS.enemySheets.fantasyKnightSheet
                 : GAME_ASSETS.enemySheets.nagaWarriorSheet);
 
-            let sheetAsset = getProcessedSpriteSync(sheetUrl);
-            if (!sheetAsset && isMultiRowSpriteUrl(sheetUrl)) {
+            const sheetAsset =
+              sim.enemyRenderMode !== 'all_3d' ? getProcessedSpriteSync(sheetUrl) : undefined;
+            if (!sheetAsset && sim.enemyRenderMode !== 'all_3d' && isMultiRowSpriteUrl(sheetUrl)) {
               loadAndProcessSprite(sheetUrl, {
                 mode: 'character',
                 gridLayout: 'multirow',
@@ -8264,12 +8213,15 @@ export default function KaliyugaArena() {
                 ? 1 - Math.max(0, e.aiTimer / 0.32)
                 : 0;
 
-            const explicitEnemyFrame = getMultiRowFrameBounds(
-              sheetAsset,
-              enemyAnimState,
-              e.animTime,
-              enemyStateProgress
-            );
+            const explicitEnemyFrame =
+              sim.enemyRenderMode !== 'all_3d'
+                ? getMultiRowFrameBounds(
+                    sheetAsset,
+                    enemyAnimState,
+                    e.animTime,
+                    enemyStateProgress
+                  )
+                : null;
 
             const animFrame =
               e.aiState === 'attack'
@@ -8312,6 +8264,7 @@ export default function KaliyugaArena() {
 
             const enemy3d = enemy3dRef.current;
             const renderedEnemy3D =
+              sim.state !== 'title' &&
               sim.enemyRenderMode === 'all_3d' &&
               enemy3d &&
               enemy3d.renderEnemy({
@@ -8944,7 +8897,7 @@ export default function KaliyugaArena() {
         const bannerAlpha = Math.min(1, sim.chamberBannerTimer * 1.2);
         ctx.save();
         ctx.globalAlpha = bannerAlpha;
-        const by = ch * 0.10;
+        const by = chamberSpec.isBossChamber ? Math.max(118, ch * 0.165) : ch * 0.10;
 
         ctx.textAlign = 'center';
 

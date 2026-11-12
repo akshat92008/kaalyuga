@@ -1,0 +1,1997 @@
+# HADES vs. KALIYUGA: THE BLEEDING CROWN
+
+## Dedicated Game Development Blueprint
+
+Design comparison · Combat architecture · Enemy AI · Boss encounters · 2.5D rendering · Progression · Production pipeline · Vertical-slice implementation
+
+[First Impressions: HADES by Supergiant Games | by MindMine TV | MindMine | Medium](https://images.openai.com/static-rsc-4/DV0rmyWTwrdS7EDJpSykr_UlRqDDlo-gsdmrOK-QeAX3HAzKSLgM0DVWj9mq1GxhcXtB7_3c3QS_dTI3jwLqYeh7Gw2KcpiqSA7PKK09roraLA7o366ZOONyl3-sAqe6kUq1qangebW7VaJEZ4MI2wEpbARivfJjHTbE_QfyBJM?purpose=inline)
+
+[Chơi lại bom tấn indie Hades (2020): Vẫn cuốn như ngày mới ra](https://images.openai.com/static-rsc-4/jewRBbfaIvQWOxthJ1dgYNYv2A2VULOwR0LA5VNFikzfUu3nDrUX36dzUgWWpicvCrnkkf2AS8LSV12xYEm0eKyXCjrVnYIB_tAmfIbV1YciE_I2GEVYCUaIeCJKrfzjIhKlV4p4EGV3ThtjT0djGlCT1Y_llgDq0Gy-ZDvhsgI?purpose=inline)
+
+[Mahabharat Episode 9: Amba Thirsts for Revenge](https://images.openai.com/static-rsc-4/7rYxEqXF_bP-6drmgu6gRGoleBaLOVj10CH1Gx7IJMNyRNbhfHPFJ-5MVU28hd5a9nz5tHj1RDzGIVKxgCbIEMouS5nZjsdgbGe_94wvg2C786CD4VeCFa1iQqD4tuLc3XmA7XTXRytT2uEhagIxlDHMSkZ7panXW9Yo8tG4wx8?purpose=inline)
+
+7
+
+The objective is not to recreate Hades. It is to understand the systems that make Hades work and translate those systems into Kaliyuga's own identity.
+
+I am treating this as a development document that can be handed to your AI coding agents and used as a reference while building the game.
+
+There is one important scope decision:
+
+Vertical-slice scope locked
+
+We are focusing on the existing vertical slice:
+
+1. Five-scroll prologue and opening.
+2. Vaitarani Ferry Ghat hub.
+3. Savitri and the weaponsmith interactions.
+4. Act I – Charnel Plains.
+5. Existing Charnel enemies and encounters.
+6. Dundubhi boss.
+7. Vrikodara boss.
+8. First shard and memory.
+9. Sanjaya's first correction.
+10. Ferry I conclusion.
+
+We are not expanding the roster, adding new weapon classes, creating additional voice acting or introducing new secondary Astras just to imitate Hades.
+
+Our existing Parashu, Rudra's combat foundation, stances, parry and existing Astra systems are the foundation to work with.
+
+# PART I — Understanding the two games
+
+## 1. Fundamental design differences
+
+[Hades Guide: How to Play and Everything You Need to Know | Push Square](https://images.openai.com/static-rsc-4/I0m6jW43AdgD5yJaVG4va8XMtnlV7WuaU5uCepglFJJHBgMazbZxJtUachU0GfK0aeCm8Z05cOkg06lCvQEpfZoDuv8L64VE1Ex35DXvF6hVtFuaeUbRPlvCCANTINAo6-1Q403D7aKF1CiB7ZmeH698X7_X6_JNa4paa9Wwk8M?purpose=inline)
+
+Hades
+
+Fast, room-based, build-driven roguelike.
+
+[Raji: Kaliyuga - Epic Action-Adventure Game | Indian Mythology | Steam](https://images.openai.com/static-rsc-4/RTSGYCh4siIRfP0QnFpMUlGE7X1B_kUzwk0kWJV-kvGfzd_nvJDibGjSZ9D0PZLv8Di8p_fgwulo_4_ykKGXZMqENIAwS7lgPISTpJ1s2YXk7lWqHOgKf-9ENtPGQ73OitwUE2m8So1WkEZw8hfVUaw1lCBQdJd2ZRxViHXNmLo?purpose=inline)
+
+Kaliyuga
+
+Story-driven, boss-focused mythological action roguelike.
+
+| Category        | Hades                           | Kaliyuga                                    |
+| --------------- | ------------------------------- | ------------------------------------------- |
+| Camera          | Fixed isometric                 | Fixed isometric                             |
+| Character       | 3D-rendered 2D presentation     | 3D Rudra                                    |
+| Regular enemies | 2D presentation                 | Painted 2D sprites                          |
+| Bosses          | Distinctive animated characters | Selective 2D/3D presentation                |
+| Combat          | Fast, continuous                | Deliberate, impactful                       |
+| Weapons         | Six weapon families             | Parashu-focused slice                       |
+| Abilities       | Olympian boons                  | Existing stances and Astras                 |
+| Level structure | Randomized authored chambers    | Designed chambers and encounters            |
+| Progression     | Repeated escape attempts        | Story and shard progression                 |
+| Hub             | House of Hades                  | Vaitarani Ferry Ghat                        |
+| Narrative       | Reactive character dialogue     | Illustrated cutscenes and text interactions |
+| Audio           | Dynamic music and extensive VO  | Mythological orchestral identity            |
+
+The biggest difference is the combat philosophy.
+
+Hades prioritizes fast, continuous action. Kaliyuga can have heavier attacks, more deliberate enemy encounters and greater emphasis on boss pattern recognition.
+
+We should borrow Hades' responsiveness without necessarily copying its attack speed.
+
+## 2. The development philosophy we should adopt
+
+Hades was built around interconnected systems, rather than hundreds of disconnected features.
+
+Its art direction also evolved around production feasibility. Jen Zee explained that Supergiant moved from a painterly approach to pen-and-ink partly because it was faster to produce at the scale they needed.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://mcvuk.com\&sz=32)
+
+MCV/DEVELOP+1
+
+
+
+There are three principles I want to carry into Kaliyuga:
+
+Principle A — System depth over content quantity.
+
+Make existing enemies, attacks, upgrades and bosses interesting before producing more.
+
+Principle B — Every action must communicate.
+
+Movement, attacks, parries, enemy telegraphs and damage should be understandable visually and through sound.
+
+Principle C — Production consistency.
+
+Every asset must fit a defined pipeline. We should not have to redesign the game every time we introduce a new enemy.
+
+# PART II — Combat architecture
+
+## 3. Combat: Hades versus Kaliyuga
+
+[Critique de Hades : chef d’oeuvre de l’action – Etoile et champignon](https://images.openai.com/static-rsc-4/fdrvcMgEwxCikT795Y9SwRBm6M7SJ5lyuhhBzO_giNuA0rsRsm-4LdMmh8cwjMHBmVGfKUWdb2DYIh7J0zPwjgpscybT-TEI4nxG5I6DXBUwK4NDvm2YzTsNWcH0jGTlePHAssunXPOkI3wtPwqQxEJ7dHss9AeGGxNy1y8e-cU?purpose=inline)
+
+[Hades: Heart-Seeking Bow - gamepressure.com](https://images.openai.com/static-rsc-4/9QcAk1HtD_-_ZieYLtz55sOsJf56uqtdY2ajTR6Sd8-wNUwGMVQENkIOLULGiOMiN_dRKW6pfwwQNqg3G6U8R-N_HPSFSQ4E3K4AjjmBhVzVoVI0uKvZR0K2oDlw5HSU7jDsiJNYd49nlC7wg2_fmRfJjATMvti0IT9XbH6MHL8?purpose=inline)
+
+[Hades build recipes: Aspect of Zeus shield with Thunder Flourish - Album on Imgur](https://images.openai.com/static-rsc-4/EbTk04QdNLqMF0cOG32BeGvdy4nLVdLmbWKKhPWw9SafDU9PWSMiX2cUnT_6RnStmes0fQ1pmi_ASZhqSYebOk8nwhec1c9kPUhHWoIE9FWoLMhDxE_e1AUXZSbzjYK8lHY2YL3v8NQMEVc4iKS0KG7WXghD59owumfBVdWP9w0?purpose=inline)
+
+9
+
+This is the most important development area.
+
+I would divide combat into six interconnected systems:
+
+1. Player movement.
+2. Weapon attacks.
+3. Defensive mechanics.
+4. Enemy reactions.
+5. Combat feedback.
+6. Abilities and resources.
+
+These systems should be developed and tested together.
+
+### 3.1 Combat architecture comparison
+
+| System             | Hades approach          | Kaliyuga implementation                |
+| ------------------ | ----------------------- | -------------------------------------- |
+| Primary attack     | Weapon-specific attack  | Parashu light combo                    |
+| Secondary attack   | Weapon special          | Parashu heavy/special                  |
+| Movement           | Dash                    | Rudra dodge/dash                       |
+| Defence            | Dash and Athena effects | Existing parry and dodge               |
+| Build modification | Boons                   | Existing blessings/upgrades            |
+| Ultimate           | God Call                | Existing Astra system                  |
+| Combat resource    | Cast/Call resources     | Existing stamina and Astra Energy      |
+| Enemy response     | Hit, knockback, stagger | Impact, posture, stagger and knockback |
+
+Important: Do not create new combat buttons simply because Hades has them. We should preserve the existing control architecture.
+
+## 4. Rudra's movement system
+
+[Critique de Hades : chef d’oeuvre de l’action – Etoile et champignon](https://images.openai.com/static-rsc-4/fdrvcMgEwxCikT795Y9SwRBm6M7SJ5lyuhhBzO_giNuA0rsRsm-4LdMmh8cwjMHBmVGfKUWdb2DYIh7J0zPwjgpscybT-TEI4nxG5I6DXBUwK4NDvm2YzTsNWcH0jGTlePHAssunXPOkI3wtPwqQxEJ7dHss9AeGGxNy1y8e-cU?purpose=inline)
+
+[etoile-et-champignon.fr](https://etoile-et-champignon.fr/critique-de-hades-chef-doeuvre-de-laction/?utm_source=chatgpt.com)
+
+Movement is the foundation of combat.
+
+A player should never feel that the character is fighting against their input.
+
+### Required movement states
+
+| State           | Expected behaviour              |
+| --------------- | ------------------------------- |
+| Idle            | Stable standing animation       |
+| Moving          | Directional movement            |
+| Turning         | Smooth directional transition   |
+| Dash            | Fast directional movement       |
+| Attack movement | Appropriate movement commitment |
+| Hit reaction    | Temporary movement interruption |
+| Stagger         | Reduced or disabled control     |
+| Death           | Controlled death sequence       |
+
+### Movement requirements
+
+- Consistent movement speed.
+- Smooth directional changes.
+- No unwanted acceleration.
+- Reliable collision with the playable floor.
+- Correct foot anchoring.
+- No slipping during idle.
+- No animation overriding combat input.
+- No movement through solid enemies or obstacles unless explicitly intended.
+
+### Dash design
+
+Hades makes the dash a central combat action.
+
+For Rudra, it should provide:
+
+- A clear movement burst.
+- A controlled duration.
+- An intentional recovery window.
+- A defensive window if that is part of the existing design.
+- Consistent directional input.
+- Reliable interaction with enemy hitboxes.
+
+I recommend keeping dash invulnerability and dash distance as separate tuning parameters.
+
+That lets us balance defensive effectiveness without accidentally changing movement feel.
+
+### Acceptance criteria
+
+- Rudra responds to movement input immediately.
+- Dash does not cause unintended animation locking.
+- Dash cannot be spammed indefinitely if the current design requires stamina or cooldown restrictions.
+- Rudra cannot become stuck in a dash state.
+- Movement remains consistent throughout every chamber.
+
+## 5. Parashu combat system
+
+[Hades: Stygian Blade - gamepressure.com](https://images.openai.com/static-rsc-4/AWQ1C5EYGo-mUh0fFr7d6oT3oRhPj9_GfBbZUxe4jSLHoXvbBqH64WQkGT91NFHxmC9DQpGAfyUqoFMsVuoiD2mCi1CKTZTamKN8JbXacWNH2yrXijc8gOjlN-ULKri_1VIM6WRpqnEqemR3re34m1VlQoXGvL89dE1DNBIMlFA?purpose=inline)
+
+[Hades: Twin Fists - gamepressure.com](https://images.openai.com/static-rsc-4/1YIOO1hURtrPcOxP4DpEwRGGMy3U3nswZQLX5obvFeBKbqtbpVp7GzASP-HZ2yeyTr5UgiZaL-g4HjADffo0L486KXZlqI7GcsRxp4jD3af9o5HcMubV9mo-UVQHp31vFZi-A4bobAbqSzqw_b1BpjgvO7HejDdo1mZpDkGoapo?purpose=inline)
+
+[Axe of Ganesha (Parashu) 5 oz Pure Silver Coin by Spectres](https://images.openai.com/static-rsc-4/-ww7sJ7LBSyaSsRO6a-hBrAz7IzRppBTXr0lw1qaH8RDmaNGGj5H1kYjD-w63GVv86ZW9qw7adCJt3k_SDcU5pRWP2qeXvrO2LXqN0otRvAPxbOcSsPhBnLi2rCKs18Cmo4RhjI82DvhaVlX3o10S7tQZSQYmD8Y0twBNnNMucA?purpose=inline)
+
+9
+
+We should treat the Parashu as one weapon with multiple combat behaviours.
+
+We do not need six weapon types.
+
+We need one exceptionally polished weapon.
+
+### Proposed attack structure
+
+| Attack         | Function                              | Design purpose           |
+| -------------- | ------------------------------------- | ------------------------ |
+| Light attack 1 | Quick horizontal strike               | Fast initiation          |
+| Light attack 2 | Follow-up strike                      | Combo continuation       |
+| Light attack 3 | Stronger finishing strike             | Combo payoff             |
+| Heavy attack   | Committed powerful strike             | High impact              |
+| Heavy charge   | Stronger attack, if already supported | Risk/reward              |
+| Dash attack    | Mobile offensive strike               | Repositioning            |
+| Parry          | Defensive counter                     | Timing mastery           |
+| Stance attack  | Existing stance-specific variation    | Combat identity          |
+| Astra          | Existing ability                      | Powerful tactical moment |
+
+These are the target behaviours, not a requirement to implement every missing move during the vertical slice.
+
+### Attack state architecture
+
+```
+
+IDLE
+  |
+  +--> LIGHT_ATTACK_1
+  |       |
+  |       +--> LIGHT_ATTACK_2
+  |               |
+  |               +--> LIGHT_ATTACK_3
+  |
+  +--> HEAVY_ATTACK
+  |
+  +--> DASH
+  |
+  +--> PARRY
+  |
+  +--> STANCE_ACTION
+  |
+  +--> ASTRA_ACTION
+  |
+  +--> HIT_REACTION
+  |
+  +--> STAGGER
+  |
+  +--> DEATH
+
+```
+
+Every attack should have three timing windows:
+
+- Startup: attack preparation.
+- Active: damage can connect.
+- Recovery: attack finishes and control returns.
+
+This prevents the common problem of animations playing while the actual hitbox behaves independently.
+
+### Combo buffering
+
+Hades feels responsive partly because the game does not require the player to press every input at an exact frame.
+
+For Kaliyuga, we should test a small input-buffer window.
+
+For example:
+
+If the player presses the next attack slightly before the current attack finishes, the game queues it and executes it when the next combo window opens.
+
+This avoids requiring frame-perfect button presses.
+
+### Attack cancellation
+
+Not every action should cancel every other action.
+
+I recommend:
+
+| From         | Can transition into                  |
+| ------------ | ------------------------------------ |
+| Idle         | All valid actions                    |
+| Light attack | Next combo, permitted dash           |
+| Heavy attack | Recovery, permitted defensive action |
+| Dash         | Idle, permitted follow-up            |
+| Parry        | Counter or recovery                  |
+| Hit reaction | Recovery when reaction ends          |
+| Stagger      | Recovery when posture permits        |
+| Death        | Nothing                              |
+
+The final rules should be based on the existing combat implementation rather than creating conflicting state systems.
+
+## 6. The most important Hades lesson: hit confirmation
+
+[Combat | Hades Wiki](https://images.openai.com/static-rsc-4/fSmVlssjQMjVQJNMmZwopeYW3sA5g_lcz5NCoRgih_Awn1IQlKf-Zj7dfppddawG5a5Xp_rEb1sszj4vEuG3LYrylYsitB0d4ExSHzW3TSy8e7-b20mNlfzf0E7MKpybL0HkGO7p_Kf0_smjWRhKkw7FE9oPZN88KMdb7qNsb4I?purpose=inline)
+
+[Hades](https://images.openai.com/static-rsc-4/oSPAqRPVtAPgPI59wlUNVvL0WYruDkyTJt8CJMIIphcruCJ2VAD9xnzJJx03N4WFcVWHIZ98O8XsWW1xUV7daMtKz1JJ1hMIWZuruR0RqU0M2CaNnAQc-I55n05BpcP02xVLR6krghNnczKu_I9sOo6SDTecVXm0kUZeptFjkZU?purpose=inline)
+
+[死ぬたびに新しい要素が見つかるローグライクアクションがやめられない - プチメタ3.0](https://images.openai.com/static-rsc-4/Zq1SiD_ExXd-1ebtbdTAjG2KiLyJG-zgQVTOII-MpInFvafAOMCqj8qbh_eYa9M4JWXLKVEDQhy4OQ9wtTahDIAJ7Djl9V5Q_QX-14vJmr1Ff0aVkKCDNPSwCDFeSMRZbHFkz1-qTx8XDwSKkRZ3AbOcdS0BFAGWHBOZE7NzkuY?purpose=inline)
+
+8
+
+This is where many indie action games fail.
+
+An attack can have a beautiful animation and still feel terrible if the enemy doesn't respond correctly.
+
+Hades communicates impact using several simultaneous feedback layers.
+
+For Kaliyuga, we should establish the following hit-confirmation pipeline:
+
+Rudra attack connects
+
+Hitbox confirms collision
+
+Damage calculation
+
+Damage, armour, posture and modifiers
+
+Enemy reaction
+
+Hit animation, stagger, knockback
+
+Player feedback
+
+Impact VFX, sound, optional hitstop
+
+### Required feedback layers
+
+| Feedback                    | Priority   |
+| --------------------------- | ---------- |
+| Correct enemy hit reaction  | Critical   |
+| Correct damage registration | Critical   |
+| Weapon impact sound         | Critical   |
+| Visible impact effect       | High       |
+| Hitstop on selected attacks | High       |
+| Knockback                   | High       |
+| Stagger response            | High       |
+| Damage numbers              | Optional   |
+| Screen shake                | Controlled |
+
+### Hitstop
+
+Hitstop is a very short pause or slowdown around a successful impact.
+
+It can make heavy attacks feel substantially more powerful.
+
+But it should be used selectively.
+
+For example:
+
+- Light attacks: little or no hitstop.
+- Heavy attacks: stronger hitstop.
+- Boss finishing attacks: more pronounced impact.
+- Environmental attacks: context-dependent.
+
+These are tuning principles, not final frame values. We should determine actual timing through playtesting.
+
+Our target: Rudra's attacks should feel like they physically connect with something.
+
+## 7. Enemy AI architecture
+
+[Hades: Elizjum - GRYOnline.pl](https://images.openai.com/static-rsc-4/67vsJsPAvqyLu5EVuCnpP0RK1pw65jniLmt05u6OQR1an_Bs9e6QbNoMvbH3dWSlHSmgf-wnfIQR3iS19X2ZQELgds5vdv_f7Pg75EkgrcHmoHqTTPIsE9f2OOaVG_WJh2sO4Tv8LSGn9hK75UvpJ9pXaMj9O2lnG7zJQwYVNOk?purpose=inline)
+
+[Hades Review - GOTY, To Be Honest](https://images.openai.com/static-rsc-4/sMTcXe0qzCH4GhFkAy0sOHwFUwjTrhr8lC-1eVhX3mXuNAzf7coyop8NMUbH7POEYa1qfW7Nfg80OTb2P19FH2mOiKWbZIZFXd5T4UuzC8OgXS3GnSDC88ETeQN70AcJ7xGi5ltCGZAp2Sr_T7QEACb-9Vfef6Bc6h_U-_IQBxo?purpose=inline)
+
+[Hades: Heart-Seeking Bow - gamepressure.com](https://images.openai.com/static-rsc-4/9QcAk1HtD_-_ZieYLtz55sOsJf56uqtdY2ajTR6Sd8-wNUwGMVQENkIOLULGiOMiN_dRKW6pfwwQNqg3G6U8R-N_HPSFSQ4E3K4AjjmBhVzVoVI0uKvZR0K2oDlw5HSU7jDsiJNYd49nlC7wg2_fmRfJjATMvti0IT9XbH6MHL8?purpose=inline)
+
+12
+
+Hades doesn't need every enemy to have extremely sophisticated artificial intelligence.
+
+It gives enemies recognizable roles and combines those roles to create challenging encounters.
+
+We should use the same principle.
+
+### 7.1 Four fundamental enemy roles
+
+We can classify our existing enemy assets into these behavioural roles. This does not require adding new enemies.
+
+| Role                | Behaviour               | Player challenge     |
+| ------------------- | ----------------------- | -------------------- |
+| Basic melee         | Approaches and attacks  | Basic combat         |
+| Heavy melee         | Slow, powerful attacks  | Timing and parrying  |
+| Ranged              | Attacks from distance   | Positioning          |
+| Aggressive/charging | Rapidly closes distance | Movement and dodging |
+
+Some existing enemies can combine two roles.
+
+### 7.2 Enemy state machine
+
+Every regular enemy should use a consistent state architecture.
+
+```
+
+SPAWN
+  |
+  v
+IDLE
+  |
+  v
+DETECT PLAYER
+  |
+  v
+APPROACH / POSITION
+  |
+  v
+SELECT ATTACK
+  |
+  v
+TELEGRAPH
+  |
+  v
+ATTACK
+  |
+  v
+RECOVERY
+  |
+  +----> SELECT ATTACK
+  |
+  +----> REPOSITION
+
+INTERRUPT STATES:
+  HIT REACTION
+  STAGGER
+  KNOCKBACK
+  DEATH
+
+```
+
+### 7.3 Enemy behaviour requirements
+
+Detection
+
+- Detect Rudra within a defined radius.
+- Stop detecting when outside the relevant range.
+- Avoid activating enemies across the entire map unnecessarily.
+
+Positioning
+
+- Approach the player.
+- Maintain an appropriate attack distance.
+- Avoid stacking all enemies at the same coordinates.
+- Avoid continuously pushing against one another.
+
+Attack selection
+
+- Select an attack appropriate to distance.
+- Respect attack cooldowns.
+- Avoid overlapping attacks from every enemy simultaneously.
+- Avoid enemies repeatedly selecting attacks that cannot connect.
+
+Recovery
+
+- Give the player an opportunity to respond.
+- Avoid instant repeated attacks.
+- Make attack patterns recognizable.
+
+### 7.4 Coordinated enemy waves
+
+This is something I particularly recommend borrowing from Hades.
+
+Rather than spawning all enemies simultaneously and letting them independently attack Rudra, use controlled encounter groups.
+
+Example:
+
+Example encounter composition
+
+Wave 1 — Introduction
+
+Two basic melee enemies.
+
+Tests the player's basic attack and movement.
+
+Wave 2 — Pressure
+
+Two melee enemies and one ranged enemy.
+
+Forces the player to manage multiple directions.
+
+Wave 3 — Challenge
+
+One heavy enemy and supporting melee enemies.
+
+Tests parrying, stagger and attack timing.
+
+Completion
+
+All enemies defeated, reward unlocked.
+
+These are example configurations, not additional content requirements. Use the existing Charnel Plains roster.
+
+Important: Don't let every enemy attack simultaneously. Give the encounter an attack rhythm.
+
+The player should feel pressured, not cheated.
+
+# PART III — Boss development
+
+## 8. Hades boss design versus Kaliyuga boss design
+
+[Apa Itu Genre Game Roguelike dan Bagaimana Sejarahnya? – Kepedia.co.id](https://images.openai.com/static-rsc-4/4xa17FLvShVSpSlMbMWfrCAPAnAAwLRey6fygXE_0XKruiwg0eizIvV8EtUqJZ7J7JpLw6IfNSLiDfcD9zok-opoalI7Xf7ytRAku9anHhUhjLM38kX5W-7oEwzC5NW3TegIpshqlZtKEtMxLXGROXYa-AYSzl2841lHh0lnzCU?purpose=inline)
+
+[Hades Review](https://images.openai.com/static-rsc-4/eKALJ1Qwfm2Xk0q1NSsuTMeOAJelxvL9iCh4HhieqB567pSLGfwh5h7xKNWvoOjJM9At6dfWPsz7HNpopAMrBkuW1UFTcdHRbGu0mjDVWM_oKAJVNrbLXjmH5i1cKLsZ-fzikvyjnbLsOhIB2bCkefcBEkzn5ehDZBT-xJ0WdOg?purpose=inline)
+
+[Dundubhi Concept Art Open File on Behance :: Behance](https://images.openai.com/static-rsc-4/nDfK-KTJfuFWphcb0bfN_2SNblGCKwEogbUsjU5pEy1-CCvgmENYJxupZgXCQ1enW6tjd2t3TmaG_FGmJ9W5fcxsBwzNsmKSIZWXcFQ43E1zKWzqM3QP0Zy2G9UdVfcvIDSGv6zpi2IfHhtOHrG96eYnkFygwvroeBIsGD7AEpM?purpose=inline)
+
+5
+
+Boss encounters should be the strongest gameplay moments in Kaliyuga.
+
+I would use Hades' philosophy of recognizable attacks, clear telegraphs, distinct phases and meaningful recovery windows.
+
+But I would combine that with the more cinematic presentation we're pursuing.
+
+We have two existing bosses for the vertical slice, and each should test a different part of Rudra's combat system.
+
+## 8.1 Dundubhi — the first major boss
+
+[Mahishasur - The Demon Conqueror by Crazygarn3r on DeviantArt](https://images.openai.com/static-rsc-4/FbZXfLfllrOaf6N7bHokN0eWFkZtIxggVcrrYrvHe36z6DXZu4S2ATv3dab1y8cDetvqh4KPHmP1B1jBqBdf-OGXMWKePMd3YLk-JK796MzugDmBggSo3SzEGkucCNJbo14kzNrxL7mfp-Z2EkosWzvhYWyiqZn679kWqhV7X84?purpose=inline)
+
+[deviantart.com](https://www.deviantart.com/crazygarn3r/art/Mahishasur-The-Demon-Conqueror-992742858?utm_source=chatgpt.com)
+
+Reference for the existing Dundubhi character direction.
+
+Dundubhi should introduce the player to boss combat.
+
+His identity:
+
+- Massive bronze buffalo demon.
+- Low crescent horns.
+- Temple chains.
+- Smoke emerging from the iron nose-ring.
+- Heavy physical attacks.
+- Broken pillars and drums as environmental elements.
+
+### Dundubhi encounter architecture
+
+| Encounter element | Design                                    |
+| ----------------- | ----------------------------------------- |
+| Entrance          | Selective cinematic boss introduction     |
+| Basic attack      | Heavy close-range strike                  |
+| Charge            | Forward movement attack                   |
+| Horn attack       | Wide frontal threat                       |
+| Area attack       | Ground-impact attack                      |
+| Arena mechanic    | Pillars and drums                         |
+| Recovery          | Clear opportunity after committed attacks |
+| Defeat            | Dedicated death animation and reward      |
+
+### Boss phases
+
+Phase 1 — Physical pressure
+
+Introduction
+
+[Resonance: A Plague Tale Legacy: Resonance: A Plague Tale Legacy Releases August 27 - Focus Entertainment](https://images.openai.com/static-rsc-4/l2doAlW7M7AqSg1qCkcPqh9BxHO88dPFzoP9s4j41G1neKUJdGLXonTZBWrjSGucFO8fXqSazLjg1AGaFZYaymgyLlhq9MJx8xO5w6BfUbc5miZvo0UtyZif9RH9j2tWU_8rrIibN-wDwjHxEgLN5Er8WTJfiD1_x_UKBMI3EXw?purpose=inline)
+
+[focus-entmt.com](https://www.focus-entmt.com/en/news/resonance-a-plague-tale-legacy-releases-august-27?utm_source=chatgpt.com)
+
+- Introduces the boss's attack patterns.
+- Tests dodge timing.
+- Introduces the charge.
+
+  Phase 2 — Arena pressure
+
+  Escalation
+
+  [《黑神話：悟空》牛年前夕釋出新預告，牛頭巨人破門現身🐮 | 4Gamers](https://images.openai.com/static-rsc-4/7VS-K6qjZU-o8aeUFdxKDHuAADfm8F_ecAv4qz0wIAgm0qP0TkDrH_ohHBII2zwyxAeXC9syYCK6_5wReCHJdLCHwKnyAOrlsxtiPZMe0Lf8-5Qc45exL6KDrfaUoxOR4e7pe07JmHqEU1ypTrPkVeovHNd5B-adGuOnO3-6lLw?purpose=inline)
+
+  [4gamers.com.tw](https://www.4gamers.com.tw/news/detail/46664/black-myth-wukong-official-trailer-shows-gaint-bull-monster?utm_source=chatgpt.com)
+- Introduces the existing pillar/drum mechanics.
+- Increases environmental pressure.
+- Creates more complicated positioning decisions.
+
+  Defeat — Reward
+
+  Resolution
+- Distinct defeat animation.
+- Combat completion.
+- Reward and progression unlock.
+
+We should not add unnecessary attacks just to make the boss feel complicated.
+
+The existing attacks should be implemented and tuned properly first.
+
+## 8.2 Vrikodara — the major combat test
+
+[Rakshasa Name Generator - Free & Instant | GenName.io](https://images.openai.com/static-rsc-4/NpA40UpKDkf1L1e04lN_7_odR7ATM83kMTfCdUnKOjnpQeccY_hALKrdSiKdIxy7LkXMmzrcNX_SZ6Vf3nZ-eNt5pW3lnIKnOawrGni-0rjL6KcJDtyuX6K6Y5jheYNRkhOPQNU2yO5X_BECOvZi75R8Wo83g9yLAloCWrLMvjw?purpose=inline)
+
+[genname.io](https://genname.io/gen/rakshasa-names?utm_source=chatgpt.com)
+
+Vrikodara should feel substantially different from Dundubhi.
+
+His identity:
+
+- Starving ash-grey Rakshasa.
+- Exposed ribs.
+- Burn scars.
+- White hair.
+- Broken pillar.
+- Aggressive, unnatural movement.
+
+Where Dundubhi tests physical combat, Vrikodara should test the player's ability to understand dangerous patterns and manage space.
+
+### Existing Vrikodara mechanics
+
+| Mechanic         | Combat purpose                           |
+| ---------------- | ---------------------------------------- |
+| Vacuum attack    | Pulls Rudra into danger                  |
+| Slag attack      | Creates hazardous areas                  |
+| Consume          | Punishes poor positioning                |
+| Broken pillar    | Establishes the boss's physical identity |
+| Phase escalation | Increases pressure                       |
+
+### Boss phase structure
+
+Phase 1 — Hunting
+
+[Un soulslike in uscita sembra ispirarsi a Legacy of Kain: Soul Reaver - SpazioGames](https://images.openai.com/static-rsc-4/ZvPhrKzpzJ6jLBR9fYpgTcFtJoCfty4wBuABSIkNt1pqZGsj5JBLJK0_xfdt3os8iaVolCaYzdNmMvSF6bYUl1x2f7izIKy-kjWRiViunGr706tGsqeWbLGQ7XRrrMkZAQrhFYYu_caOd3TsgJd7B-zUdl3a3y1rfzrwRNR7apw?purpose=inline)
+
+[spaziogames.it](https://www.spaziogames.it/notizie/un-soulslike-in-uscita-sembra-ispirarsi-a-legacy-of-kain-soul-reaver?utm_source=chatgpt.com)
+
+- Introduce close-range attacks.
+- Establish movement patterns.
+- Teach the player to recognize the boss's preparation.
+
+Phase 2 — Consumption
+
+[夜叉與羅剎](https://images.openai.com/static-rsc-4/ek3ZLEfm3y2iqY9dWfrDj7bXugkKMT_VT-0hFdiLWy_D-ofxWjzHpJKmpcvtTIXvTVVwy57Au6AUlj4HZP30WcTXaf4ZJ9moJK9AsxaYXJr8pr8F-EU_LNM_FbvxXpUkKy_q8a6RLYG_2sl2ZcGjDCq1yE2QtsKhu_nBZ0fagH8?purpose=inline)
+
+[letung.com.tw](https://www.letung.com.tw/article/71/401?srsltid=AfmBOooUecJTsCsfATpF5YwHs13Oit-liux6ffFMnkCq_7qvCsqRimbl\&utm_source=chatgpt.com)
+
+- Introduce the existing vacuum mechanic.
+- Make positioning more important.
+- Introduce the Consume threat.
+
+Phase 3 — Desperation
+
+[Гайд по Верстаку для Перековки в Path of Exile 2: Использование для Крафта и Улучшений | Dving](https://images.openai.com/static-rsc-4/82EDtw6fdeOsXi0_kQjcyzGGwQBLbIu3ZPnNK3Z6acWxp_ulk6lRYgBdY_B_S_C7PpJUwG2Ynxbt1x-pTFBJiZRiMR5EIDHqPNkIMks6hePJ48dp_PjhOkvNfZUG34-sFXzcRlWBbboMdjE915VqQ8NBKEpfG_nxvpzAOm0uPTs?purpose=inline)
+
+[dving.net](https://dving.net/ru/guides/path-of-exile-2-guides/verstaku-dlia-perekovki-gaid?utm_source=chatgpt.com)
+
+- Escalate the existing attack patterns.
+- Increase the difficulty of surviving mistakes.
+- Preserve recognizable telegraphs.
+
+The exact number of phases should follow the existing implementation and fight length. Do not force three phases if the current encounter works better with two.
+
+## 8.3 Boss telegraph system
+
+This should be a shared system for both bosses.
+
+Each attack should have:
+
+1. Preparation animation.
+2. Visual indicator.
+3. Attack execution.
+4. Hit detection.
+5. Recovery.
+6. Return to the boss's combat state.
+
+For example:
+
+| Attack type    | Telegraph                                     |
+| -------------- | --------------------------------------------- |
+| Frontal strike | Weapon or body movement                       |
+| Charge         | Body lowered and directional preparation      |
+| Ground attack  | Raised body and ground-impact anticipation    |
+| Vacuum         | Visible gathering of debris and energy        |
+| Slag           | Ground hazard indication                      |
+| Consume        | Recognizable targeting and attack preparation |
+
+The player should be able to understand what is coming without reading a tutorial.
+
+### Boss HUD
+
+Required:
+
+- Boss name.
+- Health bar.
+- Phase transition feedback.
+- Optional posture/stagger indicator if the existing combat design supports it.
+
+Do not overcrowd the HUD.
+
+The boss and its attack animations should remain the focus.
+
+# PART IV — Chamber and level design
+
+## 9. How to adapt Hades' room structure
+
+[Hades Is Better Before You're Good at It — and That's the Point | GGS Blog](https://images.openai.com/static-rsc-4/zD19P3F-xonOFDdzc9hRyHLQINIlb2YsPQObEcbH2Lr8nwRIRRkbqfAbCXxFNYRt3H9CHyPUZY8dEgAUQQ1jjZuY8KsbF9hLPX9BQXMv3wvVWC01jfbiedxccFocnXZ2H0hFh3l9P1ec8pBMyY9-Mzb7BM0HqJoG5SCy_GkshzI?purpose=inline)
+
+[Hades: Asphodel - gamepressure.com](https://images.openai.com/static-rsc-4/0DzNSPtm4NBvrYGQde205dRK4oTxTolYpddMPFwPJS-Eku_PYB-xGI6clQzhnmpKOX13PhMlU35FHHy4Free3zqlhX3zP7zs0t6TgNIH_x70NWMlPvFwRpmds477cMnAATWj6nuLCR7JrWoYKrkjYmIouknsuQElTfuoT9enSmc?purpose=inline)
+
+[Лучшие инди-игры десятилетия — Minecraft, Terraria, Stardew Valley, Cuphead, Inside, Hades, Hollow Knight и другие - Чемпионат](https://images.openai.com/static-rsc-4/8ZIhzA82OWzSqcxUtftJpbqALGUHvMoEqtD4DvR7sYfT-F3L2xGpnPyc2SzbqnwCIJZD4Mm0U65ka4ynmmS-7FolmjGhIX4663p-n1b7eB0jGsaEPm4hyzJQtStrZTBM3Hyjx0TaaG8PAbsEwgLWoTH9P2dLksj-vlopeiSO6yI?purpose=inline)
+
+10
+
+Hades gets enormous replayability out of designed chambers and encounter combinations.
+
+For Kaliyuga, we don't need to reproduce its randomized chamber generator.
+
+We need a reliable encounter structure.
+
+### 9.1 The Kaliyuga chamber loop
+
+Enter chamber
+
+Environment and camera initialization
+
+Encounter begins
+
+Enemy spawning and combat activation
+
+Combat
+
+Enemy waves and existing combat systems
+
+Encounter completion
+
+Verify that all enemies are defeated
+
+Reward / progression
+
+Next chamber or boss
+
+### 9.2 Room design rules
+
+Every chamber should have a specific gameplay purpose.
+
+I recommend these categories:
+
+| Chamber type    | Purpose                                  |
+| --------------- | ---------------------------------------- |
+| Introduction    | Introduce enemies and basic combat       |
+| Standard        | Test familiar mechanics                  |
+| Mixed encounter | Combine different enemy roles            |
+| Elite           | Test combat mastery                      |
+| Boss            | Test learned mechanics                   |
+| Reward          | Provide progression and narrative payoff |
+
+These are functional categories, not a demand for more levels.
+
+### 9.3 Arena layout
+
+Every combat arena should be checked for:
+
+- Adequate playable space.
+- Clear enemy spawning positions.
+- Reliable collision boundaries.
+- Camera visibility.
+- No hidden player position.
+- No enemy spawning inside the player.
+- No inaccessible corners.
+- No collision with decorative scenery.
+- Enough room for boss attacks.
+
+Critical: Our playable floor must be independent of the animated background.
+
+This is particularly important for our 2.5D implementation.
+
+# PART V — 2.5D visual and technical architecture
+
+## 10. The most important difference between Hades and Kaliyuga visually
+
+[Hades (Video Game) Reviews at Levi Gether blog](https://images.openai.com/static-rsc-4/FcFExrs2mG80ilFuckN2TAtrNplV6xQqmKPVtbc_rEimEGHmwgilY24beXq-NivyOsyPgbDZ9LBJ8nz_ERGdlAFpAKmQJdcLSMgs57vHk0Y4n140AshfX3Ew0Cbhpj2E0uwheV06EyQcO9Blcske_8L4nUSIDGaIX9QT2-r-ROA?purpose=inline)
+
+[Лучшие инди-игры десятилетия — Minecraft, Terraria, Stardew Valley, Cuphead, Inside, Hades, Hollow Knight и другие - Чемпионат](https://images.openai.com/static-rsc-4/8ZIhzA82OWzSqcxUtftJpbqALGUHvMoEqtD4DvR7sYfT-F3L2xGpnPyc2SzbqnwCIJZD4Mm0U65ka4ynmmS-7FolmjGhIX4663p-n1b7eB0jGsaEPm4hyzJQtStrZTBM3Hyjx0TaaG8PAbsEwgLWoTH9P2dLksj-vlopeiSO6yI?purpose=inline)
+
+[Critique de Hades : chef d’oeuvre de l’action – Etoile et champignon](https://images.openai.com/static-rsc-4/fdrvcMgEwxCikT795Y9SwRBm6M7SJ5lyuhhBzO_giNuA0rsRsm-4LdMmh8cwjMHBmVGfKUWdb2DYIh7J0zPwjgpscybT-TEI4nxG5I6DXBUwK4NDvm2YzTsNWcH0jGTlePHAssunXPOkI3wtPwqQxEJ7dHss9AeGGxNy1y8e-cU?purpose=inline)
+
+10
+
+We have chosen a different rendering direction.
+
+Our current structure is:
+
+- Rudra: 3D.
+- Regular enemies: 2D sprite sheets.
+- Environments: painted backgrounds.
+- Environment animation: video or animated visual layers.
+- Bosses: existing mixed presentation.
+- Combat effects: painted, colourful 2D VFX.
+- Camera: fixed isometric.
+- Playable floor: separate collision and movement system.
+
+This is a viable approach, but it requires careful integration.
+
+## 10.1 Five-layer visual architecture
+
+Layer 5 — Foreground
+
+Foreground props, atmospheric effects, occlusion.
+
+Layer 4 — Characters
+
+3D Rudra, 2D enemies, boss models or sprites.
+
+Layer 3 — Combat effects
+
+Weapon trails, impact effects, attacks and projectiles.
+
+Layer 2 — Playable floor
+
+Collision, navigation, enemy movement and attack positioning.
+
+Layer 1 — Animated background
+
+Painted environment, fire, water, smoke and distant scenery.
+
+The actual rendering order should be configurable per scene. The five layers describe functional responsibilities, not an inflexible draw-order rule.
+
+### 10.2 Rudra and enemy integration
+
+The most significant technical risk is the combination of a 3D player and 2D enemies.
+
+They need to look like they occupy the same world.
+
+We should test:
+
+- Character scale.
+- Foot position.
+- Ground contact.
+- Shadow placement.
+- Lighting consistency.
+- Outline and colour consistency.
+- Camera perspective.
+- Movement speed.
+- Attack reach.
+- Hitbox alignment.
+
+The 3D Rudra model should not be replaced with a 2D sprite simply because of one visual mismatch.
+
+First test the existing model against the enemy sprites and correct the scale, lighting, camera and rendering.
+
+Only reconsider pre-rendering if the mismatch persists.
+
+## 10.3 Sprite sheet integration
+
+[Animated Isometric Monsters (Legendaria)](https://images.openai.com/static-rsc-4/KfadCQhAPZWi7a8EH9jp2SfgKo2X4LUNIUn8e8GOoKloubbMAUDm7FA81ozhP28SkSNEmrQvma01wltuCF_fpfeKwlHniry0mvFGXdZMwypv7gtc49znSaJjX3pGQBo_H3gxg7n4SoxGWNbdzXo9me-yae_KEEDx1x-sjfeeKq0?purpose=inline)
+
+[2D Fantasy Ghosts Character Sprite - CraftPix.net](https://images.openai.com/static-rsc-4/1jOU7mtyTxmrW8saPtu1f15Le9SIskejamw8ar1Br98ECXoC_jYAIxsuNbbPd3iRb2wUaobkBPxM3x3I0kq0DzhscNHjaMzj8Ou9i8N0j9DNeaLSnMDXsByHiZIqnR6p3HjDgirNO3XcwsWOeYP6RM5UfmBO_QEwjtA_2jP6HJo?purpose=inline)
+
+[《哈迪斯》评测：失败和胜利同样有趣 - GameRes游资网](https://images.openai.com/static-rsc-4/nPPIVUZXeMBIp2lhEZOjFnqWosp7DfaDvA5vx24dAeU7nddSP3opcNY8yj3kET65rfI2FCEu6peo3wDiCkj-ZXABXAJ-JT_uUQ6GC-9EeJzBgKPrd5JOaAKJipAl5ZDP1MWaAPk6xR5L6DVs3EK8bhMzL-z5aZjPBhNYlnW4V4A?purpose=inline)
+
+12
+
+Our current sprite pipeline uses approximately 14 existing enemy/boss sheets, with 8×6 or 10×6 layouts as appropriate.
+
+The integration pipeline should be:
+
+1. Import sprite sheet.
+2. Verify frame dimensions.
+3. Verify transparent regions.
+4. Configure animation frame sequences.
+5. Extract idle, movement, attack, hit and death animations where available.
+6. Align the character's feet.
+7. Set a consistent ground anchor.
+8. Configure collision.
+9. Configure Y-sorting.
+10. Test against Rudra.
+
+### Non-negotiable sprite requirements
+
+- No jumping between ground positions during animation.
+- No accidental cropping.
+- No visible sprite sheet grid.
+- No inconsistent animation speed.
+- No incorrect direction flipping.
+- No floating characters.
+- No enemy hitbox detached from the character.
+
+### Y-sorting
+
+In an isometric game, the rendering order must respond to character position.
+
+For example, a character closer to the bottom of the screen may need to render in front of another character farther up the screen.
+
+This must be consistent for:
+
+- Rudra.
+- Enemies.
+- Bosses.
+- Props.
+- Foreground elements.
+
+### Foot anchoring
+
+The foot position should be the reference point for character placement.
+
+This prevents a character from appearing to slide or jump when its animation changes.
+
+## 11. VFX architecture
+
+[A Behind-The-Scenes Look at the Effects in Hades](https://images.openai.com/static-rsc-4/V7UsOnQcixcRQv4Lu_vwxmVBCeZgXbk8O-0U9LnjW86FjaAX2OA50pyfv3U9Q4kdzKqVREcxT4Fa_DMHdjGUefVdNd4wOgj76Sg5PRpJXian28mN7DJD_nGdkL2BqIvQKlIv3VaHGVD5sG0ciS0Aabys7RaXOrza47IXr95tnZg?purpose=inline)
+
+[Hades : Tout savoir sur Varatha, la Lance Éternelle et ses aspects - Millenium](https://images.openai.com/static-rsc-4/QCYgYgKuJP0WugtM0ffvbnDeCs7-iFHBsOeH-qvk3buS0UaE6qRxsK4bHYNFu6hNe9ILz4mb5gCHDiH3vFHUJBlij9SJpB9yYS5IFCy_EJZ0wiEL89th4eFBOd2AuA4kZkwF7x0GDmPehguVeipEnGzLPiE9YtREmyIBOcOdwZM?purpose=inline)
+
+[Five games that incorporate mythology like Hades](https://images.openai.com/static-rsc-4/deIpyjNiLjCDjBpGTF04lqRzCXSEKBhelr1oP0MabIPKF4oU2bZLZGFw8TBYypwdIIAbrKY-N3cpdSSVShAjY3fg60UiAXUKkez7oEIAbpjaF17uHuoKv838xKMDKpRDpnUCFrmx9oleUtF7F3xBD10Hl-9-0ef7y97UYLpjwPY?purpose=inline)
+
+13
+
+Hades demonstrates that effects can make combat much more expressive without changing the underlying combat mechanics.
+
+For Kaliyuga, we should use our existing colourful painted VFX direction.
+
+### VFX categories
+
+| Category    | Examples                           |
+| ----------- | ---------------------------------- |
+| Weapon      | Parashu trails                     |
+| Impact      | Hit sparks and impact bursts       |
+| Elemental   | Fire, ash, lightning               |
+| Enemy       | Attack preparation and projectiles |
+| Boss        | Vacuum, slag and charge effects    |
+| Environment | Dust, smoke, fire and water        |
+| Player      | Dash, parry and Astra effects      |
+
+### VFX priority
+
+I would implement effects in this order:
+
+1. Rudra light attack.
+2. Rudra heavy attack.
+3. Enemy hit reaction.
+4. Enemy death.
+5. Dash.
+6. Parry.
+7. Enemy telegraphs.
+8. Boss attacks.
+9. Boss phase transitions.
+10. Environmental atmosphere.
+
+The first eight matter much more than decorative particles.
+
+### Visual hierarchy
+
+The order of importance should be:
+
+1. Rudra and enemy silhouettes.
+2. Incoming attack indicators.
+3. Weapon impacts.
+4. Projectiles.
+5. Secondary effects.
+6. Ambient environmental animation.
+
+This is crucial because the playable floor is already visually busy with the painted environment.
+
+# PART VI — Progression and hub design
+
+## 12. House of Hades versus Vaitarani Ferry Ghat
+
+[Hades: Underworld structure - gamepressure.com](https://images.openai.com/static-rsc-4/w0MYlKOjD5oIRg4AdAO94pWlPQHfvGlmViWsMCk3IGOlVtdaLYfeLO5Kt2hlayhQETH9WA1yJra7o1dISp9Y0i-5LsyDtnIxWsWrjKIrw68mid-VWGhJA0CpS347FINd9YV5mp5YjISvXZxJ5ahaF0mAJf2x_tOEieOqk6Yzv5U?purpose=inline)
+
+[Hades: Live, Die, Kiss](https://images.openai.com/static-rsc-4/AZ_lsajAKFCI4VsMPdRM_U0OI4W3u2K9TkeVF7B6YJ_zan1EOchsXEY5pA-jTpKOet1P-N9Y-HXFAdO52DKhb8CsP-A8SExbB65joH9OipBPa7NjxfdrOMkakHYP8QzHPLIfLvK7xJg4hSH8Z2xSqkvCG7hcHLyoltVlpXTWAjM?purpose=inline)
+
+[मृत्युलोक और नर्क के बीच का रास्ता है आग उगलती वैतरणी नदी in Hindi](https://images.openai.com/static-rsc-4/EgQ9_FlHU5hrVxDx65rrNMCaD4hFBhlP-iTR2zLqIGavrcpsSQw3fttTv39Sgg4khtGlAMfunJvh5co-DZRDaLdiNcDC8XS_czP74mdE2rKVkcf2kQikZQnYevH1gHOkNXjanOHrHT9OsNwyB2cjabKGjzh2VwX4JLA0fCiLs-4?purpose=inline)
+
+10
+
+The House of Hades is an excellent example of a hub that has both gameplay and narrative functions.
+
+Vaitarani should serve a similar purpose, but with our own structure.
+
+### Hub architecture
+
+| Hades                   | Kaliyuga                          |
+| ----------------------- | --------------------------------- |
+| House of Hades          | Vaitarani Ferry Ghat              |
+| Achilles and other NPCs | Savitri and existing characters   |
+| Weapon chamber          | Weaponsmith                       |
+| House Contractor        | Existing hub progression          |
+| Dialogue interactions   | Text-based character interactions |
+| Run departure           | Ferry progression                 |
+
+### 12.1 Savitri interaction
+
+We have already established that Savitri should not require traditional voice acting.
+
+Instead:
+
+- Savitri stands at the hub.
+- Rudra approaches.
+- The player interacts.
+- A chat-style dialogue interface appears.
+- Savitri provides available missions and information.
+- Completing relevant objectives unlocks additional interactions.
+
+[Dakshineswar Kali Temple – Iconic Shakti Peetha on the Hooghly River](https://images.openai.com/static-rsc-4/u8KwjMFBLaN2EpKfl7-o4AmhXGn0eGSYk5vzgUahb4Z07WZ3F5_owp8ann2i8PIuV8po7-eJqL5iJso2Gx7JPT36uXQ1VTCXfAacWuQzFEl9HVNNF4kkCRrPIwATxx7aIFHsKDNnldOtw1DEFGlOIP9zg8zQ5ydsl1-IXosYRSw?purpose=inline)
+
+[mystreal.com](https://www.mystreal.com/temples/west-bengal/dakshineswar-kali-temple/?utm_source=chatgpt.com)
+
+The interaction should feel intentional rather than like a generic dialogue box.
+
+### 12.2 Weaponsmith
+
+The weaponsmith provides the practical progression interface.
+
+Possible responsibilities within the existing design:
+
+- Weapon-related upgrades.
+- Existing Parashu improvements.
+- Resource-based progression.
+- Existing combat-related unlocks.
+
+We should not add new weapon classes to justify the character's existence.
+
+### 12.3 Hub progression
+
+Hades uses the hub to reflect player progress.
+
+We can use the three established Vaitarani lantern states.
+
+The environment, available interactions and narrative should reflect the player's progression.
+
+The player should feel that the hub is evolving, not merely returning to an unchanged menu.
+
+## 13. Boons and progression: adapt, don't copy
+
+[Hades Beginner's Guide | Gameplay Tips & Tricks | NoobFeed](https://images.openai.com/static-rsc-4/5-AkByd8MhqJsAqnqv88nDKgxv-sM7GUTONGm0c61zumRO5L1w3YwaBswoHzibBwpxWYxuYQC4Mo3o6RnM-91Z3x6q7jhaQCayaPKtAZAB2rBHewaEJ_t5ZNMKc7GTshhO6UBCipYY2sG1l7RwBajcL5WS7gKpndtLMHQjA8uj4?purpose=inline)
+
+[Steam Community :: Guide :: Miscellaneous, everything guide (sourced from gamepedia)](https://images.openai.com/static-rsc-4/-AAR5B4PIIjP58NiLgDS6mmxj9zjP3NretD4qD1CyIa9q3f9ShKeIbfT_N5ubggr8soQQhfTlALKqFyVI6JmawHoLqCoV5C4iBNrKiqyPZqJU56AmmUQNQqryVY1eg8A9uUoDRr7Am5M54FCtT6nW3RkzwHlaawKCygHXzxlCHM?purpose=inline)
+
+[Hades: Weapons and how to use them - gamepressure.com](https://images.openai.com/static-rsc-4/O8WnAE2emAi-p8IV-feNpIWIAUFP_QD-PBHG9HbCldkB4EOHSipa-iMX-u1vWOcLPrv36LY87uwJwXo09ZbsqNW8Me3_ssNjq6H0jU62ASk5bOa7urn_SyAC-SE4d2OkFqE2b9DNZTRXfupYzPmzdT9z6Fd9lKeFKIig-jZ8Ic0?purpose=inline)
+
+6
+
+Hades has a very large boon pool.
+
+We should not try to recreate that for the vertical slice.
+
+Instead, use the existing systems and focus on meaningful choices.
+
+### Progression categories
+
+| Category           | Purpose                               |
+| ------------------ | ------------------------------------- |
+| Temporary reward   | Improves the current expedition       |
+| Permanent upgrade  | Improves future attempts              |
+| Weapon progression | Changes existing Parashu capabilities |
+| Existing blessing  | Adds a gameplay modifier              |
+| Shard progression  | Advances story and world state        |
+
+### The quality test
+
+Every upgrade should pass at least one of these tests:
+
+- Does it change the player's combat strategy?
+- Does it improve an existing mechanic meaningfully?
+- Does it introduce an interesting trade-off?
+- Does it provide a meaningful progression reward?
+
+If an upgrade only adds a negligible numerical increase, it is lower priority.
+
+### A critical distinction
+
+Hades has a lot of content, but content quantity is not its central strength.
+
+Its central strength is how the content interacts.
+
+This is why I would rather have five interesting, tested upgrades than twenty upgrades that barely change combat.
+
+# PART VII — Narrative, cutscenes and presentation
+
+## 14. Hades narrative versus Kaliyuga narrative
+
+[Персефона аид - Zefirka.club фото и картинки](https://images.openai.com/static-rsc-4/VUKL6bhWrp6b96jVn56XScvSZUe-OiFq1Ev9VfXzU0_LmwGiIfAA2Scd1SblifdYmxcsZp0t06DywPtAJZREpW5-b9UekIX-_SN9VYr0q6H5e5_JiouDBE8bJyQBKiKboqqHqriY7gEJmuHCJAOdQPbddlcsjy21hhtFTTIyxqI?purpose=inline)
+
+[Hades Guide | How to Get Battie | NoobFeed](https://images.openai.com/static-rsc-4/v0jRjjrlXElosnCPV3dO-IGQV3z3SqA2sDJ0hoOJnZ-QywNGwMmmYKX45oB-3rmmQWRwnXnwbRLwAqwY5BQN0k_B1FsfmQ_l_i3EylfWqxwZ-2k0vKk8javvL-5yy3j5IT6AvBwEBmWZyIys3FBY4n3JkS2a_urUhHzFo-XifhA?purpose=inline)
+
+[The Legend of Barbarik: The Unsung Warrior of Mahabharata](https://images.openai.com/static-rsc-4/cxT1p4MzmiQAOto5aDNAZknpi8VINseYjbixqHJJqHvjla9WhNLBiBK8k_3frme2NlhFyV1Ea8rKI8AszVgAB_GjAqRsI1NUAQNHV0OJsWLd4gaQ1UpPcnirUGU4Y-7QunRNuuaAQ_fbk08R70RbrflfOC3mKfbU5tPP_LIkyF0?purpose=inline)
+
+9
+
+Hades uses reactive dialogue to make repeated runs meaningful.
+
+Kaliyuga has a different opportunity: its narrative is more deliberately cinematic and mythological.
+
+We should preserve that identity.
+
+### 14.1 Two presentation systems
+
+I recommend keeping two distinct presentation formats.
+
+A. Illustrated narrative cutscenes
+
+- Painted cinematic compositions.
+- Multiple deliberately composed shots.
+- Subtle camera movement.
+- Controlled animation.
+- Atmospheric music.
+- No unnecessary character animation.
+- No artificial AI-generated movement that distracts from the artwork.
+
+B. In-game interactions
+
+- Savitri's chat-style interface.
+- Weaponsmith interaction.
+- Mission updates.
+- Short lore entries.
+- Reward descriptions.
+- Narrative progression notifications.
+
+This creates a distinction between major story moments and ordinary hub interactions.
+
+### 14.2 Selective boss cinematics
+
+Boss introductions deserve more presentation than regular enemies.
+
+However, we shouldn't create a cinematic for every encounter.
+
+I recommend:
+
+- Dundubhi: dedicated entrance.
+- Vrikodara: dedicated entrance.
+- Regular enemy waves: direct gameplay.
+- Boss phase transitions: gameplay animations and effects.
+- Boss defeats: dedicated short sequences where appropriate.
+
+The player's control should return quickly after important cinematic moments.
+
+### 14.3 Narrative flags
+
+The game needs reliable state tracking.
+
+For example:
+
+```
+PROLOGUE_COMPLETED
+OPENING_COMPLETED
+VAITARANI_ENTERED
+LANTERN_STATE_UPDATED
+ACT_I_STARTED
+DUNDUBHI_DEFEATED
+VRIKODARA_DEFEATED
+FIRST_SHARD_COLLECTED
+MEMORY_UNLOCKED
+SANJAYA_CORRECTION_1
+FERRY_I_COMPLETED
+```
+
+These are suggested names for existing story milestones, not an instruction to create duplicate progression systems.
+
+The game should use a single source of truth for these flags.
+
+This prevents:
+
+- Dialogue repeating incorrectly.
+- Bosses reappearing after defeat.
+- Rewards being granted twice.
+- Cutscenes triggering in the wrong order.
+- Progression getting stuck.
+
+# PART VIII — Audio design
+
+## 15. Hades' audio philosophy
+
+[‎Hades: Original Soundtrack - Album by Darren Korb - Apple Music](https://images.openai.com/static-rsc-4/tcROm5A2TrPvr5bYyeSbQ44tElIC3UvgKRc5_c_qR-o7NpkB0_5JddoBaw0ABM5Xq1GBMyP0j5STxeldiokpAnWIZQjpIyD7gXimRKQiSecwbeW_DqJTarLnK0uF7TUIwq9MjIo9zmVFDleADnGCdOBBGwtbCVazX_Om9oN_nS4?purpose=inline)
+
+[music.apple.com](https://music.apple.com/us/album/hades-original-soundtrack/1531339044?utm_source=chatgpt.com)
+
+Darren Korb designed Hades' music to withstand repeated play.
+
+He used musical stems, variations and transitions so that the music could react to what was happening during a run. He also built the soundtrack around sounds that felt appropriate to the game's Greek Underworld setting.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://gameplay.co\&sz=32)
+
+Gameplay+1
+
+
+
+We should apply the same philosophy to our Indian mythological musical identity.
+
+### Kaliyuga audio structure
+
+| Situation        | Audio treatment                   |
+| ---------------- | --------------------------------- |
+| Vaitarani        | Atmospheric mythological ambience |
+| Charnel Plains   | Dark environmental composition    |
+| Standard combat  | Percussion and rhythmic energy    |
+| Elite encounters | More intense arrangement          |
+| Dundubhi         | Heavy, aggressive boss theme      |
+| Vrikodara        | Dark, unsettling boss theme       |
+| Cinematic        | Orchestral and mythological scale |
+| Boss defeat      | Short musical resolution          |
+
+### Adaptive music
+
+We don't need to build an elaborate adaptive music engine immediately.
+
+Start with a few states:
+
+```
+EXPLORATION
+    |
+    v
+COMBAT
+    |
+    v
+ELITE / BOSS
+    |
+    v
+VICTORY
+    |
+    v
+EXPLORATION
+```
+
+Then, if the existing audio system supports it, layer additional percussion or instrumentation.
+
+### Sound effects are more important than additional music right now
+
+Prioritize:
+
+1. Parashu impact.
+2. Enemy hit.
+3. Heavy attack.
+4. Parry.
+5. Dash.
+6. Enemy attack warnings.
+7. Boss attacks.
+8. Boss defeat.
+9. Environmental ambience.
+
+A player should be able to distinguish a light hit, a heavy hit and a parry through sound alone.
+
+# PART IX — Technical implementation blueprint
+
+## 16. Recommended system architecture
+
+The following is an engine-agnostic architecture. It should be adapted to the existing project and must not introduce a second implementation of systems that already work.
+
+```
+
+KALIYUGA
+|
++-- GAME FLOW
+|   |
+|   +-- Main Menu
+|   +-- Prologue
+|   +-- Vaitarani Hub
+|   +-- Act I
+|   +-- Boss Encounters
+|   +-- Reward / Memory
+|   +-- Ferry I
+|
++-- PLAYER
+|   |
+|   +-- Movement
+|   +-- Animation State
+|   +-- Parashu Combat
+|   +-- Stances
+|   +-- Dodge
+|   +-- Parry
+|   +-- Stamina
+|   +-- Posture
+|   +-- Astra Energy
+|
++-- COMBAT
+|   |
+|   +-- Attack Data
+|   +-- Hit Detection
+|   +-- Damage Calculation
+|   +-- Hit Reactions
+|   +-- Knockback
+|   +-- Stagger
+|   +-- VFX
+|   +-- Audio Feedback
+|
++-- ENEMIES
+|   |
+|   +-- Enemy Controller
+|   +-- State Machine
+|   +-- Detection
+|   +-- Positioning
+|   +-- Attack Selection
+|   +-- Animation
+|   +-- Death
+|
++-- BOSSES
+|   |
+|   +-- Dundubhi
+|   +-- Vrikodara
+|   +-- Boss State Machine
+|   +-- Telegraphs
+|   +-- Phase Controller
+|   +-- Boss HUD
+|
++-- WORLD
+|   |
+|   +-- Chamber Manager
+|   +-- Spawn Manager
+|   +-- Wave Manager
+|   +-- Collision Floor
+|   +-- Background Animation
+|   +-- Camera
+|   +-- Y-Sorting
+|
++-- PROGRESSION
+|   |
+|   +-- Rewards
+|   +-- Shards
+|   +-- Memory
+|   +-- Story Flags
+|   +-- Hub State
+|
++-- PRESENTATION
+    |
+    +-- Cutscenes
+    +-- Savitri Interface
+    +-- Weaponsmith Interface
+    +-- HUD
+    +-- Menus
+    +-- Audio
+
+```
+
+### 16.1 The most important architectural rule
+
+Do not let individual enemies implement their own completely separate damage and combat logic.
+
+All enemies should use the same fundamental combat interface.
+
+For example:
+
+```
+ReceiveHit(
+    damage,
+    posture_damage,
+    knockback,
+    attack_type,
+    source_position
+)
+```
+
+The enemy then decides how to respond based on its current state and resistance.
+
+Dundubhi and Vrikodara can have special responses, but they should still use the shared foundation.
+
+### 16.2 Data-driven attack configuration
+
+Rather than hardcoding every attack into separate scripts, use configuration data.
+
+Illustrative example:
+
+```
+{
+  "attack_id": "rudra_heavy_01",
+  "damage": 40,
+  "posture_damage": 30,
+  "startup": 0.35,
+  "active": 0.18,
+  "recovery": 0.55,
+  "knockback": 5.0,
+  "hitstop": 0.08
+}
+```
+
+These values are hypothetical examples, not recommended final balance numbers.
+
+The benefit is that an AI coding agent or designer can tune attacks without rewriting the entire combat system.
+
+### 16.3 One source of truth
+
+The following should not be duplicated:
+
+- Player health.
+- Stamina.
+- Posture.
+- Astra Energy.
+- Boss health.
+- Boss phase.
+- Enemy health.
+- Story flags.
+- Reward state.
+
+The HUD should read from the underlying gameplay systems rather than maintaining separate copies of those values.
+
+This avoids bugs where the visual health bar and actual health disagree.
+
+# PART X — Production pipeline
+
+## 17. How Hades' production decisions apply to us
+
+Jen Zee's account of Hades' production reveals something particularly useful: the art pipeline was selected with the volume of required assets in mind.
+
+Supergiant shipped 32,494 FX animation frames and 942,489 character and enemy animation frames, alongside its extensive character and environment art.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://mcvuk.com\&sz=32)
+
+MCV/DEVELOP
+
+
+
+We have a much smaller vertical-slice scope.
+
+We should optimize around the assets already generated.
+
+### 17.1 Our asset pipeline
+
+1\. Asset generation
+
+Character artwork, sprite sheets, backgrounds and VFX.
+
+2\. Asset validation
+
+Transparency, proportions, frames, consistency and dimensions.
+
+3\. Engine integration
+
+Animation, collision, sorting, positioning and rendering.
+
+4\. Gameplay testing
+
+Combat, readability, animation transitions and performance.
+
+5\. Polish
+
+Lighting, effects, sound, transitions and final QA.
+
+### 17.2 Asset acceptance requirements
+
+Every asset should have an explicit definition of done.
+
+For example, an enemy sprite sheet is not complete merely because the image has been generated.
+
+It is complete when:
+
+- All required frames are present.
+- The frame layout is correct.
+- The transparent background is correct.
+- The animation plays correctly.
+- The feet remain anchored.
+- The sprite faces the correct directions.
+- The hitbox matches the visible body.
+- The enemy works in the actual arena.
+
+This will save a lot of time.
+
+# PART XI — The actual vertical-slice development roadmap
+
+## 18. Recommended implementation order
+
+This is where we turn the research into work.
+
+I would not work on every system simultaneously.
+
+The sequence matters because later systems depend on earlier ones.
+
+Recommended execution order
+
+### Stage A — Combat foundation
+
+First priority
+
+- Verify Rudra movement.
+- Verify Parashu attack animations.
+- Verify combo transitions.
+- Verify heavy attacks.
+- Verify dodge.
+- Verify parry.
+- Verify stamina and posture.
+- Verify existing stances and Astras.
+- Verify attack hitboxes.
+- Verify enemy damage registration.
+- Verify hit reactions and knockback.
+
+Exit condition: Rudra versus one Charnel enemy should already be enjoyable.
+
+### Stage B — Enemy integration
+
+- Integrate existing sprite sheets.
+- Fix frame extraction.
+- Fix foot anchoring.
+- Fix Y-sorting.
+- Configure animation states.
+- Integrate collision.
+- Implement enemy detection.
+- Implement attack selection.
+- Implement telegraphs.
+- Implement stagger and death.
+- Test all existing enemy roles.
+
+Exit condition: Every existing regular enemy can participate in a functioning encounter.
+
+### Stage C — Chamber and wave management
+
+- Build the Charnel Plains arena.
+- Configure enemy spawn positions.
+- Configure wave progression.
+- Implement encounter completion.
+- Implement reward spawning.
+- Implement chamber transitions.
+- Test camera boundaries.
+- Test collision boundaries.
+
+Exit condition: A complete encounter can be entered, fought and completed without manual intervention.
+
+### Stage D — Dundubhi
+
+- Integrate boss visuals.
+- Integrate attack animations.
+- Configure boss state machine.
+- Implement attack telegraphs.
+- Implement charge.
+- Implement heavy attacks.
+- Implement existing pillar/drum mechanics.
+- Implement boss health.
+- Implement defeat.
+- Implement reward.
+
+Exit condition: The entire Dundubhi encounter works from entrance to victory.
+
+### Stage E — Vrikodara
+
+- Integrate existing boss visuals.
+- Configure boss attack states.
+- Implement vacuum.
+- Implement slag.
+- Implement Consume.
+- Implement phase escalation.
+- Implement defeat.
+- Implement memory reward.
+
+Exit condition: The entire Vrikodara encounter works from entrance to victory.
+
+### Stage F — Hub and story
+
+- Finalize Vaitarani environment.
+- Implement the three lantern states.
+- Implement Savitri interaction.
+- Implement chat interface.
+- Implement weaponsmith interaction.
+- Implement existing upgrade and reward interactions.
+- Implement story flags.
+- Implement memory.
+- Implement Sanjaya's correction.
+- Implement Ferry I.
+
+Exit condition: The player can complete the vertical-slice story without broken progression.
+
+### Stage G — Visual and audio polish
+
+- Finalize painted environments.
+- Integrate animated backgrounds.
+- Finalize character scale and lighting.
+- Add weapon trails.
+- Add hit effects.
+- Add boss effects.
+- Add environmental ambience.
+- Integrate combat sounds.
+- Integrate existing music.
+- Finalize illustrated cutscenes.
+- Polish HUD and menus.
+
+Exit condition: The game looks and sounds like one coherent product.
+
+### Stage H — Final QA
+
+- Test complete prologue.
+- Test hub entry and return.
+- Test all encounter waves.
+- Test Dundubhi.
+- Test Vrikodara.
+- Test rewards.
+- Test death and restart.
+- Test story flags.
+- Test Ferry I.
+- Test performance.
+- Test browser build and input handling.
+
+# PART XII — Combat balancing and quality standards
+
+## 19. How to know whether Kaliyuga's combat is actually good
+
+We need measurable standards, not just "it feels okay."
+
+Hades went through extensive refinement to make its gameplay remain enjoyable across repeated playthroughs.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://www.sfchronicle.com\&sz=32)
+
+San Francisco Chronicle+1
+
+
+
+For our vertical slice, I recommend the following test categories.
+
+| Test                | Passing condition                          |
+| ------------------- | ------------------------------------------ |
+| Input response      | No unintended input delay                  |
+| Attack registration | Every valid attack registers correctly     |
+| Combo               | Transitions work consistently              |
+| Dodge               | No stuck states or unintended movement     |
+| Parry               | Correct timing and counter response        |
+| Enemy AI            | No idle enemies or endless attacking loops |
+| Telegraphs          | Attacks are visually understandable        |
+| Hit reactions       | Enemy reacts to registered damage          |
+| Boss phases         | Transitions occur correctly                |
+| Rewards             | No duplicate or missing rewards            |
+| Story               | Progression flags remain consistent        |
+| Camera              | Rudra and enemies remain visible           |
+
+### 19.1 Suggested combat telemetry
+
+Even a small amount of instrumentation can help us balance the game.
+
+Track:
+
+- Player damage received.
+- Player damage dealt.
+- Number of dodges.
+- Successful parries.
+- Failed parries.
+- Enemy attack hit rate.
+- Boss encounter duration.
+- Player deaths.
+- Time spent in each encounter.
+
+This will help identify whether an encounter is difficult because of its mechanics or because of a technical problem.
+
+### 19.2 Performance targets
+
+Our existing browser-PC target should remain:
+
+# 60 FPS
+
+Target frame rate
+
+# 80 MB
+
+Initial download budget
+
+These are project targets, not verified current build measurements.
+
+Particular areas to monitor:
+
+- Animated background video decoding.
+- Sprite sheet memory.
+- VFX overdraw.
+- Multiple enemy AI updates.
+- Boss effects.
+- Audio loading.
+- Scene transitions.
+
+Because we're using animated backgrounds, we should profile video decoding separately from gameplay rendering.
+
+A beautiful environment that causes combat to stutter is not acceptable.
+
+# PART XIII — AI agent development workflow
+
+## 20. How I recommend using Codex and Antigravity
+
+This section is particularly important because we should not allow AI agents to independently redesign the game while implementing it.
+
+The biggest danger in AI-assisted game development is architectural drift.
+
+An agent might fix one issue by creating another combat controller, duplicate an existing state manager or replace an existing system unnecessarily.
+
+We need a controlled workflow.
+
+### 20.1 Divide the work between agents
+
+| Agent       | Responsibility                                                        |
+| ----------- | --------------------------------------------------------------------- |
+| Codex       | Codebase inspection, implementation, debugging                        |
+| Antigravity | Visual inspection, scene testing and integration assistance           |
+| You         | Gameplay testing, artistic decisions and acceptance                   |
+| Me          | System specifications, prompts, design reviews and debugging guidance |
+
+### 20.2 Every coding task should follow four steps
+
+1\. Inspect
+
+Agent examines the existing implementation and identifies the relevant systems.
+
+2\. Plan
+
+Agent explains exactly which existing files and systems it intends to modify.
+
+3\. Implement
+
+Agent makes the smallest changes needed without replacing working systems.
+
+4\. Verify
+
+Agent runs the project, checks the relevant behaviour and reports what was tested.
+
+Don't let an agent jump directly into rewriting combat because an attack animation is not working.
+
+First determine whether the problem is in the animation, hitbox, state machine or input handling.
+
+## 20.3 Master implementation prompt
+
+This is the instruction I recommend keeping as the foundation for our coding agents.
+
+# KALIYUGA — MASTER DEVELOPMENT INSTRUCTIONS
+
+You are working on Kaliyuga: The Bleeding Crown, a story-driven, boss-focused Indian mythological action roguelike.
+
+## CORE DESIGN IDENTITY
+
+The game uses:
+
+- Fixed isometric camera.
+- 2.5D presentation.
+- 3D playable protagonist Rudra.
+- Painted 2D regular enemy sprite sheets.
+- Existing 2D/3D boss assets.
+- Animated painted environmental backgrounds.
+- A separate playable floor and collision system.
+- Dark Indian mythological art direction.
+- Hand-painted, colourful combat VFX.
+
+Hades is a reference for combat responsiveness, encounter readability, progression and polish. Do not reproduce its art style or blindly copy its mechanics.
+
+## VERTICAL SLICE SCOPE
+
+The current playable scope is:
+
+1. Five-scroll prologue.
+2. Opening sequence.
+3. Vaitarani Ferry Ghat hub.
+4. Savitri interactions.
+5. Weaponsmith interactions.
+6. Act I: Charnel Plains.
+7. Existing Charnel enemies.
+8. Dundubhi boss.
+9. Vrikodara boss.
+10. First shard and memory.
+11. Sanjaya correction 1.
+12. Ferry I.
+
+Do not add new regular enemies, weapon classes, voice acting, secondary Astras, acts or bosses.
+
+## COMBAT REQUIREMENTS
+
+Preserve the existing Parashu combat foundation.
+
+Work with existing:
+
+- Light and heavy attacks.
+- Attack combos.
+- Three stances.
+- Dodge.
+- Parry.
+- Stamina.
+- Posture.
+- Existing Astra abilities and energy.
+- Existing Ashen Karma and progression systems where applicable.
+
+Prioritize:
+
+- Responsive input.
+- Correct hit detection.
+- Animation-state consistency.
+- Enemy hit reactions.
+- Stagger.
+- Knockback.
+- Attack telegraphs.
+- Reliable combat transitions.
+
+## ENEMY REQUIREMENTS
+
+Use the existing enemy roster and sprite sheets.
+
+Maintain:
+
+- Correct frame extraction.
+- Foot anchoring.
+- Y-sorting.
+- Correct collision.
+- Recognizable attack states.
+- Reliable death and hit animations.
+- Appropriate enemy positioning.
+
+Do not generate or add enemies.
+
+## BOSS REQUIREMENTS
+
+Dundubhi must preserve his existing identity and mechanics, including physical attacks and the pillar/drum encounter elements.
+
+Vrikodara must preserve his existing identity and mechanics, including vacuum, slag and Consume.
+
+Both encounters require:
+
+- Boss state management.
+- Telegraphs.
+- Attack execution.
+- Recovery windows.
+- Health management.
+- Phase escalation where designed.
+- Defeat handling.
+- Reward progression.
+
+## TECHNICAL RULES
+
+1. Inspect existing code before editing.
+2. Reuse existing systems wherever possible.
+3. Never create duplicate managers or controllers without justification.
+4. Preserve the current game engine and project architecture.
+5. Avoid unrelated refactoring.
+6. Do not replace functioning systems.
+7. Use shared combat interfaces.
+8. Keep story progression data consistent.
+9. Preserve the separate collision floor and animated background architecture.
+10. Test every change in the actual running game.
+
+## PERFORMANCE
+
+Target:
+
+- 60 FPS.
+- Browser PC.
+- Initial download budget below 80 MB.
+
+Profile animated backgrounds, VFX, enemy updates and asset loading.
+
+## REQUIRED REPORT AFTER EVERY TASK
+
+Provide:
+
+1. What was inspected.
+2. What was changed.
+3. Which files were modified.
+4. Which existing systems were reused.
+5. What was tested.
+6. What passed.
+7. What remains broken.
+8. Whether any regressions were introduced.
+
+Never claim a feature is complete unless it has actually been tested.
+
+The objective is a polished, coherent vertical slice, not an expanding feature list.
+
+# PART XIV — Final development priorities
+
+## 21. What deserves the most development time?
+
+I would allocate our remaining development effort according to the following priorities.
+
+Recommended effort allocation
+
+Proposed distribution of remaining vertical-slice development effort, not measured current progress.
+
+0%7.5%15%22.5%30%Combat foundationEnemies and bossesVisual integrationChambers and encountersHub and progressionAudio and cutscenesQA and optimization
+
+The percentages are planning estimates, not fixed deadlines.
+
+My reasoning:
+
+- Combat needs to be excellent.
+- The bosses must feel memorable.
+- The 2D/3D integration is a major technical risk.
+- The chamber loop must work reliably.
+- The story must progress without bugs.
+- Polish comes after the underlying systems are stable.
+
+# 22. The final acceptance test
+
+This is how I would determine whether our vertical slice is genuinely ready.
+
+## Kaliyuga vertical-slice completion checklist
+
+0 / 25 verified
+
+0%
+
+1\. Opening and hub
+
+Prologue and opening work correctly
+
+Vaitarani hub is functional
+
+Three lantern states work
+
+Savitri interaction works
+
+Weaponsmith interaction works
+
+2\. Combat
+
+Rudra movement feels responsive
+
+Parashu combos work
+
+Dodge and parry work
+
+Existing stances and Astras work
+
+Hit reactions and enemy feedback work
+
+3\. Act I
+
+Charnel Plains playable floor works
+
+Existing enemies are integrated
+
+Enemy waves function correctly
+
+Chamber completion and rewards work
+
+4\. Bosses
+
+Dundubhi entrance and encounter work
+
+Dundubhi arena mechanics work
+
+Vrikodara encounter works
+
+Vacuum, slag and Consume work
+
+Both boss defeats and rewards work
+
+5\. Narrative and polish
+
+First shard and memory work
+
+Sanjaya correction 1 works
+
+Ferry I completes the slice
+
+Cutscenes play correctly
+
+Audio and VFX are integrated
+
+60 FPS and download budget are tested
+
+Reset checklist
+
+Only mark a requirement complete after testing it in the actual build.
+
+# 23. My final recommendation
+
+There is one lesson from Hades that I want us to take particularly seriously.
+
+Don't confuse the amount of content in a game with its depth.
+
+Hades has six weapons, numerous gods, hundreds of upgrade combinations, many enemies, bosses and enormous amounts of dialogue.
+
+But the underlying experience rests on a relatively compact set of interconnected systems.
+
+For Kaliyuga, our vertical slice has a different opportunity.
+
+We have:
+
+- One central playable character.
+- One primary weapon identity.
+- Three stances.
+- Existing combat abilities.
+- A defined enemy roster.
+- Two major bosses.
+- A central hub.
+- A focused story sequence.
+- A distinctive art direction.
+
+That is enough to create a convincing vertical slice if the implementation is polished.
+
+I would much rather see someone play 30 minutes of Kaliyuga and say:
+
+The combat feels excellent, the bosses are memorable, the world looks beautiful, and I want to play more.
+
+That is a much stronger result than showing someone a large number of unfinished systems.
+
+The order I would personally enforce is:
+
+1. Make Rudra feel excellent.
+2. Make one enemy encounter excellent.
+3. Make Dundubhi excellent.
+4. Make Vrikodara excellent.
+5. Connect everything through the hub and story.
+6. Polish the entire experience.
+
+This is the Hades lesson worth applying to our game.
+
+## Research references and development material
+
+These are the most useful primary and industry sources supporting this blueprint.
+
+1. [Supergiant Games — Developing Hell documentary](https://www.supergiantgames.com/blog/2/?utm_source=chatgpt.com) — Six-part development documentary, recommended by the studio itself.
+2. [Jen Zee — Behind the Art of Hades](https://mcvuk.com/business-news/behind-the-art-of-hades-we-value-artistic-integrity-and-excellence-in-artistic-craft-at-supergiant-however-were-first-and-foremost-a-game-design-lead-team/?utm_source=chatgpt.com) — Art direction, production decisions, tools and asset pipeline.
+3. [Greg Kasavin — Hades development discussion at GDC](https://www.gamedeveloper.com/design/watch-greg-kasavin-discuss-the-development-of-supergiant-games-i-hades-i-?utm_source=chatgpt.com) — Development philosophy and Early Access.
+4. [The Sound of Hades — Darren Korb interview](https://gameplay.co/hades-game-music-sound-design-darren-korb-supergiant-games/?utm_source=chatgpt.com) — Music, audio and repeated-play design.
+5. [Greg Kasavin and Darren Korb — RPG Site interview](https://dev.rpgsite.net/interview/20348-supergiant-games-interview-2026-greg-kasavin-darren-korb-hades-2-ending-music-future-coffee?utm_source=chatgpt.com) — Music adaptation and boss themes.
+6. [San Francisco Chronicle — How Supergiant made Hades](https://www.sfchronicle.com/business/article/How-S-F-s-Supergiant-made-Hades-one-of-15839041.php?utm_source=chatgpt.com) — Studio structure and development history.
+
+One next step I'd recommend: use this blueprint as the acceptance standard for a weekly Kaliyuga build review, identifying what actually works, what remains broken and the next highest-priority implementation task.
+
+🎮Review Kaliyuga progress every weekTap to set up

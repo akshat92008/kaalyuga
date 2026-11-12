@@ -9,7 +9,7 @@ import {
   applyHadesCelShadingToHierarchy,
   bake2DSpriteFrameFromCanvas,
 } from './hadesSpriteBaker';
-import { simplifyBufferGeometry } from './meshSimplifier';
+import { loadFbxCached, simplifyBufferGeometry } from './meshSimplifier';
 
 export type RudraAnimState =
   | 'idle'
@@ -168,9 +168,9 @@ export class Rudra3DRenderer {
       });
 
     Promise.all([
-      loadFbx(RUDRA_RIGGED_FBX_URL),
-      loadFbx(RUDRA_TEXTURE_FBX_URL),
-      loadFbx(PARASHU_WEAPON_FBX_URL),
+      loadFbxCached(RUDRA_RIGGED_FBX_URL).catch(() => loadFbx(RUDRA_RIGGED_FBX_URL)),
+      Promise.resolve(null),
+      loadFbxCached(PARASHU_WEAPON_FBX_URL).catch(() => loadFbx(PARASHU_WEAPON_FBX_URL)),
       loadTex(RUDRA_DIFFUSE_URL),
       loadTex(PARASHU_DIFFUSE_URL),
       loadFbx(RUDRA_ANIM_URLS.idle),
@@ -200,8 +200,7 @@ export class Rudra3DRenderer {
           metalness: 0.06,
         });
 
-        if (riggedGroup && texturedGroup) {
-          // Exact 1:1 UV copy (493,632 verts === 493,632 verts) + mesh simplification
+        if (riggedGroup) {
           bindTexturedGeometryToSkeleton(riggedGroup, texturedGroup, mat);
         } else {
           baseGroup.traverse((child) => {
@@ -235,7 +234,7 @@ export class Rudra3DRenderer {
           weaponGroup.traverse((c) => {
             if ((c as THREE.Mesh).isMesh) {
               const wm = c as THREE.Mesh;
-              wm.geometry = simplifyBufferGeometry(wm.geometry, 32, 12000);
+              wm.geometry = simplifyBufferGeometry(wm.geometry, 32, 32000);
               wm.material = wepMat;
               wm.frustumCulled = false;
             }
@@ -254,7 +253,7 @@ export class Rudra3DRenderer {
           const weaponSocket = new THREE.Group();
           weaponGroup.scale.setScalar(localWepScale);
           weaponGroup.rotation.set(-Math.PI * 0.5, 0, -Math.PI * 0.5);
-          weaponGroup.position.set(0, 0, 0.22 * maxDim * localWepScale);
+          weaponGroup.position.set(0.26 * maxDim * localWepScale, 0, 0);
           weaponSocket.add(weaponGroup);
           rightHand.add(weaponSocket);
         }
@@ -366,8 +365,8 @@ export class Rudra3DRenderer {
     if (!this.renderer || !this.isReady || !this.model || !this.mixer) return null;
 
     const normalizedYaw = ((facingAngleRad % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
-    const yawIndex = Math.round((normalizedYaw / (Math.PI * 2)) * 32) % 32;
-    const quantizedYaw = (yawIndex / 32) * Math.PI * 2;
+    const yawIndex = Math.round((normalizedYaw / (Math.PI * 2)) * 16) % 16;
+    const quantizedYaw = (yawIndex / 16) * Math.PI * 2;
 
     const isAttack =
       state === 'attack1' ||
@@ -382,7 +381,7 @@ export class Rudra3DRenderer {
       this.actions.idle;
 
     const clipDur = action ? Math.max(0.4, action.getClip().duration) : 1.0;
-    const steps = isAttack ? 28 : 24;
+    const steps = isAttack ? 18 : 14;
 
     // For attacks, animTimeSec is normalized progress [0..1]; for locomotion, it's elapsed seconds
     const stepIndex = isAttack
@@ -415,7 +414,7 @@ export class Rudra3DRenderer {
       cacheFrame: false,
     });
 
-    if (this.frameCache.size > 1600) {
+    if (this.frameCache.size > 2000) {
       const oldest = this.frameCache.keys().next().value;
       if (oldest) this.frameCache.delete(oldest);
     }

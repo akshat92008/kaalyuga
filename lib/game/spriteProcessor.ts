@@ -559,8 +559,8 @@ export function getProcessedSpriteSync(url: string): ProcessedSpriteAsset | unde
   return undefined;
 }
 
-const MAX_SPRITE_SHEET_DIM = 1536;
-const MAX_MULTIROW_SHEET_DIM = 1920;
+const MAX_SPRITE_SHEET_DIM = 768;
+const MAX_MULTIROW_SHEET_DIM = 1024;
 
 export function loadAndProcessSprite(
   url: string,

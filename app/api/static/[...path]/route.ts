@@ -1,7 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import path from 'path';
+import fs from 'fs';
+import crypto from 'crypto';
 
 const GITHUB_RAW_BASE = 'https://raw.githubusercontent.com/akshat92008/kaalyuga/main';
+const DISK_CACHE_DIR = '/tmp/kaliyuga_static_cache';
+
+try {
+  if (!fs.existsSync(DISK_CACHE_DIR)) {
+    fs.mkdirSync(DISK_CACHE_DIR, { recursive: true });
+  }
+} catch {}
 
 const MIME_MAP: Record<string, string> = {
   '.mp4': 'video/mp4',
@@ -20,13 +29,25 @@ const MIME_MAP: Record<string, string> = {
   '.json': 'application/json',
 };
 
-// Bounded 180 MB in-memory LRU buffer cache so 3D FBX rigs & textures stay cached in RAM
-const MAX_CACHE_BYTES = 180 * 1024 * 1024;
+// Bounded 256 MB in-memory LRU buffer cache + /tmp tmpfs persistent cache
+const MAX_CACHE_BYTES = 256 * 1024 * 1024;
 let currentCacheBytes = 0;
 const memoryCache = new Map<string, Buffer>();
 const inflightFetches = new Map<string, Promise<Buffer | null>>();
 
+function getDiskCachePath(cacheKey: string): string {
+  const hash = crypto.createHash('sha1').update(cacheKey).digest('hex');
+  return path.join(DISK_CACHE_DIR, `${hash}.bin`);
+}
+
 function putInCache(key: string, buf: Buffer): void {
+  try {
+    const diskPath = getDiskCachePath(key);
+    if (!fs.existsSync(diskPath)) {
+      fs.writeFileSync(diskPath, buf);
+    }
+  } catch {}
+
   if (buf.byteLength > 45 * 1024 * 1024) {
     return;
   }
@@ -64,6 +85,17 @@ async function fetchFromGitHub(segments: string[]): Promise<Buffer | null> {
   if (memoryCache.has(cacheKey)) {
     return memoryCache.get(cacheKey)!;
   }
+  try {
+    const diskPath = getDiskCachePath(cacheKey);
+    if (fs.existsSync(diskPath)) {
+      const diskBuf = fs.readFileSync(diskPath);
+      if (diskBuf.byteLength > 0) {
+        putInCache(cacheKey, diskBuf);
+        return diskBuf;
+      }
+    }
+  } catch {}
+
   if (inflightFetches.has(cacheKey)) {
     return inflightFetches.get(cacheKey)!;
   }
@@ -71,10 +103,19 @@ async function fetchFromGitHub(segments: string[]): Promise<Buffer | null> {
   const task = (async (): Promise<Buffer | null> => {
     const tryFetch = async (relParts: string[]): Promise<Buffer | null> => {
       const encodedPath = relParts.map((s) => encodeURIComponent(s)).join('/');
-      const res = await fetch(`${GITHUB_RAW_BASE}/${encodedPath}`);
-      if (!res.ok) return null;
-      const ab = await res.arrayBuffer();
-      return Buffer.from(ab);
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const res = await fetch(`${GITHUB_RAW_BASE}/${encodedPath}`);
+          if (!res.ok) return null;
+          const ab = await res.arrayBuffer();
+          return Buffer.from(ab);
+        } catch {
+          if (attempt === 0) {
+            await new Promise((r) => setTimeout(r, 250));
+          }
+        }
+      }
+      return null;
     };
 
     let buf = await tryFetch(repoRel);

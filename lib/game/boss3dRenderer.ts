@@ -160,6 +160,7 @@ export class Boss3DRenderer {
   private fillLight: THREE.DirectionalLight;
 
   private rigs: Partial<Record<Boss3DKind, LoadedBossRig>> = {};
+  private loadingByKind: Partial<Record<Boss3DKind, Promise<void>>> = {};
   private activeKind: Boss3DKind | null = null;
   private currentYaw = 0;
   private targetYaw = 0;
@@ -173,7 +174,6 @@ export class Boss3DRenderer {
   private clipAnimTime = 0;
   private lastRenderTime = -999;
   private disposed = false;
-  private loadingStarted = false;
 
   // Real-time 3D Boss Weapon Trail Ribbon
   private trailGeometry: THREE.BufferGeometry;
@@ -280,141 +280,72 @@ export class Boss3DRenderer {
       this.renderer.toneMappingExposure = 1.0;
       this.renderer.shadowMap.enabled = false;
       this.scene.environment = null;
-      this.loadingStarted = true;
-      this.loadAllBossAssets();
     } catch {
       this.renderer = null;
     }
   }
 
-  private async loadAllBossAssets(): Promise<void> {
+  private loadTex(url: string, isColor = false): Promise<THREE.Texture | null> {
     const texLoader = new THREE.TextureLoader();
+    return new Promise<THREE.Texture | null>((resolve) => {
+      if (IS_SOFTWARE_WEBGL && !isColor) {
+        resolve(null);
+        return;
+      }
+      texLoader.load(
+        url,
+        (t) => {
+          if (isColor) t.colorSpace = THREE.SRGBColorSpace;
+          if (IS_SOFTWARE_WEBGL) {
+            t.generateMipmaps = false;
+            t.minFilter = THREE.LinearFilter;
+          }
+          t.needsUpdate = true;
+          resolve(t);
+        },
+        undefined,
+        () => resolve(null)
+      );
+    });
+  }
 
-    const loadTex = (url: string, isColor = false) =>
-      new Promise<THREE.Texture | null>((resolve) => {
-        if (IS_SOFTWARE_WEBGL && !isColor) {
-          resolve(null);
-          return;
-        }
-        texLoader.load(
-          url,
-          (t) => {
-            if (isColor) t.colorSpace = THREE.SRGBColorSpace;
-            if (IS_SOFTWARE_WEBGL) {
-              t.generateMipmaps = false;
-              t.minFilter = THREE.LinearFilter;
-            }
-            t.needsUpdate = true;
-            resolve(t);
-          },
-          undefined,
-          () => resolve(null)
-        );
-      });
+  public ensureBossLoaded(kind: Boss3DKind): void {
+    if (this.rigs[kind] || this.loadingByKind[kind]) return;
+    this.loadingByKind[kind] =
+      kind === 'dundubhi' ? this.loadDundubhiRig() : this.loadVrikodaraRig();
+  }
 
+  private async loadDundubhiRig(): Promise<void> {
     try {
-      this.loadProgress = 12;
-      const wepBase = '/models/Meshy_AI_Bloodforged_Trident_A_1025041928_texture_fbx';
-
-      // Share cached FBX geometries across renderers to eliminate Vrikodara loading lag!
-      const axePackDir = '/new_3d_assets/Animations/Pro Melee Axe Pack';
+      this.loadProgress = Math.max(this.loadProgress, 15);
       const [
         dundubhiGroup,
-        dundubhiTexFbx,
         mIdleFbx,
         mRunFbx,
         mSwipeFbx,
         mJumpFbx,
         mRoarFbx,
-        vrikodaraGroup,
-        vIdleFbx,
-        vRunFbx,
-        vCombo1Fbx,
-        vCombo2Fbx,
-        vSpinFbx,
-        vSlamFbx,
-        tridentFbx,
         dunBase,
         dunNorm,
-        dunRough,
-        dunMet,
-        vrikBase,
-        vrikMet,
-        vrikNorm,
-        vrikRough,
-        wepBaseTex,
-        wepNormTex,
-        wepRoughTex,
-        wepMetTex,
       ] = await Promise.all([
         loadFbxCached(GAME_ASSETS.models3d.dundubhiFbx, false),
-        loadFbxCached(GAME_ASSETS.models3d.dundubhiTextureFbx, false),
         loadFbxCached(GAME_ASSETS.models3d.dundubhiAnims.idle, false),
         loadFbxCached(GAME_ASSETS.models3d.dundubhiAnims.run, false),
         loadFbxCached(GAME_ASSETS.models3d.dundubhiAnims.swipe, false),
         loadFbxCached(GAME_ASSETS.models3d.dundubhiAnims.jumpAttack, false),
         loadFbxCached(GAME_ASSETS.models3d.dundubhiAnims.roar, false),
-        loadFbxCached(GAME_ASSETS.models3d.vrikodaraFbx, false),
-        loadFbxCached(`${axePackDir}/standing idle.fbx`, false),
-        loadFbxCached(`${axePackDir}/standing run forward.fbx`, false),
-        loadFbxCached(`${axePackDir}/standing melee combo attack ver. 1.fbx`, false),
-        loadFbxCached(`${axePackDir}/standing melee combo attack ver. 2.fbx`, false),
-        loadFbxCached(`${axePackDir}/standing melee attack 360 high.fbx`, false),
-        loadFbxCached(`${axePackDir}/standing melee attack downward.fbx`, false),
-        loadFbxCached(GAME_ASSETS.models3d.tridentFbx, true),
-        loadTex(GAME_ASSETS.models3d.dundubhiTex.baseColor, true),
-        loadTex(GAME_ASSETS.models3d.dundubhiTex.normal, false),
-        loadTex(GAME_ASSETS.models3d.dundubhiTex.roughness, false),
-        loadTex(GAME_ASSETS.models3d.dundubhiTex.metallic, false),
-        loadTex(GAME_ASSETS.models3d.vrikodaraTex.baseColor, true),
-        loadTex(GAME_ASSETS.models3d.vrikodaraTex.metallic, false),
-        loadTex(GAME_ASSETS.models3d.vrikodaraTex.normal, false),
-        loadTex(GAME_ASSETS.models3d.vrikodaraTex.roughness, false),
-        loadTex(`${wepBase}/Meshy_AI_Bloodforged_Trident_A_1025041928_texture.png`, true),
-        loadTex(`${wepBase}/Meshy_AI_Bloodforged_Trident_A_1025041928_texture_normal.png`, false),
-        loadTex(`${wepBase}/Meshy_AI_Bloodforged_Trident_A_1025041928_texture_roughness.png`, false),
-        loadTex(`${wepBase}/Meshy_AI_Bloodforged_Trident_A_1025041928_texture_metallic.png`, false),
+        this.loadTex(GAME_ASSETS.models3d.dundubhiTex.baseColor, true),
+        this.loadTex(GAME_ASSETS.models3d.dundubhiTex.normal, false),
       ]);
 
       if (this.disposed) return;
-      this.loadProgress = 78;
 
-      let rawWeaponMesh: THREE.Mesh | null = null;
-      tridentFbx.traverse((child) => {
-        if ((child as THREE.Mesh).isMesh && !rawWeaponMesh) {
-          rawWeaponMesh = child as THREE.Mesh;
-        }
-      });
-
-      void dunRough;
-      void dunMet;
-      void vrikRough;
-      void vrikMet;
-      void wepRoughTex;
-      void wepMetTex;
-
-      const createWepMat = () =>
-        new THREE.MeshStandardMaterial({
-          map: wepBaseTex || undefined,
-          normalMap: wepNormTex || undefined,
-          normalScale: new THREE.Vector2(0.45, 0.45),
-          roughness: 0.92,
-          metalness: 0.0,
-          envMapIntensity: 0.0,
-          emissive: new THREE.Color(0x38080c),
-          emissiveIntensity: 0.14,
-        });
-
-      // ======================================================================
-      // 1. CONFIGURE DUNDUBHI (Runebound Minotaur Warlord — 65-Bone SkinnedMesh)
-      // ======================================================================
       const dundubhiRoot = new THREE.Group();
       dundubhiGroup.position.set(0, 0, 0);
       dundubhiGroup.scale.setScalar(1.05);
       dundubhiRoot.add(dundubhiGroup);
 
       const dundubhiMaterials: THREE.MeshStandardMaterial[] = [];
-      const dunWepMat = createWepMat();
       const dunCharMat = new THREE.MeshStandardMaterial({
         color: new THREE.Color(0xffffff),
         map: dunBase || undefined,
@@ -428,7 +359,8 @@ export class Boss3DRenderer {
       });
       dundubhiMaterials.push(dunCharMat);
 
-      bindTexturedGeometryToSkeleton(dundubhiGroup, dundubhiTexFbx, dunCharMat);
+      // Simplify Dundubhi's native 741k-vertex SkinnedMesh to ~12k vertices while preserving native UVs & skinning
+      bindTexturedGeometryToSkeleton(dundubhiGroup, null, dunCharMat);
       applyHadesCelShadingToHierarchy(dundubhiGroup);
 
       const dunBones: BossUpperBodyBones = {
@@ -440,14 +372,13 @@ export class Boss3DRenderer {
         leftArm: dundubhiGroup.getObjectByName('mixamorigLeftArm') || null,
       };
 
-      // Dundubhi already has his sculpted weapon in his native FBX mesh; attach trail nodes only
       const dunTipNode = new THREE.Object3D();
       const dunBaseNode = new THREE.Object3D();
       let dunRightSocket: THREE.Group | null = null;
       if (dunBones.rightHand) {
         dunRightSocket = new THREE.Group();
-        dunTipNode.position.set(0, 0, 52);
-        dunBaseNode.position.set(0, 0, 14);
+        dunTipNode.position.set(52, 0, 0);
+        dunBaseNode.position.set(14, 0, 0);
         dunRightSocket.add(dunTipNode);
         dunRightSocket.add(dunBaseNode);
         dunBones.rightHand.add(dunRightSocket);
@@ -499,7 +430,7 @@ export class Boss3DRenderer {
         actions: dunActions,
         activeKey: null,
         materials: dundubhiMaterials,
-        weaponMaterials: [dunWepMat],
+        weaponMaterials: [],
         rightWeaponSocket: dunRightSocket,
         leftWeaponSocket: null,
         weaponTipNode: dunTipNode,
@@ -507,11 +438,52 @@ export class Boss3DRenderer {
         bones: dunBones,
       };
 
-      // ======================================================================
-      // 2. CONFIGURE VRIKODARA (Crimson Skull Warlord — Red-Painted Sovereign)
-      //    Normalize 1.70m model height to 158 scene units to match the 216-unit
-      //    orthographic boss camera and bind Mixamo Pro Melee Axe Pack clips!
-      // ======================================================================
+      this.transitionToClip(this.rigs.dundubhi, 'idle', 0.05, 1.0, 0, true);
+      this.rigs.dundubhi.mixer.update(0.016);
+      this.loadProgress = 100;
+      this.isReady = true;
+    } catch (err) {
+      console.warn('Boss3DRenderer Dundubhi load warning:', err);
+      this.loadProgress = 100;
+    }
+  }
+
+  private async loadVrikodaraRig(): Promise<void> {
+    try {
+      this.loadProgress = Math.max(this.loadProgress, 15);
+      const wepBase = '/models/Meshy_AI_Bloodforged_Trident_A_1025041928_texture_fbx';
+      const axePackDir = '/new_3d_assets/Animations/Pro Melee Axe Pack';
+
+      const [
+        vrikodaraGroup,
+        vIdleFbx,
+        vRunFbx,
+        vCombo1Fbx,
+        vCombo2Fbx,
+        vSpinFbx,
+        vSlamFbx,
+        tridentFbx,
+        vrikBase,
+        vrikNorm,
+        wepBaseTex,
+        wepNormTex,
+      ] = await Promise.all([
+        loadFbxCached(GAME_ASSETS.models3d.vrikodaraFbx, false),
+        loadFbxCached(`${axePackDir}/standing idle.fbx`, false),
+        loadFbxCached(`${axePackDir}/standing run forward.fbx`, false),
+        loadFbxCached(`${axePackDir}/standing melee combo attack ver. 1.fbx`, false),
+        loadFbxCached(`${axePackDir}/standing melee combo attack ver. 2.fbx`, false),
+        loadFbxCached(`${axePackDir}/standing melee attack 360 high.fbx`, false),
+        loadFbxCached(`${axePackDir}/standing melee attack downward.fbx`, false),
+        loadFbxCached(GAME_ASSETS.models3d.tridentFbx, true),
+        this.loadTex(GAME_ASSETS.models3d.vrikodaraTex.baseColor, true),
+        this.loadTex(GAME_ASSETS.models3d.vrikodaraTex.normal, false),
+        this.loadTex(`${wepBase}/Meshy_AI_Bloodforged_Trident_A_1025041928_texture.png`, true),
+        this.loadTex(`${wepBase}/Meshy_AI_Bloodforged_Trident_A_1025041928_texture_normal.png`, false),
+      ]);
+
+      if (this.disposed) return;
+
       const vrikStandingHipY = extractStandingHipY(vrikodaraGroup);
       const vrikRawBox = new THREE.Box3().setFromObject(vrikodaraGroup);
       const vrikRawH = Math.max(0.01, vrikRawBox.max.y - vrikRawBox.min.y);
@@ -523,7 +495,16 @@ export class Boss3DRenderer {
       vrikodaraRoot.add(vrikodaraGroup);
 
       const vrikMaterials: THREE.MeshStandardMaterial[] = [];
-      const vrikWepMat = createWepMat();
+      const vrikWepMat = new THREE.MeshStandardMaterial({
+        map: wepBaseTex || undefined,
+        normalMap: wepNormTex || undefined,
+        normalScale: new THREE.Vector2(0.45, 0.45),
+        roughness: 0.92,
+        metalness: 0.0,
+        envMapIntensity: 0.0,
+        emissive: new THREE.Color(0x38080c),
+        emissiveIntensity: 0.14,
+      });
 
       const vrikCharMat = new THREE.MeshStandardMaterial({
         color: new THREE.Color(0xffffff),
@@ -538,15 +519,8 @@ export class Boss3DRenderer {
       });
       vrikMaterials.push(vrikCharMat);
 
-      vrikodaraGroup.traverse((obj) => {
-        if ((obj as THREE.Mesh).isMesh) {
-          const mesh = obj as THREE.Mesh;
-          mesh.frustumCulled = false;
-          mesh.castShadow = !IS_SOFTWARE_WEBGL;
-          mesh.receiveShadow = !IS_SOFTWARE_WEBGL;
-          mesh.material = vrikCharMat;
-        }
-      });
+      // Simplify Vrikodara's native 842k-vertex SkinnedMesh to ~12k vertices while preserving native UVs & skinning
+      bindTexturedGeometryToSkeleton(vrikodaraGroup, null, vrikCharMat);
       applyHadesCelShadingToHierarchy(vrikodaraGroup);
       vrikodaraGroup.updateMatrixWorld(true);
 
@@ -580,13 +554,20 @@ export class Boss3DRenderer {
       let vrikRightSocket: THREE.Group | null = null;
       let vrikLeftSocket: THREE.Group | null = null;
 
-      if (vrikBones.rightHand && rawWeaponMesh) {
+      if (vrikBones.rightHand && tridentFbx) {
         const handScaleVec = new THREE.Vector3();
         vrikBones.rightHand.getWorldScale(handScaleVec);
         const handScale = Math.max(1e-5, handScaleVec.x);
 
-        const rightMesh = (rawWeaponMesh as THREE.Mesh).clone();
-        const wepBox = new THREE.Box3().setFromObject(rightMesh);
+        const rightWepGroup = tridentFbx.clone(true);
+        rightWepGroup.traverse((child) => {
+          if ((child as THREE.Mesh).isMesh) {
+            const m = child as THREE.Mesh;
+            m.material = vrikWepMat;
+            m.frustumCulled = false;
+          }
+        });
+        const wepBox = new THREE.Box3().setFromObject(rightWepGroup);
         const wepSize = new THREE.Vector3();
         wepBox.getSize(wepSize);
         const maxDim = Math.max(0.001, wepSize.x, wepSize.y, wepSize.z);
@@ -594,30 +575,36 @@ export class Boss3DRenderer {
         const localWepScale = desiredWorldLen / (maxDim * handScale);
 
         vrikRightSocket = new THREE.Group();
-        rightMesh.material = vrikWepMat;
-        rightMesh.frustumCulled = false;
-        rightMesh.scale.setScalar(localWepScale);
-        rightMesh.rotation.set(-Math.PI * 0.5, 0, -Math.PI * 0.5);
-        rightMesh.position.set(0, 0, 0.22 * maxDim * localWepScale);
+        rightWepGroup.scale.setScalar(localWepScale);
+        // Bloodforged_Trident_Axe blade is at +Y of rightWepGroup; rotation(-pi/2, 0, -pi/2) maps +Y -> +X of RightHand
+        rightWepGroup.rotation.set(-Math.PI * 0.5, 0, -Math.PI * 0.5);
+        rightWepGroup.position.set(0.26 * maxDim * localWepScale, 0, 0);
 
-        vrikTipNode.position.set(0, 0, 0.45 * maxDim);
-        vrikBaseNode.position.set(0, 0, 0.12 * maxDim);
-        rightMesh.add(vrikTipNode);
-        rightMesh.add(vrikBaseNode);
+        vrikTipNode.position.set(0.45 * maxDim * localWepScale, 0, 0);
+        vrikBaseNode.position.set(0.12 * maxDim * localWepScale, 0, 0);
+        vrikRightSocket.add(vrikTipNode);
+        vrikRightSocket.add(vrikBaseNode);
+        vrikRightSocket.add(rightWepGroup);
 
-        vrikRightSocket.add(rightMesh);
         applyHadesCelShadingToHierarchy(vrikRightSocket);
         vrikBones.rightHand.add(vrikRightSocket);
       }
 
       const vrikLeftHand = findVrikBone(['mixamorigLeftHand', 'LeftHand']);
-      if (vrikLeftHand && rawWeaponMesh) {
+      if (vrikLeftHand && tridentFbx) {
         const handScaleVec = new THREE.Vector3();
         vrikLeftHand.getWorldScale(handScaleVec);
         const handScale = Math.max(1e-5, handScaleVec.x);
 
-        const leftMesh = (rawWeaponMesh as THREE.Mesh).clone();
-        const wepBox = new THREE.Box3().setFromObject(leftMesh);
+        const leftWepGroup = tridentFbx.clone(true);
+        leftWepGroup.traverse((child) => {
+          if ((child as THREE.Mesh).isMesh) {
+            const m = child as THREE.Mesh;
+            m.material = vrikWepMat;
+            m.frustumCulled = false;
+          }
+        });
+        const wepBox = new THREE.Box3().setFromObject(leftWepGroup);
         const wepSize = new THREE.Vector3();
         wepBox.getSize(wepSize);
         const maxDim = Math.max(0.001, wepSize.x, wepSize.y, wepSize.z);
@@ -625,13 +612,11 @@ export class Boss3DRenderer {
         const localWepScale = desiredWorldLen / (maxDim * handScale);
 
         vrikLeftSocket = new THREE.Group();
-        leftMesh.material = vrikWepMat;
-        leftMesh.frustumCulled = false;
-        leftMesh.scale.setScalar(localWepScale);
-        leftMesh.rotation.set(-Math.PI * 0.5, 0, Math.PI * 0.5);
-        leftMesh.position.set(0, 0, 0.22 * maxDim * localWepScale);
+        leftWepGroup.scale.setScalar(localWepScale);
+        leftWepGroup.rotation.set(-Math.PI * 0.5, 0, Math.PI * 0.5);
+        leftWepGroup.position.set(-0.26 * maxDim * localWepScale, 0, 0);
 
-        vrikLeftSocket.add(leftMesh);
+        vrikLeftSocket.add(leftWepGroup);
         vrikLeftSocket.visible = false;
         applyHadesCelShadingToHierarchy(vrikLeftSocket);
         vrikLeftHand.add(vrikLeftSocket);
@@ -687,16 +672,12 @@ export class Boss3DRenderer {
         bones: vrikBones,
       };
 
-      // Warm up both rigs for 1 frame so shaders compile during preload
-      this.transitionToClip(this.rigs.dundubhi, 'idle', 0.05, 1.0, 0, true);
-      this.rigs.dundubhi.mixer.update(0.016);
       this.transitionToClip(this.rigs.vrikodara, 'idle', 0.05, 1.0, 0, true);
       this.rigs.vrikodara.mixer.update(0.016);
-
       this.loadProgress = 100;
       this.isReady = true;
     } catch (err) {
-      console.warn('Boss3DRenderer load warning:', err);
+      console.warn('Boss3DRenderer Vrikodara load warning:', err);
       this.loadProgress = 100;
     }
   }
@@ -796,11 +777,7 @@ export class Boss3DRenderer {
 
   public updateAndRender(params: Boss3DUpdateParams): boolean {
     if (!this.renderer) return false;
-    if (!this.loadingStarted) {
-      this.loadingStarted = true;
-      this.loadAllBossAssets();
-    }
-    if (!this.isReady) return false;
+    this.ensureBossLoaded(params.kind);
     const rig = this.rigs[params.kind];
     if (!rig) return false;
 
@@ -900,24 +877,36 @@ export class Boss3DRenderer {
     const turnSpeed = params.aiState === 'attack' || params.aiState === 'windup' ? 24 : 14;
     this.currentYaw += angleDiff * Math.min(1, turnSpeed * dt);
 
-    // Compute Hades 2D Stepped Sprite-Sheet Frame Key ("Animated on Twos")
+    // Compute Hades 2D Stepped Sprite-Sheet Frame Key (16 directions x 14 steps for zero cache thrashing)
     this.clipAnimTime += dt * targetTimeScale;
     const isBossAction =
       params.aiState === 'windup' ||
       params.aiState === 'attack' ||
       this.attackSwingTimer > 0;
-    const { frameKey, quantizedYaw } = computeSpriteSheetFrameKey({
+    const activeAction = rig.actions[rig.activeKey || desiredClip];
+    const clipDuration = Math.max(0.25, activeAction?.getClip().duration || 1.0);
+    const { frameKey: baseKey, quantizedYaw } = computeSpriteSheetFrameKey({
       id: params.kind,
       animName: rig.activeKey || desiredClip,
-      animTime: this.clipAnimTime % 2.4,
+      animTime: this.clipAnimTime,
+      clipDuration,
       yawRad: this.currentYaw,
       isAttacking: isBossAction,
       isHurt: params.isHitFlash,
       isParrying: Boolean(params.isParrying),
       phase: params.phase,
+      yawDirections: 16,
+      stepsPerClip: 14,
     });
+    const actionSubStep =
+      params.aiState === 'windup'
+        ? `w${Math.round(params.windupProgress * 6)}`
+        : params.aiState === 'attack'
+        ? `a${Math.round((1 - this.attackSwingTimer / Math.max(0.05, this.attackSwingDuration)) * 8)}`
+        : 'loc';
+    const frameKey = `${baseKey}:${actionSubStep}`;
 
-    const cached = !isBossAction && this.trailSamples.length === 0 ? this.frameCache.get(frameKey) : undefined;
+    const cached = !params.isHitFlash ? this.frameCache.get(frameKey) : undefined;
     if (cached) {
       this.canvas = cached;
       rig.mixer.update(dt);
@@ -1022,8 +1011,8 @@ export class Boss3DRenderer {
       cacheFrame: false,
     });
     this.canvas = baked;
-    if (!isBossAction && this.trailSamples.length === 0 && !params.isHitFlash) {
-      if (this.frameCache.size > 480) {
+    if (!params.isHitFlash) {
+      if (this.frameCache.size > 1200) {
         const oldest = this.frameCache.keys().next().value;
         if (oldest) this.frameCache.delete(oldest);
       }
