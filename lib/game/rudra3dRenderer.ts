@@ -62,7 +62,7 @@ const PARASHU_DIFFUSE_URL =
 const RUDRA_ANIM_URLS: Record<RudraAnimState, string> = {
   idle: '/new_3d_assets/Animations/Pro Melee Axe Pack/standing idle.fbx',
   run: '/new_3d_assets/Animations/Pro Melee Axe Pack/standing run forward.fbx',
-  dash: '/new_3d_assets/Animations/Pro Melee Axe Pack/standing melee run jump attack.fbx',
+  dash: '/new_3d_assets/Animations/Pro Melee Axe Pack/standing run forward.fbx',
   attack1: '/new_3d_assets/Animations/Pro Melee Axe Pack/standing melee combo attack ver. 1.fbx',
   attack2: '/new_3d_assets/Animations/Pro Melee Axe Pack/standing melee combo attack ver. 2.fbx',
   attack3: '/new_3d_assets/Animations/Pro Melee Axe Pack/standing melee combo attack ver. 3.fbx',
@@ -220,7 +220,8 @@ export class Rudra3DRenderer {
         baseGroup.scale.setScalar(scale);
         baseGroup.position.set(0, -0.06, 0);
 
-        // Attach 3D Parashu Battle-Axe to Rudra's right hand bone
+        // Attach 3D Parashu Battle-Axe to Rudra's right hand bone with exact world-scale normalization
+        baseGroup.updateMatrixWorld(true);
         const rightHand =
           baseGroup.getObjectByName('mixamorigRightHand') ||
           baseGroup.getObjectByName('RightHand');
@@ -239,10 +240,21 @@ export class Rudra3DRenderer {
               wm.frustumCulled = false;
             }
           });
+          const handScaleVec = new THREE.Vector3();
+          rightHand.getWorldScale(handScaleVec);
+          const handScale = Math.max(1e-5, handScaleVec.x);
+
+          const wepBox = new THREE.Box3().setFromObject(weaponGroup);
+          const wepSize = new THREE.Vector3();
+          wepBox.getSize(wepSize);
+          const maxDim = Math.max(0.001, wepSize.x, wepSize.y, wepSize.z);
+          const desiredWorldLen = 1.02;
+          const localWepScale = desiredWorldLen / (maxDim * handScale);
+
           const weaponSocket = new THREE.Group();
-          weaponGroup.scale.setScalar(0.56);
-          weaponGroup.rotation.set(Math.PI * 0.5, 0, Math.PI * 0.5);
-          weaponGroup.position.set(0, 14, 18);
+          weaponGroup.scale.setScalar(localWepScale);
+          weaponGroup.rotation.set(-Math.PI * 0.5, 0, -Math.PI * 0.5);
+          weaponGroup.position.set(0, 0, 0.22 * maxDim * localWepScale);
           weaponSocket.add(weaponGroup);
           rightHand.add(weaponSocket);
         }
@@ -354,8 +366,8 @@ export class Rudra3DRenderer {
     if (!this.renderer || !this.isReady || !this.model || !this.mixer) return null;
 
     const normalizedYaw = ((facingAngleRad % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
-    const yawIndex = Math.round((normalizedYaw / (Math.PI * 2)) * 16) % 16;
-    const quantizedYaw = (yawIndex / 16) * Math.PI * 2;
+    const yawIndex = Math.round((normalizedYaw / (Math.PI * 2)) * 32) % 32;
+    const quantizedYaw = (yawIndex / 32) * Math.PI * 2;
 
     const isAttack =
       state === 'attack1' ||
@@ -370,7 +382,7 @@ export class Rudra3DRenderer {
       this.actions.idle;
 
     const clipDur = action ? Math.max(0.4, action.getClip().duration) : 1.0;
-    const steps = isAttack ? 12 : 10;
+    const steps = isAttack ? 28 : 24;
 
     // For attacks, animTimeSec is normalized progress [0..1]; for locomotion, it's elapsed seconds
     const stepIndex = isAttack
@@ -403,7 +415,7 @@ export class Rudra3DRenderer {
       cacheFrame: false,
     });
 
-    if (this.frameCache.size > 900) {
+    if (this.frameCache.size > 1600) {
       const oldest = this.frameCache.keys().next().value;
       if (oldest) this.frameCache.delete(oldest);
     }

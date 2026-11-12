@@ -421,6 +421,25 @@ export function applyHadesCelShadingToHierarchy(
 }
 
 const sharedFrameCache = new Map<string, HTMLCanvasElement>();
+let sharedSilhouetteCanvas: HTMLCanvasElement | null = null;
+let sharedSilhouetteCtx: CanvasRenderingContext2D | null = null;
+
+function getSharedSilhouetteCanvas(w: number, h: number): {
+  canvas: HTMLCanvasElement;
+  ctx: CanvasRenderingContext2D | null;
+} {
+  if (!sharedSilhouetteCanvas) {
+    sharedSilhouetteCanvas = document.createElement('canvas');
+    sharedSilhouetteCtx = sharedSilhouetteCanvas.getContext('2d');
+  }
+  if (sharedSilhouetteCanvas.width !== w || sharedSilhouetteCanvas.height !== h) {
+    sharedSilhouetteCanvas.width = w;
+    sharedSilhouetteCanvas.height = h;
+  } else if (sharedSilhouetteCtx) {
+    sharedSilhouetteCtx.clearRect(0, 0, w, h);
+  }
+  return { canvas: sharedSilhouetteCanvas, ctx: sharedSilhouetteCtx };
+}
 
 /**
  * Fast GPU-accelerated 2D Sprite Baker that converts a rendered 3D WebGL frame into a crisp
@@ -452,12 +471,10 @@ export function bake2DSpriteFrameFromCanvas(
   const thickness = options?.outlineThickness ?? 2;
   const outlineColor = options?.outlineColor ?? '#120907';
 
-  // 1. Draw crisp 2D silhouette outline using GPU-composited directional offsets
-  const silhouetteCanvas = document.createElement('canvas');
-  silhouetteCanvas.width = w;
-  silhouetteCanvas.height = h;
-  const sCtx = silhouetteCanvas.getContext('2d');
+  // 1. Draw crisp 2D silhouette outline using GPU-composited directional offsets on reused scratch canvas
+  const { canvas: silhouetteCanvas, ctx: sCtx } = getSharedSilhouetteCanvas(w, h);
   if (sCtx) {
+    sCtx.globalCompositeOperation = 'source-over';
     sCtx.drawImage(sourceCanvas, 0, 0, w, h);
     sCtx.globalCompositeOperation = 'source-in';
     sCtx.fillStyle = outlineColor;
@@ -476,6 +493,12 @@ export function bake2DSpriteFrameFromCanvas(
     for (let i = 0; i < offsets.length; i++) {
       ctx.drawImage(silhouetteCanvas, offsets[i][0], offsets[i][1], w, h);
     }
+
+    // Subtle upper-left warm rim highlight so characters pop against dark & bright arenas
+    sCtx.globalCompositeOperation = 'source-in';
+    sCtx.fillStyle = 'rgba(255, 200, 110, 0.38)';
+    sCtx.fillRect(0, 0, w, h);
+    ctx.drawImage(silhouetteCanvas, -1.2, -1.2, w, h);
   }
 
   // 2. Draw crisp character sprite over the dark ink outline
@@ -491,7 +514,7 @@ export function bake2DSpriteFrameFromCanvas(
   }
 
   if (options?.cacheFrame !== false) {
-    if (sharedFrameCache.size > 1800) {
+    if (sharedFrameCache.size > 2400) {
       const oldest = sharedFrameCache.keys().next().value;
       if (oldest) sharedFrameCache.delete(oldest);
     }

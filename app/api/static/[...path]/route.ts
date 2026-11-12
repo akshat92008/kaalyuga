@@ -20,14 +20,14 @@ const MIME_MAP: Record<string, string> = {
   '.json': 'application/json',
 };
 
-// Bounded 80 MB in-memory LRU buffer cache so we never fill /tmp or disk
-const MAX_CACHE_BYTES = 80 * 1024 * 1024;
+// Bounded 180 MB in-memory LRU buffer cache so 3D FBX rigs & textures stay cached in RAM
+const MAX_CACHE_BYTES = 180 * 1024 * 1024;
 let currentCacheBytes = 0;
 const memoryCache = new Map<string, Buffer>();
 const inflightFetches = new Map<string, Promise<Buffer | null>>();
 
 function putInCache(key: string, buf: Buffer): void {
-  if (buf.byteLength > 28 * 1024 * 1024) {
+  if (buf.byteLength > 45 * 1024 * 1024) {
     return;
   }
   if (memoryCache.has(key)) {
@@ -81,12 +81,17 @@ async function fetchFromGitHub(segments: string[]): Promise<Buffer | null> {
     if (!buf) {
       const lastIdx = repoRel.length - 1;
       const last = repoRel[lastIdx];
-      if (last && (last.includes('...') || last.includes('…'))) {
-        const altLast = last.includes('...')
-          ? last.replace(/\.\.\./g, '…')
-          : last.replace(/…/g, '...');
-        const altRel = [...repoRel.slice(0, -1), altLast];
-        buf = await tryFetch(altRel);
+      if (last) {
+        if (last.includes('...') || last.includes('…')) {
+          const altLast = last.includes('...')
+            ? last.replace(/\.\.\./g, '…')
+            : last.replace(/…/g, '...');
+          buf = await tryFetch([...repoRel.slice(0, -1), altLast]);
+        }
+        if (!buf && last.includes('enviro_')) {
+          const altLast = last.replace('enviro_', 'enviro…_');
+          buf = await tryFetch([...repoRel.slice(0, -1), altLast]);
+        }
       }
     }
 

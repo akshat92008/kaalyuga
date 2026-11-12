@@ -70,11 +70,12 @@ export const GAME_ASSETS = {
   arenaVideos: {
     waterCourtyard: '/videos/Animate_courtyard_image_with_water_47b6b081_1080p.mp4',
     templeEnvironment: '/videos/Animate_image_into_game_environment_ad4672f3_1080p.mp4',
+    battlefieldEnv: '/videos/Animate_battlefield_environment_…_56896e20.mp4',
     fogClearingSanctum: '/videos/Animate_image_removing_fog_e4e55e75_1080p.mp4',
     lavaArena: '/videos/Animate_lava_arena_scene_0e362b91_1080p.mp4',
-    mythicEnvA: '/videos/Animate_mythological_game_enviro_743206b7_1080p.mp4',
-    mythicEnvB: '/videos/Animate_mythological_game_enviro_db8affc3_1080p.mp4',
-    mythicEnvC: '/videos/Animate_mythological_game_enviro_f7acefd6_1080p.mp4',
+    mythicEnvA: '/videos/Animate_mythological_game_enviro…_743206b7_1080p.mp4',
+    mythicEnvB: '/videos/Animate_mythological_game_enviro…_db8affc3_1080p.mp4',
+    mythicEnvC: '/videos/Animate_mythological_game_enviro…_f7acefd6_1080p.mp4',
     axeSlashEnergy: '/videos/Axe_slash_energy_attack_animation_236a5328_1080p.mp4',
   },
   titleVideo720p: '/videos/Warrior_standing_on_battlefield_e09ae2f5.mp4',
@@ -111,6 +112,8 @@ export const GAME_ASSETS = {
   models3d: {
     dundubhiFbx:
       '/models/Meshy_AI_Runebound_Minotaur_Warlord_20261025_texture_fbx/Meshy_AI_Runebound_Minotaur_Warlord_Animations.fbx',
+    dundubhiTextureFbx:
+      '/models/Meshy_AI_Runebound_Minotaur_Warlord_20261025_texture_fbx/Meshy_AI_Runebound_Minotaur_Warlord_20261025_texture.fbx',
     dundubhiAnims: {
       idle: '/models/Meshy_AI_Runebound_Minotaur_Warlord_20261025_texture_fbx/mutant_idle.fbx',
       walk: '/models/Meshy_AI_Runebound_Minotaur_Warlord_20261025_texture_fbx/mutant_run.fbx',
@@ -137,20 +140,20 @@ export const GAME_ASSETS = {
         '/models/Meshy_AI_Bloodforged_Trident_A_1025041928_texture_fbx/Meshy_AI_Bloodforged_Trident_A_1025041928_texture.png',
     },
     vrikodaraFbx:
-      '/models/Meshy_AI_Meshy_AI_Infernal_Maw_biped/Meshy_AI_Meshy_AI_Infernal_Maw_biped_Animation_Running_withSkin.fbx',
+      '/models/Meshy_AI_Crimson_Skull_Warlord_biped/Meshy_AI_Crimson_Skull_Warlord_biped_Animation_Running_withSkin.fbx',
     vrikodaraTex: {
       baseColor:
-        '/models/Meshy_AI_Infernal_Maw_Sovereign_20261025_texture_fbx/Meshy_AI_Infernal_Maw_Sovereign_20261025_texture.png',
+        '/models/Meshy_AI_Crimson_Skull_Warlord_biped/Meshy_AI_Crimson_Skull_Warlord_biped_texture_0.png',
       diffuse:
-        '/models/Meshy_AI_Infernal_Maw_Sovereign_20261025_texture_fbx/Meshy_AI_Infernal_Maw_Sovereign_20261025_texture.png',
+        '/models/Meshy_AI_Crimson_Skull_Warlord_biped/Meshy_AI_Crimson_Skull_Warlord_biped_texture_0.png',
       normal:
-        '/models/Meshy_AI_Infernal_Maw_Sovereign_20261025_texture_fbx/Meshy_AI_Infernal_Maw_Sovereign_20261025_texture_normal.png',
+        '/models/Meshy_AI_Crimson_Skull_Warlord_biped/Meshy_AI_Crimson_Skull_Warlord_biped_texture_0_normal.png',
       metallic:
-        '/models/Meshy_AI_Meshy_AI_Infernal_Maw_biped/Meshy_AI_Meshy_AI_Infernal_Maw_biped_texture_0_metallic.png',
+        '/models/Meshy_AI_Crimson_Skull_Warlord_biped/Meshy_AI_Crimson_Skull_Warlord_biped_texture_0_metallic.png',
       roughness:
-        '/models/Meshy_AI_Meshy_AI_Infernal_Maw_biped/Meshy_AI_Meshy_AI_Infernal_Maw_biped_texture_0_roughness.png',
+        '/models/Meshy_AI_Crimson_Skull_Warlord_biped/Meshy_AI_Crimson_Skull_Warlord_biped_texture_0_roughness.png',
       specular:
-        '/models/Meshy_AI_Meshy_AI_Infernal_Maw_biped/Meshy_AI_Meshy_AI_Infernal_Maw_biped_texture_0_metallic.png',
+        '/models/Meshy_AI_Crimson_Skull_Warlord_biped/Meshy_AI_Crimson_Skull_Warlord_biped_texture_0_metallic.png',
     },
     tridentFbx:
       '/models/Meshy_AI_Bloodforged_Trident_A_1025041928_texture_fbx/Meshy_AI_Bloodforged_Trident_A_1025041928_texture.fbx',
@@ -270,7 +273,7 @@ export const GAME_ASSETS = {
     raktabijaCourtyard: '/assets/aistudio/Gemini_Generated_Image_bmq158bmq158bmq1_a3eaf68a.png',
     chariotBonefield: '/assets/aistudio/Gemini_Generated_Image_fexppofexppofexp.png',
     chariotBonefieldAlt: '/assets/aistudio/Gemini_Generated_Image_ey07c4ey07c4ey07_1de21fb8.png',
-    warDrumColonnade: '/assets/aistudio/Gemini_Generated_Image_46i1mu46i1mu46i1.png',
+    warDrumColonnade: '/assets/aistudio/Gemini_Generated_Image_c0fyyc0fyyc0fyyc_4d7dcd20.png',
     soulFireSanctum: '/assets/aistudio/Gemini_Generated_Image_acbxb7acbxb7acbx_9e34bd2e.png',
     gopuramCauseway: '/assets/aistudio/Gemini_Generated_Image_p8dfx9p8dfx9p8df.png',
     gopuramCausewayAlt: '/assets/aistudio/Gemini_Generated_Image_c0fyyc0fyyc0fyyc_4d7dcd20.png',
@@ -577,7 +580,7 @@ export const CHAMBERS: ChamberSpec[] = [
     sanjayaQuote:
       '“The axles are fused with molten brass and bone. Rakshasa bruisers prowl the wreckage!”',
     backgroundUrl: GAME_ASSETS.chambers.chariotBonefield,
-    videoUrl: GAME_ASSETS.arenaVideos.mythicEnvA,
+    videoUrl: GAME_ASSETS.arenaVideos.battlefieldEnv,
     floorTint: 'rgba(26, 12, 8, 0.08)',
     isBossChamber: false,
     envEffect: 'lava_fissures',
@@ -621,8 +624,8 @@ export const CHAMBERS: ChamberSpec[] = [
     strikethroughLie: '“The temple bull bowed before the royal standard of Hastinapura...”',
     sanjayaQuote:
       '“Dundubhi’s Chola-bronze hide deflects raw steel! Bait his horn-charge into the outer Kurukshetra Pillars to crack his armor!”',
-    backgroundUrl: GAME_ASSETS.chambers.warDrumColonnade,
-    videoUrl: GAME_ASSETS.arenaVideos.mythicEnvB,
+    backgroundUrl: GAME_ASSETS.chambers.bossSanctumPhase1Alt,
+    videoUrl: GAME_ASSETS.arenaVideos.mythicEnvA,
     floorTint: 'rgba(24, 12, 8, 0.08)',
     isBossChamber: true,
     envEffect: 'lava_fissures',
@@ -696,7 +699,7 @@ export const CHAMBERS: ChamberSpec[] = [
     strikethroughLie: '“Pilgrims walked unharmed across the temple causeway...”',
     sanjayaQuote:
       '“Every flagstone is rigged with bloodied iron spikes and Agni lotus vents. Lure the Rakshasa bruisers onto the plates!”',
-    backgroundUrl: GAME_ASSETS.chambers.gopuramCauseway,
+    backgroundUrl: GAME_ASSETS.chambers.gopuramCausewayAlt,
     videoUrl: GAME_ASSETS.arenaVideos.lavaArena,
     floorTint: 'rgba(24, 10, 10, 0.08)',
     isBossChamber: false,
@@ -742,8 +745,8 @@ export const CHAMBERS: ChamberSpec[] = [
     sanjayaQuote:
       '“Golden chains and an Om padlock bind Vrikodara’s threshold! Slaughter the Royal Asura Guard to shatter the seal!”',
     backgroundUrl: GAME_ASSETS.chambers.asuraLavaLocked,
-    unlockedBackgroundUrl: GAME_ASSETS.chambers.asuraLavaUnlocked,
-    videoUrl: GAME_ASSETS.arenaVideos.mythicEnvC,
+    unlockedBackgroundUrl: GAME_ASSETS.chambers.asuraLavaLocked,
+    videoUrl: GAME_ASSETS.arenaVideos.mythicEnvB,
     floorTint: 'rgba(26, 10, 8, 0.06)',
     isBossChamber: false,
     envEffect: 'lava_fissures',
@@ -807,9 +810,9 @@ export const CHAMBERS: ChamberSpec[] = [
     sanjayaQuote:
       '“Behold Vrikodara! Ten thousand chariots burn inside his abdominal furnace—and when the blood-eclipse rises, his twin Tridents tear the cosmos!”',
     backgroundUrl: GAME_ASSETS.chambers.bossSanctumPhase1,
-    phase2BackgroundUrl: GAME_ASSETS.chambers.bossSanctumPhase2Eclipse,
+    phase2BackgroundUrl: GAME_ASSETS.chambers.bossSanctumPhase1,
     videoUrl: GAME_ASSETS.arenaVideos.mythicEnvC,
-    phase2VideoUrl: GAME_ASSETS.arenaVideos.lavaArena,
+    phase2VideoUrl: GAME_ASSETS.arenaVideos.mythicEnvC,
     floorTint: 'rgba(22, 6, 10, 0.06)',
     isBossChamber: true,
     envEffect: 'eclipse_wind',

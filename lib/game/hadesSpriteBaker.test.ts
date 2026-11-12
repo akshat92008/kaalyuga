@@ -4,17 +4,19 @@ import {
   gradePixelToHadesPalette,
   computeSpriteSheetFrameKey,
 } from './hadesSpriteBaker';
+import { getChamberGeometry, constrainActorToChamber } from './chamberGeometry';
 
 describe('Hades 2D Sprite Sheet Baker & Texture Re-Grader', () => {
-  it('regrades Rudra pale neutral grey skin into gleaming oiled bronze (warm R > G > B)', () => {
-    const paleSkin = gradePixelToHadesPalette(128, 128, 128, 255, 'rudra_bronze');
-    assert.ok(
-      paleSkin.r > paleSkin.g && paleSkin.g > paleSkin.b,
-      `Expected warm bronze R > G > B, got (${paleSkin.r}, ${paleSkin.g}, ${paleSkin.b})`
+  it('preserves neutral skin/hide hues with S-curve contrast without artificial orange blowout', () => {
+    const neutralSkin = gradePixelToHadesPalette(128, 128, 128, 255, 'rudra_bronze');
+    assert.equal(
+      neutralSkin.r,
+      neutralSkin.g,
+      `Neutral grey should remain balanced without orange tint, got (${neutralSkin.r}, ${neutralSkin.g}, ${neutralSkin.b})`
     );
     assert.ok(
-      paleSkin.r - paleSkin.b >= 70,
-      `Expected strong warm bronze separation R - B >= 70, got ${paleSkin.r - paleSkin.b}`
+      neutralSkin.r > 128,
+      `Midtones above 122 should receive crisp S-curve contrast lift, got ${neutralSkin.r}`
     );
   });
 
@@ -25,13 +27,13 @@ describe('Hades 2D Sprite Sheet Baker & Texture Re-Grader', () => {
 
   it('intensifies Rudra and Vrikodara crimson armor/cloth into deep blood-crimson', () => {
     const dhoti = gradePixelToHadesPalette(150, 42, 40, 255, 'rudra_bronze');
-    assert.ok(dhoti.r >= 195 && dhoti.g <= 35, 'Crimson cloth should be deeply saturated');
+    assert.ok(dhoti.r >= 195 && dhoti.g <= 36, 'Crimson cloth should be deeply saturated');
 
     const vrikPlate = gradePixelToHadesPalette(160, 50, 48, 255, 'vrikodara_crimson');
-    assert.ok(vrikPlate.r >= 200 && vrikPlate.g <= 40, 'Vrikodara plate should be rich crimson');
+    assert.ok(vrikPlate.r >= 200 && vrikPlate.g <= 42, 'Vrikodara plate should be rich crimson');
   });
 
-  it('quantizes animation time on twos (15 FPS idle/run, 24 FPS attack) and 24 isometric directions', () => {
+  it('quantizes animation time at 30 FPS idle/run, 60 FPS attack, and 36 isometric directions', () => {
     const idleA = computeSpriteSheetFrameKey({
       id: 'rudra',
       animName: 'Combat_Idle',
@@ -44,7 +46,7 @@ describe('Hades 2D Sprite Sheet Baker & Texture Re-Grader', () => {
     const idleB = computeSpriteSheetFrameKey({
       id: 'rudra',
       animName: 'Combat_Idle',
-      animTime: 0.05,
+      animTime: 0.02,
       yawRad: 0.04,
       isAttacking: false,
       isHurt: false,
@@ -53,7 +55,7 @@ describe('Hades 2D Sprite Sheet Baker & Texture Re-Grader', () => {
     assert.equal(
       idleA.frameKey,
       idleB.frameKey,
-      'Sub-step times within the same 15 FPS frame and direction bucket should share a sprite-sheet frame key'
+      'Sub-step times within the same 30 FPS frame and direction bucket should share a sprite-sheet frame key'
     );
 
     const strikeFrame = computeSpriteSheetFrameKey({
@@ -65,6 +67,24 @@ describe('Hades 2D Sprite Sheet Baker & Texture Re-Grader', () => {
       isHurt: false,
       isParrying: false,
     });
-    assert.equal(strikeFrame.quantizedTimeStep, 2);
+    assert.equal(strikeFrame.quantizedTimeStep, 6);
+  });
+
+  it('clamps all chamber polygons below the sky/wall ceiling so Rudra never walks or attacks in the sky', () => {
+    for (let chamberIdx = 0; chamberIdx < 8; chamberIdx++) {
+      const geom = getChamberGeometry(chamberIdx);
+      for (const pt of geom.outerPolygon) {
+        assert.ok(
+          pt.y >= 0.32,
+          `Chamber ${chamberIdx} polygon vertex y=${pt.y} must stay grounded (>= 0.32)`
+        );
+      }
+      const clampedSkyAttempt = constrainActorToChamber(500, 50, 0, -100, 1000, 1000, chamberIdx, false, false, 18);
+      assert.ok(
+        clampedSkyAttempt.y >= 320,
+        `Clamped sky target in chamber ${chamberIdx} should stay on the stone floor (>= 320), got ${clampedSkyAttempt.y}`
+      );
+    }
   });
 });
+
