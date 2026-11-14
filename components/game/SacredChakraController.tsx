@@ -426,6 +426,7 @@ export function SacredChakraController({
           <button
             type="button"
             data-testid="pc-skill-dodge"
+            title="Agni-Step Dash [SPACE] (2 Charges · 160ms Dash / 130ms I-Frames)"
             onPointerDown={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -509,6 +510,7 @@ export function SacredChakraController({
           <button
             type="button"
             data-testid="pc-skill-heavy"
+            title="Stance Heavy Unleash [RMB / K] · Riposte Counter · Astra Cast"
             onPointerDown={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -601,6 +603,7 @@ export function SacredChakraController({
           <button
             type="button"
             data-testid="pc-skill-parry"
+            title="Kalaripayattu Vajra Parry & Riposte [SHIFT]"
             onPointerDown={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -648,6 +651,7 @@ export function SacredChakraController({
           <button
             type="button"
             data-testid="pc-skill-strike"
+            title="4-Hit Parashu Light Combo [LMB / J] · Brutal Execute [F / L]"
             onPointerDown={(e) => {
               e.preventDefault();
               e.stopPropagation();

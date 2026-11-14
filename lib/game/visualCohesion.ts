@@ -218,23 +218,23 @@ export function computeGroundedContactShadow(params: {
   const dy = params.worldY - (params.lightSourceY ?? params.worldY - 120);
   const distToLight = Math.hypot(dx, dy);
 
-  const directionalSkewX = Math.max(-0.58, Math.min(0.58, dx / 420));
-  const directionalOffsetX = Math.max(-14, Math.min(14, (dx / Math.max(120, distToLight)) * 9.5));
-  const directionalOffsetY = Math.max(-6, Math.min(8, (dy / Math.max(120, distToLight)) * 4.5));
+  const directionalSkewX = Math.max(-0.42, Math.min(0.42, dx / 480));
+  const directionalOffsetX = Math.max(-6, Math.min(6, (dx / Math.max(140, distToLight)) * 4.8));
+  const directionalOffsetY = Math.max(-2.5, Math.min(3.5, (dy / Math.max(140, distToLight)) * 2.0));
 
   const lightProximity = Math.max(0, Math.min(1, 1 - distToLight / 520));
 
   return {
-    aoCoreRadiusX: Number((params.baseRadius * 0.72 * elevAtten).toFixed(2)),
-    aoCoreRadiusY: Number((params.baseRadius * 0.32 * elevAtten).toFixed(2)),
-    aoCoreAlpha: Number((0.78 * elevAtten).toFixed(3)),
-    penumbraRadiusX: Number((params.baseRadius * 1.42 * (1.08 - elevAtten * 0.08)).toFixed(2)),
-    penumbraRadiusY: Number((params.baseRadius * 0.62 * (1.08 - elevAtten * 0.08)).toFixed(2)),
-    penumbraAlpha: Number((0.46 * elevAtten).toFixed(3)),
+    aoCoreRadiusX: Number((params.baseRadius * 0.78 * elevAtten).toFixed(2)),
+    aoCoreRadiusY: Number((params.baseRadius * 0.34 * elevAtten).toFixed(2)),
+    aoCoreAlpha: Number((0.86 * elevAtten).toFixed(3)),
+    penumbraRadiusX: Number((params.baseRadius * 1.26 * (1.06 - elevAtten * 0.06)).toFixed(2)),
+    penumbraRadiusY: Number((params.baseRadius * 0.54 * (1.06 - elevAtten * 0.06)).toFixed(2)),
+    penumbraAlpha: Number((0.44 * elevAtten).toFixed(3)),
     directionalSkewX: Number(directionalSkewX.toFixed(3)),
     directionalOffsetX: Number(directionalOffsetX.toFixed(2)),
     directionalOffsetY: Number(directionalOffsetY.toFixed(2)),
-    warmBounceAlpha: Number((0.16 + lightProximity * 0.24).toFixed(3)),
+    warmBounceAlpha: Number((0.12 + lightProximity * 0.18).toFixed(3)),
   };
 }
 
@@ -274,12 +274,17 @@ export function computeWeaponSlashRibbon(params: {
   comboStep?: number;
 }): WeaponSlashRibbonMesh {
   const segments = 14;
-  const prog = Math.max(0, Math.min(1, params.swingProgress));
-  const arcSpan = params.isHeavy ? Math.PI * 1.32 : Math.PI * 0.98;
+  const rawProg = Math.max(0, Math.min(1, params.swingProgress));
+  // Smooth S-curve swing progression so the Parashu crescent ribbon tracks the exact active attack frame
+  const prog =
+    rawProg < 0.5
+      ? 2 * rawProg * rawProg
+      : 1 - Math.pow(-2 * rawProg + 2, 2) / 2;
+  const arcSpan = params.isHeavy ? Math.PI * 1.32 : Math.PI * 1.02;
   const reverseDir = !params.isHeavy && params.comboStep === 2 ? -1 : 1;
 
   const startAngle = params.aimAngle - reverseDir * (arcSpan * 0.52);
-  const activeSweep = arcSpan * (0.35 + prog * 0.65);
+  const activeSweep = arcSpan * (0.28 + prog * 0.72);
 
   let coreColor = '#fff9e6';
   let plasmaColor = '#ff9d2e';
@@ -430,29 +435,18 @@ export function renderBattleScarsOnFloor(
         ctx.fill();
       }
     } else if (s.kind === 'scorch_crater') {
+      // Stage B (Step 12): Subtle dark charred stone mark without glowing orange hazard rings
       ctx.save();
       ctx.scale(1, 0.52);
-      const cGrad = ctx.createRadialGradient(0, 0, 2, 0, 0, s.radius);
-      cGrad.addColorStop(0, 'rgba(10, 7, 6, 0.92)');
-      cGrad.addColorStop(0.55, 'rgba(28, 16, 12, 0.76)');
-      cGrad.addColorStop(0.82, 'rgba(255, 106, 43, 0.24)');
+      const cGrad = ctx.createRadialGradient(0, 0, 2, 0, 0, s.radius * 0.85);
+      cGrad.addColorStop(0, 'rgba(10, 7, 6, 0.64)');
+      cGrad.addColorStop(0.62, 'rgba(20, 14, 12, 0.42)');
       cGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
       ctx.fillStyle = cGrad;
       ctx.beginPath();
-      ctx.arc(0, 0, s.radius, 0, Math.PI * 2);
+      ctx.arc(0, 0, s.radius * 0.85, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
-
-      // Glowing radial magma fissures inside crater
-      ctx.strokeStyle = s.secondaryColor;
-      ctx.lineWidth = 1.3;
-      for (let d = 0; d < s.droplets.length; d++) {
-        const crack = s.droplets[d];
-        ctx.beginPath();
-        ctx.moveTo(crack.offsetX * 0.22, crack.offsetY * 0.22);
-        ctx.lineTo(crack.offsetX, crack.offsetY);
-        ctx.stroke();
-      }
     } else if (s.kind === 'shattered_armor') {
       for (let d = 0; d < s.droplets.length; d++) {
         const shard = s.droplets[d];
@@ -614,7 +608,9 @@ export function renderWeaponBoneSlashRibbon(
   grad.addColorStop(0.72, mesh.plasmaColor);
   grad.addColorStop(1, mesh.coreColor);
 
-  ctx.globalAlpha = Math.min(1, alpha * 0.92);
+  // Stage B (Step 12): Cap screen-blended ribbon alpha so stacked slashes never wash out Rudra
+  const cappedAlpha = Math.min(0.68, alpha * 0.72);
+  ctx.globalAlpha = cappedAlpha;
   ctx.fillStyle = grad;
   ctx.fill();
 
@@ -628,8 +624,8 @@ export function renderWeaponBoneSlashRibbon(
     else ctx.lineTo(leadX, leadY);
   }
   ctx.strokeStyle = mesh.coreColor;
-  ctx.lineWidth = 3.2;
-  ctx.globalAlpha = Math.min(1, alpha * 0.98);
+  ctx.lineWidth = 2.8;
+  ctx.globalAlpha = Math.min(0.76, alpha * 0.82);
   ctx.stroke();
 
   // Secondary parallel inner Agni speed-arc
@@ -642,20 +638,20 @@ export function renderWeaponBoneSlashRibbon(
     else ctx.lineTo(innerArcX, innerArcY);
   }
   ctx.strokeStyle = mesh.plasmaColor;
-  ctx.lineWidth = 1.6;
-  ctx.globalAlpha = Math.min(1, alpha * 0.78);
+  ctx.lineWidth = 1.5;
+  ctx.globalAlpha = Math.min(0.62, alpha * 0.65);
   ctx.stroke();
 
   // Layer 3: Leading-Edge Blade Tip Star Flare
   if (last) {
-    const tipGrad = ctx.createRadialGradient(mesh.tipX, mesh.tipY, 1, mesh.tipX, mesh.tipY, 18);
+    const tipGrad = ctx.createRadialGradient(mesh.tipX, mesh.tipY, 1, mesh.tipX, mesh.tipY, 15);
     tipGrad.addColorStop(0, mesh.coreColor);
     tipGrad.addColorStop(0.45, mesh.plasmaColor);
     tipGrad.addColorStop(1, 'rgba(255, 82, 36, 0)');
     ctx.fillStyle = tipGrad;
-    ctx.globalAlpha = Math.min(1, alpha * 0.95);
+    ctx.globalAlpha = Math.min(0.72, alpha * 0.76);
     ctx.beginPath();
-    ctx.arc(mesh.tipX, mesh.tipY, 18, 0, Math.PI * 2);
+    ctx.arc(mesh.tipX, mesh.tipY, 15, 0, Math.PI * 2);
     ctx.fill();
   }
 

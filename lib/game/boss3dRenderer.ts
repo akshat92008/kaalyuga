@@ -20,9 +20,13 @@ import {
   extractStandingHipY,
 } from './enemy3dRenderer';
 import {
+  SHARED_STUDIO_OUTLINE_COLOR,
+  SHARED_STUDIO_OUTLINE_THICKNESS,
   applyHadesCelShadingToHierarchy,
   bake2DSpriteFrameFromCanvas,
   computeSpriteSheetFrameKey,
+  getSharedStudioWebGLRenderer,
+  setupSharedStudioLightingRig,
 } from './hadesSpriteBaker';
 import { GAME_ASSETS } from './assets';
 
@@ -212,21 +216,11 @@ export class Boss3DRenderer {
     this.camera.position.set(0, 154, 300);
     this.camera.lookAt(0, 84, 0);
 
-    // Flat 2D Illustration Lighting Rig (zero glossy specular hotspots, preserves true painted boss colors)
-    const ambient = new THREE.AmbientLight(0xf2ece4, 2.15);
-    this.scene.add(ambient);
-
-    this.keyLight = new THREE.DirectionalLight(0xfff6e8, 1.18);
-    this.keyLight.position.set(-140, 245, 215);
-    this.scene.add(this.keyLight);
-
-    this.rimLight = new THREE.DirectionalLight(0xffe6a8, 0.72);
-    this.rimLight.position.set(150, 200, -215);
-    this.scene.add(this.rimLight);
-
-    this.fillLight = new THREE.DirectionalLight(0xc8c0b8, 0.85);
-    this.fillLight.position.set(165, 70, 135);
-    this.scene.add(this.fillLight);
+    // Unified Hades Studio Lighting Rig (distanceScale=60 for centimeter boss frustum)
+    const studioLights = setupSharedStudioLightingRig(this.scene, 60);
+    this.keyLight = studioLights.keyLight;
+    this.rimLight = studioLights.rimLight;
+    this.fillLight = studioLights.fillLight;
 
     // Initialize 3D Weapon Slash Ribbon Mesh
     this.trailGeometry = new THREE.BufferGeometry();
@@ -267,18 +261,7 @@ export class Boss3DRenderer {
     this.scene.add(this.trailMesh);
 
     try {
-      this.renderer = new THREE.WebGLRenderer({
-        canvas: this.webglCanvas,
-        alpha: true,
-        antialias: !IS_SOFTWARE_WEBGL,
-        powerPreference: 'high-performance',
-      });
-      this.renderer.setSize(size, size, false);
-      this.renderer.setPixelRatio(1);
-      this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-      this.renderer.toneMapping = THREE.NoToneMapping;
-      this.renderer.toneMappingExposure = 1.0;
-      this.renderer.shadowMap.enabled = false;
+      this.renderer = getSharedStudioWebGLRenderer(size);
       this.scene.environment = null;
     } catch {
       this.renderer = null;
@@ -442,6 +425,7 @@ export class Boss3DRenderer {
       this.rigs.dundubhi.mixer.update(0.016);
       this.loadProgress = 100;
       this.isReady = true;
+      this.prewarmBossAtlas('dundubhi');
     } catch (err) {
       console.warn('Boss3DRenderer Dundubhi load warning:', err);
       this.loadProgress = 100;
@@ -676,6 +660,7 @@ export class Boss3DRenderer {
       this.rigs.vrikodara.mixer.update(0.016);
       this.loadProgress = 100;
       this.isReady = true;
+      this.prewarmBossAtlas('vrikodara');
     } catch (err) {
       console.warn('Boss3DRenderer Vrikodara load warning:', err);
       this.loadProgress = 100;
@@ -1003,10 +988,17 @@ export class Boss3DRenderer {
       params.phase === 3 ? 0xff2a18 : params.attackKind === 'shockwave' ? 0xff7722 : 0xd92638;
     this.updateWeaponTrail(rig, dt, trailActive, trailColor);
 
+    if (
+      this.renderer.domElement.width !== this.size ||
+      this.renderer.domElement.height !== this.size
+    ) {
+      this.renderer.setSize(this.size, this.size, false);
+    }
+    this.renderer.clear();
     this.renderer.render(this.scene, this.camera);
-    const baked = bake2DSpriteFrameFromCanvas(this.webglCanvas, frameKey, {
-      outlineColor: params.isHitFlash ? '#ffffff' : '#120806',
-      outlineThickness: 2.2,
+    const baked = bake2DSpriteFrameFromCanvas(this.renderer.domElement, frameKey, {
+      outlineColor: params.isHitFlash ? '#ffffff' : SHARED_STUDIO_OUTLINE_COLOR,
+      outlineThickness: SHARED_STUDIO_OUTLINE_THICKNESS,
       hitFlash: params.isHitFlash,
       cacheFrame: false,
     });
@@ -1097,13 +1089,40 @@ export class Boss3DRenderer {
     posAttr.needsUpdate = true;
   }
 
+  /**
+   * Stage B (Step 10): Pre-bake core boss idle/chase/windup/attack sprite frames on load
+   */
+  public prewarmBossAtlas(kind: Boss3DKind): void {
+    const rig = this.rigs[kind];
+    if (!rig || !this.renderer) return;
+    const states: Array<Boss3DUpdateParams['aiState']> = ['idle', 'chase', 'windup', 'attack'];
+    const angles = [0, Math.PI];
+    for (const st of states) {
+      for (const ang of angles) {
+        this.updateAndRender({
+          kind,
+          dt: 0.016,
+          vx: st === 'chase' ? Math.cos(ang) * 140 : 0,
+          vy: st === 'chase' ? Math.sin(ang) * 140 : 0,
+          facing: ang === 0 ? 1 : -1,
+          aimAngle: ang,
+          aiState: st,
+          attackKind: 'cone',
+          attackPattern: 0,
+          windupProgress: st === 'windup' ? 0.5 : 0,
+          phase: 1,
+          armorCracked: false,
+          isPostureBroken: false,
+          isHitFlash: false,
+        });
+      }
+    }
+  }
+
   public dispose(): void {
     this.disposed = true;
     this.trailGeometry.dispose();
     this.trailMaterial.dispose();
-    if (this.renderer) {
-      this.renderer.dispose();
-      this.renderer = null;
-    }
+    this.renderer = null;
   }
 }

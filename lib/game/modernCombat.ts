@@ -61,7 +61,7 @@ export function evaluateParryImpact(input: ParryEvaluationInput): ParryEvaluatio
       healAmount: 14,
       hitstopSec: 0.095,
       calloutTitle: 'PERFECT VAJRA PARRY!',
-      calloutSubtitle: 'PRESS [LMB / RMB] FOR LETHAL RIPOSTE COUNTER (2.65× DMG)',
+      calloutSubtitle: 'PRESS [LMB / J] OR [RMB / K] FOR LETHAL RIPOSTE COUNTER (2.65× DMG)',
     };
   }
 
@@ -91,6 +91,200 @@ export function evaluateParryImpact(input: ParryEvaluationInput): ParryEvaluatio
     hitstopSec: 0,
     calloutTitle: 'GUARD BROKEN',
     calloutSubtitle: '',
+  };
+}
+
+// ----------------------------------------------------------------------------
+// Hades-Grade Dash Timing, Explicit Startup/Active/Recovery Phases & 120ms Buffer
+// ----------------------------------------------------------------------------
+
+export const DASH_DURATION_SEC = 0.16; // 160ms crisp dash distance window
+export const DASH_IFRAME_SEC = 0.13; // 130ms strict invulnerability window
+export const DASH_STAMINA_COST = 25;
+export const INPUT_BUFFER_WINDOW_SEC = 0.12; // 120ms recovery input buffer
+
+export type CombatActionKind =
+  | 'idle'
+  | 'light_attack'
+  | 'heavy_unleash'
+  | 'dodge'
+  | 'parry'
+  | 'astra'
+  | 'execute'
+  | 'gourd';
+
+export type ActionFramePhase = 'idle' | 'startup' | 'active' | 'recovery';
+
+export interface ActionFramePhaseInfo {
+  phase: ActionFramePhase;
+  elapsedSec: number;
+  remainingSec: number;
+  normalizedProgress: number;
+  canBufferNext: boolean;
+  canChainImmediately: boolean;
+  canDashCancel: boolean;
+}
+
+/**
+ * Splits Rudra's combat actions into explicit Startup -> Active -> Recovery frame phases
+ * and evaluates whether the current frame is inside the final 120ms input buffer window
+ * or eligible for instant Zagreus-style Dash cancel.
+ */
+export function computeActionFramePhase(
+  action: CombatActionKind,
+  remainingSec: number,
+  totalDurationSec: number
+): ActionFramePhaseInfo {
+  if (action === 'idle' || totalDurationSec <= 0 || remainingSec <= 0) {
+    return {
+      phase: 'idle',
+      elapsedSec: 0,
+      remainingSec: 0,
+      normalizedProgress: 1,
+      canBufferNext: true,
+      canChainImmediately: true,
+      canDashCancel: true,
+    };
+  }
+
+  const clampedRem = Math.max(0, Math.min(totalDurationSec, remainingSec));
+  const elapsedSec = Math.max(0, totalDurationSec - clampedRem);
+  const normalizedProgress = Math.max(0, Math.min(1, elapsedSec / totalDurationSec));
+
+  // Frame phase ratios tailored per action type
+  let startupEndRatio = 0.22;
+  let activeEndRatio = 0.68;
+  if (action === 'heavy_unleash') {
+    startupEndRatio = 0.26;
+    activeEndRatio = 0.70;
+  } else if (action === 'parry') {
+    startupEndRatio = 0.08;
+    activeEndRatio = 0.58;
+  } else if (action === 'astra') {
+    startupEndRatio = 0.20;
+    activeEndRatio = 0.65;
+  } else if (action === 'dodge') {
+    startupEndRatio = 0.15;
+    activeEndRatio = 0.8125; // 130ms / 160ms = 0.8125 active i-frame ratio
+  }
+
+  const phase: ActionFramePhase =
+    normalizedProgress < startupEndRatio
+      ? 'startup'
+      : normalizedProgress < activeEndRatio
+      ? 'active'
+      : 'recovery';
+
+  // Any input pressed within the final 120ms of an action (or during recovery) buffers & chains seamlessly
+  const inBufferWindow = clampedRem <= INPUT_BUFFER_WINDOW_SEC || phase === 'recovery';
+  const canChainImmediately = clampedRem <= 0.035;
+  // Dash cancels startup or recovery (and active frames of light/heavy/parry/astra) immediately like Zagreus
+  const canDashCancel =
+    action === 'light_attack' ||
+    action === 'heavy_unleash' ||
+    action === 'parry' ||
+    action === 'astra';
+
+  return {
+    phase,
+    elapsedSec: Number(elapsedSec.toFixed(4)),
+    remainingSec: Number(clampedRem.toFixed(4)),
+    normalizedProgress: Number(normalizedProgress.toFixed(4)),
+    canBufferNext: inBufferWindow,
+    canChainImmediately,
+    canDashCancel,
+  };
+}
+
+// ----------------------------------------------------------------------------
+// Deterministic Telegraph-Backed Iron Guard State (Replaces Per-Frame RNG)
+// ----------------------------------------------------------------------------
+
+export const IRON_GUARD_WINDUP_SEC = 0.22;
+export const IRON_GUARD_ACTIVE_BOSS_SEC = 1.1;
+export const IRON_GUARD_ACTIVE_ELITE_SEC = 0.9;
+export const IRON_GUARD_COOLDOWN_BOSS_SEC = 5.5;
+export const IRON_GUARD_COOLDOWN_ELITE_SEC = 6.5;
+
+export interface IronGuardStepInput {
+  canGuard: boolean;
+  isBoss: boolean;
+  aiState: string;
+  distToPlayer: number;
+  playerAttacking: boolean;
+  postureBroken: boolean;
+  immobilized: boolean;
+  parryStanceTimer: number;
+  ironGuardWindupTimer: number;
+  ironGuardCd: number;
+  dt: number;
+}
+
+export interface IronGuardStepResult {
+  parryStanceTimer: number;
+  ironGuardWindupTimer: number;
+  ironGuardCd: number;
+  startedWindup: boolean;
+  activatedGuard: boolean;
+}
+
+/**
+ * Advances an enemy's Iron Guard state machine deterministically with zero per-frame RNG:
+ * - Requires `ironGuardCd <= 0` and player attacking within 170px while enemy is in chase/idle.
+ * - Enters a visible 220ms golden shield windup (`startedWindup = true`) and locks cooldown (5.5s–6.5s).
+ * - When the windup completes, activates `parryStanceTimer` (`activatedGuard = true`).
+ */
+export function stepEnemyIronGuardState(input: IronGuardStepInput): IronGuardStepResult {
+  let parryStanceTimer = Math.max(0, input.parryStanceTimer - input.dt);
+  let ironGuardWindupTimer = Math.max(0, input.ironGuardWindupTimer);
+  let ironGuardCd = Math.max(0, input.ironGuardCd - input.dt);
+  let startedWindup = false;
+  let activatedGuard = false;
+
+  if (input.postureBroken || input.immobilized || input.aiState === 'ko') {
+    return {
+      parryStanceTimer: 0,
+      ironGuardWindupTimer: 0,
+      ironGuardCd,
+      startedWindup: false,
+      activatedGuard: false,
+    };
+  }
+
+  if (ironGuardWindupTimer > 0) {
+    ironGuardWindupTimer = Math.max(0, ironGuardWindupTimer - input.dt);
+    if (ironGuardWindupTimer <= 0) {
+      parryStanceTimer = input.isBoss ? IRON_GUARD_ACTIVE_BOSS_SEC : IRON_GUARD_ACTIVE_ELITE_SEC;
+      activatedGuard = true;
+    }
+    return {
+      parryStanceTimer,
+      ironGuardWindupTimer,
+      ironGuardCd,
+      startedWindup,
+      activatedGuard,
+    };
+  }
+
+  if (
+    input.canGuard &&
+    parryStanceTimer <= 0 &&
+    ironGuardCd <= 0 &&
+    (input.aiState === 'chase' || input.aiState === 'idle') &&
+    input.playerAttacking &&
+    input.distToPlayer < 170
+  ) {
+    ironGuardWindupTimer = IRON_GUARD_WINDUP_SEC;
+    ironGuardCd = input.isBoss ? IRON_GUARD_COOLDOWN_BOSS_SEC : IRON_GUARD_COOLDOWN_ELITE_SEC;
+    startedWindup = true;
+  }
+
+  return {
+    parryStanceTimer,
+    ironGuardWindupTimer,
+    ironGuardCd,
+    startedWindup,
+    activatedGuard,
   };
 }
 

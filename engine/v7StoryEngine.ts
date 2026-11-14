@@ -32,11 +32,18 @@ export interface StoryMemoryFlags {
   shardsCollected: number;
   shardsRecovered: number;
   dundubhiCleared: boolean;
+  vrikodaraCleared?: boolean;
   rakshasaStanceUnlocked: boolean;
   openingCompleted: boolean;
   prologueCompleted: boolean;
   ferry1Choice: 'silence' | 'ask_ila' | 'apologize' | null;
   final_choice: 'vow' | 'sovereign' | null;
+  PROLOGUE_COMPLETED?: boolean;
+  DUNDUBHI_DEFEATED?: boolean;
+  VRIKODARA_DEFEATED?: boolean;
+  FIRST_SHARD_COLLECTED?: boolean;
+  SANJAYA_CORRECTION_1?: boolean;
+  FERRY_I_COMPLETED?: boolean;
 }
 
 export const INITIAL_STORY_FLAGS: StoryMemoryFlags = {
@@ -48,11 +55,18 @@ export const INITIAL_STORY_FLAGS: StoryMemoryFlags = {
   shardsCollected: 0,
   shardsRecovered: 0,
   dundubhiCleared: false,
+  vrikodaraCleared: false,
   rakshasaStanceUnlocked: false,
   openingCompleted: false,
   prologueCompleted: false,
   ferry1Choice: null,
   final_choice: null,
+  PROLOGUE_COMPLETED: false,
+  DUNDUBHI_DEFEATED: false,
+  VRIKODARA_DEFEATED: false,
+  FIRST_SHARD_COLLECTED: false,
+  SANJAYA_CORRECTION_1: false,
+  FERRY_I_COMPLETED: false,
 };
 
 const STORY_STORAGE_KEY = 'kaliyuga_v7_story_memory';
@@ -67,12 +81,28 @@ export function loadStoryMemoryFlags(): StoryMemoryFlags {
       Number(parsed.shardsCollected || 0),
       Number(parsed.shardsRecovered || 0)
     );
+    const looks: string[] = Array.isArray(parsed.looks) ? parsed.looks : [];
+    const prologueDone = Boolean(parsed.prologueCompleted || parsed.PROLOGUE_COMPLETED);
+    const dundubhiDone = Boolean(parsed.dundubhiCleared || parsed.DUNDUBHI_DEFEATED);
+    const vrikodaraDone = Boolean(parsed.vrikodaraCleared || parsed.VRIKODARA_DEFEATED || shards > 0);
+    const shardDone = Boolean(parsed.FIRST_SHARD_COLLECTED || shards > 0);
+    const sanjayaDone = Boolean(parsed.SANJAYA_CORRECTION_1 || looks.length > 0 || shards > 0);
+    const ferryDone = Boolean(parsed.FERRY_I_COMPLETED || parsed.ferry_listened || parsed.ferry1Choice);
     return {
       ...INITIAL_STORY_FLAGS,
       ...parsed,
       shardsCollected: shards,
       shardsRecovered: shards,
-      looks: Array.isArray(parsed.looks) ? parsed.looks : [],
+      looks,
+      prologueCompleted: prologueDone,
+      dundubhiCleared: dundubhiDone,
+      vrikodaraCleared: vrikodaraDone,
+      PROLOGUE_COMPLETED: prologueDone,
+      DUNDUBHI_DEFEATED: dundubhiDone,
+      VRIKODARA_DEFEATED: vrikodaraDone,
+      FIRST_SHARD_COLLECTED: shardDone,
+      SANJAYA_CORRECTION_1: sanjayaDone,
+      FERRY_I_COMPLETED: ferryDone,
     };
   } catch {
     return { ...INITIAL_STORY_FLAGS };
@@ -83,12 +113,27 @@ export function saveStoryMemoryFlags(flags: StoryMemoryFlags): void {
   if (typeof window === 'undefined') return;
   try {
     const shards = Math.max(flags.shardsCollected || 0, flags.shardsRecovered || 0);
+    const prologueDone = Boolean(flags.prologueCompleted || flags.PROLOGUE_COMPLETED);
+    const dundubhiDone = Boolean(flags.dundubhiCleared || flags.DUNDUBHI_DEFEATED);
+    const vrikodaraDone = Boolean(flags.vrikodaraCleared || flags.VRIKODARA_DEFEATED || shards > 0);
+    const shardDone = Boolean(flags.FIRST_SHARD_COLLECTED || shards > 0);
+    const sanjayaDone = Boolean(flags.SANJAYA_CORRECTION_1 || flags.looks.length > 0 || shards > 0);
+    const ferryDone = Boolean(flags.FERRY_I_COMPLETED || flags.ferry_listened || flags.ferry1Choice);
     window.localStorage.setItem(
       STORY_STORAGE_KEY,
       JSON.stringify({
         ...flags,
         shardsCollected: shards,
         shardsRecovered: shards,
+        prologueCompleted: prologueDone,
+        dundubhiCleared: dundubhiDone,
+        vrikodaraCleared: vrikodaraDone,
+        PROLOGUE_COMPLETED: prologueDone,
+        DUNDUBHI_DEFEATED: dundubhiDone,
+        VRIKODARA_DEFEATED: vrikodaraDone,
+        FIRST_SHARD_COLLECTED: shardDone,
+        SANJAYA_CORRECTION_1: sanjayaDone,
+        FERRY_I_COMPLETED: ferryDone,
       })
     );
   } catch {

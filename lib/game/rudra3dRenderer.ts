@@ -6,8 +6,12 @@ import {
   extractStandingHipY,
 } from './enemy3dRenderer';
 import {
+  SHARED_STUDIO_OUTLINE_COLOR,
+  SHARED_STUDIO_OUTLINE_THICKNESS,
   applyHadesCelShadingToHierarchy,
   bake2DSpriteFrameFromCanvas,
+  getSharedStudioWebGLRenderer,
+  setupSharedStudioLightingRig,
 } from './hadesSpriteBaker';
 import { loadFbxCached, simplifyBufferGeometry } from './meshSimplifier';
 
@@ -43,6 +47,7 @@ export interface RudraRenderInput {
   stance: string;
   focusOrbs: number;
   elevationY: number;
+  finisherVariant?: 'downward_crush' | 'spin_360_cleave' | 'impaling_lunge' | null;
 }
 
 // Exact 1:1 vertex match (493,632 verts === 493,632 verts) between Pro Melee Axe Pack rig & Ashen_Warborn texture FBX!
@@ -73,7 +78,7 @@ const RUDRA_ANIM_URLS: Record<RudraAnimState, string> = {
 };
 
 export class Rudra3DRenderer {
-  private renderer: THREE.WebGLRenderer | null = null;
+  private readonly size: number;
   private scene: THREE.Scene;
   private camera: THREE.PerspectiveCamera;
   private wrapper: THREE.Group;
@@ -88,6 +93,7 @@ export class Rudra3DRenderer {
   private frameCache: Map<string, HTMLCanvasElement> = new Map();
 
   constructor(size = 256) {
+    this.size = size;
     this.scene = new THREE.Scene();
     this.wrapper = new THREE.Group();
     this.scene.add(this.wrapper);
@@ -97,16 +103,8 @@ export class Rudra3DRenderer {
     this.camera.position.set(0, 2.1, 4.4);
     this.camera.lookAt(0, 0.82, 0);
 
-    const ambient = new THREE.AmbientLight(0xffffff, 2.35);
-    this.scene.add(ambient);
-
-    const keyLight = new THREE.DirectionalLight(0xfff5e4, 2.75);
-    keyLight.position.set(2.8, 5.2, 4.0);
-    this.scene.add(keyLight);
-
-    const fillLight = new THREE.DirectionalLight(0xcbd5e1, 1.2);
-    fillLight.position.set(-3.0, 2.5, 2.0);
-    this.scene.add(fillLight);
+    // Unified Studio Key / Fill / Warm-Rim Lighting Rig shared with Enemy3DRenderer & Boss3DRenderer
+    setupSharedStudioLightingRig(this.scene, 1.0);
 
     if (typeof document !== 'undefined') {
       this.canvas = document.createElement('canvas');
@@ -117,23 +115,10 @@ export class Rudra3DRenderer {
     }
 
     if (typeof window !== 'undefined') {
-      try {
-        this.renderer = new THREE.WebGLRenderer({
-          alpha: true,
-          antialias: true,
-          powerPreference: 'high-performance',
-          preserveDrawingBuffer: true,
-        });
-        this.renderer.setSize(size, size);
-        this.renderer.setPixelRatio(1);
-        this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-        this.renderer.toneMapping = THREE.NoToneMapping;
-        this.renderer.setClearColor(0x000000, 0);
-        this.canvas = this.renderer.domElement;
-
+      const renderer = getSharedStudioWebGLRenderer(size);
+      if (renderer) {
+        this.canvas = renderer.domElement;
         this.loadRudraModelAndAnimations();
-      } catch (e) {
-        console.warn('[Rudra3DRenderer] WebGL initialization skipped:', e);
       }
     }
   }
@@ -196,7 +181,7 @@ export class Rudra3DRenderer {
         const mat = new THREE.MeshStandardMaterial({
           color: 0xffffff,
           map: diffuseMap || null,
-          roughness: 0.86,
+          roughness: 0.84,
           metalness: 0.08,
         });
 
@@ -289,6 +274,7 @@ export class Rudra3DRenderer {
 
         this.isReady = true;
         this.loadProgress = 1.0;
+        this.prewarmCoreAtlas();
 
         (Object.keys(RUDRA_ANIM_URLS) as RudraAnimState[]).forEach((state) => {
           if (state === 'idle' || state === 'run') return;
@@ -307,14 +293,49 @@ export class Rudra3DRenderer {
             for (const k of Array.from(this.frameCache.keys())) {
               if (k.startsWith(prefix)) this.frameCache.delete(k);
             }
+            // Pre-bake key strike frames immediately when attack1/heavy/hurt finish loading
+            if (state === 'attack1' || state === 'heavy' || state === 'hurt') {
+              const warmAngles = [0, Math.PI * 0.5, Math.PI, Math.PI * 1.5];
+              const warmSteps = state === 'hurt' ? [0.15, 0.5] : [0.15, 0.38, 0.62, 0.85];
+              for (const ang of warmAngles) {
+                for (const prog of warmSteps) {
+                  this.renderFrame(state, prog, ang, false);
+                }
+              }
+            }
           });
         });
       }
     );
   }
 
+  /**
+   * Pre-bakes Rudra's core idle, run, attack1, heavy, and hurt frames across primary facing directions
+   * during chamber transitions so first swings hit the sprite cache with zero runtime baking lag.
+   */
+  public prewarmCoreAtlas(): void {
+    if (!this.isReady || !this.model || !this.mixer) return;
+    const warmAngles = [0, Math.PI * 0.5, Math.PI, Math.PI * 1.5];
+    for (const ang of warmAngles) {
+      this.renderFrame('idle', 0.0, ang, false);
+      this.renderFrame('idle', 0.35, ang, false);
+      this.renderFrame('run', 0.0, ang, false);
+      this.renderFrame('run', 0.25, ang, false);
+      this.renderFrame('run', 0.5, ang, false);
+      if (this.actions.attack1) {
+        this.renderFrame('attack1', 0.2, ang, false);
+        this.renderFrame('attack1', 0.5, ang, false);
+        this.renderFrame('attack1', 0.8, ang, false);
+      }
+      if (this.actions.heavy) {
+        this.renderFrame('heavy', 0.25, ang, false);
+        this.renderFrame('heavy', 0.55, ang, false);
+      }
+    }
+  }
+
   public updateAndRender(input: RudraRenderInput): boolean {
-    if (!this.isReady || !this.renderer) return false;
+    if (!this.isReady) return false;
     this.elapsedSec += Math.max(0, Math.min(0.1, input.dt || 0.016));
 
     let state: RudraAnimState = 'idle';
@@ -327,15 +348,30 @@ export class Rudra3DRenderer {
     } else if (input.isCasting) {
       state = 'cast';
     } else if (input.isHeavyAttack) {
-      state = 'heavy';
+      if (input.finisherVariant === 'spin_360_cleave' && this.actions.cast) {
+        state = 'cast';
+      } else if (input.finisherVariant === 'impaling_lunge' && this.actions.attack3) {
+        state = 'attack3';
+      } else {
+        state = 'heavy';
+      }
       animClock = Math.max(0, Math.min(0.99, input.attackProgress));
     } else if (input.isAttacking) {
-      state =
-        input.comboStep === 2
-          ? 'attack2'
-          : input.comboStep >= 3
-            ? 'attack3'
-            : 'attack1';
+      if (input.comboStep >= 4 && input.finisherVariant) {
+        state =
+          input.finisherVariant === 'downward_crush' && this.actions.heavy
+            ? 'heavy'
+            : input.finisherVariant === 'spin_360_cleave' && this.actions.cast
+              ? 'cast'
+              : 'attack3';
+      } else {
+        state =
+          input.comboStep === 2
+            ? 'attack2'
+            : input.comboStep >= 3
+              ? 'attack3'
+              : 'attack1';
+      }
       animClock = Math.max(0, Math.min(0.99, input.attackProgress));
     } else if (input.isDodging) {
       state = 'dash';
@@ -362,7 +398,7 @@ export class Rudra3DRenderer {
     facingAngleRad: number,
     hitFlash = false
   ): HTMLCanvasElement | null {
-    if (!this.renderer || !this.isReady || !this.model || !this.mixer) return null;
+    if (!this.isReady || !this.model || !this.mixer) return null;
 
     const normalizedYaw = ((facingAngleRad % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
     const yawIndex = Math.round((normalizedYaw / (Math.PI * 2)) * 16) % 16;
@@ -395,6 +431,9 @@ export class Rudra3DRenderer {
     const cached = this.frameCache.get(cacheKey);
     if (cached) return cached;
 
+    const renderer = getSharedStudioWebGLRenderer(this.size);
+    if (!renderer) return null;
+
     if (action) {
       this.mixer.stopAllAction();
       action.reset();
@@ -405,16 +444,16 @@ export class Rudra3DRenderer {
     this.wrapper.rotation.y = Math.PI * 0.5 - quantizedYaw;
     this.wrapper.rotation.x = 0;
 
-    this.renderer.render(this.scene, this.camera);
+    renderer.render(this.scene, this.camera);
 
-    const baked = bake2DSpriteFrameFromCanvas(this.renderer.domElement, cacheKey, {
-      outlineColor: hitFlash ? '#ffffff' : '#120806',
-      outlineThickness: 2,
+    const baked = bake2DSpriteFrameFromCanvas(renderer.domElement, cacheKey, {
+      outlineColor: hitFlash ? '#ffffff' : SHARED_STUDIO_OUTLINE_COLOR,
+      outlineThickness: SHARED_STUDIO_OUTLINE_THICKNESS,
       hitFlash,
       cacheFrame: false,
     });
 
-    if (this.frameCache.size > 2000) {
+    if (this.frameCache.size > 280) {
       const oldest = this.frameCache.keys().next().value;
       if (oldest) this.frameCache.delete(oldest);
     }
@@ -425,9 +464,6 @@ export class Rudra3DRenderer {
 
   public dispose(): void {
     this.frameCache.clear();
-    if (this.renderer) {
-      this.renderer.dispose();
-      this.renderer = null;
-    }
   }
 }
+

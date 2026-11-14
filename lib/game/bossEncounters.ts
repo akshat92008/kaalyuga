@@ -11,6 +11,7 @@
 import { MoltenSlagFissure } from '@/engine/lanternShaderEngine';
 
 export type BossArchetypeId = 'xuemo' | 'vrikodara';
+export type BossMoveId = string;
 
 export type BossCounterplayKind =
   | 'parry_gold'
@@ -538,18 +539,28 @@ export function renderBossArenaHazards(
     ctx.translate(z.x, z.y);
     ctx.scale(1, 0.58);
 
-    // Outer bronze resonance ring
-    ctx.strokeStyle = `rgba(255, 196, 77, ${(0.45 + prog * 0.5).toFixed(2)})`;
-    ctx.lineWidth = 2.4;
+    // Outer bronze resonance ring (crisp cymatic line stroke only — zero muddy floor decal fill)
+    ctx.strokeStyle = `rgba(255, 196, 77, ${(0.52 + prog * 0.45).toFixed(2)})`;
+    ctx.lineWidth = 2.5;
     ctx.beginPath();
     ctx.arc(0, 0, z.radius, 0, Math.PI * 2);
     ctx.stroke();
 
-    // Expanding inner detonation fill
-    ctx.fillStyle = `rgba(255, 122, 42, ${(0.12 + prog * 0.28).toFixed(2)})`;
+    // Inner dashed harmonic ring
+    ctx.strokeStyle = `rgba(255, 132, 58, ${(0.42 + prog * 0.35).toFixed(2)})`;
+    ctx.lineWidth = 1.6;
+    ctx.setLineDash([10, 8]);
     ctx.beginPath();
-    ctx.arc(0, 0, z.radius * prog, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.arc(0, 0, z.radius * 0.72, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Expanding inner acoustic shock-ring (stroke only, no muddy fill)
+    ctx.strokeStyle = `rgba(255, 232, 148, ${(0.55 + prog * 0.42).toFixed(2)})`;
+    ctx.lineWidth = 2.1;
+    ctx.beginPath();
+    ctx.arc(0, 0, Math.max(4, z.radius * prog), 0, Math.PI * 2);
+    ctx.stroke();
 
     ctx.restore();
   }
@@ -576,8 +587,8 @@ export function renderBossArenaHazards(
     ctx.fillStyle = baitPillar.willImpact ? '#3ee0a8' : '#ffd86b';
     ctx.fillText(
       baitPillar.willImpact
-        ? '⚡ PILLAR IMPACT LOCKED! (TUSK-LODGE)'
-        : '🎯 BAIT CHARGE HERE',
+        ? '⚡ PILLAR IMPACT LOCKED! (4.5s ARMOR BREAK)'
+        : '🎯 BAIT HORN CHARGE HERE',
       baitPillar.x,
       baitPillar.y - 88
     );
@@ -586,3 +597,92 @@ export function renderBossArenaHazards(
 
   ctx.restore();
 }
+
+export const DUNDUBHI_PILLAR_PUNISH_WINDOW_SEC = 4.5;
+
+export interface DundubhiPillarShatterResult {
+  shattered: boolean;
+  punishWindowSec: number;
+  selfDamageRatio: number;
+  bannerText: string;
+}
+
+/**
+ * Resolves Dundubhi colliding with a Kurukshetra Pillar during his Horn-Charge Corridor,
+ * triggering a dramatic pillar-shatter + long 4.5s armor-broken punish window.
+ */
+export function resolveDundubhiPillarCollision(): DundubhiPillarShatterResult {
+  return {
+    shattered: true,
+    punishWindowSec: DUNDUBHI_PILLAR_PUNISH_WINDOW_SEC,
+    selfDamageRatio: 0.14,
+    bannerText: 'PILLAR SHATTERED! DUNDUBHI ARMOR BROKEN (4.5s PUNISH)',
+  };
+}
+
+/**
+ * Evaluates whether a target at (targetX, targetY) is inside Vrikodara's active
+ * attack telegraph or safely inside one of the fair dash/outward-escape gaps.
+ */
+export function evaluateVrikodaraTelegraphHit(params: {
+  moveId: BossMoveId | undefined;
+  bossX: number;
+  bossY: number;
+  bossAttackAngle: number;
+  targetX: number;
+  targetY: number;
+  targetRadius: number;
+}): { hit: boolean; inSafeEscapeGap: boolean } {
+  const dx = params.targetX - params.bossX;
+  const dy = params.targetY - params.bossY;
+  const dist = Math.hypot(dx, dy);
+  const angleToTarget = Math.atan2(dy, dx);
+
+  let relAngle = angleToTarget - params.bossAttackAngle;
+  while (relAngle > Math.PI) relAngle -= Math.PI * 2;
+  while (relAngle < -Math.PI) relAngle += Math.PI * 2;
+
+  if (params.moveId === 'agni_furnace_inhale') {
+    // Abdominal Furnace Vacuum Pull: fair outward-escape gap outside 158px core blast radius
+    const blastCoreRadius = 158 + params.targetRadius * 0.5;
+    const hit = dist <= blastCoreRadius;
+    return { hit, inSafeEscapeGap: !hit };
+  }
+
+  if (params.moveId === 'vaitarani_slag_eruption') {
+    // Molten Slag Arc: 3 radial magma prongs at [-0.68, 0, +0.68] rad, each ±0.21 rad wide, max range 275px
+    const maxRange = 275 + params.targetRadius * 0.5;
+    if (dist > maxRange) {
+      return { hit: false, inSafeEscapeGap: true };
+    }
+    const prongOffsets = [-0.68, 0, 0.68];
+    const prongHalfArc = 0.21;
+    for (const offset of prongOffsets) {
+      let diff = relAngle - offset;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      if (Math.abs(diff) <= prongHalfArc) {
+        return { hit: true, inSafeEscapeGap: false };
+      }
+    }
+    // Player is between the molten slag prongs in a safe wedge gap!
+    return { hit: false, inSafeEscapeGap: true };
+  }
+
+  if (
+    params.moveId === 'rudra_jaw_guillotine' ||
+    params.moveId === 'kalagni_cataclysm_vortex'
+  ) {
+    // Phase 2 Eclipse Twin-Trident Sweep: wide frontal double-crescent arc, leaving rear & outer escape gap
+    const isCataclysm = params.moveId === 'kalagni_cataclysm_vortex';
+    const maxRadius = (isCataclysm ? 245 : 210) + params.targetRadius * 0.5;
+    const sweepHalfArc = isCataclysm ? 1.18 : 1.02;
+    if (dist <= maxRadius && Math.abs(relAngle) <= sweepHalfArc) {
+      return { hit: true, inSafeEscapeGap: false };
+    }
+    return { hit: false, inSafeEscapeGap: true };
+  }
+
+  return { hit: dist <= 185, inSafeEscapeGap: dist > 185 };
+}
+

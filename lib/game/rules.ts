@@ -412,27 +412,45 @@ export function isPointInShockwaveRing(params: {
 }
 
 export const DASH_RECHARGE_SECONDS = 1.15;
+export const DASH_STAMINA_REQUIRED = 25;
 
 export function consumeDashStamina(params: {
   currentCharges: number;
   maxCharges: number;
   currentRechargeTimer?: number;
-}): { canDash: boolean; nextCharges: number; nextRechargeTimer: number } {
+  currentStamina?: number;
+  staminaCost?: number;
+}): {
+  canDash: boolean;
+  nextCharges: number;
+  nextRechargeTimer: number;
+  nextStamina: number;
+} {
   const existingTimer = params.currentRechargeTimer ?? 0;
-  if (params.currentCharges < 1) {
+  const cost = params.staminaCost ?? DASH_STAMINA_REQUIRED;
+  const currentStamina = params.currentStamina ?? 100;
+  if (params.currentCharges < 1 || currentStamina < cost) {
     return {
       canDash: false,
       nextCharges: params.currentCharges,
-      nextRechargeTimer: existingTimer > 0 ? existingTimer : DASH_RECHARGE_SECONDS,
+      nextRechargeTimer:
+        params.currentCharges < 1
+          ? existingTimer > 0
+            ? existingTimer
+            : DASH_RECHARGE_SECONDS
+          : existingTimer,
+      nextStamina: currentStamina,
     };
   }
   const nextCharges = Math.max(0, Math.min(params.maxCharges, params.currentCharges - 1));
   const nextRechargeTimer =
     existingTimer > 0 ? existingTimer : nextCharges < params.maxCharges ? DASH_RECHARGE_SECONDS : 0;
+  const nextStamina = Math.max(0, currentStamina - cost);
   return {
     canDash: true,
     nextCharges,
     nextRechargeTimer,
+    nextStamina,
   };
 }
 

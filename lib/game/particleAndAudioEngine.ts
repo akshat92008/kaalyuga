@@ -172,10 +172,10 @@ export function emitParticleBurst(
     if (cfg.archetype === 'blood_splatter') {
       // Ballistic arterial blood droplets: strong downward gravity, crimson-obsidian palette
       pt.vy -= 45 + r2 * 65; // initial upward arc before falling to floorY
-      pt.size = (2.8 + r3 * 3.4) * sizeMult;
+      pt.size = (2.8 + r3 * 3.2) * sizeMult;
       pt.color = cfg.primaryColor ?? (r2 > 0.35 ? '#d9162a' : '#8a0a18');
       pt.coreColor = cfg.secondaryColor ?? '#ff5e6c';
-      pt.maxLife = 0.36 + r1 * 0.28;
+      pt.maxLife = 0.22 + r1 * 0.16;
       pt.life = pt.maxLife;
       pt.gravity = 420;
       pt.drag = 0.96;
@@ -185,10 +185,10 @@ export function emitParticleBurst(
     } else if (cfg.archetype === 'ember_dust') {
       // Buoyant thermal embers & Kurukshetra ash: upward thermal lift + curl turbulence
       pt.vy -= 25 + r2 * 40;
-      pt.size = (2.0 + r3 * 2.8) * sizeMult;
+      pt.size = (1.8 + r3 * 2.4) * sizeMult;
       pt.color = cfg.primaryColor ?? (r2 > 0.45 ? '#ff7b29' : '#ffd86b');
       pt.coreColor = cfg.secondaryColor ?? '#fff6d6';
-      pt.maxLife = 0.52 + r1 * 0.48;
+      pt.maxLife = 0.30 + r1 * 0.22;
       pt.life = pt.maxLife;
       pt.gravity = -68 - r2 * 45;
       pt.drag = 0.94;
@@ -197,10 +197,10 @@ export function emitParticleBurst(
       pt.swirlAngularVel = 0;
     } else if (cfg.archetype === 'magic_spell') {
       // Astral Prana / Kala-Sands / Savitri Lotus spell motes: tangential swirl + harmonic glow
-      pt.size = (2.6 + r3 * 3.2) * sizeMult;
+      pt.size = (2.4 + r3 * 2.8) * sizeMult;
       pt.color = cfg.primaryColor ?? '#3ee0a8';
       pt.coreColor = cfg.secondaryColor ?? '#e0f2fe';
-      pt.maxLife = 0.48 + r1 * 0.36;
+      pt.maxLife = 0.26 + r1 * 0.18;
       pt.life = pt.maxLife;
       pt.gravity = -22;
       pt.drag = 0.95;
@@ -210,10 +210,10 @@ export function emitParticleBurst(
     } else {
       // 'bronze_spark': High-velocity Chola bronze ricochet sparks with elastic floor bounce
       pt.vy -= 55 + r2 * 70;
-      pt.size = (2.2 + r3 * 2.2) * sizeMult;
+      pt.size = (2.0 + r3 * 2.0) * sizeMult;
       pt.color = cfg.primaryColor ?? '#ffd86b';
       pt.coreColor = '#ffffff';
-      pt.maxLife = 0.34 + r1 * 0.24;
+      pt.maxLife = 0.18 + r1 * 0.14;
       pt.life = pt.maxLife;
       pt.gravity = 380;
       pt.drag = 0.97;
@@ -340,13 +340,17 @@ export function renderParticlePoolCanvas(
   ctx.restore();
 
   // Pass 2: Additive/Screen-blended 'ember_dust', 'magic_spell', and 'bronze_spark'
+  // Stage B (Step 12): Enforce additive/screen cap so stacked hit sparks never wash out Rudra
   ctx.save();
   ctx.globalCompositeOperation = 'screen';
+  let screenParticlesRendered = 0;
   for (let i = 0; i < pool.length; i++) {
     const pt = pool[i];
     if (!pt.active || pt.archetype === 'blood_splatter') continue;
+    if (screenParticlesRendered >= 64) break;
+    screenParticlesRendered++;
 
-    ctx.globalAlpha = pt.alpha;
+    ctx.globalAlpha = Math.min(0.58, pt.alpha * 0.64);
 
     if (pt.archetype === 'magic_spell') {
       const pulse = 0.8 + 0.25 * Math.sin(pt.phase * 2.0);

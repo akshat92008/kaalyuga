@@ -2,11 +2,16 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import {
+  SHARED_STUDIO_OUTLINE_COLOR,
+  SHARED_STUDIO_OUTLINE_THICKNESS,
   gradePixelToHadesPalette,
   computeSpriteSheetFrameKey,
+  computeArenaFloorGradeSpec,
+  setupSharedStudioLightingRig,
 } from './hadesSpriteBaker';
 import { getChamberGeometry, constrainActorToChamber } from './chamberGeometry';
 import { simplifyBufferGeometry } from './meshSimplifier';
+import { selectSlotKeyFromInput } from './enemy3dRenderer';
 
 describe('Hades 2D Sprite Sheet Baker & Texture Re-Grader', () => {
   it('preserves neutral skin/hide hues with S-curve contrast without artificial orange blowout', () => {
@@ -98,8 +103,31 @@ describe('Hades 2D Sprite Sheet Baker & Texture Re-Grader', () => {
       '56x56x56 decimation should reduce high-poly vertex count while preserving UVs'
     );
   });
+
+  it('maps all 8 distinct 3D enemy models across enemy types and chamber variants', () => {
+    assert.equal(selectSlotKeyFromInput('wolf_guai', 0), 'grunt_ghoul');
+    assert.equal(selectSlotKeyFromInput('fire_monk', 0), 'witch_oracle');
+    assert.equal(selectSlotKeyFromInput('stone_golem', 0), 'club_brute');
+    assert.equal(selectSlotKeyFromInput('stone_golem', 1), 'axe_guardian');
+    assert.equal(selectSlotKeyFromInput('stone_golem', 2), 'shield_gladiator');
+    assert.equal(selectSlotKeyFromInput('stone_golem', 3, 'skull_warlord'), 'skullclad_warden');
+    assert.equal(selectSlotKeyFromInput('furnace_titan', 0), 'bomber_guardian');
+    assert.equal(selectSlotKeyFromInput('furnace_titan', 1), 'horned_warbringer');
+  });
+
+  it('Stage B: unifies studio lighting rig, outline thickness (#120806, 2.0px), and dark-ash/ember floor grade', () => {
+    assert.equal(SHARED_STUDIO_OUTLINE_COLOR, '#120806');
+    assert.equal(SHARED_STUDIO_OUTLINE_THICKNESS, 2.0);
+
+    const scene = new THREE.Scene();
+    const rig = setupSharedStudioLightingRig(scene, 1.0);
+    assert.equal(scene.children.length, 4);
+    assert.ok(rig.keyLight.intensity > rig.fillLight.intensity);
+    assert.ok(rig.rimLight.intensity > 1.0);
+
+    const ch0Grade = computeArenaFloorGradeSpec(0);
+    const ch4Grade = computeArenaFloorGradeSpec(4);
+    assert.ok(ch0Grade.multiplyInner.startsWith('rgba('));
+    assert.ok(ch4Grade.ashTintOverlay.startsWith('rgba('));
+  });
 });
-
-
-
-

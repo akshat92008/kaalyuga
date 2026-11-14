@@ -1,6 +1,7 @@
 // Hades-Style Isometric Chamber Collision Boundaries, Asset-Driven Exit Gates, Reward Orbs, Floor Traps & Foreground Parallax
 import { GAME_ASSETS } from './assets';
 import { getProcessedSpriteSync } from './spriteProcessor';
+import { computeArenaFloorGradeSpec } from './hadesSpriteBaker';
 
 export interface NormPoint {
   x: number;
@@ -517,11 +518,19 @@ export function renderIsometricChamberPlatform(
     ctx.restore();
   }
 
-  // 1.5. Kurukshetra Blood-Eclipse Grade: Hades-level value hierarchy (Dark Floors 30-42% -> Bright Characters 75-90% -> Luminous VFX 100%)
+  // 1.5. Stage B (Step 8) — Color-grade active arena plates into consistent dark-ash/ember backgrounds:
+  // Darkens and slightly desaturates walkable stone floors across Vaitarani + Act I arenas so brightly lit
+  // characters (75-90% value) and crimson/gold telegraphs (100% value) pop cleanly.
   ctx.save();
-  // Warm obsidian-amber dusk multiply pass that tames overly bright cream/sandstone floors (especially Chamber 1)
+  const gradeSpec = computeArenaFloorGradeSpec(chamberIndex);
+
+  // Subtle desaturation pass on high-chroma floor areas so arena plates read as dark volcanic stone/ash
+  ctx.globalCompositeOperation = 'saturation';
+  ctx.fillStyle = 'rgba(28, 22, 24, 0.28)';
+  ctx.fillRect(0, 0, worldW, worldH);
+
+  // Cohesive dark-ash/ember multiply pass across all chambers
   ctx.globalCompositeOperation = 'multiply';
-  const isBrightSandstoneChamber = chamberIndex === 0 || chamberIndex === 2;
   const eclipseTone = ctx.createRadialGradient(
     worldW * 0.5,
     worldH * 0.56,
@@ -530,20 +539,18 @@ export function renderIsometricChamberPlatform(
     worldH * 0.54,
     worldW * 0.66
   );
-  if (isBrightSandstoneChamber) {
-    eclipseTone.addColorStop(0, 'rgba(138, 102, 78, 0.92)');
-    eclipseTone.addColorStop(0.55, 'rgba(98, 66, 52, 0.95)');
-    eclipseTone.addColorStop(1, 'rgba(42, 22, 20, 0.98)');
-  } else {
-    eclipseTone.addColorStop(0, 'rgba(176, 142, 118, 0.92)');
-    eclipseTone.addColorStop(0.6, 'rgba(128, 92, 76, 0.95)');
-    eclipseTone.addColorStop(1, 'rgba(56, 30, 28, 0.98)');
-  }
+  eclipseTone.addColorStop(0, gradeSpec.multiplyInner);
+  eclipseTone.addColorStop(0.56, gradeSpec.multiplyMid);
+  eclipseTone.addColorStop(1, gradeSpec.multiplyOuter);
   ctx.fillStyle = eclipseTone;
   ctx.fillRect(0, 0, worldW, worldH);
 
-  // Subtle atmospheric obsidian-crimson perimeter vignette + top canopy shadow for crisp HUD & character contrast
+  // Dark-ash atmospheric veil over walkable floor plate
   ctx.globalCompositeOperation = 'source-over';
+  ctx.fillStyle = gradeSpec.ashTintOverlay;
+  ctx.fillRect(0, 0, worldW, worldH);
+
+  // Atmospheric obsidian-crimson perimeter vignette + top canopy shadow for crisp HUD & character contrast
   const vignette = ctx.createRadialGradient(
     worldW * 0.5,
     worldH * 0.56,
@@ -552,18 +559,22 @@ export function renderIsometricChamberPlatform(
     worldH * 0.54,
     worldW * 0.68
   );
-  vignette.addColorStop(0, isBrightSandstoneChamber ? 'rgba(18, 8, 10, 0.18)' : 'rgba(14, 6, 8, 0.10)');
-  vignette.addColorStop(0.68, 'rgba(14, 6, 8, 0.34)');
-  vignette.addColorStop(1, 'rgba(8, 3, 5, 0.66)');
+  vignette.addColorStop(0, gradeSpec.vignetteInner);
+  vignette.addColorStop(0.68, gradeSpec.vignetteMid);
+  vignette.addColorStop(1, gradeSpec.vignetteOuter);
   ctx.fillStyle = vignette;
   ctx.fillRect(0, 0, worldW, worldH);
 
   if (floorTint) {
-    ctx.globalAlpha = 0.14;
+    ctx.globalAlpha = 0.10;
     ctx.fillStyle = floorTint;
     ctx.fillRect(0, 0, worldW, worldH);
   }
   ctx.restore();
+
+  // 1.6. Stage B (Step 9) — Lightweight Procedural Arena Atmosphere (60 FPS, near-zero decode overhead):
+  // Layers Vaitarani water/magma shimmer, brazier flicker light pools, and drifting ash/ember particles over the color-graded plate.
+  renderProceduralArenaAtmosphere(ctx, worldW, worldH, chamberIndex, now);
 
   // 2. Surface decals, craters, and ambient brazier floor pools
   renderSurfaceDetailsCallback();
@@ -881,3 +892,94 @@ export function renderForegroundParallaxAndWipe(
     ctx.restore();
   }
 }
+
+/**
+ * Stage B (Step 9) — Lightweight Procedural Arena Atmosphere (60 FPS, near-zero decode overhead):
+ * Layers subtle Vaitarani water/magma shimmer, warm brazier flicker light pools, and drifting
+ * ash & rising ember particles over the color-graded arena plate.
+ */
+export function renderProceduralArenaAtmosphere(
+  ctx: CanvasRenderingContext2D,
+  worldW: number,
+  worldH: number,
+  chamberIndex: number,
+  nowMs: number
+) {
+  const t = nowMs * 0.001;
+  ctx.save();
+
+  // 1. Vaitarani Water / Blood-River Shimmer along the perimeter moat
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  const shimmerColor =
+    chamberIndex >= 4
+      ? 'rgba(255, 92, 38, 0.09)'
+      : chamberIndex === 1
+      ? 'rgba(220, 48, 56, 0.08)'
+      : 'rgba(196, 134, 72, 0.075)';
+  ctx.strokeStyle = shimmerColor;
+  ctx.lineWidth = 2.0;
+  for (let i = 0; i < 6; i++) {
+    const bandY = worldH * (0.28 + i * 0.11) + Math.sin(t * 1.3 + i * 1.4) * 6;
+    const bandX = worldW * (i % 2 === 0 ? 0.12 : 0.82) + Math.cos(t * 0.9 + i) * 14;
+    ctx.beginPath();
+    ctx.ellipse(bandX, bandY, 64 + (i % 3) * 18, 12, 0, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // 2. Warm Brazier Flicker Light Pools on the walkable stone floor
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  const brazierAnchors = [
+    { x: 0.24, y: 0.42 },
+    { x: 0.76, y: 0.42 },
+    { x: 0.20, y: 0.72 },
+    { x: 0.80, y: 0.72 },
+  ];
+  for (let b = 0; b < brazierAnchors.length; b++) {
+    const anchor = brazierAnchors[b];
+    const flicker =
+      0.82 +
+      Math.sin(t * 6.4 + b * 2.1) * 0.11 +
+      Math.cos(t * 13.7 + b * 1.3) * 0.07;
+    const bx = anchor.x * worldW;
+    const by = anchor.y * worldH;
+    const radius = 135 * flicker;
+    const poolGrad = ctx.createRadialGradient(bx, by, 6, bx, by, radius);
+    poolGrad.addColorStop(0, `rgba(255, 156, 64, ${(0.12 * flicker).toFixed(3)})`);
+    poolGrad.addColorStop(0.55, `rgba(214, 78, 34, ${(0.055 * flicker).toFixed(3)})`);
+    poolGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = poolGrad;
+    ctx.beginPath();
+    ctx.arc(bx, by, radius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+
+  // 3. Drifting Volcanic Ash & Rising Ember Particles (deterministic, zero allocation)
+  ctx.save();
+  for (let m = 0; m < 18; m++) {
+    const seedX = (m * 173 + chamberIndex * 41) % 1000;
+    const seedY = (m * 293 + chamberIndex * 67) % 1000;
+    const isEmber = m % 3 === 0;
+    const px =
+      ((seedX * 0.001 * worldW + t * (isEmber ? 18 : 11) + Math.sin(t * 1.4 + m) * 16) %
+        worldW +
+        worldW) %
+      worldW;
+    const py =
+      ((seedY * 0.001 * worldH - t * (isEmber ? 24 : 9)) % worldH + worldH) % worldH;
+    const alpha = 0.28 + 0.22 * Math.sin(t * 3.2 + m * 1.7);
+    ctx.fillStyle = isEmber
+      ? `rgba(255, 168, 76, ${alpha.toFixed(2)})`
+      : `rgba(186, 172, 164, ${(alpha * 0.65).toFixed(2)})`;
+    ctx.beginPath();
+    ctx.arc(px, py, isEmber ? 1.8 : 1.4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+
+  ctx.restore();
+}
+

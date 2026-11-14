@@ -1,6 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  DASH_DURATION_SEC,
+  DASH_IFRAME_SEC,
+  INPUT_BUFFER_WINDOW_SEC,
+  computeActionFramePhase,
+  stepEnemyIronGuardState,
   evaluateParryImpact,
   evaluateSeeThroughOrRiposte,
   pushTemporalSnapshot,
@@ -8,6 +13,8 @@ import {
   planShadowAssassination,
   computeCombatStyleStatus,
 } from './modernCombat';
+import { consumeDashStamina } from './rules';
+import { assignGroupAttackTokens } from './astraEngine';
 
 test('God of War 2-Tier Parry: Perfect Golden window negates 100% damage, grants Riposte & Focus Orb', () => {
   const perfect = evaluateParryImpact({
@@ -123,3 +130,121 @@ test('Hades / DMC Combat Style Rank scales from D to SSS with damage and karma m
   assert.ok(rankSSS.damageBonusMultiplier > rankS.damageBonusMultiplier);
   assert.ok(rankS.damageBonusMultiplier > rankD.damageBonusMultiplier);
 });
+
+test('Dash timing split (160ms duration / 130ms i-frame) & strict 2-charge + stamina gating', () => {
+  assert.equal(DASH_DURATION_SEC, 0.16);
+  assert.equal(DASH_IFRAME_SEC, 0.13);
+  assert.equal(INPUT_BUFFER_WINDOW_SEC, 0.12);
+
+  // Requires BOTH charges >= 1 AND stamina >= 25
+  const noStamina = consumeDashStamina({
+    currentCharges: 2,
+    maxCharges: 2,
+    currentRechargeTimer: 0,
+    currentStamina: 15,
+    staminaCost: 25,
+  });
+  assert.equal(noStamina.canDash, false);
+  assert.equal(noStamina.nextCharges, 2);
+
+  const noCharge = consumeDashStamina({
+    currentCharges: 0,
+    maxCharges: 2,
+    currentRechargeTimer: 0.6,
+    currentStamina: 100,
+    staminaCost: 25,
+  });
+  assert.equal(noCharge.canDash, false);
+  assert.equal(noCharge.nextCharges, 0);
+
+  const validDash = consumeDashStamina({
+    currentCharges: 2,
+    maxCharges: 2,
+    currentRechargeTimer: 0,
+    currentStamina: 80,
+    staminaCost: 25,
+  });
+  assert.equal(validDash.canDash, true);
+  assert.equal(validDash.nextCharges, 1);
+  assert.equal(validDash.nextStamina, 55);
+});
+
+test('Explicit Startup / Active / Recovery frame phases + 120ms input buffer & Dash cancel', () => {
+  const startup = computeActionFramePhase('light_attack', 0.25, 0.28);
+  assert.equal(startup.phase, 'startup');
+  assert.equal(startup.canDashCancel, true);
+  assert.equal(startup.canBufferNext, false);
+
+  const active = computeActionFramePhase('light_attack', 0.16, 0.28);
+  assert.equal(active.phase, 'active');
+  assert.equal(active.canDashCancel, true);
+
+  const recoveryBuffer = computeActionFramePhase('light_attack', 0.10, 0.28);
+  assert.equal(recoveryBuffer.phase, 'active'); // 0.18 / 0.28 = 0.64, still inside 120ms buffer window!
+  assert.equal(recoveryBuffer.canBufferNext, true);
+
+  const lateRecovery = computeActionFramePhase('heavy_unleash', 0.08, 0.44);
+  assert.equal(lateRecovery.phase, 'recovery');
+  assert.equal(lateRecovery.canBufferNext, true);
+  assert.equal(lateRecovery.canDashCancel, true);
+});
+
+test('Deterministic Iron Guard windup & cooldown replaces per-frame RNG', () => {
+  // Step 1: Enemy in range while player attacks -> triggers 220ms windup once and locks 6.5s cooldown
+  const step1 = stepEnemyIronGuardState({
+    canGuard: true,
+    isBoss: false,
+    aiState: 'chase',
+    distToPlayer: 120,
+    playerAttacking: true,
+    postureBroken: false,
+    immobilized: false,
+    parryStanceTimer: 0,
+    ironGuardWindupTimer: 0,
+    ironGuardCd: 0,
+    dt: 0.016,
+  });
+  assert.equal(step1.startedWindup, true);
+  assert.equal(step1.activatedGuard, false);
+  assert.equal(step1.ironGuardWindupTimer, 0.22);
+  assert.equal(step1.ironGuardCd, 6.5);
+
+  // Step 2: Finish 220ms windup -> activates 0.9s guard stance
+  const step2 = stepEnemyIronGuardState({
+    canGuard: true,
+    isBoss: false,
+    aiState: 'chase',
+    distToPlayer: 120,
+    playerAttacking: true,
+    postureBroken: false,
+    immobilized: false,
+    parryStanceTimer: step1.parryStanceTimer,
+    ironGuardWindupTimer: step1.ironGuardWindupTimer,
+    ironGuardCd: step1.ironGuardCd,
+    dt: 0.25,
+  });
+  assert.equal(step2.activatedGuard, true);
+  assert.equal(step2.parryStanceTimer, 0.9);
+  assert.ok(step2.ironGuardCd > 6.0);
+});
+
+test('Simultaneous enemy attack tokens strictly capped to < 2 melee + 1 ranged', () => {
+  const tokens = assignGroupAttackTokens(
+    [
+      { id: 1, type: 'wolf_guai', hp: 100, x: 110, y: 100, aiState: 'chase' },
+      { id: 2, type: 'stone_golem', hp: 100, x: 130, y: 100, aiState: 'chase' },
+      { id: 3, type: 'furnace_titan', hp: 100, x: 140, y: 100, aiState: 'chase' },
+      { id: 4, type: 'fire_monk', hp: 100, x: 220, y: 100, aiState: 'chase' },
+      { id: 5, type: 'fire_monk', hp: 100, x: 260, y: 100, aiState: 'chase' },
+    ],
+    100,
+    100
+  );
+  // At most 1 melee/heavy (id 1) + 1 ranged (id 4) = 2 tokens total
+  assert.equal(tokens.size, 2);
+  assert.equal(tokens.has(1), true);
+  assert.equal(tokens.has(4), true);
+  assert.equal(tokens.has(2), false);
+  assert.equal(tokens.has(3), false);
+});
+

@@ -250,10 +250,119 @@ export class Hades2DSpriteBaker {
   }
 }
 
+export const SHARED_STUDIO_OUTLINE_COLOR = '#120806';
+export const SHARED_STUDIO_OUTLINE_THICKNESS = 2.0;
+
+export interface SharedStudioRigLights {
+  ambient: THREE.AmbientLight;
+  keyLight: THREE.DirectionalLight;
+  fillLight: THREE.DirectionalLight;
+  rimLight: THREE.DirectionalLight;
+}
+
+let sharedStudioWebGLRenderer: THREE.WebGLRenderer | null = null;
+
+/**
+ * Returns a single shared offscreen WebGLRenderer used across Rudra3DRenderer,
+ * Enemy3DRenderer, and Boss3DRenderer so all 3D models share one WebGL context,
+ * identical color-space/tone-mapping settings, and zero multi-context GPU overhead.
+ */
+export function getSharedStudioWebGLRenderer(size: number): THREE.WebGLRenderer | null {
+  if (typeof window === 'undefined') return null;
+  if (!sharedStudioWebGLRenderer) {
+    try {
+      sharedStudioWebGLRenderer = new THREE.WebGLRenderer({
+        alpha: true,
+        antialias: true,
+        powerPreference: 'high-performance',
+        preserveDrawingBuffer: true,
+      });
+      sharedStudioWebGLRenderer.setPixelRatio(1);
+      sharedStudioWebGLRenderer.outputColorSpace = THREE.SRGBColorSpace;
+      sharedStudioWebGLRenderer.toneMapping = THREE.NoToneMapping;
+      sharedStudioWebGLRenderer.toneMappingExposure = 1.0;
+      sharedStudioWebGLRenderer.shadowMap.enabled = false;
+      sharedStudioWebGLRenderer.setClearColor(0x000000, 0);
+    } catch (e) {
+      console.warn('[SharedStudioWebGLRenderer] WebGL initialization skipped:', e);
+      sharedStudioWebGLRenderer = null;
+      return null;
+    }
+  }
+  const currentSize = new THREE.Vector2();
+  sharedStudioWebGLRenderer.getSize(currentSize);
+  if (currentSize.x !== size || currentSize.y !== size) {
+    sharedStudioWebGLRenderer.setSize(size, size, false);
+  }
+  return sharedStudioWebGLRenderer;
+}
+
+/**
+ * Attaches the unified Hades Studio Key / Fill / Warm-Rim Lighting Rig to any
+ * 3D character or boss scene so Rudra, Enemies, and Bosses share 100% identical
+ * shading, value hierarchy, and warm rim separation.
+ */
+export function setupSharedStudioLightingRig(
+  scene: THREE.Scene,
+  distanceScale = 1.0
+): SharedStudioRigLights {
+  const ambient = new THREE.AmbientLight(0xfffaf2, 2.25);
+  scene.add(ambient);
+
+  const keyLight = new THREE.DirectionalLight(0xfff4e2, 1.85);
+  keyLight.position.set(3.0 * distanceScale, 5.2 * distanceScale, 4.0 * distanceScale);
+  scene.add(keyLight);
+
+  const fillLight = new THREE.DirectionalLight(0xd8e2f0, 0.82);
+  fillLight.position.set(-3.2 * distanceScale, 2.4 * distanceScale, 2.0 * distanceScale);
+  scene.add(fillLight);
+
+  const rimLight = new THREE.DirectionalLight(0xffcf70, 1.15);
+  rimLight.position.set(0.0, 3.6 * distanceScale, -3.8 * distanceScale);
+  scene.add(rimLight);
+
+  return { ambient, keyLight, fillLight, rimLight };
+}
+
+/**
+ * Computes the cohesive dark-ash/ember floor color-grading stops for each chamber
+ * so walkable stone floors stay in the 30-40% value range while characters and
+ * crimson/gold telegraphs pop cleanly.
+ */
+export function computeArenaFloorGradeSpec(chamberIndex: number): {
+  multiplyInner: string;
+  multiplyMid: string;
+  multiplyOuter: string;
+  ashVeilColor: string;
+  ashTintOverlay: string;
+  vignetteCenter: string;
+  vignetteInner: string;
+  vignetteMid: string;
+  vignetteEdge: string;
+  vignetteOuter: string;
+} {
+  const isBrightSandstone = chamberIndex === 0 || chamberIndex === 2 || chamberIndex === 5;
+  const ashColor = isBrightSandstone ? 'rgba(18, 13, 15, 0.28)' : 'rgba(14, 10, 12, 0.22)';
+  const vigInner = isBrightSandstone ? 'rgba(16, 9, 11, 0.20)' : 'rgba(12, 7, 9, 0.14)';
+  const vigOuter = 'rgba(6, 3, 5, 0.72)';
+  return {
+    multiplyInner: isBrightSandstone ? 'rgba(116, 90, 74, 0.94)' : 'rgba(136, 108, 92, 0.94)',
+    multiplyMid: isBrightSandstone ? 'rgba(78, 56, 46, 0.96)' : 'rgba(92, 68, 58, 0.96)',
+    multiplyOuter: 'rgba(34, 20, 18, 0.98)',
+    ashVeilColor: ashColor,
+    ashTintOverlay: ashColor,
+    vignetteCenter: vigInner,
+    vignetteInner: vigInner,
+    vignetteMid: 'rgba(12, 6, 8, 0.38)',
+    vignetteEdge: vigOuter,
+    vignetteOuter: vigOuter,
+  };
+}
+
 /**
  * Applies clean, color-true sRGB diffuse material settings to a 3D hierarchy
  * (zero muddy step-shader banding, zero plastic specular glare) so models show
- * the exact colors of their uploaded .png textures.
+ * the exact colors of their uploaded .png textures under the shared studio rig.
  */
 export function applyHadesCelShadingToHierarchy(
   root: THREE.Object3D,
@@ -271,10 +380,13 @@ export function applyHadesCelShadingToHierarchy(
       if (!m) return m;
       const std = m as THREE.MeshStandardMaterial;
       if ('roughness' in std) {
-        std.roughness = 0.85;
+        std.roughness = 0.84;
       }
       if ('metalness' in std) {
         std.metalness = 0.08;
+      }
+      if ('envMapIntensity' in std) {
+        std.envMapIntensity = 0.0;
       }
       if ('emissive' in std && std.emissive) {
         std.emissive.setHex(0x000000);
@@ -311,7 +423,7 @@ function getSharedSilhouetteCanvas(w: number, h: number): {
 
 /**
  * Fast GPU-accelerated 2D Sprite Baker that converts a rendered 3D WebGL frame into a crisp
- * Hades-style 2D sprite with #120806 dark comic-ink silhouette outlines, warm upper rim highlight,
+ * Hades-style 2D sprite with unified #120806 dark comic-ink silhouette outlines, warm upper rim highlight,
  * and optional 3-frame white-gold hit-flash.
  */
 export function bake2DSpriteFrameFromCanvas(
@@ -336,8 +448,8 @@ export function bake2DSpriteFrameFromCanvas(
   const ctx = outCanvas.getContext('2d');
   if (!ctx) return sourceCanvas;
 
-  const thickness = options?.outlineThickness ?? 2;
-  const outlineColor = options?.outlineColor ?? '#120806';
+  const thickness = options?.outlineThickness ?? SHARED_STUDIO_OUTLINE_THICKNESS;
+  const outlineColor = options?.outlineColor ?? SHARED_STUDIO_OUTLINE_COLOR;
 
   // 1. Draw crisp 2D silhouette outline using GPU-composited directional offsets on reused scratch canvas
   const { canvas: silhouetteCanvas, ctx: sCtx } = getSharedSilhouetteCanvas(w, h);
@@ -360,9 +472,9 @@ export function bake2DSpriteFrameFromCanvas(
 
     // Subtle upper-left warm rim highlight so characters pop against dark & bright arenas
     sCtx.globalCompositeOperation = 'source-in';
-    sCtx.fillStyle = 'rgba(255, 200, 110, 0.38)';
+    sCtx.fillStyle = 'rgba(255, 204, 118, 0.42)';
     sCtx.fillRect(0, 0, w, h);
-    ctx.drawImage(silhouetteCanvas, -1.2, -1.2, w, h);
+    ctx.drawImage(silhouetteCanvas, -1.25, -1.25, w, h);
   }
 
   // 2. Draw crisp character sprite over the dark ink outline
@@ -378,7 +490,7 @@ export function bake2DSpriteFrameFromCanvas(
   }
 
   if (options?.cacheFrame !== false) {
-    if (sharedFrameCache.size > 2400) {
+    if (sharedFrameCache.size > 280) {
       const oldest = sharedFrameCache.keys().next().value;
       if (oldest) sharedFrameCache.delete(oldest);
     }
@@ -387,4 +499,3 @@ export function bake2DSpriteFrameFromCanvas(
 
   return outCanvas;
 }
-

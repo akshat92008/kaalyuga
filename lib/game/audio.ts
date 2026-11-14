@@ -264,6 +264,102 @@ class SoundEngine {
     osc.stop(now + 0.31);
   }
 
+  /**
+   * Distinct Vrikodara Telegraph 1: Abdominal Furnace Vacuum Pull (inward sub-bass turbine inhale)
+   */
+  public playVrikodaraVacuumTelegraph() {
+    this.playWavSfx(SoundEngine.SFX_FILES.ominousDrums, 0.28, 0.82);
+    const ctx = this.getContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+
+    const osc = ctx.createOscillator();
+    const filter = ctx.createBiquadFilter();
+    const gain = ctx.createGain();
+
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(48, now);
+    osc.frequency.exponentialRampToValueAtTime(165, now + 0.72);
+
+    filter.type = 'bandpass';
+    filter.Q.value = 3.5;
+    filter.frequency.setValueAtTime(90, now);
+    filter.frequency.exponentialRampToValueAtTime(540, now + 0.72);
+
+    gain.gain.setValueAtTime(0.015, now);
+    gain.gain.linearRampToValueAtTime(0.16, now + 0.55);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.78);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.start(now);
+    osc.stop(now + 0.78);
+  }
+
+  /**
+   * Distinct Vrikodara Telegraph 2: Molten Slag Arc (bubbling volcanic brass rumble)
+   */
+  public playVrikodaraSlagTelegraph() {
+    this.playWavSfx(SoundEngine.SFX_FILES.ominousDrums, 0.28, 0.95);
+    const ctx = this.getContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+
+    const osc1 = ctx.createOscillator();
+    const osc2 = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc1.type = 'triangle';
+    osc2.type = 'square';
+    osc1.frequency.setValueAtTime(72, now);
+    osc1.frequency.linearRampToValueAtTime(118, now + 0.48);
+    osc2.frequency.setValueAtTime(108, now);
+    osc2.frequency.linearRampToValueAtTime(176, now + 0.48);
+
+    gain.gain.setValueAtTime(0.015, now);
+    gain.gain.linearRampToValueAtTime(0.14, now + 0.14);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.52);
+
+    osc1.connect(gain);
+    osc2.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc1.start(now);
+    osc2.start(now);
+    osc1.stop(now + 0.52);
+    osc2.stop(now + 0.52);
+  }
+
+  /**
+   * Distinct Vrikodara Telegraph 3: Phase 2 Eclipse Twin-Trident Sweep (metallic twin-resonance chime)
+   */
+  public playVrikodaraEclipseSweepTelegraph() {
+    this.playWavSfx(SoundEngine.SFX_FILES.ominousDrums, 0.30, 1.18);
+    const ctx = this.getContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+
+    const freqs = [520, 780];
+    freqs.forEach((f, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = idx === 0 ? 'sawtooth' : 'sine';
+      osc.frequency.setValueAtTime(f, now + idx * 0.07);
+      osc.frequency.exponentialRampToValueAtTime(f * 1.42, now + 0.45 + idx * 0.07);
+
+      gain.gain.setValueAtTime(0.01, now + idx * 0.07);
+      gain.gain.linearRampToValueAtTime(0.12, now + 0.06 + idx * 0.07);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.52 + idx * 0.07);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now + idx * 0.07);
+      osc.stop(now + 0.54 + idx * 0.07);
+    });
+  }
+
   public playGong(type: 'chamber' | 'victory' | 'defeat') {
     if (type === 'victory') {
       this.playWavSfx(SoundEngine.SFX_FILES.levelCompleted, 0.45, 1.0);

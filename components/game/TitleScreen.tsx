@@ -18,17 +18,17 @@ interface TitleScreenProps {
 }
 
 const KEYBOARD_SHORTCUTS = [
-  { key: 'LMB / [J]', action: 'Light Parashu Combo', desc: '4-hit relentless blood-axe cleave' },
-  { key: 'RMB / [V]', action: 'Heavy Stance Unleash', desc: 'Consumes Tapas orbs for screen-shaking smash' },
-  { key: '[SPACE]', action: 'Phantom Step Dash', desc: '2-charge iframe dash with hand-painted afterimage' },
-  { key: '[TAB]', action: 'Cycle Combat Stance', desc: 'Switch between Smash, Pillar, and Thrust stances' },
-  { key: '[T]', action: 'Kalaripayattu Guard Parry', desc: 'Deflect attacks & shatter enemy posture' },
-  { key: '[R]', action: 'Amrita Kalasha Draught', desc: 'Restore vitality from sacred vessel' },
-  { key: '[Q]', action: 'Agneyastra Fire Bow', desc: 'Loose a blazing astral arrow & immobilize foes' },
-  { key: '[E]', action: 'Look / Maya Phantoms', desc: 'Inspect world artifacts or summon mirage clones' },
-  { key: '[Z]', action: 'Rudra Tandava Wrath', desc: 'Awaken divine अग्नि (Agni) damage surge' },
-  { key: '[F]', action: 'Lethal Execute', desc: 'Finisher on posture-broken enemies' },
-  { key: '[1] [2] [3]', action: 'Switch Weapon Aspect', desc: 'Brahmashira Gada / Parashu / Pinaka Glaive' },
+  { key: 'LMB / [J]', action: 'Light Parashu Combo', desc: '4-hit relentless blood-axe cleave (Dash-Strike mid-dash)' },
+  { key: 'RMB / [K]', action: 'Heavy Stance Unleash', desc: 'Consumes Tapas orbs for screen-shaking smash / finisher' },
+  { key: '[SPACE]', action: 'Agni-Step Dash', desc: '2-charge dash (160ms dash / 130ms i-frames + Agni trail)' },
+  { key: '[SHIFT]', action: 'Kalaripayattu Guard Parry', desc: 'Deflect attacks, shatter posture & trigger Riposte' },
+  { key: '[1] [2] [3]', action: 'Switch Combat Stance', desc: 'Smash [1], Pillar [2], and Thrust [3] stances' },
+  { key: '[H]', action: 'Amrita Kalasha Draught', desc: 'Restore vitality from sacred vessel' },
+  { key: '[Q]', action: 'Agneyastra (Fire Invocation)', desc: 'Fire crater invocation & second-press Upasamhara (+10 Astra)' },
+  { key: '[E]', action: 'Interact / Vayavyastra (Wind)', desc: 'Talk to Hub NPCs, inspect artifacts, or cast Vayavyastra' },
+  { key: '[R]', action: 'Vajrastra (Lightning)', desc: 'Shatter Vajra shields & chain +60% damage on Soaked foes' },
+  { key: '[F] / [L]', action: 'Lethal Execute / Cast', desc: 'Finisher on posture-broken enemies or Blood-Shard cast' },
+  { key: '[TAB]', action: 'Cycle Combat Stance', desc: 'Quick-cycle Smash → Pillar → Thrust stances' },
   { key: '[ESC]', action: 'Pause / Options Menu', desc: 'Pause combat, view controls, or return to title' },
 ];
 

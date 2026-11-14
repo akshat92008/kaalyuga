@@ -380,7 +380,7 @@ export interface GroupAttackSlots {
 
 /**
  * Enforces the Hades-style Group Attack Coordinator:
- * At most 1 Melee attacker + 1 Ranged attacker + 1 Heavy Enforcer may actively wind up / strike at once.
+ * Strictly caps simultaneous enemy attack tokens to < 2 Melee (max 1 Melee/Heavy attacker) + 1 Ranged attacker at once.
  */
 export function assignGroupAttackTokens<TId extends number | string>(
   enemies: Array<{
@@ -399,7 +399,6 @@ export function assignGroupAttackTokens<TId extends number | string>(
   const allowedIds = new Set<TId>();
   let meleeCount = 0;
   let rangedCount = 0;
-  let heavyCount = 0;
 
   const living = enemies
     .filter((e) => e.hp > 0 && e.aiState !== 'ko')
@@ -421,14 +420,11 @@ export function assignGroupAttackTokens<TId extends number | string>(
       allowedIds.add(enemy.id);
       continue;
     }
-    if (enemy.slotCategory === 'melee' && meleeCount < 1) {
+    if ((enemy.slotCategory === 'melee' || enemy.slotCategory === 'heavy') && meleeCount < 1) {
       meleeCount += 1;
       allowedIds.add(enemy.id);
     } else if (enemy.slotCategory === 'ranged' && rangedCount < 1) {
       rangedCount += 1;
-      allowedIds.add(enemy.id);
-    } else if (enemy.slotCategory === 'heavy' && heavyCount < 1) {
-      heavyCount += 1;
       allowedIds.add(enemy.id);
     }
   }
