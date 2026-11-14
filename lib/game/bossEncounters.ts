@@ -9,8 +9,16 @@
 // ============================================================================
 
 import { MoltenSlagFissure } from '@/engine/lanternShaderEngine';
+import {
+  drawAdditiveFlipbookCell,
+  drawAdditiveFlipbookRowProgress,
+  DUNDUBHI_FLIPBOOK_ROWS,
+  ISOMETRIC_TELEGRAPH_CELLS,
+  PHASE2_VFX_SHEETS,
+  VRIKODARA_FLIPBOOK_ROWS,
+} from './vfxFlipbook';
 
-export type BossArchetypeId = 'xuemo' | 'vrikodara';
+export type BossArchetypeId = 'dundubhi' | 'xuemo' | 'vrikodara';
 export type BossMoveId = string;
 
 export type BossCounterplayKind =
@@ -49,11 +57,10 @@ export interface SonicDrumZone {
   detonated: boolean;
 }
 
-export const BOSS_SIGNATURE_MOVES: Record<BossArchetypeId, BossSignatureMoveSpec[]> = {
-  xuemo: [
+const DUNDUBHI_SIGNATURE_MOVES: BossSignatureMoveSpec[] = [
     {
       id: 'brahmadanda_horn_gore',
-      bossType: 'xuemo',
+      bossType: 'dundubhi',
       minPhase: 1,
       title: 'HORN GORE STAMPEDE',
       sanskritSubtitle: 'BRAHMADANDA SHRINGA-VEGA',
@@ -159,7 +166,11 @@ export const BOSS_SIGNATURE_MOVES: Record<BossArchetypeId, BossSignatureMoveSpec
       spawnsSonicZone: true,
       triggersVacuumPull: false,
     },
-  ],
+];
+
+export const BOSS_SIGNATURE_MOVES: Record<BossArchetypeId, BossSignatureMoveSpec[]> = {
+  dundubhi: DUNDUBHI_SIGNATURE_MOVES,
+  xuemo: DUNDUBHI_SIGNATURE_MOVES,
   vrikodara: [
     {
       id: 'agni_furnace_inhale',
@@ -282,16 +293,18 @@ export function selectBossSignatureMove(params: {
   distanceToPlayerPx: number;
   hasIntactPillars: boolean;
 }): BossSignatureMoveSpec {
-  const pool = BOSS_SIGNATURE_MOVES[params.bossType].filter(
+  const normalizedBoss: BossArchetypeId =
+    params.bossType === 'xuemo' ? 'dundubhi' : params.bossType;
+  const pool = BOSS_SIGNATURE_MOVES[normalizedBoss].filter(
     (m) => m.minPhase <= params.phase
   );
   if (pool.length === 0) {
-    return BOSS_SIGNATURE_MOVES[params.bossType][0];
+    return BOSS_SIGNATURE_MOVES[normalizedBoss][0];
   }
 
   // If Dundubhi is at medium-long range and intact pillars exist, prioritize Horn Gore Stampede so player can bait him!
   if (
-    params.bossType === 'xuemo' &&
+    (normalizedBoss === 'dundubhi' || params.bossType === 'xuemo') &&
     params.distanceToPlayerPx > 165 &&
     params.hasIntactPillars &&
     params.attackPatternIndex % 2 === 0
@@ -336,7 +349,7 @@ export function computeBossVulnerabilityMultiplier(params: {
   postureMultiplier: number;
   vulnerabilityCallout: string | null;
 } {
-  if (params.bossType === 'xuemo') {
+  if (params.bossType === 'dundubhi' || params.bossType === 'xuemo') {
     if (params.tuskLodgedTimer > 0) {
       return {
         damageMultiplier: 1.65,
@@ -440,7 +453,9 @@ export function findBaitablePillarOnTrajectory(params: {
   pillars: Array<{ id: number; x: number; y: number; destroyed: boolean; type: string }>;
 }): { id: number; x: number; y: number; willImpact: boolean } | null {
   const intact = params.pillars.filter(
-    (p) => !p.destroyed && p.type === 'dragon_pillar'
+    (p) =>
+      !p.destroyed &&
+      (p.type === 'kurukshetra_pillar' || p.type === 'dragon_pillar')
   );
   if (intact.length === 0) return null;
 
@@ -480,7 +495,8 @@ export function findBaitablePillarOnTrajectory(params: {
 }
 
 /**
- * Renders Vrikodara's Arena-Splitting Molten Slag Fissures & Dundubhi's Sonic War-Drum Resonance Zones on the floor.
+ * Renders Vrikodara's Arena-Splitting Molten Slag Geysers (`us4plh` Row 1) &
+ * Dundubhi's Sonic War-Drum Resonance Rings (`kogf7y` Row 0) using additive flipbooks.
  */
 export function renderBossArenaHazards(
   ctx: CanvasRenderingContext2D,
@@ -489,97 +505,78 @@ export function renderBossArenaHazards(
   sonicZones: SonicDrumZone[],
   baitPillar: { x: number; y: number; willImpact: boolean } | null
 ): void {
-  ctx.save();
+  const vrikSheet = PHASE2_VFX_SHEETS.vrikodaraVacuumAndSlag4x2;
+  const dundubhiSheet = PHASE2_VFX_SHEETS.dundubhiShockwaveAndShatter4x2;
+  const teleSheet = PHASE2_VFX_SHEETS.isometricTelegraphs2x2;
 
-  // 1. Render Vrikodara's Arena-Splitting Molten Slag Fissures
+  // 1. Render Vrikodara's Arena-Splitting Molten Slag Fissures using us4plh...png Row 1 (Erupting Molten Slag Geysers)
   for (let i = 0; i < slagFissures.length; i++) {
     const f = slagFissures[i];
     if (f.life <= 0) continue;
-    const alpha = Math.min(1, f.life / Math.min(1.2, f.maxLife * 0.25));
-    const pulse = 0.78 + 0.22 * Math.sin(timeSec * 6.5 + i * 1.7);
-    const w = f.width || 34;
+    const alpha = Math.min(0.86, f.life / Math.min(1.2, f.maxLife * 0.25));
+    const dx = f.x2 - f.x1;
+    const dy = f.y2 - f.y1;
+    const len = Math.hypot(dx, dy);
+    const geyserNodes = Math.max(2, Math.min(5, Math.ceil(len / 75)));
 
-    ctx.save();
-    ctx.globalAlpha = alpha;
-    ctx.lineCap = 'round';
-
-    // Charred obsidian outer crust
-    ctx.strokeStyle = 'rgba(14, 9, 8, 0.92)';
-    ctx.lineWidth = w * 1.15;
-    ctx.beginPath();
-    ctx.moveTo(f.x1, f.y1);
-    ctx.lineTo(f.x2, f.y2);
-    ctx.stroke();
-
-    // Glowing crimson-orange magma channel
-    ctx.strokeStyle = `rgba(255, 78, 24, ${(0.72 * pulse).toFixed(2)})`;
-    ctx.lineWidth = w * 0.68;
-    ctx.beginPath();
-    ctx.moveTo(f.x1, f.y1);
-    ctx.lineTo(f.x2, f.y2);
-    ctx.stroke();
-
-    // White-hot molten core vein
-    ctx.strokeStyle = `rgba(255, 224, 122, ${(0.85 * pulse).toFixed(2)})`;
-    ctx.lineWidth = w * 0.24;
-    ctx.beginPath();
-    ctx.moveTo(f.x1, f.y1);
-    ctx.lineTo(f.x2, f.y2);
-    ctx.stroke();
-
-    ctx.restore();
+    for (let n = 0; n < geyserNodes; n++) {
+      const t = geyserNodes === 1 ? 0.5 : n / (geyserNodes - 1);
+      const gx = f.x1 + dx * t;
+      const gy = f.y1 + dy * t;
+      const animProg = (timeSec * 3.2 + i * 0.37 + n * 0.23) % 1;
+      drawAdditiveFlipbookRowProgress(ctx, {
+        sheetUrl: vrikSheet.url,
+        cols: vrikSheet.cols,
+        rows: vrikSheet.rows,
+        rowIndex: VRIKODARA_FLIPBOOK_ROWS.MOLTEN_SLAG_GEYSERS,
+        progress: animProg,
+        x: gx,
+        y: gy - 12,
+        size: 112,
+        scaleX: 1,
+        scaleY: 0.86,
+        alpha: alpha * 0.82,
+      });
+    }
   }
 
-  // 2. Render Dundubhi's Cymatic Sonic War-Drum Resonance Zones
+  // 2. Render Dundubhi's Cymatic Sonic War-Drum Resonance Zones using kogf7y...png Row 0 (Concentric Bronze Sonic Rings)
   for (let i = 0; i < sonicZones.length; i++) {
     const z = sonicZones[i];
     if (z.detonated || z.timer <= 0) continue;
     const prog = 1 - Math.max(0, z.timer / Math.max(0.01, z.maxTimer));
-    ctx.save();
-    ctx.translate(z.x, z.y);
-    ctx.scale(1, 0.58);
-
-    // Outer bronze resonance ring (crisp cymatic line stroke only — zero muddy floor decal fill)
-    ctx.strokeStyle = `rgba(255, 196, 77, ${(0.52 + prog * 0.45).toFixed(2)})`;
-    ctx.lineWidth = 2.5;
-    ctx.beginPath();
-    ctx.arc(0, 0, z.radius, 0, Math.PI * 2);
-    ctx.stroke();
-
-    // Inner dashed harmonic ring
-    ctx.strokeStyle = `rgba(255, 132, 58, ${(0.42 + prog * 0.35).toFixed(2)})`;
-    ctx.lineWidth = 1.6;
-    ctx.setLineDash([10, 8]);
-    ctx.beginPath();
-    ctx.arc(0, 0, z.radius * 0.72, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    // Expanding inner acoustic shock-ring (stroke only, no muddy fill)
-    ctx.strokeStyle = `rgba(255, 232, 148, ${(0.55 + prog * 0.42).toFixed(2)})`;
-    ctx.lineWidth = 2.1;
-    ctx.beginPath();
-    ctx.arc(0, 0, Math.max(4, z.radius * prog), 0, Math.PI * 2);
-    ctx.stroke();
-
-    ctx.restore();
+    drawAdditiveFlipbookRowProgress(ctx, {
+      sheetUrl: dundubhiSheet.url,
+      cols: dundubhiSheet.cols,
+      rows: dundubhiSheet.rows,
+      rowIndex: DUNDUBHI_FLIPBOOK_ROWS.SONIC_BRONZE_RINGS,
+      progress: prog,
+      x: z.x,
+      y: z.y,
+      size: z.radius * (1.55 + prog * 0.55),
+      scaleX: 1,
+      scaleY: 0.62,
+      alpha: 0.55 + prog * 0.33,
+    });
   }
 
-  // 3. Render Dundubhi Pillar-Baiting Target Ring during Horn Gore Windup
+  // 3. Render Dundubhi Pillar-Baiting Target Mandala during Horn Gore Windup using jjxeuu...png Top-Left
   if (baitPillar) {
     const pulse = 0.65 + 0.35 * Math.sin(timeSec * 9.0);
-    ctx.save();
-    ctx.translate(baitPillar.x, baitPillar.y);
-    ctx.scale(1, 0.58);
-    ctx.strokeStyle = baitPillar.willImpact
-      ? `rgba(62, 224, 168, ${(0.75 + pulse * 0.25).toFixed(2)})`
-      : `rgba(255, 216, 107, ${(0.55 + pulse * 0.3).toFixed(2)})`;
-    ctx.lineWidth = baitPillar.willImpact ? 3.2 : 2.2;
-    ctx.setLineDash([8, 6]);
-    ctx.beginPath();
-    ctx.arc(0, 0, 56, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.restore();
+    drawAdditiveFlipbookCell(ctx, {
+      sheetUrl: teleSheet.url,
+      cols: teleSheet.cols,
+      rows: teleSheet.rows,
+      col: ISOMETRIC_TELEGRAPH_CELLS.BOSS_CIRCULAR_SLAM_MANDALA.col,
+      row: ISOMETRIC_TELEGRAPH_CELLS.BOSS_CIRCULAR_SLAM_MANDALA.row,
+      x: baitPillar.x,
+      y: baitPillar.y,
+      width: 132,
+      rotationRad: (timeSec * 1.4) % (Math.PI * 2),
+      scaleX: 1,
+      scaleY: 0.62,
+      alpha: baitPillar.willImpact ? 0.88 : 0.58 + pulse * 0.24,
+    });
 
     ctx.save();
     ctx.font = 'bold 10px monospace';
@@ -594,8 +591,6 @@ export function renderBossArenaHazards(
     );
     ctx.restore();
   }
-
-  ctx.restore();
 }
 
 export const DUNDUBHI_PILLAR_PUNISH_WINDOW_SEC = 4.5;

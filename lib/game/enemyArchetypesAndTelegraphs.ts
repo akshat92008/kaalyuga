@@ -1,6 +1,20 @@
 import type { BossMoveId } from './bossEncounters';
+import {
+  drawAdditiveFlipbookCell,
+  drawAdditiveFlipbookRowProgress,
+  DUNDUBHI_FLIPBOOK_ROWS,
+  ISOMETRIC_TELEGRAPH_CELLS,
+  PHASE2_VFX_SHEETS,
+  VRIKODARA_FLIPBOOK_ROWS,
+} from './vfxFlipbook';
 
 export type EnemyType =
+  | 'charnel_ghoul'
+  | 'ashen_oracle'
+  | 'ironmaw_gladiator'
+  | 'bloodmaw_brute'
+  | 'semi_boss_bloodforge'
+  | 'dundubhi'
   | 'wolf_guai'
   | 'fire_monk'
   | 'stone_golem'
@@ -50,8 +64,8 @@ export function computeAct1ArchetypeAttackSpec(params: {
   const dist = Math.hypot(dx, dy);
   const attackAngle = Math.atan2(dy, dx);
 
-  if (params.enemyType === 'wolf_guai') {
-    // Charnel Ghoul: Fast pounce with red lunge line (380ms windup)
+  if (params.enemyType === 'charnel_ghoul' || params.enemyType === 'wolf_guai') {
+    // Charnel Ghoul: Fast pounce with directional chevron runway (380ms windup)
     const pounceRangePx = Math.max(155, Math.min(285, dist + 42));
     return {
       windupSec: CHARNEL_GHOUL_POUNCE_WINDUP_SEC,
@@ -70,8 +84,8 @@ export function computeAct1ArchetypeAttackSpec(params: {
     };
   }
 
-  if (params.enemyType === 'fire_monk') {
-    // Ashen Oracle: Ranged curse orb + Vedic ground yantra circle (650ms fill ring before burst)
+  if (params.enemyType === 'ashen_oracle' || params.enemyType === 'fire_monk') {
+    // Ashen Oracle: Ranged curse orb + Vedic ground yantra lotus sigil (650ms fill before burst)
     return {
       windupSec: ASHEN_ORACLE_YANTRA_WINDUP_SEC,
       recoverySec: 0.52,
@@ -89,8 +103,18 @@ export function computeAct1ArchetypeAttackSpec(params: {
     };
   }
 
-  if (params.enemyType === 'stone_golem' || params.enemyType === 'furnace_titan') {
-    // Ironmaw Gladiator: Front shield block that opens during windup/recovery, heavy overhead slam (550ms windup) vulnerable to Dash-behind backstab
+  if (
+    params.enemyType === 'ironmaw_gladiator' ||
+    params.enemyType === 'bloodmaw_brute' ||
+    params.enemyType === 'semi_boss_bloodforge' ||
+    params.enemyType === 'stone_golem' ||
+    params.enemyType === 'furnace_titan'
+  ) {
+    // Ironmaw Gladiator / Bloodmaw Brute / Semi-Boss: Front shield block that opens during windup/recovery, heavy overhead slam (550ms windup) vulnerable to Dash-behind backstab
+    const isHeavy =
+      params.enemyType === 'bloodmaw_brute' ||
+      params.enemyType === 'semi_boss_bloodforge' ||
+      params.enemyType === 'furnace_titan';
     return {
       windupSec: IRONMAW_GLADIATOR_SLAM_WINDUP_SEC,
       recoverySec: 0.95,
@@ -100,7 +124,7 @@ export function computeAct1ArchetypeAttackSpec(params: {
       pounceRangePx: 0,
       yantraRadiusPx: 0,
       slamArcRad: 1.28,
-      slamRangePx: params.enemyType === 'furnace_titan' ? 148 : 132,
+      slamRangePx: isHeavy ? 148 : 132,
       frontShieldActiveInChase: true,
       opensInWindupAndRecovery: true,
       backstabBonusMultiplier: 1.55,
@@ -144,9 +168,12 @@ export function evaluateIronmawGladiatorDefense(params: {
   attackerY: number;
 }): IronmawShieldEvaluation {
   const isGladiator =
-    params.enemyType === 'stone_golem' || params.enemyType === 'furnace_titan';
+    params.enemyType === 'ironmaw_gladiator' ||
+    params.enemyType === 'bloodmaw_brute' ||
+    params.enemyType === 'semi_boss_bloodforge' ||
+    params.enemyType === 'stone_golem' ||
+    params.enemyType === 'furnace_titan';
 
-  // Angle from enemy to attacker
   const toAttackerAngle = Math.atan2(
     params.attackerY - params.enemyY,
     params.attackerX - params.enemyX,
@@ -155,8 +182,8 @@ export function evaluateIronmawGladiatorDefense(params: {
   while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
   while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
 
-  const isFrontCone = Math.abs(angleDiff) <= Math.PI * 0.48; // ~86 deg each side in front
-  const isBackstabAngle = Math.abs(angleDiff) >= Math.PI * 0.56; // Rear hemisphere
+  const isFrontCone = Math.abs(angleDiff) <= Math.PI * 0.48;
+  const isBackstabAngle = Math.abs(angleDiff) >= Math.PI * 0.56;
 
   if (!isGladiator) {
     return {
@@ -170,9 +197,6 @@ export function evaluateIronmawGladiatorDefense(params: {
     };
   }
 
-  // Ironmaw Gladiator:
-  // Front shield is active during chase OR explicit ironGuardTimer,
-  // EXCEPT it opens up during heavy overhead slam windup, attack, recovery, or posture break!
   const isVulnerableWindowOpen =
     params.aiState === 'windup' ||
     params.aiState === 'attack' ||
@@ -187,7 +211,7 @@ export function evaluateIronmawGladiatorDefense(params: {
 
   let damageMultiplier = 1.0;
   if (isBackstabAngle && isVulnerableWindowOpen) {
-    damageMultiplier = 1.55; // Massive backstab punish when dashing behind overhead slam!
+    damageMultiplier = 1.55;
   } else if (isBackstabAngle) {
     damageMultiplier = 1.35;
   } else if (isFrontShieldBlocking) {
@@ -222,519 +246,475 @@ export interface TelegraphRenderTarget {
   yantraRadius?: number;
 }
 
+export interface TelegraphFlipbookStampSpec {
+  sheetUrl: string;
+  cols: number;
+  rows: number;
+  col: number;
+  row: number;
+  x: number;
+  y: number;
+  width: number;
+  height?: number;
+  rotationRad: number;
+  scaleX: number;
+  scaleY: number;
+  alpha: number;
+}
+
+/**
+ * Pure, deterministic planner that maps any Act I Enemy Archetype or Boss windup into
+ * hand-painted `#000000` flipbook stamps (`jjxeuu` 2x2 Isometric Telegraphs, `kogf7y` Dundubhi
+ * sonic rings, and `us4plh` Vrikodara furnace vortex & molten slag geysers).
+ */
+export function resolveEnemyAndBossTelegraphFlipbookPlan(
+  e: TelegraphRenderTarget,
+  nowMs: number,
+  pillars?: Array<{ x: number; y: number; radius: number; hp: number }>
+): TelegraphFlipbookStampSpec[] {
+  if (e.aiState !== 'windup') return [];
+
+  const totalWindup = Math.max(0.15, e.windupDuration || 0.55);
+  const progress = Math.max(0, Math.min(1, 1 - e.aiTimer / totalWindup));
+  const isParryFlash = e.aiTimer <= 0.22 && e.aiTimer > 0.02;
+  const baseAlpha = isParryFlash ? 0.88 : 0.48 + progress * 0.38;
+  const teleSheet = PHASE2_VFX_SHEETS.isometricTelegraphs2x2;
+  const stamps: TelegraphFlipbookStampSpec[] = [];
+
+  // 1. CHARNEL GHOUL (`charnel_ghoul` / `wolf_guai`) — Directional Dash/Charge Chevron Runway (Top-Right cell 1,0)
+  if (!e.isBoss && (e.type === 'charnel_ghoul' || e.type === 'wolf_guai')) {
+    const angle = e.attackAngle;
+    const targetX = e.pounceTargetX ?? e.x + Math.cos(angle) * 220;
+    const targetY = e.pounceTargetY ?? e.y + Math.sin(angle) * 220;
+    const dist = Math.max(90, Math.hypot(targetX - e.x, targetY - e.y));
+    const midX = e.x + Math.cos(angle) * (dist * 0.5);
+    const midY = e.y + Math.sin(angle) * (dist * 0.5);
+
+    stamps.push({
+      sheetUrl: teleSheet.url,
+      cols: teleSheet.cols,
+      rows: teleSheet.rows,
+      col: ISOMETRIC_TELEGRAPH_CELLS.DIRECTIONAL_CHEVRON_RUNWAY.col,
+      row: ISOMETRIC_TELEGRAPH_CELLS.DIRECTIONAL_CHEVRON_RUNWAY.row,
+      x: midX,
+      y: midY,
+      width: dist * 1.05,
+      height: 82,
+      rotationRad: angle,
+      scaleX: 1,
+      scaleY: 0.65,
+      alpha: baseAlpha,
+    });
+    return stamps;
+  }
+
+  // 2. ASHEN ORACLE (`ashen_oracle` / `fire_monk`) — Aghori Oracle Curse Lotus Sigil (Bottom-Left cell 0,1)
+  if (!e.isBoss && (e.type === 'ashen_oracle' || e.type === 'fire_monk')) {
+    const yantraX = e.yantraTargetX ?? e.x + Math.cos(e.attackAngle) * 190;
+    const yantraY = e.yantraTargetY ?? e.y + Math.sin(e.attackAngle) * 190;
+    const yantraR = e.yantraRadius ?? 92;
+
+    // Ground lotus sigil at target coordinates
+    stamps.push({
+      sheetUrl: teleSheet.url,
+      cols: teleSheet.cols,
+      rows: teleSheet.rows,
+      col: ISOMETRIC_TELEGRAPH_CELLS.ORACLE_CURSE_LOTUS_SIGIL.col,
+      row: ISOMETRIC_TELEGRAPH_CELLS.ORACLE_CURSE_LOTUS_SIGIL.row,
+      x: yantraX,
+      y: yantraY,
+      width: yantraR * (1.55 + progress * 0.65),
+      rotationRad: (nowMs * 0.0014) % (Math.PI * 2),
+      scaleX: 1,
+      scaleY: 0.64,
+      alpha: baseAlpha,
+    });
+
+    // Secondary casting sigil under the Oracle
+    stamps.push({
+      sheetUrl: teleSheet.url,
+      cols: teleSheet.cols,
+      rows: teleSheet.rows,
+      col: ISOMETRIC_TELEGRAPH_CELLS.ORACLE_CURSE_LOTUS_SIGIL.col,
+      row: ISOMETRIC_TELEGRAPH_CELLS.ORACLE_CURSE_LOTUS_SIGIL.row,
+      x: e.x,
+      y: e.y,
+      width: 78,
+      rotationRad: -(nowMs * 0.002) % (Math.PI * 2),
+      scaleX: 1,
+      scaleY: 0.58,
+      alpha: baseAlpha * 0.72,
+    });
+    return stamps;
+  }
+
+  // 3. IRONMAW GLADIATOR / BLOODMAW BRUTE / SEMI-BOSS — Elite Circular Slam Mandala (Top-Left 0,0) + Cleave Cone (Bottom-Right 1,1)
+  if (
+    !e.isBoss &&
+    (e.type === 'ironmaw_gladiator' ||
+      e.type === 'bloodmaw_brute' ||
+      e.type === 'semi_boss_bloodforge' ||
+      e.type === 'stone_golem' ||
+      e.type === 'furnace_titan')
+  ) {
+    const isHeavy =
+      e.type === 'bloodmaw_brute' ||
+      e.type === 'semi_boss_bloodforge' ||
+      e.type === 'furnace_titan';
+    const slamRadius = isHeavy ? 148 : 132;
+    const coneCenterDist = slamRadius * 0.48;
+    stamps.push({
+      sheetUrl: teleSheet.url,
+      cols: teleSheet.cols,
+      rows: teleSheet.rows,
+      col: ISOMETRIC_TELEGRAPH_CELLS.BOSS_CIRCULAR_SLAM_MANDALA.col,
+      row: ISOMETRIC_TELEGRAPH_CELLS.BOSS_CIRCULAR_SLAM_MANDALA.row,
+      x: e.x + Math.cos(e.attackAngle) * coneCenterDist,
+      y: e.y + Math.sin(e.attackAngle) * coneCenterDist * 0.65,
+      width: slamRadius * (1.15 + progress * 0.35),
+      rotationRad: e.attackAngle,
+      scaleX: 1,
+      scaleY: 0.62,
+      alpha: baseAlpha,
+    });
+    stamps.push({
+      sheetUrl: teleSheet.url,
+      cols: teleSheet.cols,
+      rows: teleSheet.rows,
+      col: ISOMETRIC_TELEGRAPH_CELLS.CLEAVE_BREATH_CONE_WARNING.col,
+      row: ISOMETRIC_TELEGRAPH_CELLS.CLEAVE_BREATH_CONE_WARNING.row,
+      x: e.x + Math.cos(e.attackAngle) * (coneCenterDist * 0.85),
+      y: e.y + Math.sin(e.attackAngle) * (coneCenterDist * 0.85) * 0.65,
+      width: slamRadius * (1.2 + progress * 0.35),
+      rotationRad: e.attackAngle,
+      scaleX: 1,
+      scaleY: 0.66,
+      alpha: baseAlpha * 0.85,
+    });
+    return stamps;
+  }
+
+  // 4. DUNDUBHI (`dundubhi` / `xuemo`) — Horn-Charge Corridor (Top-Right cell 1,0) OR Sonic Slam (Top-Left cell 0,0 + kogf7y Row 0)
+  if (e.isBoss && (e.type === 'dundubhi' || e.type === 'xuemo')) {
+    if (
+      e.attackKind === 'corridor' ||
+      e.activeBossMoveId === 'rakta_stampede_charge'
+    ) {
+      const corridorLen = 520;
+      const cosA = Math.cos(e.attackAngle);
+      const sinA = Math.sin(e.attackAngle);
+
+      // Stamp 2 linked Chevron Runway segments along the 520px charge trajectory
+      for (const segFrac of [0.32, 0.74]) {
+        stamps.push({
+          sheetUrl: teleSheet.url,
+          cols: teleSheet.cols,
+          rows: teleSheet.rows,
+          col: ISOMETRIC_TELEGRAPH_CELLS.DIRECTIONAL_CHEVRON_RUNWAY.col,
+          row: ISOMETRIC_TELEGRAPH_CELLS.DIRECTIONAL_CHEVRON_RUNWAY.row,
+          x: e.x + cosA * (corridorLen * segFrac),
+          y: e.y + sinA * (corridorLen * segFrac),
+          width: 280,
+          height: 118,
+          rotationRad: e.attackAngle,
+          scaleX: 1,
+          scaleY: 0.65,
+          alpha: baseAlpha,
+        });
+      }
+
+      // Highlight any Kurukshetra Pillar intersecting the charge corridor using Top-Left Circular Slam Mandala
+      if (pillars && pillars.length > 0) {
+        const halfWidth = Math.max(46, e.radius * 0.92);
+        for (const pillar of pillars) {
+          if (pillar.hp <= 0) continue;
+          const relX = pillar.x - e.x;
+          const relY = pillar.y - e.y;
+          const along = relX * cosA + relY * sinA;
+          const perp = Math.abs(-relX * sinA + relY * cosA);
+          if (
+            along > 20 &&
+            along <= corridorLen + 30 &&
+            perp <= halfWidth + pillar.radius + 18
+          ) {
+            stamps.push({
+              sheetUrl: teleSheet.url,
+              cols: teleSheet.cols,
+              rows: teleSheet.rows,
+              col: ISOMETRIC_TELEGRAPH_CELLS.BOSS_CIRCULAR_SLAM_MANDALA.col,
+              row: ISOMETRIC_TELEGRAPH_CELLS.BOSS_CIRCULAR_SLAM_MANDALA.row,
+              x: pillar.x,
+              y: pillar.y,
+              width: (pillar.radius + 42) * 2,
+              rotationRad: (nowMs * 0.002) % (Math.PI * 2),
+              scaleX: 1,
+              scaleY: 0.62,
+              alpha: 0.86,
+            });
+          }
+        }
+      }
+      return stamps;
+    }
+
+    // Dundubhi AoE / Cone slam: Top-Left Boss Circular Slam Mandala + kogf7y Row 0 Sonic Bronze Rings
+    const dundubhiSheet = PHASE2_VFX_SHEETS.dundubhiShockwaveAndShatter4x2;
+    const frameCol = Math.min(3, Math.floor(progress * 4));
+    stamps.push({
+      sheetUrl: teleSheet.url,
+      cols: teleSheet.cols,
+      rows: teleSheet.rows,
+      col:
+        e.attackKind === 'aoe'
+          ? ISOMETRIC_TELEGRAPH_CELLS.BOSS_CIRCULAR_SLAM_MANDALA.col
+          : ISOMETRIC_TELEGRAPH_CELLS.CLEAVE_BREATH_CONE_WARNING.col,
+      row:
+        e.attackKind === 'aoe'
+          ? ISOMETRIC_TELEGRAPH_CELLS.BOSS_CIRCULAR_SLAM_MANDALA.row
+          : ISOMETRIC_TELEGRAPH_CELLS.CLEAVE_BREATH_CONE_WARNING.row,
+      x: e.x + (e.attackKind === 'aoe' ? 0 : Math.cos(e.attackAngle) * 72),
+      y: e.y + (e.attackKind === 'aoe' ? 0 : Math.sin(e.attackAngle) * 48),
+      width: e.attackKind === 'aoe' ? 280 : 225,
+      rotationRad: e.attackAngle,
+      scaleX: 1,
+      scaleY: 0.62,
+      alpha: baseAlpha,
+    });
+    stamps.push({
+      sheetUrl: dundubhiSheet.url,
+      cols: dundubhiSheet.cols,
+      rows: dundubhiSheet.rows,
+      col: frameCol,
+      row: DUNDUBHI_FLIPBOOK_ROWS.SONIC_BRONZE_RINGS,
+      x: e.x,
+      y: e.y,
+      width: 240 * (0.7 + progress * 0.45),
+      rotationRad: 0,
+      scaleX: 1,
+      scaleY: 0.62,
+      alpha: baseAlpha * 0.85,
+    });
+    return stamps;
+  }
+
+  // 5. VRIKODARA (`furnace_titan` / `vrikodara` Boss) — 3 Distinct Phase Ground Flipbook Telegraphs
+  if (e.isBoss && (e.type === 'furnace_titan' || e.type === 'vrikodara')) {
+    const moveId = e.activeBossMoveId;
+    const vrikSheet = PHASE2_VFX_SHEETS.vrikodaraVacuumAndSlag4x2;
+    const frameCol = Math.min(3, Math.floor(progress * 4));
+
+    // 5A. Abdominal Furnace Vacuum Pull (`agni_furnace_inhale`) -> us4plh Row 0 Vortex + Top-Left Circular Slam Mandala
+    if (moveId === 'agni_furnace_inhale') {
+      stamps.push({
+        sheetUrl: teleSheet.url,
+        cols: teleSheet.cols,
+        rows: teleSheet.rows,
+        col: ISOMETRIC_TELEGRAPH_CELLS.BOSS_CIRCULAR_SLAM_MANDALA.col,
+        row: ISOMETRIC_TELEGRAPH_CELLS.BOSS_CIRCULAR_SLAM_MANDALA.row,
+        x: e.x,
+        y: e.y,
+        width: 310 * (0.75 + progress * 0.35),
+        rotationRad: (nowMs * 0.0018) % (Math.PI * 2),
+        scaleX: 1,
+        scaleY: 0.6,
+        alpha: baseAlpha,
+      });
+      stamps.push({
+        sheetUrl: vrikSheet.url,
+        cols: vrikSheet.cols,
+        rows: vrikSheet.rows,
+        col: frameCol,
+        row: VRIKODARA_FLIPBOOK_ROWS.FURNACE_GRAVITATIONAL_VORTEX,
+        x: e.x,
+        y: e.y - 26,
+        width: 235,
+        rotationRad: -(nowMs * 0.0032) % (Math.PI * 2),
+        scaleX: 1,
+        scaleY: 0.72,
+        alpha: 0.85,
+      });
+      return stamps;
+    }
+
+    // 5B. Molten Slag Arc (`vaitarani_slag_eruption`) -> 3 Radial Cleave Cones (Bottom-Right cell 1,1) + us4plh Row 1 Slag Geysers
+    if (moveId === 'vaitarani_slag_eruption') {
+      const prongOffsets = [-0.68, 0, 0.68];
+      for (const offset of prongOffsets) {
+        const centerAngle = e.attackAngle + offset;
+        const coneDist = 115;
+        stamps.push({
+          sheetUrl: teleSheet.url,
+          cols: teleSheet.cols,
+          rows: teleSheet.rows,
+          col: ISOMETRIC_TELEGRAPH_CELLS.CLEAVE_BREATH_CONE_WARNING.col,
+          row: ISOMETRIC_TELEGRAPH_CELLS.CLEAVE_BREATH_CONE_WARNING.row,
+          x: e.x + Math.cos(centerAngle) * coneDist,
+          y: e.y + Math.sin(centerAngle) * coneDist * 0.65,
+          width: 195 * (0.75 + progress * 0.3),
+          rotationRad: centerAngle,
+          scaleX: 1,
+          scaleY: 0.56,
+          alpha: baseAlpha,
+        });
+        stamps.push({
+          sheetUrl: vrikSheet.url,
+          cols: vrikSheet.cols,
+          rows: vrikSheet.rows,
+          col: frameCol,
+          row: VRIKODARA_FLIPBOOK_ROWS.MOLTEN_SLAG_GEYSERS,
+          x: e.x + Math.cos(centerAngle) * (155 * (0.45 + progress * 0.55)),
+          y: e.y + Math.sin(centerAngle) * (155 * (0.45 + progress * 0.55)) * 0.65,
+          width: 124,
+          rotationRad: 0,
+          scaleX: 1,
+          scaleY: 0.85,
+          alpha: baseAlpha * 0.88,
+        });
+      }
+      return stamps;
+    }
+
+    // 5C. Phase 2 Eclipse Twin-Trident Sweep (`rudra_jaw_guillotine` / `kalagni_cataclysm_vortex`)
+    const isCataclysm = moveId === 'kalagni_cataclysm_vortex';
+    const sweepWidth = isCataclysm ? 285 : 240;
+    stamps.push({
+      sheetUrl: teleSheet.url,
+      cols: teleSheet.cols,
+      rows: teleSheet.rows,
+      col: ISOMETRIC_TELEGRAPH_CELLS.CLEAVE_BREATH_CONE_WARNING.col,
+      row: ISOMETRIC_TELEGRAPH_CELLS.CLEAVE_BREATH_CONE_WARNING.row,
+      x: e.x + Math.cos(e.attackAngle) * 78,
+      y: e.y + Math.sin(e.attackAngle) * 52,
+      width: sweepWidth * (0.8 + progress * 0.28),
+      rotationRad: e.attackAngle,
+      scaleX: 1.12,
+      scaleY: 0.66,
+      alpha: baseAlpha,
+    });
+    stamps.push({
+      sheetUrl: teleSheet.url,
+      cols: teleSheet.cols,
+      rows: teleSheet.rows,
+      col: ISOMETRIC_TELEGRAPH_CELLS.BOSS_CIRCULAR_SLAM_MANDALA.col,
+      row: ISOMETRIC_TELEGRAPH_CELLS.BOSS_CIRCULAR_SLAM_MANDALA.row,
+      x: e.x,
+      y: e.y,
+      width: sweepWidth * 0.92,
+      rotationRad: e.attackAngle,
+      scaleX: 1,
+      scaleY: 0.6,
+      alpha: baseAlpha * 0.72,
+    });
+    return stamps;
+  }
+
+  // Fallback standard cone/circle telegraph using jjxeuu
+  stamps.push({
+    sheetUrl: teleSheet.url,
+    cols: teleSheet.cols,
+    rows: teleSheet.rows,
+    col:
+      e.attackKind === 'aoe'
+        ? ISOMETRIC_TELEGRAPH_CELLS.BOSS_CIRCULAR_SLAM_MANDALA.col
+        : ISOMETRIC_TELEGRAPH_CELLS.CLEAVE_BREATH_CONE_WARNING.col,
+    row:
+      e.attackKind === 'aoe'
+        ? ISOMETRIC_TELEGRAPH_CELLS.BOSS_CIRCULAR_SLAM_MANDALA.row
+        : ISOMETRIC_TELEGRAPH_CELLS.CLEAVE_BREATH_CONE_WARNING.row,
+    x: e.x + Math.cos(e.attackAngle) * 56,
+    y: e.y + Math.sin(e.attackAngle) * 38,
+    width: 156,
+    rotationRad: e.attackAngle,
+    scaleX: 1,
+    scaleY: 0.64,
+    alpha: baseAlpha,
+  });
+  return stamps;
+}
+
 /**
  * Renders distinct, unmistakable Hades-grade ground telegraphs for Act I Enemy Archetypes,
- * Dundubhi (Act I Mid-Boss) Horn-Charge Corridor, and Vrikodara (Act I Finale Boss) phases.
+ * Dundubhi (Act I Mid-Boss), and Vrikodara (Act I Finale Boss) using ONLY hand-painted
+ * `#000000` flipbooks (`jjxeuu`, `kogf7y`, `us4plh`) with additive blending (`lighter`).
+ * Zero `ctx.arc` or `ctx.stroke` debug shapes!
  */
 export function renderEnemyAndBossGroundTelegraph(
   ctx: CanvasRenderingContext2D,
   e: TelegraphRenderTarget,
   nowMs: number,
-  pillars?: Array<{ x: number; y: number; radius: number; hp: number }>,
+  pillars?: Array<{ x: number; y: number; radius: number; hp: number }>
 ): boolean {
   if (e.aiState !== 'windup') return false;
 
-  const totalWindup = Math.max(0.15, e.windupDuration || 0.55);
-  const progress = Math.max(0, Math.min(1, 1 - e.aiTimer / totalWindup));
-  const isParryFlash = e.aiTimer <= 0.22 && e.aiTimer > 0.02;
+  const stamps = resolveEnemyAndBossTelegraphFlipbookPlan(e, nowMs, pillars);
+  if (stamps.length === 0) return false;
 
-  // 1. CHARNEL GHOUL (`wolf_guai`) — Fast Pounce with Red Lunge Line (380ms windup)
-  if (!e.isBoss && e.type === 'wolf_guai') {
-    const angle = e.attackAngle;
-    const targetX = e.pounceTargetX ?? e.x + Math.cos(angle) * 220;
-    const targetY = e.pounceTargetY ?? e.y + Math.sin(angle) * 220;
-    const dist = Math.max(90, Math.hypot(targetX - e.x, targetY - e.y));
-
-    ctx.save();
-    ctx.translate(e.x, e.y);
-    ctx.scale(1, 0.55); // Isometric ground projection
-    ctx.rotate(angle);
-
-    const corridorHalfWidth = 22;
-    // Outer corridor frame
-    ctx.fillStyle = isParryFlash
-      ? 'rgba(255, 240, 150, 0.24)'
-      : 'rgba(220, 24, 38, 0.18)';
-    ctx.fillRect(0, -corridorHalfWidth, dist, corridorHalfWidth * 2);
-
-    // Sweeping red lunge fill along the corridor
-    ctx.fillStyle = isParryFlash
-      ? 'rgba(255, 245, 175, 0.52)'
-      : `rgba(255, 42, 56, ${0.32 + progress * 0.42})`;
-    ctx.fillRect(0, -corridorHalfWidth, dist * progress, corridorHalfWidth * 2);
-
-    // Crisp central red laser lunge line + arrowhead
-    ctx.strokeStyle = isParryFlash ? '#FFF7B2' : '#FF2A38';
-    ctx.lineWidth = isParryFlash ? 4 : 3;
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.lineTo(dist, 0);
-    ctx.stroke();
-
-    // Corridor rails
-    ctx.lineWidth = 1.8;
-    ctx.strokeStyle = isParryFlash
-      ? '#FFF7B2'
-      : 'rgba(255, 75, 85, 0.88)';
-    ctx.strokeRect(0, -corridorHalfWidth, dist, corridorHalfWidth * 2);
-
-    // Directional lunge chevrons
-    const chevronCount = 4;
-    for (let i = 1; i <= chevronCount; i++) {
-      const cx = (dist / (chevronCount + 0.5)) * i;
-      ctx.beginPath();
-      ctx.moveTo(cx - 10, -corridorHalfWidth * 0.65);
-      ctx.lineTo(cx + 4, 0);
-      ctx.lineTo(cx - 10, corridorHalfWidth * 0.65);
-      ctx.stroke();
-    }
-
-    // Destination pounce impact ring
-    ctx.beginPath();
-    ctx.arc(dist, 0, corridorHalfWidth * 1.15, 0, Math.PI * 2);
-    ctx.strokeStyle = isParryFlash ? '#FFFFFF' : '#FF3B47';
-    ctx.lineWidth = 2.4;
-    ctx.stroke();
-    ctx.restore();
-    return true;
+  for (let i = 0; i < stamps.length; i++) {
+    const st = stamps[i];
+    drawAdditiveFlipbookCell(ctx, {
+      sheetUrl: st.sheetUrl,
+      cols: st.cols,
+      rows: st.rows,
+      col: st.col,
+      row: st.row,
+      x: st.x,
+      y: st.y,
+      width: st.width,
+      height: st.height,
+      rotationRad: st.rotationRad,
+      scaleX: st.scaleX,
+      scaleY: st.scaleY,
+      alpha: st.alpha,
+    });
   }
 
-  // 2. ASHEN ORACLE (`fire_monk`) — Ranged Curse Orb + Vedic Ground Yantra Circle (650ms fill ring before burst)
-  if (!e.isBoss && e.type === 'fire_monk') {
-    const yantraX = e.yantraTargetX ?? e.x + Math.cos(e.attackAngle) * 190;
-    const yantraY = e.yantraTargetY ?? e.y + Math.sin(e.attackAngle) * 190;
-    const yantraR = e.yantraRadius ?? 92;
-
-    // A) Ranged Curse Orb trajectory line from Oracle to player direction
-    ctx.save();
-    ctx.translate(e.x, e.y);
-    ctx.scale(1, 0.55);
-    ctx.rotate(e.attackAngle);
-    ctx.strokeStyle = `rgba(216, 110, 255, ${0.42 + progress * 0.45})`;
-    ctx.lineWidth = 2.2;
-    ctx.setLineDash([8, 6]);
-    ctx.beginPath();
-    ctx.moveTo(22, 0);
-    ctx.lineTo(290, 0);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.restore();
-
-    // B) Vedic Ground Yantra Circle (650ms fill ring before burst)
-    ctx.save();
-    ctx.translate(yantraX, yantraY);
-    ctx.scale(1, 0.55);
-
-    // Base dark-violet/crimson Vedic mandala ring
-    ctx.fillStyle = `rgba(148, 36, 220, ${0.12 + progress * 0.18})`;
-    ctx.beginPath();
-    ctx.arc(0, 0, yantraR, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Expanding 650ms fill ring before burst
-    ctx.fillStyle = isParryFlash
-      ? 'rgba(255, 235, 150, 0.42)'
-      : `rgba(235, 68, 255, ${0.22 + progress * 0.38})`;
-    ctx.beginPath();
-    ctx.arc(0, 0, yantraR * progress, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Sacred Vedic 8-pointed Shatkona/Yantra geometry inside the circle
-    ctx.rotate((nowMs * 0.0018) % (Math.PI * 2));
-    ctx.strokeStyle = isParryFlash
-      ? '#FFF7B2'
-      : `rgba(255, 115, 240, ${0.75 + progress * 0.25})`;
-    ctx.lineWidth = 2.2;
-    ctx.beginPath();
-    ctx.arc(0, 0, yantraR, 0, Math.PI * 2);
-    ctx.stroke();
-
-    // Inscribed interlocking Vedic squares
-    const sq = yantraR * 0.68;
-    ctx.strokeRect(-sq, -sq, sq * 2, sq * 2);
-    ctx.rotate(Math.PI / 4);
-    ctx.strokeRect(-sq, -sq, sq * 2, sq * 2);
-    ctx.restore();
-    return true;
-  }
-
-  // 3. IRONMAW GLADIATOR (`stone_golem` / `furnace_titan` non-boss) — 550ms Heavy Overhead Slam + Backstab Open Arc
+  // Tactical text callout for Ironmaw Gladiator backstab or Dundubhi Pillar Lock
   if (
     !e.isBoss &&
-    (e.type === 'stone_golem' || e.type === 'furnace_titan')
+    (e.type === 'ironmaw_gladiator' ||
+      e.type === 'bloodmaw_brute' ||
+      e.type === 'semi_boss_bloodforge' ||
+      e.type === 'stone_golem' ||
+      e.type === 'furnace_titan')
   ) {
-    const slamRadius = e.type === 'furnace_titan' ? 148 : 132;
-    const halfArc = 0.64; // 1.28 rad total front slam cone
-
-    ctx.save();
-    ctx.translate(e.x, e.y);
-    ctx.scale(1, 0.55);
-
-    // Front Heavy Overhead Slam Sector
-    ctx.fillStyle = isParryFlash
-      ? 'rgba(255, 245, 160, 0.34)'
-      : 'rgba(255, 62, 34, 0.20)';
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.arc(0, 0, slamRadius, e.attackAngle - halfArc, e.attackAngle + halfArc);
-    ctx.closePath();
-    ctx.fill();
-
-    // Expanding fill wave (550ms windup)
-    ctx.fillStyle = isParryFlash
-      ? 'rgba(255, 245, 160, 0.55)'
-      : `rgba(255, 88, 38, ${0.32 + progress * 0.42})`;
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.arc(
-      0,
-      0,
-      slamRadius * progress,
-      e.attackAngle - halfArc,
-      e.attackAngle + halfArc,
-    );
-    ctx.closePath();
-    ctx.fill();
-
-    ctx.strokeStyle = isParryFlash ? '#FFF7B2' : '#FF4E2A';
-    ctx.lineWidth = isParryFlash ? 3.5 : 2.5;
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.arc(0, 0, slamRadius, e.attackAngle - halfArc, e.attackAngle + halfArc);
-    ctx.closePath();
-    ctx.stroke();
-
-    // Rear Backstab Open Indicator (Gold/Emerald dashed arc behind the Gladiator)
-    const rearAngle = e.attackAngle + Math.PI;
-    ctx.strokeStyle = 'rgba(110, 255, 170, 0.78)';
-    ctx.lineWidth = 2.2;
-    ctx.setLineDash([7, 5]);
-    ctx.beginPath();
-    ctx.arc(0, 0, e.radius + 36, rearAngle - 0.85, rearAngle + 0.85);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.restore();
-
-    // Crisp tactical hint above Gladiator
     ctx.save();
     ctx.font = 'bold 10px monospace';
     ctx.textAlign = 'center';
     ctx.fillStyle = '#7DFFBA';
     ctx.fillText('DASH BEHIND [SPACE] · BACKSTAB', e.x, e.y - e.radius - 42);
     ctx.restore();
-    return true;
-  }
-
-  // 4. DUNDUBHI (`xuemo`) — Horn-Charge Corridor & Pillar Counterplay Telegraph
-  if (
+  } else if (
     e.isBoss &&
-    e.type === 'xuemo' &&
-    (e.attackKind === 'corridor' ||
-      e.activeBossMoveId === 'rakta_stampede_charge')
+    (e.type === 'dundubhi' || e.type === 'xuemo') &&
+    pillars &&
+    pillars.length > 0 &&
+    (e.attackKind === 'corridor' || e.activeBossMoveId === 'rakta_stampede_charge')
   ) {
-    const corridorLen = 540;
+    const cosA = Math.cos(e.attackAngle);
+    const sinA = Math.sin(e.attackAngle);
     const halfWidth = Math.max(46, e.radius * 0.92);
-
-    ctx.save();
-    ctx.translate(e.x, e.y);
-    ctx.scale(1, 0.55);
-    ctx.rotate(e.attackAngle);
-
-    // High-contrast crimson/gold stampede corridor
-    ctx.fillStyle = 'rgba(225, 28, 38, 0.22)';
-    ctx.fillRect(0, -halfWidth, corridorLen, halfWidth * 2);
-
-    // Sweeping horn-charge fill
-    ctx.fillStyle = isParryFlash
-      ? 'rgba(255, 240, 150, 0.48)'
-      : `rgba(255, 58, 42, ${0.32 + progress * 0.42})`;
-    ctx.fillRect(0, -halfWidth, corridorLen * progress, halfWidth * 2);
-
-    // Twin horn rails + outer border
-    ctx.strokeStyle = isParryFlash ? '#FFF7B2' : '#FF3828';
-    ctx.lineWidth = 3.2;
-    ctx.strokeRect(0, -halfWidth, corridorLen, halfWidth * 2);
-
-    // Twin inner horn tracks
-    ctx.strokeStyle = 'rgba(255, 198, 92, 0.72)';
-    ctx.lineWidth = 1.8;
-    ctx.beginPath();
-    ctx.moveTo(0, -halfWidth * 0.45);
-    ctx.lineTo(corridorLen, -halfWidth * 0.45);
-    ctx.moveTo(0, halfWidth * 0.45);
-    ctx.lineTo(corridorLen, halfWidth * 0.45);
-    ctx.stroke();
-
-    // Animated directional stampede chevrons
-    const scrollOffset = ((nowMs * 0.35) % 75);
-    ctx.strokeStyle = '#FFD166';
-    ctx.lineWidth = 2.6;
-    for (let dist = 45 + scrollOffset; dist < corridorLen - 25; dist += 75) {
-      ctx.beginPath();
-      ctx.moveTo(dist - 16, -halfWidth * 0.65);
-      ctx.lineTo(dist + 8, 0);
-      ctx.lineTo(dist - 16, halfWidth * 0.65);
-      ctx.stroke();
-    }
-    ctx.restore();
-
-    // Highlight any Kurukshetra Pillar intersecting the charge corridor as a BAIT target!
-    if (pillars && pillars.length > 0) {
-      const cosA = Math.cos(e.attackAngle);
-      const sinA = Math.sin(e.attackAngle);
-      for (const pillar of pillars) {
-        if (pillar.hp <= 0) continue;
-        const relX = pillar.x - e.x;
-        const relY = pillar.y - e.y;
-        const along = relX * cosA + relY * sinA;
-        const perp = Math.abs(-relX * sinA + relY * cosA);
-        if (along > 20 && along <= corridorLen + 30 && perp <= halfWidth + pillar.radius + 18) {
-          ctx.save();
-          ctx.translate(pillar.x, pillar.y);
-          ctx.scale(1, 0.55);
-          ctx.strokeStyle = '#FFD166';
-          ctx.lineWidth = 3.5;
-          ctx.beginPath();
-          ctx.arc(0, 0, pillar.radius + 24, 0, Math.PI * 2);
-          ctx.stroke();
-          ctx.restore();
-
-          ctx.save();
-          ctx.font = 'bold 11px monospace';
-          ctx.textAlign = 'center';
-          ctx.fillStyle = '#FFD166';
-          ctx.fillText(
-            'PILLAR LOCKED! SHATTER = 4.5s ARMOR BREAK',
-            pillar.x,
-            pillar.y - pillar.radius - 32,
-          );
-          ctx.restore();
-        }
-      }
-    }
-    return true;
-  }
-
-  // 5. VRIKODARA (`furnace_titan` Boss) — 3 Distinct Phase Ground Shape Telegraphs with Fair Escape Gaps
-  if (e.isBoss && e.type === 'furnace_titan') {
-    const moveId = e.activeBossMoveId;
-
-    // 5A. Abdominal Furnace Vacuum Pull (`agni_furnace_inhale`)
-    if (moveId === 'agni_furnace_inhale') {
-      const pullRadius = 310;
-      const blastCoreRadius = 158;
-
-      ctx.save();
-      ctx.translate(e.x, e.y);
-      ctx.scale(1, 0.55);
-
-      // Outer vacuum suction ring with inward-scrolling rings
-      const inwardPhase = 1 - ((nowMs * 0.0022) % 1);
-      ctx.strokeStyle = `rgba(255, 136, 48, ${0.45 + progress * 0.4})`;
-      ctx.lineWidth = 2.2;
-      ctx.setLineDash([12, 8]);
-      ctx.beginPath();
-      ctx.arc(0, 0, pullRadius, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(0, 0, blastCoreRadius + (pullRadius - blastCoreRadius) * inwardPhase, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.setLineDash([]);
-
-      // Inner abdominal furnace detonation core (danger zone)
-      ctx.fillStyle = `rgba(255, 58, 28, ${0.18 + progress * 0.34})`;
-      ctx.beginPath();
-      ctx.arc(0, 0, blastCoreRadius, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = `rgba(255, 175, 55, ${0.28 + progress * 0.42})`;
-      ctx.beginPath();
-      ctx.arc(0, 0, blastCoreRadius * progress, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.strokeStyle = isParryFlash ? '#FFF7B2' : '#FF4824';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.arc(0, 0, blastCoreRadius, 0, Math.PI * 2);
-      ctx.stroke();
-
-      // 4 Outward Escape Safe Lanes (showing player where to Dash outward)
-      ctx.strokeStyle = 'rgba(125, 255, 186, 0.78)';
-      ctx.lineWidth = 2.4;
-      for (let i = 0; i < 4; i++) {
-        const laneAngle = e.attackAngle + (i * Math.PI) / 2;
-        const rStart = blastCoreRadius + 14;
-        const rEnd = pullRadius + 24;
-        ctx.beginPath();
-        ctx.moveTo(Math.cos(laneAngle) * rStart, Math.sin(laneAngle) * rStart);
-        ctx.lineTo(Math.cos(laneAngle) * rEnd, Math.sin(laneAngle) * rEnd);
-        ctx.stroke();
-      }
-      ctx.restore();
-      return true;
-    }
-
-    // 5B. Molten Slag Arc (`vaitarani_slag_eruption`) — 3 Radial Magma Lanes with Fair Safe Wedge Gaps
-    if (moveId === 'vaitarani_slag_eruption') {
-      const laneLength = 275;
-      const laneHalfArc = 0.21; // Each of the 3 slag prongs is 0.42 rad wide, leaving 0.30 rad safe escape gaps between prongs!
-      const prongOffsets = [-0.68, 0, 0.68];
-
-      ctx.save();
-      ctx.translate(e.x, e.y);
-      ctx.scale(1, 0.55);
-
-      for (const offset of prongOffsets) {
-        const centerAngle = e.attackAngle + offset;
-        ctx.fillStyle = 'rgba(255, 82, 24, 0.22)';
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.arc(
-          0,
-          0,
-          laneLength,
-          centerAngle - laneHalfArc,
-          centerAngle + laneHalfArc,
+    for (const pillar of pillars) {
+      if (pillar.hp <= 0) continue;
+      const relX = pillar.x - e.x;
+      const relY = pillar.y - e.y;
+      const along = relX * cosA + relY * sinA;
+      const perp = Math.abs(-relX * sinA + relY * cosA);
+      if (along > 20 && along <= 550 && perp <= halfWidth + pillar.radius + 18) {
+        ctx.save();
+        ctx.font = 'bold 11px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#FFD166';
+        ctx.fillText(
+          'PILLAR LOCKED! SHATTER = 4.5s ARMOR BREAK',
+          pillar.x,
+          pillar.y - pillar.radius - 32
         );
-        ctx.closePath();
-        ctx.fill();
-
-        ctx.fillStyle = isParryFlash
-          ? 'rgba(255, 240, 150, 0.52)'
-          : `rgba(255, 128, 32, ${0.32 + progress * 0.45})`;
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.arc(
-          0,
-          0,
-          laneLength * progress,
-          centerAngle - laneHalfArc,
-          centerAngle + laneHalfArc,
-        );
-        ctx.closePath();
-        ctx.fill();
-
-        ctx.strokeStyle = isParryFlash ? '#FFF7B2' : '#FF7A1E';
-        ctx.lineWidth = 2.6;
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.arc(
-          0,
-          0,
-          laneLength,
-          centerAngle - laneHalfArc,
-          centerAngle + laneHalfArc,
-        );
-        ctx.closePath();
-        ctx.stroke();
+        ctx.restore();
       }
-
-      // Highlight the 2 safe wedge gaps between the 3 molten slag lanes
-      ctx.strokeStyle = 'rgba(125, 255, 186, 0.72)';
-      ctx.lineWidth = 2;
-      ctx.setLineDash([6, 6]);
-      for (const safeOffset of [-0.34, 0.34]) {
-        const safeAngle = e.attackAngle + safeOffset;
-        ctx.beginPath();
-        ctx.moveTo(Math.cos(safeAngle) * 55, Math.sin(safeAngle) * 55);
-        ctx.lineTo(
-          Math.cos(safeAngle) * (laneLength - 15),
-          Math.sin(safeAngle) * (laneLength - 15),
-        );
-        ctx.stroke();
-      }
-      ctx.setLineDash([]);
-      ctx.restore();
-      return true;
-    }
-
-    // 5C. Phase 2 Eclipse Twin-Trident Sweep (`rudra_jaw_guillotine` / `kalagni_cataclysm_vortex`)
-    if (
-      moveId === 'rudra_jaw_guillotine' ||
-      moveId === 'kalagni_cataclysm_vortex'
-    ) {
-      const isCataclysm = moveId === 'kalagni_cataclysm_vortex';
-      const innerBladeRadius = isCataclysm ? 155 : 138;
-      const outerBladeRadius = isCataclysm ? 245 : 210;
-      const sweepHalfArc = isCataclysm ? 1.18 : 1.02; // Leaves a wide rear escape gap!
-
-      ctx.save();
-      ctx.translate(e.x, e.y);
-      ctx.scale(1, 0.55);
-
-      // Blade 1: Inner Crimson Eclipse Trident Arc
-      ctx.fillStyle = `rgba(220, 24, 62, ${0.22 + progress * 0.36})`;
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.arc(
-        0,
-        0,
-        innerBladeRadius * progress,
-        e.attackAngle - sweepHalfArc,
-        e.attackAngle + sweepHalfArc,
-      );
-      ctx.closePath();
-      ctx.fill();
-
-      ctx.strokeStyle = isParryFlash ? '#FFF7B2' : '#FF2E54';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.arc(
-        0,
-        0,
-        innerBladeRadius,
-        e.attackAngle - sweepHalfArc,
-        e.attackAngle + sweepHalfArc,
-      );
-      ctx.stroke();
-
-      // Blade 2: Outer Solar-Gold Eclipse Trident Ring Band
-      const bandInner = innerBladeRadius + 16;
-      ctx.fillStyle = `rgba(255, 168, 38, ${0.18 + progress * 0.34})`;
-      ctx.beginPath();
-      ctx.arc(
-        0,
-        0,
-        outerBladeRadius,
-        e.attackAngle - sweepHalfArc * 0.88,
-        e.attackAngle - sweepHalfArc * 0.88 + sweepHalfArc * 1.76 * progress,
-      );
-      ctx.arc(
-        0,
-        0,
-        bandInner,
-        e.attackAngle - sweepHalfArc * 0.88 + sweepHalfArc * 1.76 * progress,
-        e.attackAngle - sweepHalfArc * 0.88,
-        true,
-      );
-      ctx.closePath();
-      ctx.fill();
-
-      ctx.strokeStyle = isParryFlash ? '#FFF7B2' : '#FFB72B';
-      ctx.lineWidth = 2.6;
-      ctx.beginPath();
-      ctx.arc(
-        0,
-        0,
-        outerBladeRadius,
-        e.attackAngle - sweepHalfArc * 0.88,
-        e.attackAngle + sweepHalfArc * 0.88,
-      );
-      ctx.stroke();
-
-      // Rear Escape Gap Indicator
-      const rearAngle = e.attackAngle + Math.PI;
-      ctx.strokeStyle = 'rgba(125, 255, 186, 0.85)';
-      ctx.lineWidth = 2.6;
-      ctx.setLineDash([8, 6]);
-      ctx.beginPath();
-      ctx.arc(0, 0, e.radius + 48, rearAngle - 0.75, rearAngle + 0.75);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.restore();
-      return true;
     }
   }
 
-  return false;
+  void drawAdditiveFlipbookRowProgress;
+  return true;
 }
+

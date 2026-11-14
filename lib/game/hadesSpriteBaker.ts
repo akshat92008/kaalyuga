@@ -250,8 +250,75 @@ export class Hades2DSpriteBaker {
   }
 }
 
+export const BASE_CAMERA_ZOOM = 0.96;
 export const SHARED_STUDIO_OUTLINE_COLOR = '#120806';
 export const SHARED_STUDIO_OUTLINE_THICKNESS = 2.0;
+
+export type SilhouetteRole = 'rudra' | 'regular_enemy' | 'regular_enemy_crimson' | 'boss';
+
+export interface SilhouetteRoleSpec {
+  role: SilhouetteRole;
+  rimHex: string;
+  rimRgba: string;
+  outlineColor: string;
+  outlineThickness: number;
+  scaleAuthorityMin: number;
+  scaleAuthorityMax: number;
+  footContactRingHex: string | null;
+}
+
+export const SILHOUETTE_ROLE_PRESETS: Record<SilhouetteRole, SilhouetteRoleSpec> = {
+  rudra: {
+    role: 'rudra',
+    rimHex: '#ffb347',
+    rimRgba: 'rgba(255, 179, 71, 0.78)',
+    outlineColor: SHARED_STUDIO_OUTLINE_COLOR,
+    outlineThickness: 2.2,
+    scaleAuthorityMin: 1.0,
+    scaleAuthorityMax: 1.0,
+    footContactRingHex: '#ffb347',
+  },
+  regular_enemy: {
+    role: 'regular_enemy',
+    rimHex: '#94a3b8',
+    rimRgba: 'rgba(148, 163, 184, 0.62)',
+    outlineColor: SHARED_STUDIO_OUTLINE_COLOR,
+    outlineThickness: 2.0,
+    scaleAuthorityMin: 1.0,
+    scaleAuthorityMax: 1.12,
+    footContactRingHex: null,
+  },
+  regular_enemy_crimson: {
+    role: 'regular_enemy_crimson',
+    rimHex: '#ef4444',
+    rimRgba: 'rgba(239, 68, 68, 0.68)',
+    outlineColor: SHARED_STUDIO_OUTLINE_COLOR,
+    outlineThickness: 2.1,
+    scaleAuthorityMin: 1.0,
+    scaleAuthorityMax: 1.12,
+    footContactRingHex: null,
+  },
+  boss: {
+    role: 'boss',
+    rimHex: '#ff5a1f',
+    rimRgba: 'rgba(255, 90, 31, 0.88)',
+    outlineColor: SHARED_STUDIO_OUTLINE_COLOR,
+    outlineThickness: 2.6,
+    scaleAuthorityMin: 1.35,
+    scaleAuthorityMax: 1.55,
+    footContactRingHex: '#ff5a1f',
+  },
+};
+
+export const BOSS_SCALE_AUTHORITY = {
+  semi_boss: 1.35,
+  dundubhi: 1.45,
+  vrikodara: 1.55,
+} as const;
+
+export function getSilhouetteSpecForRole(role: SilhouetteRole): SilhouetteRoleSpec {
+  return SILHOUETTE_ROLE_PRESETS[role];
+}
 
 export interface SharedStudioRigLights {
   ambient: THREE.AmbientLight;
@@ -423,13 +490,16 @@ function getSharedSilhouetteCanvas(w: number, h: number): {
 
 /**
  * Fast GPU-accelerated 2D Sprite Baker that converts a rendered 3D WebGL frame into a crisp
- * Hades-style 2D sprite with unified #120806 dark comic-ink silhouette outlines, warm upper rim highlight,
- * and optional 3-frame white-gold hit-flash.
+ * Hades-style 2D sprite with unified #120806 dark comic-ink silhouette outlines, role-tuned directional
+ * rim highlight (#ffb347 Rudra, #94a3b8/#ef4444 Regular Enemies, #ff5a1f Bosses/Semi-Boss),
+ * and optional 1-frame white hit-flash.
  */
 export function bake2DSpriteFrameFromCanvas(
   sourceCanvas: HTMLCanvasElement,
   cacheKey: string,
   options?: {
+    role?: SilhouetteRole;
+    rimColor?: string;
     outlineColor?: string;
     outlineThickness?: number;
     hitFlash?: boolean;
@@ -448,8 +518,14 @@ export function bake2DSpriteFrameFromCanvas(
   const ctx = outCanvas.getContext('2d');
   if (!ctx) return sourceCanvas;
 
-  const thickness = options?.outlineThickness ?? SHARED_STUDIO_OUTLINE_THICKNESS;
-  const outlineColor = options?.outlineColor ?? SHARED_STUDIO_OUTLINE_COLOR;
+  const rolePreset = options?.role ? SILHOUETTE_ROLE_PRESETS[options.role] : undefined;
+  const thickness =
+    options?.outlineThickness ?? rolePreset?.outlineThickness ?? SHARED_STUDIO_OUTLINE_THICKNESS;
+  const outlineColor =
+    options?.outlineColor ?? rolePreset?.outlineColor ?? SHARED_STUDIO_OUTLINE_COLOR;
+  const rimHighlightStyle =
+    options?.rimColor ?? rolePreset?.rimRgba ?? SILHOUETTE_ROLE_PRESETS.rudra.rimRgba;
+  const rimOffset = options?.role === 'boss' ? -1.75 : options?.role === 'rudra' ? -1.5 : -1.25;
 
   // 1. Draw crisp 2D silhouette outline using GPU-composited directional offsets on reused scratch canvas
   const { canvas: silhouetteCanvas, ctx: sCtx } = getSharedSilhouetteCanvas(w, h);
@@ -470,18 +546,18 @@ export function bake2DSpriteFrameFromCanvas(
       ctx.drawImage(silhouetteCanvas, offsets[i][0], offsets[i][1], w, h);
     }
 
-    // Subtle upper-left warm rim highlight so characters pop against dark & bright arenas
+    // Role-specific directional rim-light highlight so Rudra (#ffb347), Enemies (#94a3b8/#ef4444), and Bosses (#ff5a1f) read razor-sharp at 0.96 zoom
     sCtx.globalCompositeOperation = 'source-in';
-    sCtx.fillStyle = 'rgba(255, 204, 118, 0.42)';
+    sCtx.fillStyle = rimHighlightStyle;
     sCtx.fillRect(0, 0, w, h);
-    ctx.drawImage(silhouetteCanvas, -1.25, -1.25, w, h);
+    ctx.drawImage(silhouetteCanvas, rimOffset, rimOffset, w, h);
   }
 
-  // 2. Draw crisp character sprite over the dark ink outline
+  // 2. Draw crisp character sprite over the dark ink outline & directional rim
   ctx.globalCompositeOperation = 'source-over';
   ctx.drawImage(sourceCanvas, 0, 0, w, h);
 
-  // 3. Apply 3-frame Hades white hit-flash when struck
+  // 3. Apply Hades white hit-flash when struck
   if (options?.hitFlash) {
     ctx.globalCompositeOperation = 'source-atop';
     ctx.fillStyle = 'rgba(255, 248, 225, 0.82)';

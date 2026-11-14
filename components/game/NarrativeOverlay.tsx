@@ -509,9 +509,24 @@ export function NarrativeOverlay({
   if (stage === 'vaitarani_hub' || stage === 'opening_wake') {
     const foldedPageLooked = storyFlags.looks.includes('boat_folded_page');
     return (
-      <div className="fixed inset-0 z-50 bg-[#060609] flex flex-col justify-between p-6 md:p-10 overflow-y-auto select-none">
+      <div
+        data-testid="vaitarani-ash-hub"
+        className="fixed inset-0 z-50 bg-[#060609] flex flex-col justify-between p-6 md:p-10 overflow-y-auto select-none"
+      >
+        {/* Full-bleed Vaitarani Simple Ash Hub Living MP4 + Baked Dark-Ash Floor Artwork (ol56bv) */}
+        <video
+          data-testid="vaitarani-hub-bg-video"
+          src={GAME_ASSETS.arenaVideos.ashHubRiver}
+          poster={GAME_ASSETS.chambers.vaitaraniAshHub}
+          autoPlay
+          loop
+          muted
+          playsInline
+          className="fixed inset-0 w-full h-full object-cover opacity-45 pointer-events-none z-0"
+        />
+
         {/* Top Bar: Lantern State, Difficulty Selector & Story Flags */}
-        <div className="max-w-6xl w-full mx-auto flex flex-wrap items-center justify-between gap-4 border-b border-[#c89d46]/30 pb-3.5">
+        <div className="relative z-10 max-w-6xl w-full mx-auto flex flex-wrap items-center justify-between gap-4 border-b border-[#c89d46]/30 pb-3.5 bg-[#09080c]/75 px-4 py-2.5">
           <div className="flex items-center gap-3">
             <span
               className="w-3.5 h-3.5 rounded-full"
@@ -561,20 +576,15 @@ export function NarrativeOverlay({
         </div>
 
         {/* Center Boat Scene */}
-        <div className="max-w-6xl w-full mx-auto my-auto grid grid-cols-1 lg:grid-cols-12 gap-8 items-start py-5">
-          {/* Boat Visual, Lantern Glow & Previous Run Summary */}
+        <div className="relative z-10 max-w-6xl w-full mx-auto my-auto grid grid-cols-1 lg:grid-cols-12 gap-8 items-start py-5">
+          {/* Vaitarani Simple Ash Hub Visual (ol56bv.png + Ash_drifting_across_river_landscape_2b693e5d.mp4) & Previous Run Summary */}
           <div className="lg:col-span-5 space-y-4">
             <div className="relative border border-[#c89d46]/50 bg-[#0c0a0e] overflow-hidden shadow-[0_24px_80px_rgba(0,0,0,0.95)]">
               <img
-                src={GAME_ASSETS.portraits.savitri}
-                alt="Savitri's Boat on the Vaitarani River"
-                className="w-full h-64 md:h-80 object-cover object-top"
-              />
-              <div
-                className="absolute inset-0 pointer-events-none"
-                style={{
-                  background: `radial-gradient(circle at 38% 58%, ${lantern.glowColor} 0%, rgba(6,6,10,0.82) 78%)`,
-                }}
+                data-testid="vaitarani-hub-card-img"
+                src={GAME_ASSETS.chambers.vaitaraniAshHub}
+                alt="Vaitarani Simple Ash Hub Sanctuary"
+                className="w-full h-64 md:h-80 object-cover object-center"
               />
               <div className="absolute bottom-3 left-3 right-3 p-3.5 bg-[#0b090d]/92 border border-[#c89d46]/40 flex items-start gap-3">
                 <img

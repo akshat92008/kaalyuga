@@ -380,6 +380,31 @@ function bindVideoGestureUnlock(): void {
   window.addEventListener('keydown', resumeActiveVideo, { passive: true });
 }
 
+export function prewarmArenaVideo(videoUrl: string | undefined): void {
+  if (typeof window === 'undefined' || typeof document === 'undefined' || !videoUrl) {
+    return;
+  }
+  bindVideoGestureUnlock();
+  if (arenaVideoPool.has(videoUrl)) return;
+  const video = document.createElement('video');
+  video.crossOrigin = 'anonymous';
+  video.muted = true;
+  video.defaultMuted = true;
+  video.loop = true;
+  video.playsInline = true;
+  video.preload = 'auto';
+  video.src = encodeURI(videoUrl);
+  const tryStart = () => {
+    if (currentPlayingVideoUrl === videoUrl && video.paused) {
+      video.play().catch(() => {});
+    }
+  };
+  video.addEventListener('loadeddata', tryStart);
+  video.addEventListener('canplay', tryStart);
+  video.load();
+  arenaVideoPool.set(videoUrl, video);
+}
+
 export function getOrStartArenaVideo(videoUrl: string | undefined, paused: boolean = false): HTMLVideoElement | null {
   if (typeof window === 'undefined' || typeof document === 'undefined' || !videoUrl) {
     return null;
@@ -614,6 +639,31 @@ export function renderIsometricChamberPlatform(
         ctx.restore();
       }
       ctx.restore();
+
+      // 4.15. 2x1 Vedic Chained Gate Archway (d647kw...png: Frame 0 = Chained & Padlocked, Frame 1 = Shattered Chains & Open Crimson Portal)
+      if (gatesAsset && gatesAsset.frames.length >= 2) {
+        const gateFrameIdx = isChamberCleared ? 1 : 0;
+        const gf = gatesAsset.frames[gateFrameIdx] || gatesAsset.frames[0];
+        const archH = 114;
+        const archW = (gf.sw / Math.max(1, gf.sh)) * archH;
+        ctx.save();
+        ctx.translate(gx, gy + 10);
+        if (gIdx === 1) {
+          ctx.scale(-1, 1);
+        }
+        ctx.drawImage(
+          gatesAsset.cleanCanvas,
+          gf.sx,
+          gf.sy,
+          gf.sw,
+          gf.sh,
+          -archW * 0.5,
+          -archH * 0.86,
+          archW,
+          archH
+        );
+        ctx.restore();
+      }
 
       // 4.2. Grounded Next-Path Reward Sigil & Path Inscription (Appears once the chamber is cleared so nothing floats in the air during combat!)
       if (isChamberCleared && rewardOrbsAsset && rewardOrbsAsset.frames.length > 0) {

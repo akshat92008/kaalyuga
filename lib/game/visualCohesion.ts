@@ -10,6 +10,14 @@
 // ============================================================================
 
 import type { StaffStance } from './rules';
+import {
+  drawAdditiveFlipbookCell,
+  PHASE2_VFX_SHEETS,
+  PARASHU_FLIPBOOK_ROWS,
+  PARRY_SPARKS_FLIPBOOK_ROWS,
+  DUNDUBHI_FLIPBOOK_ROWS,
+  VRIKODARA_FLIPBOOK_ROWS,
+} from './vfxFlipbook';
 
 export type BattleScarKind =
   | 'blood_splatter'
@@ -404,81 +412,44 @@ export function renderBattleScarsOnFloor(
     ctx.globalAlpha = alpha;
 
     if (s.kind === 'blood_splatter') {
-      // Dark arterial pool in isometric foreshortening
-      ctx.save();
-      ctx.scale(1, 0.52);
-      ctx.rotate(s.angle);
-      const grad = ctx.createRadialGradient(0, 0, s.radius * 0.1, 0, 0, s.radius);
-      grad.addColorStop(0, s.secondaryColor);
-      grad.addColorStop(0.65, s.primaryColor);
-      grad.addColorStop(1, 'rgba(42, 4, 8, 0)');
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.ellipse(s.radius * 0.18, 0, s.radius, s.radius * 0.68, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-
-      // Directional arterial droplets
-      ctx.fillStyle = s.primaryColor;
-      for (let d = 0; d < s.droplets.length; d++) {
-        const drop = s.droplets[d];
-        ctx.beginPath();
-        ctx.ellipse(
-          drop.offsetX,
-          drop.offsetY,
-          drop.radiusX,
-          drop.radiusY,
-          drop.rotation,
-          0,
-          Math.PI * 2
-        );
-        ctx.fill();
-      }
+      drawAdditiveFlipbookCell(ctx, {
+        sheetSpec: PHASE2_VFX_SHEETS.parryAndHitSparks4x2,
+        col: s.id % 4,
+        row: PARRY_SPARKS_FLIPBOOK_ROWS.DIRECTIONAL_HIT_SPLATTER,
+        x: 0,
+        y: 0,
+        width: s.radius * 2.8,
+        height: s.radius * 2.2,
+        rotationRad: s.angle,
+        scaleY: 0.56,
+        alpha: Math.min(0.75, alpha * 0.85),
+      });
     } else if (s.kind === 'scorch_crater') {
-      // Stage B (Step 12): Subtle dark charred stone mark without glowing orange hazard rings
-      ctx.save();
-      ctx.scale(1, 0.52);
-      const cGrad = ctx.createRadialGradient(0, 0, 2, 0, 0, s.radius * 0.85);
-      cGrad.addColorStop(0, 'rgba(10, 7, 6, 0.64)');
-      cGrad.addColorStop(0.62, 'rgba(20, 14, 12, 0.42)');
-      cGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-      ctx.fillStyle = cGrad;
-      ctx.beginPath();
-      ctx.arc(0, 0, s.radius * 0.85, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
+      drawAdditiveFlipbookCell(ctx, {
+        sheetSpec: PHASE2_VFX_SHEETS.vrikodaraVacuumAndSlag4x2,
+        col: s.id % 4,
+        row: VRIKODARA_FLIPBOOK_ROWS.MOLTEN_SLAG_GEYSERS,
+        x: 0,
+        y: 0,
+        width: s.radius * 2.6,
+        height: s.radius * 2.2,
+        rotationRad: s.angle,
+        scaleY: 0.54,
+        alpha: Math.min(0.65, alpha * 0.72),
+      });
     } else if (s.kind === 'shattered_armor') {
-      for (let d = 0; d < s.droplets.length; d++) {
-        const shard = s.droplets[d];
-        ctx.save();
-        ctx.translate(shard.offsetX, shard.offsetY);
-        ctx.rotate(shard.rotation);
-        ctx.fillStyle = d % 2 === 0 ? s.primaryColor : s.secondaryColor;
-        ctx.strokeStyle = 'rgba(0,0,0,0.85)';
-        ctx.lineWidth = 0.9;
-        ctx.beginPath();
-        ctx.moveTo(-shard.radiusX, -shard.radiusY * 0.5);
-        ctx.lineTo(shard.radiusX * 0.8, -shard.radiusY);
-        ctx.lineTo(shard.radiusX, shard.radiusY * 0.7);
-        ctx.lineTo(-shard.radiusX * 0.6, shard.radiusY);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-        ctx.restore();
-      }
-    } else {
-      // 'footstep_ash'
-      ctx.save();
-      ctx.scale(1, 0.5);
-      ctx.rotate(s.angle);
-      ctx.fillStyle = s.primaryColor;
-      ctx.strokeStyle = s.secondaryColor;
-      ctx.lineWidth = 0.8;
-      ctx.beginPath();
-      ctx.ellipse(0, 0, s.radius, s.radius * 0.58, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-      ctx.restore();
+      drawAdditiveFlipbookCell(ctx, {
+        sheetSpec: PHASE2_VFX_SHEETS.dundubhiShockwaveAndShatter4x2,
+        col: s.id % 4,
+        row: DUNDUBHI_FLIPBOOK_ROWS.PILLAR_SANDSTONE_SHATTER,
+        x: 0,
+        y: 0,
+        width: s.radius * 2.6,
+        height: s.radius * 2.2,
+        rotationRad: s.angle,
+        scaleY: 0.58,
+        alpha: Math.min(0.72, alpha * 0.8),
+      });
     }
 
     ctx.restore();
@@ -507,6 +478,28 @@ function getSharedShadowStampCanvas(): HTMLCanvasElement | null {
   return cachedShadowStampCanvas;
 }
 
+let cachedSaffronFootStampCanvas: HTMLCanvasElement | null = null;
+
+function getSharedSaffronFootStampCanvas(): HTMLCanvasElement | null {
+  if (typeof document === 'undefined') return null;
+  if (cachedSaffronFootStampCanvas) return cachedSaffronFootStampCanvas;
+  const c = document.createElement('canvas');
+  c.width = 64;
+  c.height = 64;
+  const sCtx = c.getContext('2d');
+  if (sCtx) {
+    const grad = sCtx.createRadialGradient(32, 32, 16, 32, 32, 30);
+    grad.addColorStop(0, 'rgba(255, 179, 71, 0)');
+    grad.addColorStop(0.55, 'rgba(255, 179, 71, 0.42)');
+    grad.addColorStop(0.82, 'rgba(255, 179, 71, 0.74)');
+    grad.addColorStop(1, 'rgba(255, 179, 71, 0)');
+    sCtx.fillStyle = grad;
+    sCtx.fillRect(0, 0, 64, 64);
+  }
+  cachedSaffronFootStampCanvas = c;
+  return cachedSaffronFootStampCanvas;
+}
+
 export function drawGrounded3DContactShadow(
   ctx: CanvasRenderingContext2D,
   params: {
@@ -516,53 +509,55 @@ export function drawGrounded3DContactShadow(
     elevationY: number;
     lightSourceX: number;
     accentColor?: string;
+    isPlayer?: boolean;
   }
 ): void {
   const shadow = computeGroundedContactShadow(params);
   const stamp = getSharedShadowStampCanvas();
+  if (!stamp) return;
 
   ctx.save();
   ctx.translate(params.worldX, params.worldY);
 
-  if (stamp) {
-    // 1. Directional skewed soft penumbra (zero gradient allocation)
-    ctx.save();
-    ctx.translate(shadow.directionalOffsetX, shadow.directionalOffsetY);
-    ctx.transform(1, 0, shadow.directionalSkewX, 1, 0, 0);
-    ctx.globalAlpha = shadow.penumbraAlpha;
-    ctx.drawImage(
-      stamp,
-      -shadow.penumbraRadiusX,
-      -shadow.penumbraRadiusY,
-      shadow.penumbraRadiusX * 2,
-      shadow.penumbraRadiusY * 2
-    );
-    ctx.restore();
-
-    // 2. Tight boot-level AO core
-    ctx.save();
-    ctx.globalAlpha = Math.min(0.9, shadow.aoCoreAlpha * 1.1);
-    const coreRx = shadow.aoCoreRadiusX * 1.15;
-    const coreRy = shadow.aoCoreRadiusY * 1.15;
-    ctx.drawImage(stamp, -coreRx, -coreRy, coreRx * 2, coreRy * 2);
-    ctx.restore();
-  } else {
-    ctx.fillStyle = `rgba(0, 0, 0, ${shadow.aoCoreAlpha.toFixed(2)})`;
-    ctx.beginPath();
-    ctx.ellipse(0, 0, shadow.aoCoreRadiusX, shadow.aoCoreRadiusY, 0, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  // 3. Crisp rim contact ring under actor
-  const rimCol = params.accentColor || '#ff7b29';
+  // 1. Directional skewed soft penumbra (clear dark ground shadow)
   ctx.save();
-  ctx.globalAlpha = Math.max(0.2, shadow.warmBounceAlpha * 0.65);
-  ctx.strokeStyle = rimCol;
-  ctx.lineWidth = 1.25;
-  ctx.beginPath();
-  ctx.ellipse(0, 0, shadow.aoCoreRadiusX * 0.96, shadow.aoCoreRadiusY * 0.96, 0, 0, Math.PI * 2);
-  ctx.stroke();
+  ctx.translate(shadow.directionalOffsetX, shadow.directionalOffsetY);
+  ctx.transform(1, 0, shadow.directionalSkewX, 1, 0, 0);
+  ctx.globalAlpha = Math.min(0.62, shadow.penumbraAlpha * 1.18);
+  ctx.drawImage(
+    stamp,
+    -shadow.penumbraRadiusX,
+    -shadow.penumbraRadiusY,
+    shadow.penumbraRadiusX * 2,
+    shadow.penumbraRadiusY * 2
+  );
   ctx.restore();
+
+  // 2. Tight boot-level AO core
+  ctx.save();
+  ctx.globalAlpha = Math.min(0.94, shadow.aoCoreAlpha * 1.15);
+  const coreRx = shadow.aoCoreRadiusX * 1.18;
+  const coreRy = shadow.aoCoreRadiusY * 1.18;
+  ctx.drawImage(stamp, -coreRx, -coreRy, coreRx * 2, coreRy * 2);
+  ctx.restore();
+
+  // 3. Subtle saffron (#ffb347) foot contact ring on floor Layer 2 for Rudra so player never loses center in 8-enemy swarms
+  const isRudraFootRing =
+    params.isPlayer ||
+    params.accentColor === '#ffb347' ||
+    params.accentColor === '#d4a548';
+  if (isRudraFootRing) {
+    const saffronStamp = getSharedSaffronFootStampCanvas();
+    if (saffronStamp) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 0.68;
+      const ringRx = params.baseRadius * 1.48;
+      const ringRy = params.baseRadius * 0.68;
+      ctx.drawImage(saffronStamp, -ringRx, -ringRy, ringRx * 2, ringRy * 2);
+      ctx.restore();
+    }
+  }
 
   ctx.restore();
 }
@@ -572,98 +567,24 @@ export function renderWeaponBoneSlashRibbon(
   mesh: WeaponSlashRibbonMesh,
   alpha: number
 ): void {
-  if (mesh.nodes.length < 3 || alpha <= 0.01) return;
-
+  if (mesh.nodes.length < 2 || alpha <= 0.01) return;
+  const midNode = mesh.nodes[Math.floor(mesh.nodes.length * 0.5)];
   const first = mesh.nodes[0];
   const last = mesh.nodes[mesh.nodes.length - 1];
+  const slashAngle = Math.atan2(last.spineY - first.spineY, last.spineX - first.spineX);
+  const frameCol = Math.min(2, Math.floor(alpha * 2.99));
 
-  // Layer 0: Hand-Painted Dark Obsidian Ink Outer Underlay (matches 2D sprite sheet ink style)
-  ctx.save();
-  ctx.beginPath();
-  for (let i = 0; i < mesh.nodes.length; i++) {
-    const n = mesh.nodes[i];
-    if (i === 0) ctx.moveTo(n.outerX, n.outerY);
-    else ctx.lineTo(n.outerX, n.outerY);
-  }
-  for (let i = mesh.nodes.length - 1; i >= 0; i--) {
-    const n = mesh.nodes[i];
-    ctx.lineTo(n.innerX, n.innerY);
-  }
-  ctx.closePath();
-  ctx.fillStyle = `rgba(18, 8, 5, ${Math.min(0.68, alpha * 0.65).toFixed(3)})`;
-  ctx.fill();
-  ctx.restore();
-
-  ctx.save();
-  ctx.globalCompositeOperation = 'screen';
-
-  // Layer 1: Outer Crimson/Amber Agni Plasma Distortion Ribbon
-  ctx.beginPath();
-  for (let i = 0; i < mesh.nodes.length; i++) {
-    const n = mesh.nodes[i];
-    if (i === 0) ctx.moveTo(n.outerX, n.outerY);
-    else ctx.lineTo(n.outerX, n.outerY);
-  }
-  for (let i = mesh.nodes.length - 1; i >= 0; i--) {
-    const n = mesh.nodes[i];
-    ctx.lineTo(n.innerX, n.innerY);
-  }
-  ctx.closePath();
-
-  const grad = ctx.createLinearGradient(first.spineX, first.spineY, last.spineX, last.spineY);
-  grad.addColorStop(0, 'rgba(255, 82, 36, 0)');
-  grad.addColorStop(0.28, mesh.outerGlowColor);
-  grad.addColorStop(0.72, mesh.plasmaColor);
-  grad.addColorStop(1, mesh.coreColor);
-
-  // Stage B (Step 12): Cap screen-blended ribbon alpha so stacked slashes never wash out Rudra
-  const cappedAlpha = Math.min(0.68, alpha * 0.72);
-  ctx.globalAlpha = cappedAlpha;
-  ctx.fillStyle = grad;
-  ctx.fill();
-
-  // Layer 2: Razor-Sharp White-Gold Leading Edge Blade Spine + Inner Streak
-  ctx.beginPath();
-  for (let i = 0; i < mesh.nodes.length; i++) {
-    const n = mesh.nodes[i];
-    const leadX = n.spineX + (n.outerX - n.spineX) * 0.64;
-    const leadY = n.spineY + (n.outerY - n.spineY) * 0.64;
-    if (i === 0) ctx.moveTo(leadX, leadY);
-    else ctx.lineTo(leadX, leadY);
-  }
-  ctx.strokeStyle = mesh.coreColor;
-  ctx.lineWidth = 2.8;
-  ctx.globalAlpha = Math.min(0.76, alpha * 0.82);
-  ctx.stroke();
-
-  // Secondary parallel inner Agni speed-arc
-  ctx.beginPath();
-  for (let i = 2; i < mesh.nodes.length; i++) {
-    const n = mesh.nodes[i];
-    const innerArcX = n.spineX + (n.innerX - n.spineX) * 0.35;
-    const innerArcY = n.spineY + (n.innerY - n.spineY) * 0.35;
-    if (i === 2) ctx.moveTo(innerArcX, innerArcY);
-    else ctx.lineTo(innerArcX, innerArcY);
-  }
-  ctx.strokeStyle = mesh.plasmaColor;
-  ctx.lineWidth = 1.5;
-  ctx.globalAlpha = Math.min(0.62, alpha * 0.65);
-  ctx.stroke();
-
-  // Layer 3: Leading-Edge Blade Tip Star Flare
-  if (last) {
-    const tipGrad = ctx.createRadialGradient(mesh.tipX, mesh.tipY, 1, mesh.tipX, mesh.tipY, 15);
-    tipGrad.addColorStop(0, mesh.coreColor);
-    tipGrad.addColorStop(0.45, mesh.plasmaColor);
-    tipGrad.addColorStop(1, 'rgba(255, 82, 36, 0)');
-    ctx.fillStyle = tipGrad;
-    ctx.globalAlpha = Math.min(0.72, alpha * 0.76);
-    ctx.beginPath();
-    ctx.arc(mesh.tipX, mesh.tipY, 15, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  ctx.restore();
+  drawAdditiveFlipbookCell(ctx, {
+    sheetSpec: PHASE2_VFX_SHEETS.parashuSlashes3x3,
+    col: frameCol,
+    row: PARASHU_FLIPBOOK_ROWS.LIGHT_CRESCENT_SWEEPS,
+    x: midNode.spineX,
+    y: midNode.spineY,
+    width: 118,
+    height: 118,
+    rotationRad: slashAngle,
+    alpha: Math.min(0.92, alpha),
+  });
 }
 
 export function renderWeaponTipStarburstGlint(
@@ -671,36 +592,19 @@ export function renderWeaponTipStarburstGlint(
   glint: ReturnType<typeof computeWeaponTipGlintPosition>,
   nowMs: number
 ): void {
-  const rot = nowMs * 0.0055;
-  const rOuter = glint.starRadius;
-  const rInner = rOuter * 0.24;
-
-  ctx.save();
-  ctx.globalCompositeOperation = 'screen';
-  ctx.translate(glint.x, glint.y);
-
-  // Outer halo ring
-  ctx.strokeStyle = glint.primaryColor;
-  ctx.lineWidth = 1.8;
-  ctx.globalAlpha = 0.85;
-  ctx.beginPath();
-  ctx.arc(0, 0, rOuter * 0.62, 0, Math.PI * 2);
-  ctx.stroke();
-
-  // 4-Point Razor Starburst Flare (Sekiro / God of War weapon-tip threat glint)
-  ctx.rotate(rot);
-  ctx.fillStyle = glint.coreColor;
-  ctx.beginPath();
-  for (let i = 0; i < 8; i++) {
-    const ang = (i * Math.PI) / 4;
-    const r = i % 2 === 0 ? rOuter * (i % 4 === 0 ? 1.25 : 0.85) : rInner;
-    const px = Math.cos(ang) * r;
-    const py = Math.sin(ang) * r;
-    if (i === 0) ctx.moveTo(px, py);
-    else ctx.lineTo(px, py);
-  }
-  ctx.closePath();
-  ctx.fill();
-
-  ctx.restore();
+  const frameCol = Math.floor(nowMs * 0.012) % 4;
+  drawAdditiveFlipbookCell(ctx, {
+    sheetSpec: PHASE2_VFX_SHEETS.parryAndHitSparks4x2,
+    col: frameCol,
+    row:
+      glint.primaryColor === '#ffd86b'
+        ? PARRY_SPARKS_FLIPBOOK_ROWS.VEDIC_PARRY_FLASH
+        : PARRY_SPARKS_FLIPBOOK_ROWS.DIRECTIONAL_HIT_SPLATTER,
+    x: glint.x,
+    y: glint.y,
+    width: glint.starRadius * 3.4,
+    height: glint.starRadius * 3.4,
+    rotationRad: nowMs * 0.0055,
+    alpha: 0.92,
+  });
 }

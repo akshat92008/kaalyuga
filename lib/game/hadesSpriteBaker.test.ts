@@ -104,15 +104,15 @@ describe('Hades 2D Sprite Sheet Baker & Texture Re-Grader', () => {
     );
   });
 
-  it('maps all 8 distinct 3D enemy models across enemy types and chamber variants', () => {
-    assert.equal(selectSlotKeyFromInput('wolf_guai', 0), 'grunt_ghoul');
-    assert.equal(selectSlotKeyFromInput('fire_monk', 0), 'witch_oracle');
-    assert.equal(selectSlotKeyFromInput('stone_golem', 0), 'club_brute');
-    assert.equal(selectSlotKeyFromInput('stone_golem', 1), 'axe_guardian');
-    assert.equal(selectSlotKeyFromInput('stone_golem', 2), 'shield_gladiator');
-    assert.equal(selectSlotKeyFromInput('stone_golem', 3, 'skull_warlord'), 'skullclad_warden');
-    assert.equal(selectSlotKeyFromInput('furnace_titan', 0), 'bomber_guardian');
-    assert.equal(selectSlotKeyFromInput('furnace_titan', 1), 'horned_warbringer');
+  it('maps the clean 6-model Act 1 regular mob roster across enemy types and chamber variants', () => {
+    assert.equal(selectSlotKeyFromInput('charnel_ghoul', 0), 'grunt_ghoul');
+    assert.equal(selectSlotKeyFromInput('ashen_oracle', 0), 'witch_oracle');
+    assert.equal(selectSlotKeyFromInput('ironmaw_gladiator', 0), 'shield_gladiator');
+    assert.equal(selectSlotKeyFromInput('ironmaw_gladiator', 1), 'axe_guardian');
+    assert.equal(selectSlotKeyFromInput('ironmaw_gladiator', 2), 'horned_warbringer');
+    assert.equal(selectSlotKeyFromInput('bloodmaw_brute', 0), 'club_brute');
+    assert.equal(selectSlotKeyFromInput('bloodmaw_brute', 1), 'horned_warbringer');
+    assert.equal(selectSlotKeyFromInput('bloodmaw_brute', 2), 'axe_guardian');
   });
 
   it('Stage B: unifies studio lighting rig, outline thickness (#120806, 2.0px), and dark-ash/ember floor grade', () => {

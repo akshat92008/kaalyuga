@@ -60,7 +60,7 @@ export interface HudSnapshot {
     type: string;
     aiState: string;
     name: string;
-    chineseTitle: string;
+    sanskritTitle: string;
     hp: number;
     displayHp: number;
     maxHp: number;

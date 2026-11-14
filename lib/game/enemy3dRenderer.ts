@@ -14,6 +14,11 @@ import { loadFbxCached, simplifyBufferGeometry } from './meshSimplifier';
 const sharedAnimFbxCache = new Map<string, Promise<THREE.Group | null>>();
 
 export type RegularEnemy3DKind =
+  | 'charnel_ghoul'
+  | 'ashen_oracle'
+  | 'ironmaw_gladiator'
+  | 'bloodmaw_brute'
+  | 'semi_boss_bloodforge'
   | 'wolf_guai'
   | 'fire_monk'
   | 'stone_golem'
@@ -40,7 +45,7 @@ export interface Enemy3DRenderInput {
   isParrying: boolean;
 }
 
-type EnemyWeaponKind = 'minotaur_axe' | 'trident_axe' | 'none';
+type EnemyWeaponKind = 'minotaur_axe' | 'trident_axe' | 'crescent_reaver' | 'none';
 
 interface EnemyModelSlot {
   key: string;
@@ -48,6 +53,7 @@ interface EnemyModelSlot {
   textureFbxUrl: string;
   diffuseUrl: string;
   weaponKind: EnemyWeaponKind;
+  hasLeftShield?: boolean;
   animUrls: Record<Enemy3DAnimState, string>;
   rimColor: number;
   rimIntensity: number;
@@ -64,13 +70,16 @@ const MODEL_BASE = '/new_3d_assets/3D Models';
 const MINOTAUR_AXE_FBX_URL = `${MODEL_BASE}/Weapons/Minotaur_War_Axe_20261111/Meshy_AI_Minotaur_War_Axe_20261111_texture.fbx`;
 const TRIDENT_AXE_FBX_URL = `${MODEL_BASE}/Weapons/Bloodforged_Trident_Axe_20261025/Meshy_AI_Bloodforged_Trident_Axe_20261025_texture.fbx`;
 const TRIDENT_AXE_TEX_URL = `/models/Meshy_AI_Bloodforged_Trident_A_1025041928_texture_fbx/Meshy_AI_Bloodforged_Trident_A_1025041928_texture.png`;
+const CRESCENT_REAVER_FBX_URL = `${MODEL_BASE}/Crescent_Reaver/Meshy_AI_Crescent_Reaver_20261111_texture_fbx/Meshy_AI_Crescent_Reaver_20261111_texture.fbx`;
+const CRESCENT_REAVER_TEX_URL = `${MODEL_BASE}/Crescent_Reaver/Meshy_AI_Crescent_Reaver_20261111_texture_fbx/Meshy_AI_Crescent_Reaver_20261111_texture.png`;
+const MOLTEN_ONI_AEGIS_FBX_URL = `${MODEL_BASE}/Molten_Oni_Aegis/Meshy_AI_Molten_Oni_Aegis_20261114_texture_fbx/Meshy_AI_Molten_Oni_Aegis_20261114_texture.fbx`;
+const MOLTEN_ONI_AEGIS_TEX_URL = `${MODEL_BASE}/Molten_Oni_Aegis/Meshy_AI_Molten_Oni_Aegis_20261114_texture_fbx/Meshy_AI_Molten_Oni_Aegis_20261114_texture.png`;
 
 /**
- * Curated, zero-lag roster of verified 3D enemy models with 1:1 UV texture maps
- * and real 3D weapons (Minotaur_War_Axe or Bloodforged_Trident_Axe).
- * Only the 1-2 enemy rigs present in the current chamber are lazy-loaded.
+ * Curated Phase 3 Act 1 regular mob roster with distinct rigged/textured enemies and 1:1 UV maps.
+ * Note: Crimson_Skull_Warlord is strictly reserved for Vrikodara (Act 1 Finale Boss) and never spawned here.
  */
-const ENEMY_MODEL_SLOTS: Record<
+export const ENEMY_MODEL_SLOTS: Record<
   string,
   Omit<EnemyModelSlot, 'group' | 'mixer' | 'actions' | 'ready' | 'standingHipY'>
 > = {
@@ -79,17 +88,17 @@ const ENEMY_MODEL_SLOTS: Record<
     generateFbxUrl: `${ANIM_BASE}/Great Sword Pack/Meshy_AI_Bleeding_Crown_Ghoul_20261111_generate.fbx`,
     textureFbxUrl: `${MODEL_BASE}/Bleeding_Crown_Ghoul/Meshy_AI_Bleeding_Crown_Ghoul_20261111_texture_fbx/Meshy_AI_Bleeding_Crown_Ghoul_20261111_texture.fbx`,
     diffuseUrl: `${MODEL_BASE}/Bleeding_Crown_Ghoul/Meshy_AI_Bleeding_Crown_Ghoul_20261111_texture_fbx/Meshy_AI_Bleeding_Crown_Ghoul_20261111_texture.png`,
-    weaponKind: 'minotaur_axe',
+    weaponKind: 'crescent_reaver',
     animUrls: {
-      idle: `${ANIM_BASE}/Pro Melee Axe Pack/standing idle.fbx`,
-      chase: `${ANIM_BASE}/Pro Melee Axe Pack/standing run forward.fbx`,
-      windup: `${ANIM_BASE}/Pro Melee Axe Pack/standing melee attack backhand.fbx`,
-      attack: `${ANIM_BASE}/Pro Melee Axe Pack/standing melee combo attack ver. 1.fbx`,
-      hurt: `${ANIM_BASE}/Pro Melee Axe Pack/standing react large from right.fbx`,
-      death: `${ANIM_BASE}/Pro Magic Pack/Standing React Death Backward.fbx`,
+      idle: `${ANIM_BASE}/Great Sword Pack/great sword idle.fbx`,
+      chase: `${ANIM_BASE}/Great Sword Pack/great sword run.fbx`,
+      windup: `${ANIM_BASE}/Great Sword Pack/great sword jump attack.fbx`,
+      attack: `${ANIM_BASE}/Great Sword Pack/great sword slash.fbx`,
+      hurt: `${ANIM_BASE}/Great Sword Pack/great sword impact.fbx`,
+      death: `${ANIM_BASE}/Great Sword Pack/two handed sword death.fbx`,
     },
-    rimColor: 0xffffff,
-    rimIntensity: 0.0,
+    rimColor: 0x94a3b8,
+    rimIntensity: 0.72,
     scaleMultiplier: 1.02,
   },
   witch_oracle: {
@@ -106,8 +115,8 @@ const ENEMY_MODEL_SLOTS: Record<
       hurt: `${ANIM_BASE}/Pro Magic Pack/Standing React Small From Front.fbx`,
       death: `${ANIM_BASE}/Pro Magic Pack/Standing React Death Forward.fbx`,
     },
-    rimColor: 0xffffff,
-    rimIntensity: 0.0,
+    rimColor: 0xef4444,
+    rimIntensity: 0.72,
     scaleMultiplier: 1.0,
   },
   club_brute: {
@@ -117,23 +126,24 @@ const ENEMY_MODEL_SLOTS: Record<
     diffuseUrl: `${MODEL_BASE}/Bloodmaw_Brute/Meshy_AI_Bloodmaw_Brute_20261111_texture_fbx/Meshy_AI_Bloodmaw_Brute_20261111_texture.png`,
     weaponKind: 'minotaur_axe',
     animUrls: {
-      idle: `${ANIM_BASE}/Pro Melee Axe Pack/standing idle.fbx`,
-      chase: `${ANIM_BASE}/Pro Melee Axe Pack/standing run forward.fbx`,
-      windup: `${ANIM_BASE}/Pro Melee Axe Pack/standing melee attack downward.fbx`,
-      attack: `${ANIM_BASE}/Pro Melee Axe Pack/standing melee attack 360 high.fbx`,
-      hurt: `${ANIM_BASE}/Pro Melee Axe Pack/standing react large from left.fbx`,
-      death: `${ANIM_BASE}/Pro Magic Pack/Standing React Death Backward.fbx`,
+      idle: `${ANIM_BASE}/Creature Pack/mutant breathing idle.fbx`,
+      chase: `${ANIM_BASE}/Creature Pack/mutant run.fbx`,
+      windup: `${ANIM_BASE}/Creature Pack/mutant jump attack.fbx`,
+      attack: `${ANIM_BASE}/Creature Pack/mutant swiping.fbx`,
+      hurt: `${ANIM_BASE}/Creature Pack/mutant roaring.fbx`,
+      death: `${ANIM_BASE}/Creature Pack/mutant dying.fbx`,
     },
-    rimColor: 0xffffff,
-    rimIntensity: 0.0,
-    scaleMultiplier: 1.08,
+    rimColor: 0xef4444,
+    rimIntensity: 0.74,
+    scaleMultiplier: 1.12,
   },
   shield_gladiator: {
     key: 'shield_gladiator',
     generateFbxUrl: `${ANIM_BASE}/Pro Melee Axe Pack/Meshy_AI_Ironhide_Warlord_20261111_generate.fbx`,
     textureFbxUrl: `${MODEL_BASE}/Ironmaw_Gladiator/Meshy_AI_Ironmaw_Gladiator_20261111_texture_fbx/Meshy_AI_Ironmaw_Gladiator_20261111_texture.fbx`,
     diffuseUrl: `${MODEL_BASE}/Ironmaw_Gladiator/Meshy_AI_Ironmaw_Gladiator_20261111_texture_fbx/Meshy_AI_Ironmaw_Gladiator_20261111_texture.png`,
-    weaponKind: 'trident_axe',
+    weaponKind: 'minotaur_axe',
+    hasLeftShield: true,
     animUrls: {
       idle: `${ANIM_BASE}/Pro Melee Axe Pack/standing block idle.fbx`,
       chase: `${ANIM_BASE}/Pro Melee Axe Pack/standing walk forward.fbx`,
@@ -142,8 +152,8 @@ const ENEMY_MODEL_SLOTS: Record<
       hurt: `${ANIM_BASE}/Pro Melee Axe Pack/standing block react large.fbx`,
       death: `${ANIM_BASE}/Pro Magic Pack/Standing React Death Backward.fbx`,
     },
-    rimColor: 0xffffff,
-    rimIntensity: 0.0,
+    rimColor: 0x94a3b8,
+    rimIntensity: 0.74,
     scaleMultiplier: 1.10,
   },
   axe_guardian: {
@@ -160,8 +170,8 @@ const ENEMY_MODEL_SLOTS: Record<
       hurt: `${ANIM_BASE}/Pro Melee Axe Pack/standing react large from left.fbx`,
       death: `${ANIM_BASE}/Pro Magic Pack/Standing React Death Backward.fbx`,
     },
-    rimColor: 0xffffff,
-    rimIntensity: 0.0,
+    rimColor: 0xef4444,
+    rimIntensity: 0.72,
     scaleMultiplier: 1.08,
   },
   horned_warbringer: {
@@ -169,7 +179,7 @@ const ENEMY_MODEL_SLOTS: Record<
     generateFbxUrl: `${ANIM_BASE}/Pro Melee Axe Pack/Meshy_AI_Ironhide_Brute_20261111_generate.fbx`,
     textureFbxUrl: `${MODEL_BASE}/Horned_Warbringer/Meshy_AI_Horned_Warbringer_20261111_texture_fbx/Meshy_AI_Horned_Warbringer_20261111_texture.fbx`,
     diffuseUrl: `${MODEL_BASE}/Horned_Warbringer/Meshy_AI_Horned_Warbringer_20261111_texture_fbx/Meshy_AI_Horned_Warbringer_20261111_texture.png`,
-    weaponKind: 'trident_axe',
+    weaponKind: 'crescent_reaver',
     animUrls: {
       idle: `${ANIM_BASE}/Pro Melee Axe Pack/standing idle.fbx`,
       chase: `${ANIM_BASE}/Pro Melee Axe Pack/standing run forward.fbx`,
@@ -178,45 +188,9 @@ const ENEMY_MODEL_SLOTS: Record<
       hurt: `${ANIM_BASE}/Pro Melee Axe Pack/standing react large from right.fbx`,
       death: `${ANIM_BASE}/Pro Magic Pack/Standing React Death Backward.fbx`,
     },
-    rimColor: 0xffffff,
-    rimIntensity: 0.0,
+    rimColor: 0x94a3b8,
+    rimIntensity: 0.72,
     scaleMultiplier: 1.08,
-  },
-  skullclad_warden: {
-    key: 'skullclad_warden',
-    generateFbxUrl: `${ANIM_BASE}/Pro Melee Axe Pack/Meshy_AI_Ironhide_Warlord_20261111_generate.fbx`,
-    textureFbxUrl: `/models/Meshy_AI_Skullclad_Warlord_20261031_texture_fbx/Meshy_AI_Skullclad_Warlord_20261031_texture.fbx`,
-    diffuseUrl: `/models/Meshy_AI_Skullclad_Warlord_20261031_texture_fbx/Meshy_AI_Skullclad_Warlord_20261031_texture.png`,
-    weaponKind: 'minotaur_axe',
-    animUrls: {
-      idle: `${ANIM_BASE}/Pro Melee Axe Pack/standing idle.fbx`,
-      chase: `${ANIM_BASE}/Pro Melee Axe Pack/standing run forward.fbx`,
-      windup: `${ANIM_BASE}/Pro Melee Axe Pack/standing melee attack horizontal.fbx`,
-      attack: `${ANIM_BASE}/Pro Melee Axe Pack/standing melee combo attack ver. 1.fbx`,
-      hurt: `${ANIM_BASE}/Pro Melee Axe Pack/standing react large from right.fbx`,
-      death: `${ANIM_BASE}/Pro Magic Pack/Standing React Death Backward.fbx`,
-    },
-    rimColor: 0xffffff,
-    rimIntensity: 0.0,
-    scaleMultiplier: 1.08,
-  },
-  bomber_guardian: {
-    key: 'bomber_guardian',
-    generateFbxUrl: `${ANIM_BASE}/Pro Melee Axe Pack/Meshy_AI_Ironhide_Warlord_20261111_generate.fbx`,
-    textureFbxUrl: `/models/Meshy_AI_Molten_Warlord_20261031_texture_fbx/Meshy_AI_Molten_Warlord_20261031_texture.fbx`,
-    diffuseUrl: `/models/Meshy_AI_Molten_Warlord_20261031_texture_fbx/Meshy_AI_Molten_Warlord_20261031_texture.png`,
-    weaponKind: 'trident_axe',
-    animUrls: {
-      idle: `${ANIM_BASE}/Pro Melee Axe Pack/standing idle.fbx`,
-      chase: `${ANIM_BASE}/Pro Melee Axe Pack/standing walk forward.fbx`,
-      windup: `${ANIM_BASE}/Pro Melee Axe Pack/standing melee attack 360 high.fbx`,
-      attack: `${ANIM_BASE}/Pro Melee Axe Pack/standing melee attack downward.fbx`,
-      hurt: `${ANIM_BASE}/Pro Melee Axe Pack/standing block react large.fbx`,
-      death: `${ANIM_BASE}/Pro Magic Pack/Standing React Death Backward.fbx`,
-    },
-    rimColor: 0xffffff,
-    rimIntensity: 0.0,
-    scaleMultiplier: 1.12,
   },
 };
 
@@ -227,38 +201,58 @@ export function selectSlotKeyFromInput(
   trait?: EnemyTrait
 ): string {
   if (wardenRigKey) {
+    if (wardenRigKey in ENEMY_MODEL_SLOTS) {
+      return wardenRigKey as string;
+    }
     switch (wardenRigKey as string) {
+      case 'charnel_ghoul':
       case 'wolf_guai':
         return 'grunt_ghoul';
+      case 'ashen_oracle':
       case 'fire_monk':
         return 'witch_oracle';
-      case 'stone_golem':
-        return Math.abs(id) % 2 === 0 ? 'club_brute' : 'axe_guardian';
+      case 'ironmaw_gladiator':
       case 'shield_warden':
         return 'shield_gladiator';
+      case 'bloodmaw_brute':
+      case 'stone_golem':
+        return Math.abs(id) % 2 === 0 ? 'club_brute' : 'axe_guardian';
+      case 'kaliyuga_guardian':
       case 'skull_warlord':
-        return 'skullclad_warden';
+        return 'axe_guardian';
+      case 'horned_warbringer':
       case 'horned_warlord':
-        return 'horned_warbringer';
+      case 'semi_boss_bloodforge':
       case 'furnace_titan':
       case 'sovereign_titan':
-        return 'bomber_guardian';
+        return 'horned_warbringer';
     }
   }
   if (trait === 'vajra_shield') return 'shield_gladiator';
-  if (trait === 'agni_aura') return 'bomber_guardian';
+  if (trait === 'agni_aura') return 'horned_warbringer';
 
   switch (kind) {
+    case 'charnel_ghoul':
     case 'wolf_guai':
       return 'grunt_ghoul';
+    case 'ashen_oracle':
     case 'fire_monk':
       return 'witch_oracle';
+    case 'ironmaw_gladiator': {
+      const gladiatorSlots = ['shield_gladiator', 'axe_guardian', 'horned_warbringer'];
+      return gladiatorSlots[Math.abs(id) % gladiatorSlots.length];
+    }
+    case 'bloodmaw_brute': {
+      const bruteSlots = ['club_brute', 'horned_warbringer', 'axe_guardian'];
+      return bruteSlots[Math.abs(id) % bruteSlots.length];
+    }
     case 'stone_golem': {
-      const golemSlots = ['club_brute', 'axe_guardian', 'shield_gladiator'];
+      const golemSlots = ['shield_gladiator', 'club_brute', 'axe_guardian'];
       return golemSlots[Math.abs(id) % golemSlots.length];
     }
+    case 'semi_boss_bloodforge':
     case 'furnace_titan':
-      return Math.abs(id) % 2 === 0 ? 'bomber_guardian' : 'horned_warbringer';
+      return Math.abs(id) % 2 === 0 ? 'horned_warbringer' : 'club_brute';
     default:
       return 'grunt_ghoul';
   }
@@ -274,9 +268,9 @@ function selectSlotKey(archetype: EnemyArchetype, idHash: number): string {
     case 'brute':
       return Math.abs(idHash) % 2 === 0 ? 'club_brute' : 'axe_guardian';
     case 'shield':
-      return Math.abs(idHash) % 2 === 0 ? 'shield_gladiator' : 'skullclad_warden';
+      return 'shield_gladiator';
     case 'bomber':
-      return Math.abs(idHash) % 2 === 0 ? 'bomber_guardian' : 'horned_warbringer';
+      return 'horned_warbringer';
     default:
       return 'grunt_ghoul';
   }
@@ -603,7 +597,9 @@ export class Enemy3DRenderer {
   private lastActiveCanvas: HTMLCanvasElement | null = null;
   private frameBudgetWindowMs = 0;
   private rendersInCurrentWindow = 0;
-  private sharedWeaponTemplates: Partial<Record<'minotaur_axe' | 'trident_axe', Promise<THREE.Group | null>>> = {};
+  private sharedWeaponTemplates: Partial<
+    Record<'minotaur_axe' | 'trident_axe' | 'crescent_reaver' | 'molten_aegis', Promise<THREE.Group | null>>
+  > = {};
 
   constructor(size = 256) {
     this.size = size;
@@ -641,18 +637,33 @@ export class Enemy3DRenderer {
     }
   }
 
-  private getSharedWeaponTemplate(kind: 'minotaur_axe' | 'trident_axe'): Promise<THREE.Group | null> {
+  private getSharedWeaponTemplate(
+    kind: 'minotaur_axe' | 'trident_axe' | 'crescent_reaver' | 'molten_aegis'
+  ): Promise<THREE.Group | null> {
     if (this.sharedWeaponTemplates[kind]) {
       return this.sharedWeaponTemplates[kind]!;
     }
     const texLoader = new THREE.TextureLoader();
-    const fbxUrl = kind === 'minotaur_axe' ? MINOTAUR_AXE_FBX_URL : TRIDENT_AXE_FBX_URL;
+    const fbxUrl =
+      kind === 'minotaur_axe'
+        ? MINOTAUR_AXE_FBX_URL
+        : kind === 'crescent_reaver'
+          ? CRESCENT_REAVER_FBX_URL
+          : kind === 'molten_aegis'
+            ? MOLTEN_ONI_AEGIS_FBX_URL
+            : TRIDENT_AXE_FBX_URL;
+    const texUrl =
+      kind === 'crescent_reaver'
+        ? CRESCENT_REAVER_TEX_URL
+        : kind === 'molten_aegis'
+          ? MOLTEN_ONI_AEGIS_TEX_URL
+          : TRIDENT_AXE_TEX_URL;
     const promise = loadFbxCached(fbxUrl)
       .then(
         (group) =>
           new Promise<THREE.Group | null>((resolve) => {
             texLoader.load(
-              encodeURI(TRIDENT_AXE_TEX_URL),
+              encodeURI(texUrl),
               (tex) => {
                 tex.colorSpace = THREE.SRGBColorSpace;
                 tex.needsUpdate = true;
@@ -683,7 +694,7 @@ export class Enemy3DRenderer {
   }
 
   private attachWeaponToRig(baseGroup: THREE.Group, slot: EnemyModelSlot): void {
-    if (slot.weaponKind === 'none') return;
+    if (slot.weaponKind === 'none' && !slot.hasLeftShield) return;
     baseGroup.updateMatrixWorld(true);
 
     const findBone = (names: string[]): THREE.Object3D | null => {
@@ -702,43 +713,81 @@ export class Enemy3DRenderer {
       return matched;
     };
 
-    const rightHand = findBone(['mixamorigRightHand', 'RightHand']);
-    if (!rightHand) return;
-
-    const handScaleVec = new THREE.Vector3();
-    rightHand.getWorldScale(handScaleVec);
-    const handScale = Math.max(1e-5, handScaleVec.x);
-
-    this.getSharedWeaponTemplate(slot.weaponKind).then((template) => {
-      if (!template) return;
-      const clonedWep = template.clone(true);
-      const wepBox = new THREE.Box3().setFromObject(clonedWep);
-      const wepSize = new THREE.Vector3();
-      wepBox.getSize(wepSize);
-      const maxDim = Math.max(0.001, wepSize.x, wepSize.y, wepSize.z);
-      const desiredWorldLen = 1.02 * slot.scaleMultiplier;
-      const localWepScale = desiredWorldLen / (maxDim * handScale);
-
-      const weaponSocket = new THREE.Group();
-      clonedWep.scale.setScalar(localWepScale);
-      if (slot.weaponKind === 'minotaur_axe') {
-        // Minotaur_War_Axe blade is already along +X (thumb-up/forward axis of RightHand)
-        clonedWep.rotation.set(0, 0, 0);
-      } else {
-        // Bloodforged_Trident_Axe blade is along +Y of group -> rotate onto +X of RightHand
-        clonedWep.rotation.set(-Math.PI * 0.5, 0, -Math.PI * 0.5);
-      }
-      clonedWep.position.set(0.26 * maxDim * localWepScale, 0, 0);
-      weaponSocket.add(clonedWep);
-      applyHadesCelShadingToHierarchy(weaponSocket);
-      rightHand.add(weaponSocket);
+    const flushCache = () => {
       const prefix = `${slot.key}:`;
       for (const cacheKey of Array.from(this.atlasFrameCache.keys())) {
         if (cacheKey.startsWith(prefix)) {
           this.atlasFrameCache.delete(cacheKey);
         }
       }
-    });
+    };
+
+    if (slot.weaponKind !== 'none') {
+      const rightHand = findBone(['mixamorigRightHand', 'RightHand']);
+      if (rightHand) {
+        const handScaleVec = new THREE.Vector3();
+        rightHand.getWorldScale(handScaleVec);
+        const handScale = Math.max(1e-5, handScaleVec.x);
+
+        this.getSharedWeaponTemplate(slot.weaponKind).then((template) => {
+          if (!template) return;
+          const clonedWep = template.clone(true);
+          const wepBox = new THREE.Box3().setFromObject(clonedWep);
+          const wepSize = new THREE.Vector3();
+          wepBox.getSize(wepSize);
+          const maxDim = Math.max(0.001, wepSize.x, wepSize.y, wepSize.z);
+          const desiredWorldLen = 1.02 * slot.scaleMultiplier;
+          const localWepScale = desiredWorldLen / (maxDim * handScale);
+
+          const weaponSocket = new THREE.Group();
+          clonedWep.scale.setScalar(localWepScale);
+          if (slot.weaponKind === 'minotaur_axe') {
+            clonedWep.rotation.set(0, 0, 0);
+          } else {
+            clonedWep.rotation.set(-Math.PI * 0.5, 0, -Math.PI * 0.5);
+          }
+          clonedWep.position.set(0.26 * maxDim * localWepScale, 0, 0);
+          weaponSocket.add(clonedWep);
+          applyHadesCelShadingToHierarchy(weaponSocket);
+          rightHand.add(weaponSocket);
+          flushCache();
+        });
+      }
+    }
+
+    if (slot.hasLeftShield) {
+      const leftArmBone = findBone([
+        'mixamorigLeftForeArm',
+        'LeftForeArm',
+        'mixamorigLeftHand',
+        'LeftHand',
+      ]);
+      if (leftArmBone) {
+        const armScaleVec = new THREE.Vector3();
+        leftArmBone.getWorldScale(armScaleVec);
+        const armScale = Math.max(1e-5, armScaleVec.x);
+
+        this.getSharedWeaponTemplate('molten_aegis').then((shieldTemplate) => {
+          if (!shieldTemplate) return;
+          const clonedShield = shieldTemplate.clone(true);
+          const shBox = new THREE.Box3().setFromObject(clonedShield);
+          const shSize = new THREE.Vector3();
+          shBox.getSize(shSize);
+          const maxDim = Math.max(0.001, shSize.x, shSize.y, shSize.z);
+          const desiredShieldLen = 0.72 * slot.scaleMultiplier;
+          const localShieldScale = desiredShieldLen / (maxDim * armScale);
+
+          const shieldSocket = new THREE.Group();
+          clonedShield.scale.setScalar(localShieldScale);
+          clonedShield.rotation.set(0, Math.PI * 0.5, 0);
+          clonedShield.position.set(-0.08 * maxDim * localShieldScale, 0, 0.12 * maxDim * localShieldScale);
+          shieldSocket.add(clonedShield);
+          applyHadesCelShadingToHierarchy(shieldSocket);
+          leftArmBone.add(shieldSocket);
+          flushCache();
+        });
+      }
+    }
   }
 
   private ensureSlotLoaded(slotKey: string): void {
@@ -1060,11 +1109,14 @@ export class Enemy3DRenderer {
     this.renderer.clear();
     this.renderer.render(this.scene, this.camera);
 
-    const outlineHex = hitFlash ? '#ffffff' : isElite ? '#ffd166' : SHARED_STUDIO_OUTLINE_COLOR;
+    const outlineHex = hitFlash ? '#ffffff' : SHARED_STUDIO_OUTLINE_COLOR;
+    const silhouetteRole =
+      isElite || slot.rimColor === 0xef4444 ? 'regular_enemy_crimson' : 'regular_enemy';
 
     const bakedCanvas = bake2DSpriteFrameFromCanvas(this.renderer.domElement, cacheKey, {
+      role: silhouetteRole,
       outlineColor: outlineHex,
-      outlineThickness: isElite ? 2.5 : SHARED_STUDIO_OUTLINE_THICKNESS,
+      outlineThickness: isElite ? 2.4 : SHARED_STUDIO_OUTLINE_THICKNESS,
       hitFlash,
       cacheFrame: false,
     });

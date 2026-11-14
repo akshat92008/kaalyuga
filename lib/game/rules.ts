@@ -459,7 +459,19 @@ export function consumeDashStamina(params: {
  * so every enemy attack has weight and clear counterplay.
  */
 export function computeSmartEnemyWindup(params: {
-  enemyType: 'wolf_guai' | 'fire_monk' | 'stone_golem' | 'furnace_titan' | 'xuemo' | 'vrikodara';
+  enemyType:
+    | 'charnel_ghoul'
+    | 'ashen_oracle'
+    | 'ironmaw_gladiator'
+    | 'bloodmaw_brute'
+    | 'semi_boss_bloodforge'
+    | 'dundubhi'
+    | 'wolf_guai'
+    | 'fire_monk'
+    | 'stone_golem'
+    | 'furnace_titan'
+    | 'xuemo'
+    | 'vrikodara';
   isBoss: boolean;
   phase?: 1 | 2 | 3;
 }): number {
@@ -468,12 +480,17 @@ export function computeSmartEnemyWindup(params: {
     return Number(Math.max(0.48, 0.74 - (phase - 1) * 0.08).toFixed(2));
   }
   switch (params.enemyType) {
+    case 'charnel_ghoul':
     case 'wolf_guai':
       return 0.62;
+    case 'ashen_oracle':
     case 'fire_monk':
       return 0.68;
+    case 'ironmaw_gladiator':
     case 'stone_golem':
       return 0.74;
+    case 'bloodmaw_brute':
+    case 'semi_boss_bloodforge':
     case 'furnace_titan':
       return 0.80;
     default:

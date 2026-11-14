@@ -334,7 +334,12 @@ export function classifyEnemyRole(
   slotCategory: 'melee' | 'ranged' | 'heavy';
   hasFrontalShield: boolean;
 } {
-  if (trait === 'vajra_shield' || enemyType === 'stone_golem' || enemyType === 'shield_bearer') {
+  if (
+    trait === 'vajra_shield' ||
+    enemyType === 'ironmaw_gladiator' ||
+    enemyType === 'stone_golem' ||
+    enemyType === 'shield_bearer'
+  ) {
     return {
       role: 'guardian',
       roleTitle: 'Bronze Guardian',
@@ -343,6 +348,7 @@ export function classifyEnemyRole(
     };
   }
   switch (enemyType) {
+    case 'ashen_oracle':
     case 'fire_monk':
     case 'archer':
     case 'shaman':
@@ -352,6 +358,8 @@ export function classifyEnemyRole(
         slotCategory: 'ranged',
         hasFrontalShield: false,
       };
+    case 'bloodmaw_brute':
+    case 'semi_boss_bloodforge':
     case 'furnace_titan':
     case 'executioner':
     case 'heavy_infantry':

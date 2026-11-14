@@ -260,8 +260,44 @@ test('all 8 Act I chambers have HD animated arena videos and VFX flipbook sheets
   assert.equal(CHAMBERS.length, 8);
   for (const chamber of CHAMBERS) {
     assert.ok(chamber.videoUrl && chamber.videoUrl.startsWith('/videos/') && chamber.videoUrl.endsWith('.mp4'));
+    assert.ok(!chamber.videoUrl.includes('…'), `Chamber ${chamber.id} videoUrl must not contain ellipsis`);
+    assert.ok(!chamber.backgroundUrl.includes('…'), `Chamber ${chamber.id} backgroundUrl must not contain ellipsis`);
+    assert.equal(chamber.floorTint, 'transparent', `Chamber ${chamber.id} must have zero programmatic floorTint grading`);
   }
-  assert.ok(CHAMBERS[7].phase2VideoUrl && CHAMBERS[7].phase2VideoUrl.endsWith('.mp4'));
+
+  // Vaitarani Simple Ash Hub
+  assert.equal(GAME_ASSETS.hub.vaitaraniAshHubBg, '/arenas/Gemini_Generated_Image_ol56bvol56bvol56.png');
+  assert.equal(GAME_ASSETS.hub.vaitaraniAshHubVideo, '/videos/Ash_drifting_across_river_landscape_2b693e5d.mp4');
+
+  // Chamber 1: Ash Shore / Skirmish
+  assert.equal(CHAMBERS[0].backgroundUrl, GAME_ASSETS.chambers.vaitaraniGhat);
+  assert.equal(CHAMBERS[0].videoUrl, GAME_ASSETS.arenaVideos.waterCourtyard);
+
+  // Chamber 2: Sealed Gate of Raktabija (Locked -> Unlocked + 2x1 Vedic Chained Gate overlay d647kw)
+  assert.equal(CHAMBERS[1].backgroundUrl, GAME_ASSETS.chambers.asuraLavaLocked);
+  assert.equal(CHAMBERS[1].unlockedBackgroundUrl, GAME_ASSETS.chambers.asuraLavaUnlocked);
+  assert.equal(GAME_ASSETS.exitGateArchways2x1, '/vfx/Gemini_Generated_Image_d647kwd647kwd647.png');
+
+  // Chamber 3: Kurukshetra Charnel Battleground (i2qg8y + Flames_burn_on_funeral_pyres_5bef99be.mp4)
+  assert.equal(CHAMBERS[2].backgroundUrl, '/arenas/Gemini_Generated_Image_i2qg8yi2qg8yi2qg.png');
+  assert.equal(CHAMBERS[2].videoUrl, '/videos/Flames_burn_on_funeral_pyres_5bef99be.mp4');
+
+  // Chamber 4: Dundubhi — Mandapa of the War-Drum (bc2kjf + new Dundubhi Arena MP4)
+  assert.equal(CHAMBERS[3].backgroundUrl, '/arenas/Gemini_Generated_Image_bc2kjfbc2kjfbc2k.png');
+  assert.equal(CHAMBERS[3].videoUrl, '/videos/Flames_flickering_around_stone_f_09be2052.mp4');
+
+  // Vrikodara — Sanctum of the Infernal Maw (Phase 1 -> Phase 2 Blood Eclipse)
+  assert.equal(CHAMBERS[7].backgroundUrl, GAME_ASSETS.chambers.bossSanctumPhase1);
+  assert.equal(CHAMBERS[7].videoUrl, '/videos/Animate_mythological_game_enviro_f7acefd6_1080p.mp4');
+  assert.equal(CHAMBERS[7].phase2BackgroundUrl, '/arenas/Gemini_Generated_Image_3ay6rk3ay6rk3ay6.png');
+  assert.equal(CHAMBERS[7].phase2VideoUrl, '/videos/Furnaces_spewing_flames_and_slag_baeefd93_1080p.mp4');
+
+  // Ensure zero Unicode ellipsis across all arenaVideos
+  for (const [k, url] of Object.entries(GAME_ASSETS.arenaVideos)) {
+    assert.ok(!url.includes('…'), `arenaVideos.${k} must be clean ASCII without ellipsis`);
+  }
+
   assert.ok(Object.keys(GAME_ASSETS.vfxFlipbooks).length >= 16);
   assert.ok(Object.keys(GAME_ASSETS.conceptPortraits).length >= 15);
 });
+

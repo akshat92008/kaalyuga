@@ -370,9 +370,14 @@ export function renderParticlePoolCanvas(
       ctx.closePath();
       ctx.fill();
 
+      const coreR = inner * 0.85;
       ctx.fillStyle = pt.coreColor;
       ctx.beginPath();
-      ctx.arc(pt.x, pt.y, inner * 0.85, 0, Math.PI * 2);
+      ctx.moveTo(pt.x, pt.y - coreR);
+      ctx.lineTo(pt.x + coreR, pt.y);
+      ctx.lineTo(pt.x, pt.y + coreR);
+      ctx.lineTo(pt.x - coreR, pt.y);
+      ctx.closePath();
       ctx.fill();
     } else {
       // 'ember_dust' or 'bronze_spark'

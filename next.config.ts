@@ -33,7 +33,10 @@ const nextConfig: NextConfig = {
   async rewrites() {
     const assetDirs = [
       'videos',
+      'arenas',
+      'vfx',
       'models',
+      'models_v2',
       'animations',
       'audio',
       'images',

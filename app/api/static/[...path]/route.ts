@@ -68,6 +68,212 @@ function putInCache(key: string, buf: Buffer): void {
   currentCacheBytes += buf.byteLength;
 }
 
+// Clean ASCII filename -> upstream GitHub repository path mapping (Zero Mac Unicode ellipsis required in app code)
+const CLEAN_ASCII_REPO_MAP: Record<string, string[]> = {
+  // Clean ASCII MP4 Videos (renamed from Mac Unicode ellipsis … and Cutscenes & Audio folder)
+  'Animate_battlefield_environment_56896e20.mp4': [
+    'public',
+    'videos',
+    'Animate_battlefield_environment_…_56896e20.mp4',
+  ],
+  'Animate_mythological_game_enviro_743206b7_1080p.mp4': [
+    'public',
+    'videos',
+    'Animate_mythological_game_enviro…_743206b7_1080p.mp4',
+  ],
+  'Animate_mythological_game_enviro_db8affc3_1080p.mp4': [
+    'public',
+    'videos',
+    'Animate_mythological_game_enviro…_db8affc3_1080p.mp4',
+  ],
+  'Animate_mythological_game_enviro_f7acefd6_1080p.mp4': [
+    'public',
+    'videos',
+    'Animate_mythological_game_enviro…_f7acefd6_1080p.mp4',
+  ],
+  'Flames_flickering_around_stone_f_09be2052.mp4': [
+    'new 3D assets and animations',
+    'Cutscenes & Audio',
+    'Flames_flickering_around_stone_f…_09be2052.mp4',
+  ],
+  'Rudra_looking_up_cosmic_manifest_efb48503.mp4': [
+    'new 3D assets and animations',
+    'Cutscenes & Audio',
+    'Rudra_looking_up_cosmic_manifest…_efb48503.mp4',
+  ],
+  'Ash_drifting_across_river_landscape_2b693e5d.mp4': [
+    'new 3D assets and animations',
+    'Cutscenes & Audio',
+    'Ash_drifting_across_river_landscape_2b693e5d.mp4',
+  ],
+  'Flames_burn_on_funeral_pyres_5bef99be.mp4': [
+    'new 3D assets and animations',
+    'Cutscenes & Audio',
+    'Flames_burn_on_funeral_pyres_5bef99be.mp4',
+  ],
+  'Furnaces_spewing_flames_and_slag_baeefd93_1080p.mp4': [
+    'new 3D assets and animations',
+    'Cutscenes & Audio',
+    'Furnaces_spewing_flames_and_slag_baeefd93_1080p.mp4',
+  ],
+  'Camera_tilts_upward_into_space_f5f45c0e.mp4': [
+    'new 3D assets and animations',
+    'Cutscenes & Audio',
+    'Camera_tilts_upward_into_space_f5f45c0e.mp4',
+  ],
+  'Clouds_parting_revealing_starry_sky_33ab1a1f.mp4': [
+    'new 3D assets and animations',
+    'Cutscenes & Audio',
+    'Clouds_parting_revealing_starry_sky_33ab1a1f.mp4',
+  ],
+  'Rudra_looking_at_burning_fortress_43f2ce2a.mp4': [
+    'new 3D assets and animations',
+    'Cutscenes & Audio',
+    'Rudra_looking_at_burning_fortress_43f2ce2a.mp4',
+  ],
+  'Rudra_standing_amidst_fire_and_ab5340a1.mp4': [
+    'new 3D assets and animations',
+    'Cutscenes & Audio',
+    'Rudra_standing_amidst_fire_and_ab5340a1.mp4',
+  ],
+  // Clean Arena & Gate PNGs from new 3D assets and animations/Concept Art & Visuals
+  'Gemini_Generated_Image_ol56bvol56bvol56.png': [
+    'new 3D assets and animations',
+    'Concept Art & Visuals',
+    'Gemini_Generated_Image_ol56bvol56bvol56.png',
+  ],
+  'Gemini_Generated_Image_i2qg8yi2qg8yi2qg.png': [
+    'new 3D assets and animations',
+    'Concept Art & Visuals',
+    'Gemini_Generated_Image_i2qg8yi2qg8yi2qg.png',
+  ],
+  'Gemini_Generated_Image_bc2kjfbc2kjfbc2k.png': [
+    'new 3D assets and animations',
+    'Concept Art & Visuals',
+    'Gemini_Generated_Image_bc2kjfbc2kjfbc2k.png',
+  ],
+  'Gemini_Generated_Image_3ay6rk3ay6rk3ay6.png': [
+    'new 3D assets and animations',
+    'Concept Art & Visuals',
+    'Gemini_Generated_Image_3ay6rk3ay6rk3ay6.png',
+  ],
+  'Gemini_Generated_Image_d647kwd647kwd647.png': [
+    'new 3D assets and animations',
+    'Concept Art & Visuals',
+    'Gemini_Generated_Image_d647kwd647kwd647.png',
+  ],
+  // Phase 2 Hand-Painted #000000 VFX & Isometric Telegraph Flipbook Sheets
+  'Gemini_Generated_Image_sqvx4fsqvx4fsqvx.png': [
+    'new 3D assets and animations',
+    'Concept Art & Visuals',
+    'Gemini_Generated_Image_sqvx4fsqvx4fsqvx.png',
+  ],
+  'Gemini_Generated_Image_cvl1pecvl1pecvl1.png': [
+    'new 3D assets and animations',
+    'Concept Art & Visuals',
+    'Gemini_Generated_Image_cvl1pecvl1pecvl1.png',
+  ],
+  'Gemini_Generated_Image_jjxeuujjxeuujjxe.png': [
+    'new 3D assets and animations',
+    'Concept Art & Visuals',
+    'Gemini_Generated_Image_jjxeuujjxeuujjxe.png',
+  ],
+  'Gemini_Generated_Image_kogf7ykogf7ykogf.png': [
+    'new 3D assets and animations',
+    'Concept Art & Visuals',
+    'Gemini_Generated_Image_kogf7ykogf7ykogf.png',
+  ],
+  'Gemini_Generated_Image_us4plhus4plhus4p.png': [
+    'new 3D assets and animations',
+    'Concept Art & Visuals',
+    'Gemini_Generated_Image_us4plhus4plhus4p.png',
+  ],
+  'Gemini_Generated_Image_3yg7bx3yg7bx3yg7.png': [
+    'new 3D assets and animations',
+    'Concept Art & Visuals',
+    'Gemini_Generated_Image_3yg7bx3yg7bx3yg7.png',
+  ],
+  'Gemini_Generated_Image_ho5a8gho5a8gho5a.png': [
+    'new 3D assets and animations',
+    'Concept Art & Visuals',
+    'Gemini_Generated_Image_ho5a8gho5a8gho5a.png',
+  ],
+};
+
+function isBlockedRuntimeAsset(segments: string[]): boolean {
+  const joined = segments.join('/');
+  const lower = joined.toLowerCase();
+  if (lower.endsWith('.zip') || lower.endsWith('.stl')) return true;
+  if (/\(\d+\)\.(png|jpg|jpeg|mp4)$/i.test(joined)) return true;
+  if (lower.includes('4ai5dh')) return true;
+  return false;
+}
+
+function buildCandidateRepoPaths(decoded: string[]): string[][] {
+  const candidates: string[][] = [];
+  const top = decoded[0];
+  const lastSeg = decoded[decoded.length - 1] || '';
+
+  if (CLEAN_ASCII_REPO_MAP[lastSeg]) {
+    candidates.push(CLEAN_ASCII_REPO_MAP[lastSeg]);
+  }
+
+  if (top === 'arenas') {
+    const rest = decoded.slice(1);
+    candidates.push(['public', 'arenas', ...rest]);
+    candidates.push(['new 3D assets and animations', 'Concept Art & Visuals', ...rest]);
+    candidates.push(['new 3D assets and animations', 'Cutscenes & Audio', ...rest]);
+    candidates.push(['public', 'assets', 'aistudio', ...rest]);
+    candidates.push(['public', 'videos', ...rest]);
+  } else if (top === 'vfx') {
+    const rest = decoded.slice(1);
+    candidates.push(['public', 'vfx', ...rest]);
+    candidates.push(['new 3D assets and animations', 'Concept Art & Visuals', ...rest]);
+    candidates.push(['public', 'assets', 'vfx', ...rest]);
+    candidates.push(['public', 'assets', 'aistudio', ...rest]);
+    candidates.push(['public', 'assets', 'concepts', ...rest]);
+  } else if (top === 'models_v2') {
+    const rest = decoded.slice(1);
+    candidates.push(['public', 'models_v2', ...rest]);
+    candidates.push(['new 3D assets and animations', '3D Models', ...rest]);
+    candidates.push(['new 3D assets and animations', 'Animations', ...rest]);
+    candidates.push(['public', 'models', ...rest]);
+  } else if (top === 'videos') {
+    const rest = decoded.slice(1);
+    candidates.push(['public', 'videos', ...rest]);
+    candidates.push(['new 3D assets and animations', 'Cutscenes & Audio', ...rest]);
+  } else if (top === 'new_3d_assets') {
+    candidates.push(['new 3D assets and animations', ...decoded.slice(1)]);
+  } else {
+    candidates.push(['public', ...decoded]);
+  }
+
+  // Also add ellipsis fallbacks for any candidate whose filename was ASCII-normalized
+  const expanded: string[][] = [];
+  for (const cand of candidates) {
+    expanded.push(cand);
+    const last = cand[cand.length - 1];
+    if (!last) continue;
+    if (last.includes('...') || last.includes('…')) {
+      const alt = last.includes('...') ? last.replace(/\.\.\./g, '…') : last.replace(/…/g, '...');
+      expanded.push([...cand.slice(0, -1), alt]);
+    }
+    if (last.includes('enviro_')) {
+      expanded.push([...cand.slice(0, -1), last.replace('enviro_', 'enviro…_')]);
+    }
+    if (last.includes('environment_') && !last.includes('environment_…_')) {
+      expanded.push([...cand.slice(0, -1), last.replace('environment_', 'environment_…_')]);
+    }
+    if (last.includes('stone_f_')) {
+      expanded.push([...cand.slice(0, -1), last.replace('stone_f_', 'stone_f…_')]);
+    }
+    if (last.includes('manifest_')) {
+      expanded.push([...cand.slice(0, -1), last.replace('manifest_', 'manifest…_')]);
+    }
+  }
+  return expanded;
+}
+
 async function fetchFromGitHub(segments: string[]): Promise<Buffer | null> {
   const decoded = segments.map((s) => {
     try {
@@ -77,38 +283,19 @@ async function fetchFromGitHub(segments: string[]): Promise<Buffer | null> {
     }
   });
 
-  const repoRel =
-    decoded[0] === 'new_3d_assets'
-      ? ['new 3D assets and animations', ...decoded.slice(1)]
-      : ['public', ...decoded];
+  if (isBlockedRuntimeAsset(decoded)) {
+    return null;
+  }
 
-  const cacheKey = repoRel.join('/');
+  const candidatePaths = buildCandidateRepoPaths(decoded);
+  const cacheKey = candidatePaths[0].join('/');
   if (memoryCache.has(cacheKey)) {
     return memoryCache.get(cacheKey)!;
   }
   try {
     const roots = [LOCAL_REPO_DIR, '/tmp/kaalyuga_repo', process.cwd()];
-    const relVariants: string[][] = [repoRel];
-    if (decoded[0] !== 'new_3d_assets') {
-      relVariants.push(decoded);
-    }
-    const lastSeg = repoRel[repoRel.length - 1];
-    if (lastSeg) {
-      if (lastSeg.includes('...') || lastSeg.includes('…')) {
-        const altLast = lastSeg.includes('...')
-          ? lastSeg.replace(/\.\.\./g, '…')
-          : lastSeg.replace(/…/g, '...');
-        relVariants.push([...repoRel.slice(0, -1), altLast]);
-      }
-      if (lastSeg.includes('enviro_')) {
-        relVariants.push([
-          ...repoRel.slice(0, -1),
-          lastSeg.replace('enviro_', 'enviro…_'),
-        ]);
-      }
-    }
     for (const rootDir of roots) {
-      for (const relParts of relVariants) {
+      for (const relParts of candidatePaths) {
         const localPath = path.join(rootDir, ...relParts);
         if (fs.existsSync(localPath) && fs.statSync(localPath).isFile()) {
           const localBuf = fs.readFileSync(localPath);
@@ -154,22 +341,10 @@ async function fetchFromGitHub(segments: string[]): Promise<Buffer | null> {
       return null;
     };
 
-    let buf = await tryFetch(repoRel);
-    if (!buf) {
-      const lastIdx = repoRel.length - 1;
-      const last = repoRel[lastIdx];
-      if (last) {
-        if (last.includes('...') || last.includes('…')) {
-          const altLast = last.includes('...')
-            ? last.replace(/\.\.\./g, '…')
-            : last.replace(/…/g, '...');
-          buf = await tryFetch([...repoRel.slice(0, -1), altLast]);
-        }
-        if (!buf && last.includes('enviro_')) {
-          const altLast = last.replace('enviro_', 'enviro…_');
-          buf = await tryFetch([...repoRel.slice(0, -1), altLast]);
-        }
-      }
+    let buf: Buffer | null = null;
+    for (const relParts of candidatePaths) {
+      buf = await tryFetch(relParts);
+      if (buf) break;
     }
 
     if (buf) {

@@ -447,8 +447,10 @@ export class Rudra3DRenderer {
     renderer.render(this.scene, this.camera);
 
     const baked = bake2DSpriteFrameFromCanvas(renderer.domElement, cacheKey, {
+      role: 'rudra',
+      rimColor: 'rgba(255, 179, 71, 0.78)',
       outlineColor: hitFlash ? '#ffffff' : SHARED_STUDIO_OUTLINE_COLOR,
-      outlineThickness: SHARED_STUDIO_OUTLINE_THICKNESS,
+      outlineThickness: 2.2,
       hitFlash,
       cacheFrame: false,
     });

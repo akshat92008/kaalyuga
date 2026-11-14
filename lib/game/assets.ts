@@ -3,7 +3,7 @@ import { WEAPON_CONFIGS, WeaponId } from './rules';
 export { WEAPON_CONFIGS };
 export type { WeaponId };
 
-export type PropType = 'incense_cauldron' | 'pagoda_lantern' | 'weapon_rack' | 'dragon_pillar';
+export type PropType = 'homa_cauldron' | 'deepa_lantern' | 'weapon_rack' | 'kurukshetra_pillar';
 export type EnemyTrait = 'vajra_shield' | 'agni_aura' | 'rakshasa_frenzy';
 
 export interface ChamberBrazier {
@@ -20,14 +20,23 @@ export interface ChamberPropSpec {
 }
 
 export type Warden3DRigKey =
-  | 'wolf_guai'
-  | 'fire_monk'
-  | 'stone_golem'
-  | 'furnace_titan'
-  | 'sovereign_titan';
+  | 'charnel_ghoul'
+  | 'ashen_oracle'
+  | 'ironmaw_gladiator'
+  | 'bloodmaw_brute'
+  | 'semi_boss_bloodforge';
+
+export type KaliyugaEnemySpawnType =
+  | 'charnel_ghoul'
+  | 'ashen_oracle'
+  | 'ironmaw_gladiator'
+  | 'bloodmaw_brute'
+  | 'semi_boss_bloodforge'
+  | 'dundubhi'
+  | 'vrikodara';
 
 export interface ChamberSpawnSpec {
-  type: 'wolf_guai' | 'fire_monk' | 'stone_golem' | 'furnace_titan' | 'xuemo' | 'vrikodara';
+  type: KaliyugaEnemySpawnType;
   x: number;
   y: number;
   delay?: number;
@@ -41,7 +50,7 @@ export interface ChamberSpec {
   id: number;
   chapterTitle: string;
   name: string;
-  chineseSubtitle: string;
+  sanskritSubtitle: string;
   sanjayaQuote: string;
   strikethroughLie?: string;
   sanjayaStrikethrough?: string;
@@ -66,16 +75,26 @@ export const GAME_ASSETS = {
   titleVideo: '/videos/Warrior_standing_on_battlefield_e09ae2f5.mp4',
   titleVideo1080p: '/videos/Warrior_standing_on_battlefield_e09ae2f5_1080p.mp4',
 
-  // HD 1080p Animated Chamber Background Videos & Combat Energy Video
+  // Vaitarani Simple Ash Hub (ol56bv...png + Ash_drifting_across_river_landscape_2b693e5d.mp4)
+  hub: {
+    vaitaraniAshHubBg: '/arenas/Gemini_Generated_Image_ol56bvol56bvol56.png',
+    vaitaraniAshHubVideo: '/videos/Ash_drifting_across_river_landscape_2b693e5d.mp4',
+  },
+
+  // HD 1080p Animated Chamber Background Videos & Combat Energy Video (100% Clean ASCII Filenames — Zero Ellipsis …)
   arenaVideos: {
+    ashHubRiver: '/videos/Ash_drifting_across_river_landscape_2b693e5d.mp4',
     waterCourtyard: '/videos/Animate_courtyard_image_with_water_47b6b081_1080p.mp4',
     templeEnvironment: '/videos/Animate_image_into_game_environment_ad4672f3_1080p.mp4',
-    battlefieldEnv: '/videos/Animate_battlefield_environment_…_56896e20.mp4',
+    battlefieldEnv: '/videos/Animate_battlefield_environment_56896e20.mp4',
+    funeralPyres: '/videos/Flames_burn_on_funeral_pyres_5bef99be.mp4',
+    dundubhiMandapa: '/videos/Flames_flickering_around_stone_f_09be2052.mp4',
     fogClearingSanctum: '/videos/Animate_image_removing_fog_e4e55e75_1080p.mp4',
     lavaArena: '/videos/Animate_lava_arena_scene_0e362b91_1080p.mp4',
-    mythicEnvA: '/videos/Animate_mythological_game_enviro…_743206b7_1080p.mp4',
-    mythicEnvB: '/videos/Animate_mythological_game_enviro…_db8affc3_1080p.mp4',
-    mythicEnvC: '/videos/Animate_mythological_game_enviro…_f7acefd6_1080p.mp4',
+    mythicEnvA: '/videos/Animate_mythological_game_enviro_743206b7_1080p.mp4',
+    mythicEnvB: '/videos/Animate_mythological_game_enviro_db8affc3_1080p.mp4',
+    mythicEnvC: '/videos/Animate_mythological_game_enviro_f7acefd6_1080p.mp4',
+    furnacesSlagEclipse: '/videos/Furnaces_spewing_flames_and_slag_baeefd93_1080p.mp4',
     axeSlashEnergy: '/videos/Axe_slash_energy_attack_animation_236a5328_1080p.mp4',
   },
   titleVideo720p: '/videos/Warrior_standing_on_battlefield_e09ae2f5.mp4',
@@ -108,52 +127,146 @@ export const GAME_ASSETS = {
   bespokeSlashArc: '/assets/aistudio/Gemini_Generated_Image_yqk4evyqk4evyqk4.png',
   agneyastraArrow: '/assets/aistudio/Gemini_Generated_Image_1kb7hh1kb7hh1kb7.png',
 
-  // Real-Time 3D FBX Models, Skeletal Animations & PBR Textures for Rudra, Dundubhi & Vrikodara
+  // Real-Time 3D FBX Models, Skeletal Animations & PBR Textures for Rudra, Dundubhi, Semi-Boss & Vrikodara
   models3d: {
+    // DUNDUBHI: Bellhorn_Warlord + Creature Pack (4) (Zero mutant_idle death placeholders!)
     dundubhiFbx:
-      '/models/Meshy_AI_Runebound_Minotaur_Warlord_20261025_texture_fbx/Meshy_AI_Runebound_Minotaur_Warlord_Animations.fbx',
+      '/new_3d_assets/Animations/Creature Pack (4)/Meshy_AI_Bellhorn_Warlord_20261114_generate.fbx',
     dundubhiTextureFbx:
-      '/models/Meshy_AI_Runebound_Minotaur_Warlord_20261025_texture_fbx/Meshy_AI_Runebound_Minotaur_Warlord_20261025_texture.fbx',
+      '/new_3d_assets/3D Models/Bellhorn_Warlord/Meshy_AI_Bellhorn_Warlord_20261114_texture_fbx/Meshy_AI_Bellhorn_Warlord_20261114_texture.fbx',
     dundubhiAnims: {
-      idle: '/models/Meshy_AI_Runebound_Minotaur_Warlord_20261025_texture_fbx/mutant_idle.fbx',
-      walk: '/models/Meshy_AI_Runebound_Minotaur_Warlord_20261025_texture_fbx/mutant_run.fbx',
-      run: '/models/Meshy_AI_Runebound_Minotaur_Warlord_20261025_texture_fbx/mutant_run.fbx',
-      swipe: '/models/Meshy_AI_Runebound_Minotaur_Warlord_20261025_texture_fbx/mutant_swiping.fbx',
-      slash: '/models/Meshy_AI_Runebound_Minotaur_Warlord_20261025_texture_fbx/mutant_swiping.fbx',
-      jumpAttack:
-        '/models/Meshy_AI_Runebound_Minotaur_Warlord_20261025_texture_fbx/mutant_jump_attack.fbx',
-      kick: '/models/Meshy_AI_Runebound_Minotaur_Warlord_20261025_texture_fbx/mutant_jump_attack.fbx',
-      roar: '/models/Meshy_AI_Runebound_Minotaur_Warlord_20261025_texture_fbx/mutant_roaring.fbx',
-      hit: '/models/Meshy_AI_Runebound_Minotaur_Warlord_20261025_texture_fbx/mutant_idle.fbx',
-      death: '/models/Meshy_AI_Runebound_Minotaur_Warlord_20261025_texture_fbx/mutant_idle.fbx',
+      idle: '/new_3d_assets/Animations/Creature Pack (4)/mutant breathing idle.fbx',
+      walk: '/new_3d_assets/Animations/Creature Pack (4)/mutant walking.fbx',
+      run: '/new_3d_assets/Animations/Creature Pack (4)/mutant run.fbx',
+      charge: '/new_3d_assets/Animations/Creature Pack (4)/mutant run.fbx',
+      gore: '/new_3d_assets/Animations/Creature Pack (4)/mutant swiping.fbx',
+      swipe: '/new_3d_assets/Animations/Creature Pack (4)/mutant swiping.fbx',
+      slash: '/new_3d_assets/Animations/Creature Pack (4)/mutant swiping.fbx',
+      slam: '/new_3d_assets/Animations/Creature Pack (4)/mutant jump attack.fbx',
+      jumpAttack: '/new_3d_assets/Animations/Creature Pack (4)/mutant jump attack.fbx',
+      kick: '/new_3d_assets/Animations/Creature Pack (4)/mutant jump attack.fbx',
+      roar: '/new_3d_assets/Animations/Creature Pack (4)/mutant roaring.fbx',
+      stagger: '/new_3d_assets/Animations/Creature Pack (4)/mutant flexing muscles.fbx',
+      hit: '/new_3d_assets/Animations/Creature Pack (4)/mutant flexing muscles.fbx',
+      death: '/new_3d_assets/Animations/Creature Pack (4)/mutant dying.fbx',
     },
     dundubhiTex: {
       baseColor:
-        '/models/Meshy_AI_Runebound_Minotaur_Warlord_20261025_texture_fbx/Meshy_AI_Runebound_Minotaur_Warlord_20261025_texture.png',
+        '/new_3d_assets/3D Models/Bellhorn_Warlord/Meshy_AI_Bellhorn_Warlord_20261114_texture_fbx/Meshy_AI_Bellhorn_Warlord_20261114_texture.png',
       normal:
-        '/models/Meshy_AI_Runebound_Minotaur_Warlord_20261025_texture_fbx/Meshy_AI_Runebound_Minotaur_Warlord_20261025_texture_normal.png',
+        '/new_3d_assets/3D Models/Bellhorn_Warlord/Meshy_AI_Bellhorn_Warlord_20261114_texture_fbx/Meshy_AI_Bellhorn_Warlord_20261114_texture_normal.png',
       metallic:
-        '/models/Meshy_AI_Runebound_Minotaur_Warlord_20261025_texture_fbx/Meshy_AI_Runebound_Minotaur_Warlord_20261025_texture_metallic.png',
+        '/new_3d_assets/3D Models/Bellhorn_Warlord/Meshy_AI_Bellhorn_Warlord_20261114_texture_fbx/Meshy_AI_Bellhorn_Warlord_20261114_texture_metallic.png',
       roughness:
-        '/models/Meshy_AI_Runebound_Minotaur_Warlord_20261025_texture_fbx/Meshy_AI_Runebound_Minotaur_Warlord_20261025_texture_roughness.png',
+        '/new_3d_assets/3D Models/Bellhorn_Warlord/Meshy_AI_Bellhorn_Warlord_20261114_texture_fbx/Meshy_AI_Bellhorn_Warlord_20261114_texture_roughness.png',
       weaponBaseColor:
         '/models/Meshy_AI_Bloodforged_Trident_A_1025041928_texture_fbx/Meshy_AI_Bloodforged_Trident_A_1025041928_texture.png',
     },
+
+    // SEMI-BOSS SWORD & SHIELD: Horned_Warlord_of_the_Bloodforge_v2 + Pro Sword and Shield Pack + Molten_Oni_Aegis + Crescent_Reaver
+    semiBossBloodforge: {
+      riggedFbx:
+        '/new_3d_assets/Animations/Pro Sword and Shield Pack/Meshy_AI_Horned_Warlord_of_the_Bloodforge_20261031_generate.fbx',
+      textureFbx:
+        '/new_3d_assets/3D Models/Horned_Warlord_of_the_Bloodforge_v2/Meshy_AI_Horned_Warlord_of_the_Bloodforge_20261031_texture_fbx/Meshy_AI_Horned_Warlord_of_the_Bloodforge_20261031_texture.fbx',
+      textures: {
+        baseColor:
+          '/new_3d_assets/3D Models/Horned_Warlord_of_the_Bloodforge_v2/Meshy_AI_Horned_Warlord_of_the_Bloodforge_20261031_texture_fbx/Meshy_AI_Horned_Warlord_of_the_Bloodforge_20261031_texture.png',
+        normal:
+          '/new_3d_assets/3D Models/Horned_Warlord_of_the_Bloodforge_v2/Meshy_AI_Horned_Warlord_of_the_Bloodforge_20261031_texture_fbx/Meshy_AI_Horned_Warlord_of_the_Bloodforge_20261031_texture_normal.png',
+        roughness:
+          '/new_3d_assets/3D Models/Horned_Warlord_of_the_Bloodforge_v2/Meshy_AI_Horned_Warlord_of_the_Bloodforge_20261031_texture_fbx/Meshy_AI_Horned_Warlord_of_the_Bloodforge_20261031_texture_roughness.png',
+        metalness:
+          '/new_3d_assets/3D Models/Horned_Warlord_of_the_Bloodforge_v2/Meshy_AI_Horned_Warlord_of_the_Bloodforge_20261031_texture_fbx/Meshy_AI_Horned_Warlord_of_the_Bloodforge_20261031_texture_metallic.png',
+      },
+      shieldFbx:
+        '/new_3d_assets/3D Models/Molten_Oni_Aegis/Meshy_AI_Molten_Oni_Aegis_20261114_texture_fbx/Meshy_AI_Molten_Oni_Aegis_20261114_texture.fbx',
+      shieldTex: {
+        baseColor:
+          '/new_3d_assets/3D Models/Molten_Oni_Aegis/Meshy_AI_Molten_Oni_Aegis_20261114_texture_fbx/Meshy_AI_Molten_Oni_Aegis_20261114_texture.png',
+        normal:
+          '/new_3d_assets/3D Models/Molten_Oni_Aegis/Meshy_AI_Molten_Oni_Aegis_20261114_texture_fbx/Meshy_AI_Molten_Oni_Aegis_20261114_texture_normal.png',
+        roughness:
+          '/new_3d_assets/3D Models/Molten_Oni_Aegis/Meshy_AI_Molten_Oni_Aegis_20261114_texture_fbx/Meshy_AI_Molten_Oni_Aegis_20261114_texture_roughness.png',
+        metallic:
+          '/new_3d_assets/3D Models/Molten_Oni_Aegis/Meshy_AI_Molten_Oni_Aegis_20261114_texture_fbx/Meshy_AI_Molten_Oni_Aegis_20261114_texture_metallic.png',
+      },
+      swordFbx:
+        '/new_3d_assets/3D Models/Crescent_Reaver/Meshy_AI_Crescent_Reaver_20261111_texture_fbx/Meshy_AI_Crescent_Reaver_20261111_texture.fbx',
+      swordTex: {
+        baseColor:
+          '/new_3d_assets/3D Models/Crescent_Reaver/Meshy_AI_Crescent_Reaver_20261111_texture_fbx/Meshy_AI_Crescent_Reaver_20261111_texture.png',
+        normal:
+          '/new_3d_assets/3D Models/Crescent_Reaver/Meshy_AI_Crescent_Reaver_20261111_texture_fbx/Meshy_AI_Crescent_Reaver_20261111_texture_normal.png',
+        roughness:
+          '/new_3d_assets/3D Models/Crescent_Reaver/Meshy_AI_Crescent_Reaver_20261111_texture_fbx/Meshy_AI_Crescent_Reaver_20261111_texture_roughness.png',
+        metallic:
+          '/new_3d_assets/3D Models/Crescent_Reaver/Meshy_AI_Crescent_Reaver_20261111_texture_fbx/Meshy_AI_Crescent_Reaver_20261111_texture_metallic.png',
+      },
+      anims: {
+        idle: '/new_3d_assets/Animations/Pro Sword and Shield Pack/sword and shield idle.fbx',
+        run: '/new_3d_assets/Animations/Pro Sword and Shield Pack/sword and shield run.fbx',
+        slash1: '/new_3d_assets/Animations/Pro Sword and Shield Pack/sword and shield slash.fbx',
+        slash2: '/new_3d_assets/Animations/Pro Sword and Shield Pack/sword and shield slash (2).fbx',
+        slash3: '/new_3d_assets/Animations/Pro Sword and Shield Pack/sword and shield slash (3).fbx',
+        slash4: '/new_3d_assets/Animations/Pro Sword and Shield Pack/sword and shield slash (4).fbx',
+        slash5: '/new_3d_assets/Animations/Pro Sword and Shield Pack/sword and shield slash (5).fbx',
+        attack1: '/new_3d_assets/Animations/Pro Sword and Shield Pack/sword and shield attack.fbx',
+        attack2: '/new_3d_assets/Animations/Pro Sword and Shield Pack/sword and shield attack (2).fbx',
+        attack3: '/new_3d_assets/Animations/Pro Sword and Shield Pack/sword and shield attack (3).fbx',
+        attack4: '/new_3d_assets/Animations/Pro Sword and Shield Pack/sword and shield attack (4).fbx',
+        block: '/new_3d_assets/Animations/Pro Sword and Shield Pack/sword and shield block.fbx',
+        blockIdle: '/new_3d_assets/Animations/Pro Sword and Shield Pack/sword and shield block idle.fbx',
+        impact: '/new_3d_assets/Animations/Pro Sword and Shield Pack/sword and shield impact.fbx',
+        powerUp: '/new_3d_assets/Animations/Pro Sword and Shield Pack/sword and shield power up.fbx',
+        death: '/new_3d_assets/Animations/Pro Sword and Shield Pack/sword and shield death.fbx',
+      },
+    },
+
+    // VRIKODARA: Crimson_Skull_Warlord_v2 + Pro Melee Axe Pack (5) + Embermaw_Mace (Phase 1) + Bloodforged_Trident_Axe (Phase 2)
     vrikodaraFbx:
-      '/models/Meshy_AI_Crimson_Skull_Warlord_biped/Meshy_AI_Crimson_Skull_Warlord_biped_Animation_Running_withSkin.fbx',
+      '/new_3d_assets/Animations/Pro Melee Axe Pack (5)/Meshy_AI_Crimson_Skull_Warlord_20261030_generate.fbx',
+    vrikodaraTextureFbx:
+      '/new_3d_assets/3D Models/Crimson_Skull_Warlord_v2/Meshy_AI_Crimson_Skull_Warlord_20261030_texture_fbx/Meshy_AI_Crimson_Skull_Warlord_20261030_texture.fbx',
     vrikodaraTex: {
       baseColor:
-        '/models/Meshy_AI_Crimson_Skull_Warlord_biped/Meshy_AI_Crimson_Skull_Warlord_biped_texture_0.png',
+        '/new_3d_assets/3D Models/Crimson_Skull_Warlord_v2/Meshy_AI_Crimson_Skull_Warlord_20261030_texture_fbx/Meshy_AI_Crimson_Skull_Warlord_20261030_texture.png',
       diffuse:
-        '/models/Meshy_AI_Crimson_Skull_Warlord_biped/Meshy_AI_Crimson_Skull_Warlord_biped_texture_0.png',
+        '/new_3d_assets/3D Models/Crimson_Skull_Warlord_v2/Meshy_AI_Crimson_Skull_Warlord_20261030_texture_fbx/Meshy_AI_Crimson_Skull_Warlord_20261030_texture.png',
       normal:
-        '/models/Meshy_AI_Crimson_Skull_Warlord_biped/Meshy_AI_Crimson_Skull_Warlord_biped_texture_0_normal.png',
+        '/new_3d_assets/3D Models/Crimson_Skull_Warlord_v2/Meshy_AI_Crimson_Skull_Warlord_20261030_texture_fbx/Meshy_AI_Crimson_Skull_Warlord_20261030_texture_normal.png',
       metallic:
-        '/models/Meshy_AI_Crimson_Skull_Warlord_biped/Meshy_AI_Crimson_Skull_Warlord_biped_texture_0_metallic.png',
+        '/new_3d_assets/3D Models/Crimson_Skull_Warlord_v2/Meshy_AI_Crimson_Skull_Warlord_20261030_texture_fbx/Meshy_AI_Crimson_Skull_Warlord_20261030_texture_metallic.png',
       roughness:
-        '/models/Meshy_AI_Crimson_Skull_Warlord_biped/Meshy_AI_Crimson_Skull_Warlord_biped_texture_0_roughness.png',
+        '/new_3d_assets/3D Models/Crimson_Skull_Warlord_v2/Meshy_AI_Crimson_Skull_Warlord_20261030_texture_fbx/Meshy_AI_Crimson_Skull_Warlord_20261030_texture_roughness.png',
       specular:
-        '/models/Meshy_AI_Crimson_Skull_Warlord_biped/Meshy_AI_Crimson_Skull_Warlord_biped_texture_0_metallic.png',
+        '/new_3d_assets/3D Models/Crimson_Skull_Warlord_v2/Meshy_AI_Crimson_Skull_Warlord_20261030_texture_fbx/Meshy_AI_Crimson_Skull_Warlord_20261030_texture_metallic.png',
+    },
+    vrikodaraAnims: {
+      idle: '/new_3d_assets/Animations/Pro Melee Axe Pack (5)/standing idle.fbx',
+      run: '/new_3d_assets/Animations/Pro Melee Axe Pack (5)/standing run forward.fbx',
+      downwardSmash: '/new_3d_assets/Animations/Pro Melee Axe Pack (5)/standing melee attack downward.fbx',
+      cleave360: '/new_3d_assets/Animations/Pro Melee Axe Pack (5)/standing melee attack 360 high.fbx',
+      combo1: '/new_3d_assets/Animations/Pro Melee Axe Pack (5)/standing melee combo attack ver. 1.fbx',
+      combo2: '/new_3d_assets/Animations/Pro Melee Axe Pack (5)/standing melee combo attack ver. 2.fbx',
+      combo3: '/new_3d_assets/Animations/Pro Melee Axe Pack (5)/standing melee combo attack ver. 3.fbx',
+      battlecry: '/new_3d_assets/Animations/Pro Melee Axe Pack (5)/standing taunt battlecry.fbx',
+      chestThump: '/new_3d_assets/Animations/Pro Melee Axe Pack (5)/standing taunt chest thump.fbx',
+      reactGut: '/new_3d_assets/Animations/Pro Melee Axe Pack (5)/standing react large gut.fbx',
+      block: '/new_3d_assets/Animations/Pro Melee Axe Pack (5)/standing block idle.fbx',
+      death: '/new_3d_assets/Animations/Pro Magic Pack/Standing React Death Backward.fbx',
+    },
+    embermawMaceFbx:
+      '/new_3d_assets/3D Models/Embermaw_Mace/Meshy_AI_Embermaw_Mace_20261114_texture_fbx/Meshy_AI_Embermaw_Mace_20261114_texture.fbx',
+    embermawMaceTex: {
+      baseColor:
+        '/new_3d_assets/3D Models/Embermaw_Mace/Meshy_AI_Embermaw_Mace_20261114_texture_fbx/Meshy_AI_Embermaw_Mace_20261114_texture.png',
+      normal:
+        '/new_3d_assets/3D Models/Embermaw_Mace/Meshy_AI_Embermaw_Mace_20261114_texture_fbx/Meshy_AI_Embermaw_Mace_20261114_texture_normal.png',
+      metallic:
+        '/new_3d_assets/3D Models/Embermaw_Mace/Meshy_AI_Embermaw_Mace_20261114_texture_fbx/Meshy_AI_Embermaw_Mace_20261114_texture_metallic.png',
+      roughness:
+        '/new_3d_assets/3D Models/Embermaw_Mace/Meshy_AI_Embermaw_Mace_20261114_texture_fbx/Meshy_AI_Embermaw_Mace_20261114_texture_roughness.png',
     },
     tridentFbx:
       '/models/Meshy_AI_Bloodforged_Trident_A_1025041928_texture_fbx/Meshy_AI_Bloodforged_Trident_A_1025041928_texture.fbx',
@@ -173,20 +286,6 @@ export const GAME_ASSETS = {
       '/models/Meshy_AI_Bloodbound_Titan_1025042731_texture_fbx/Meshy_AI_Bloodbound_Titan_1025042731_texture.fbx',
     bloodboundWarlordFbx:
       '/models/Meshy_AI_Bloodbound_Warlord_1025041901_texture_fbx/Meshy_AI_Bloodbound_Warlord_1025041901_texture.fbx',
-    crimsonSkullWarlord: {
-      runFbx:
-        '/models/Meshy_AI_Crimson_Skull_Warlord_biped/Meshy_AI_Crimson_Skull_Warlord_biped_Animation_Running_withSkin.fbx',
-      textures: {
-        baseColor:
-          '/models/Meshy_AI_Crimson_Skull_Warlord_biped/Meshy_AI_Crimson_Skull_Warlord_biped_texture_0.png',
-        normal:
-          '/models/Meshy_AI_Crimson_Skull_Warlord_biped/Meshy_AI_Crimson_Skull_Warlord_biped_texture_0_normal.png',
-        roughness:
-          '/models/Meshy_AI_Crimson_Skull_Warlord_biped/Meshy_AI_Crimson_Skull_Warlord_biped_texture_0_roughness.png',
-        metalness:
-          '/models/Meshy_AI_Crimson_Skull_Warlord_biped/Meshy_AI_Crimson_Skull_Warlord_biped_texture_0_metallic.png',
-      },
-    },
     skullcladWarlord: {
       meshFbx:
         '/models/Meshy_AI_Skullclad_Warlord_20261031_texture_fbx/Meshy_AI_Skullclad_Warlord_20261031_texture.fbx',
@@ -243,6 +342,28 @@ export const GAME_ASSETS = {
           '/models/Meshy_AI_Sovereign_of_the_Eternal_Wheel_20261031_texture_fbx/Meshy_AI_Sovereign_of_the_Eternal_Wheel_20261031_texture_metallic.png',
       },
     },
+    modelsV2: {
+      bellhornWarlordFbx:
+        '/new_3d_assets/3D Models/Bellhorn_Warlord/Meshy_AI_Bellhorn_Warlord_20261114_texture_fbx/Meshy_AI_Bellhorn_Warlord_20261114_texture.fbx',
+      crimsonSkullWarlordV2Fbx:
+        '/new_3d_assets/3D Models/Crimson_Skull_Warlord_v2/Meshy_AI_Crimson_Skull_Warlord_20261030_texture_fbx/Meshy_AI_Crimson_Skull_Warlord_20261030_texture.fbx',
+      emberfangFbx:
+        '/new_3d_assets/3D Models/Emberfang/Meshy_AI_Emberfang_20261114_texture.fbx',
+      emberforgedTitanFbx:
+        '/new_3d_assets/3D Models/Emberforged_Titan/Meshy_AI_Emberforged_Titan_20261114_texture_fbx/Meshy_AI_Emberforged_Titan_20261114_texture.fbx',
+      embermawMaceFbx:
+        '/new_3d_assets/3D Models/Embermaw_Mace/Meshy_AI_Embermaw_Mace_20261114_texture_fbx/Meshy_AI_Embermaw_Mace_20261114_texture.fbx',
+      hornedBloodforgeV2Fbx:
+        '/new_3d_assets/3D Models/Horned_Warlord_of_the_Bloodforge_v2/Meshy_AI_Horned_Warlord_of_the_Bloodforge_20261031_texture_fbx/Meshy_AI_Horned_Warlord_of_the_Bloodforge_20261031_texture.fbx',
+      lotusEmpressFbx:
+        '/new_3d_assets/3D Models/Lotus_Empress/Meshy_AI_Lotus_Empress_20261114_texture_fbx/Meshy_AI_Lotus_Empress_20261114_texture.fbx',
+      moltenOniAegisFbx:
+        '/new_3d_assets/3D Models/Molten_Oni_Aegis/Meshy_AI_Molten_Oni_Aegis_20261114_texture_fbx/Meshy_AI_Molten_Oni_Aegis_20261114_texture.fbx',
+      ashenWarlordFbx:
+        '/new_3d_assets/3D Models/The_Ashen_Warlord/Meshy_AI_The_Ashen_Warlord_20261114_texture_fbx/Meshy_AI_The_Ashen_Warlord_20261114_texture.fbx',
+      crescentReaverFbx:
+        '/new_3d_assets/3D Models/Crescent_Reaver/Meshy_AI_Crescent_Reaver_20261111_texture_fbx/Meshy_AI_Crescent_Reaver_20261111_texture.fbx',
+    },
   },
 
   // Dedicated Hades-Style Character Portraits & Prologue/Cutscene Paintings (v7 Asset Bible)
@@ -268,11 +389,14 @@ export const GAME_ASSETS = {
 
   // Hand-Painted 16:9 Isometric Indian Kurukshetra & Kaliyuga Chamber Arenas (Zero Wukong/Chinese Arenas)
   chambers: {
+    vaitaraniAshHub: '/arenas/Gemini_Generated_Image_ol56bvol56bvol56.png',
     vaitaraniGhat: '/assets/aistudio/Gemini_Generated_Image_rdujlrrdujlrrduj.png',
     vaitaraniGhatAlt: '/assets/aistudio/Gemini_Generated_Image_pw6vhspw6vhspw6v.png',
     raktabijaCourtyard: '/assets/aistudio/Gemini_Generated_Image_bmq158bmq158bmq1_a3eaf68a.png',
+    kurukshetraCharnel: '/arenas/Gemini_Generated_Image_i2qg8yi2qg8yi2qg.png',
     chariotBonefield: '/assets/aistudio/Gemini_Generated_Image_fexppofexppofexp.png',
     chariotBonefieldAlt: '/assets/aistudio/Gemini_Generated_Image_ey07c4ey07c4ey07_1de21fb8.png',
+    dundubhiMandapa: '/arenas/Gemini_Generated_Image_bc2kjfbc2kjfbc2k.png',
     warDrumColonnade: '/assets/aistudio/Gemini_Generated_Image_c0fyyc0fyyc0fyyc_4d7dcd20.png',
     soulFireSanctum: '/assets/aistudio/Gemini_Generated_Image_acbxb7acbxb7acbx_9e34bd2e.png',
     gopuramCauseway: '/assets/aistudio/Gemini_Generated_Image_p8dfx9p8dfx9p8df.png',
@@ -280,8 +404,8 @@ export const GAME_ASSETS = {
     asuraLavaLocked: '/assets/aistudio/Gemini_Generated_Image_u58tfju58tfju58t_2d5d830a.png',
     asuraLavaUnlocked: '/assets/aistudio/Gemini_Generated_Image_8jz0rn8jz0rn8jz0_9c7ece82.png',
     bossSanctumPhase1: '/assets/aistudio/Gemini_Generated_Image_plgsv7plgsv7plgs.png',
-    bossSanctumPhase1Alt: '/assets/aistudio/Gemini_Generated_Image_25mxvb25mxvb25mx_d4637a39.png',
-    bossSanctumPhase2Eclipse: '/assets/aistudio/Gemini_Generated_Image_9sbc7m9sbc7m9sbc_0cf239b7.png',
+    bossSanctumPhase1Alt: '/arenas/Gemini_Generated_Image_bc2kjfbc2kjfbc2k.png',
+    bossSanctumPhase2Eclipse: '/arenas/Gemini_Generated_Image_3ay6rk3ay6rk3ay6.png',
   },
 
   // Hand-Painted VFX, Telegraphs, Slash Smears, Traps, Gates, Braziers & Overhangs
@@ -296,7 +420,8 @@ export const GAME_ASSETS = {
   floorTraps2x2: '/assets/aistudio/Gemini_Generated_Image_zhy8c6zhy8c6zhy8_5d2df495.png',
   lionPillarAndTraps2x2: '/assets/aistudio/Gemini_Generated_Image_u7yyaau7yyaau7yy_0b479608.png',
   brazierFlame4x1: '/assets/aistudio/Gemini_Generated_Image_vqynauvqynauvqyn_da9af05e.png',
-  exitGateArchways2x1: '/assets/aistudio/Gemini_Generated_Image_gcf89kgcf89kgcf8_26c0ebb5.png',
+  exitGateArchways2x1: '/vfx/Gemini_Generated_Image_d647kwd647kwd647.png',
+  vedicChainedGate2x1: '/vfx/Gemini_Generated_Image_d647kwd647kwd647.png',
   gateOverlays2x2: '/assets/aistudio/Gemini_Generated_Image_5bgscc5bgscc5bgs_07c760f9.png',
   rewardOrbs2x2: '/assets/aistudio/Gemini_Generated_Image_e4v7n9e4v7n9e4v7_05a48632.png',
   foregroundOverhangsA2x2: '/assets/aistudio/Gemini_Generated_Image_glxj9tglxj9tglxj_b076ead2.png',
@@ -376,6 +501,8 @@ export const GAME_ASSETS = {
   // 2.5D Y-Sorted Destructible Courtyard Props (Pure Black Background Indian Kurukshetra Set)
   kaliyugaProps: {
     kurukshetraPillar: '/assets/aistudio/Gemini_Generated_Image_9st0qa9st0qa9st0_64c7f4c4.png',
+    kurukshetraPillarSheet3x1: '/vfx/Gemini_Generated_Image_3yg7bx3yg7bx3yg7.png',
+    lohitShardAndBoonOrbs2x2: '/vfx/Gemini_Generated_Image_ho5a8gho5a8gho5a.png',
     pillarRubble: '/assets/aistudio/Gemini_Generated_Image_xp9eibxp9eibxp9e_197206c9.png',
     brahmashiraShrine: '/assets/aistudio/Gemini_Generated_Image_rc1gsbrc1gsbrc1g_d88016ca.png',
     brokenChariot: '/assets/aistudio/Gemini_Generated_Image_w6hzmyw6hzmyw6hz_4319bd25.png',
@@ -411,8 +538,16 @@ export const GAME_ASSETS = {
     p2Kneel: '/assets/aistudio/0A23068F-ECD7-4091-98B2-E98569B6AE85_af84ff47.png',
   },
 
-  // New Multi-Frame Hand-Painted Combat VFX Flipbook Sprite Sheets (/assets/vfx & /assets/concepts)
+  // New Multi-Frame Hand-Painted Combat VFX Flipbook Sprite Sheets (/vfx, /assets/vfx & /assets/concepts)
   vfxFlipbooks: {
+    // Phase 2 Hand-Painted #000000 Additive Flipbooks & Isometric Floor Telegraphs
+    parashuSlashes3x3: '/vfx/Gemini_Generated_Image_sqvx4fsqvx4fsqvx.png',
+    parryAndHitSparks4x2: '/vfx/Gemini_Generated_Image_cvl1pecvl1pecvl1.png',
+    isometricTelegraphs2x2: '/vfx/Gemini_Generated_Image_jjxeuujjxeuujjxe.png',
+    dundubhiShockwaveAndShatter4x2: '/vfx/Gemini_Generated_Image_kogf7ykogf7ykogf.png',
+    vrikodaraVacuumAndSlag4x2: '/vfx/Gemini_Generated_Image_us4plhus4plhus4p.png',
+    kurukshetraPillarStates3x1: '/vfx/Gemini_Generated_Image_3yg7bx3yg7bx3yg7.png',
+    lohitShardAndBoonOrbs2x2: '/vfx/Gemini_Generated_Image_ho5a8gho5a8gho5a.png',
     axeSlashTrail1x8: '/assets/vfx/Axe_slash_trail_sprite_sheet_5833cc93.jpg',
     goldenJadeBurst1x8: '/assets/concepts/Gemini_Generated_Image_ckan5eckan5eckan.png',
     agniJadeDashFlame1x8: '/assets/concepts/Gemini_Generated_Image_g4k6rg4k6rg4k6rg.png',
@@ -484,13 +619,13 @@ export const CHAMBERS: ChamberSpec[] = [
     id: 1,
     chapterTitle: 'Act I · The Boiling Crossing',
     name: 'Vaitarani Ferry Ghat',
-    chineseSubtitle: 'वैतरणी घाट · CHAMBER I OF VIII',
+    sanskritSubtitle: 'वैतरणी घाट · CHAMBER I OF VIII',
     strikethroughLie: '“The fallen heroes crossed into heaven upon golden lotus barges...”',
     sanjayaQuote:
       '“Lies! The Vaitarani boils with marrow and broken crowns. Sharabha hounds feast on the unburied.”',
     backgroundUrl: GAME_ASSETS.chambers.vaitaraniGhat,
     videoUrl: GAME_ASSETS.arenaVideos.waterCourtyard,
-    floorTint: 'rgba(22, 10, 12, 0.08)',
+    floorTint: 'transparent',
     isBossChamber: false,
     envEffect: 'blood_river',
     braziers: [
@@ -503,21 +638,21 @@ export const CHAMBERS: ChamberSpec[] = [
     ],
     props: [],
     spawns: [
-      // Wave 1: 2D Hand-Painted Sharabha Hellhounds + Vrika Stalkers + Agni Spearmen across the courtyard
-      { type: 'wolf_guai', x: 0.48, y: 0.46, wave: 1 },
-      { type: 'wolf_guai', x: 0.62, y: 0.64, wave: 1, delay: 0.25 },
-      { type: 'fire_monk', x: 0.72, y: 0.42, wave: 1, delay: 0.5 },
-      { type: 'wolf_guai', x: 0.38, y: 0.32, wave: 1, delay: 0.75 },
-      // Wave 2: 2D Preta Bowmen + Ghat-Warden
-      { type: 'wolf_guai', x: 0.36, y: 0.40, wave: 2, trait: 'rakshasa_frenzy' },
-      { type: 'fire_monk', x: 0.74, y: 0.38, wave: 2, delay: 0.25 },
+      // Wave 1: Bleeding Crown Ghouls + Ashen Oracle across the courtyard
+      { type: 'charnel_ghoul', x: 0.48, y: 0.46, wave: 1 },
+      { type: 'charnel_ghoul', x: 0.62, y: 0.64, wave: 1, delay: 0.25 },
+      { type: 'ashen_oracle', x: 0.72, y: 0.42, wave: 1, delay: 0.5 },
+      { type: 'charnel_ghoul', x: 0.38, y: 0.32, wave: 1, delay: 0.75 },
+      // Wave 2: Ashen Oracles + Bloodmaw Brute Ghat-Warden
+      { type: 'charnel_ghoul', x: 0.36, y: 0.40, wave: 2, trait: 'rakshasa_frenzy' },
+      { type: 'ashen_oracle', x: 0.74, y: 0.38, wave: 2, delay: 0.25 },
       {
-        type: 'furnace_titan',
+        type: 'bloodmaw_brute',
         x: 0.62,
         y: 0.54,
         wave: 2,
         delay: 0.45,
-        wardenTitle: 'KAPALA · SKULLCLAD GHAT-WARDEN',
+        wardenTitle: 'KAPALA · BLOODMAW GHAT-WARDEN',
       },
     ],
   },
@@ -529,14 +664,14 @@ export const CHAMBERS: ChamberSpec[] = [
     id: 2,
     chapterTitle: 'Act I · The Boiling Crossing',
     name: 'Sealed Gate of Raktabija',
-    chineseSubtitle: 'रक्तबीज द्वार · CHAMBER II OF VIII',
+    sanskritSubtitle: 'रक्तबीज द्वार · CHAMBER II OF VIII',
     strikethroughLie: '“Sacred soma was poured into the temple cisterns at dawn...”',
     sanjayaQuote:
       '“Golden chains seal the northern archway to another path! Slaughter Raktabija’s pack to shatter the gate seal!”',
     backgroundUrl: GAME_ASSETS.chambers.asuraLavaLocked,
     unlockedBackgroundUrl: GAME_ASSETS.chambers.asuraLavaUnlocked,
     videoUrl: GAME_ASSETS.arenaVideos.templeEnvironment,
-    floorTint: 'rgba(24, 9, 12, 0.08)',
+    floorTint: 'transparent',
     isBossChamber: false,
     envEffect: 'blood_river',
     braziers: [
@@ -549,22 +684,23 @@ export const CHAMBERS: ChamberSpec[] = [
     ],
     props: [],
     spawns: [
-      // Wave 1: 2D Swarm Mobs
-      { type: 'fire_monk', x: 0.58, y: 0.36, wave: 1 },
-      { type: 'fire_monk', x: 0.74, y: 0.60, wave: 1, delay: 0.25 },
-      { type: 'stone_golem', x: 0.50, y: 0.52, wave: 1, delay: 0.4 },
-      { type: 'wolf_guai', x: 0.40, y: 0.70, wave: 1, delay: 0.55 },
-      // Wave 2: Raktabija Crimson Skull Warlord + 2D Guards
+      // Wave 1: Swarm Mobs
+      { type: 'ashen_oracle', x: 0.58, y: 0.36, wave: 1 },
+      { type: 'ashen_oracle', x: 0.74, y: 0.60, wave: 1, delay: 0.25 },
+      { type: 'ironmaw_gladiator', x: 0.50, y: 0.52, wave: 1, delay: 0.4 },
+      { type: 'charnel_ghoul', x: 0.40, y: 0.70, wave: 1, delay: 0.55 },
+      // Wave 2: Semi-Boss Sword & Shield (Horned Warlord of the Bloodforge v2) + Guards
       {
-        type: 'furnace_titan',
+        type: 'semi_boss_bloodforge',
         x: 0.64,
         y: 0.48,
         wave: 2,
-        trait: 'agni_aura',
-        wardenTitle: 'RAKTABIJA · CRIMSON SKULL WARLORD',
+        trait: 'vajra_shield',
+        wardenRigKey: 'semi_boss_bloodforge',
+        wardenTitle: 'RAKTABIJA · HORNED BLOODFORGE WARLORD',
       },
-      { type: 'wolf_guai', x: 0.36, y: 0.36, wave: 2, delay: 0.3 },
-      { type: 'fire_monk', x: 0.76, y: 0.54, wave: 2, delay: 0.5, trait: 'agni_aura' },
+      { type: 'charnel_ghoul', x: 0.36, y: 0.36, wave: 2, delay: 0.3 },
+      { type: 'ashen_oracle', x: 0.76, y: 0.54, wave: 2, delay: 0.5, trait: 'agni_aura' },
     ],
   },
 
@@ -575,13 +711,13 @@ export const CHAMBERS: ChamberSpec[] = [
     id: 3,
     chapterTitle: 'Act I · The Boiling Crossing',
     name: 'Kurukshetra Chariot Pyre',
-    chineseSubtitle: 'रथश्मशान · CHAMBER III OF VIII',
+    sanskritSubtitle: 'रथश्मशान · CHAMBER III OF VIII',
     strikethroughLie: '“Eighteen aksauhinis stood in gleaming golden formation...”',
     sanjayaQuote:
       '“The axles are fused with molten brass and bone. Rakshasa bruisers prowl the wreckage!”',
-    backgroundUrl: GAME_ASSETS.chambers.chariotBonefield,
-    videoUrl: GAME_ASSETS.arenaVideos.battlefieldEnv,
-    floorTint: 'rgba(26, 12, 8, 0.08)',
+    backgroundUrl: GAME_ASSETS.chambers.kurukshetraCharnel,
+    videoUrl: GAME_ASSETS.arenaVideos.funeralPyres,
+    floorTint: 'transparent',
     isBossChamber: false,
     envEffect: 'lava_fissures',
     braziers: [
@@ -594,22 +730,23 @@ export const CHAMBERS: ChamberSpec[] = [
     ],
     props: [],
     spawns: [
-      // Wave 1: 2D Swarm Mobs
-      { type: 'stone_golem', x: 0.54, y: 0.46, wave: 1, trait: 'vajra_shield' },
-      { type: 'wolf_guai', x: 0.66, y: 0.34, wave: 1, delay: 0.2 },
-      { type: 'wolf_guai', x: 0.66, y: 0.66, wave: 1, delay: 0.4 },
-      { type: 'fire_monk', x: 0.76, y: 0.50, wave: 1, delay: 0.6 },
-      // Wave 2: Raktaksha, Horned Warlord of the Bloodforge
+      // Wave 1: Swarm Mobs
+      { type: 'ironmaw_gladiator', x: 0.54, y: 0.46, wave: 1, trait: 'vajra_shield' },
+      { type: 'charnel_ghoul', x: 0.66, y: 0.34, wave: 1, delay: 0.2 },
+      { type: 'charnel_ghoul', x: 0.66, y: 0.66, wave: 1, delay: 0.4 },
+      { type: 'ashen_oracle', x: 0.76, y: 0.50, wave: 1, delay: 0.6 },
+      // Wave 2: Raktaksha, Horned Warlord of the Bloodforge (Semi-Boss Sword & Shield)
       {
-        type: 'furnace_titan',
+        type: 'semi_boss_bloodforge',
         x: 0.62,
         y: 0.52,
         wave: 2,
         trait: 'vajra_shield',
+        wardenRigKey: 'semi_boss_bloodforge',
         wardenTitle: 'RAKTAKSHA · HORNED BLOODFORGE WARDEN',
       },
-      { type: 'stone_golem', x: 0.42, y: 0.38, wave: 2, delay: 0.3 },
-      { type: 'fire_monk', x: 0.74, y: 0.40, wave: 2, delay: 0.5, trait: 'agni_aura' },
+      { type: 'ironmaw_gladiator', x: 0.42, y: 0.38, wave: 2, delay: 0.3 },
+      { type: 'ashen_oracle', x: 0.74, y: 0.40, wave: 2, delay: 0.5, trait: 'agni_aura' },
     ],
   },
 
@@ -620,13 +757,13 @@ export const CHAMBERS: ChamberSpec[] = [
     id: 4,
     chapterTitle: 'Act I Sovereign · The Bronze Behemoth',
     name: 'Mandapa of the War-Drum',
-    chineseSubtitle: 'दुन्दुभि मण्डप · CHAMBER IV OF VIII',
+    sanskritSubtitle: 'दुन्दुभि मण्डप · CHAMBER IV OF VIII',
     strikethroughLie: '“The temple bull bowed before the royal standard of Hastinapura...”',
     sanjayaQuote:
       '“Dundubhi’s Chola-bronze hide deflects raw steel! Bait his horn-charge into the outer Kurukshetra Pillars to crack his armor!”',
-    backgroundUrl: GAME_ASSETS.chambers.bossSanctumPhase1Alt,
-    videoUrl: GAME_ASSETS.arenaVideos.mythicEnvA,
-    floorTint: 'rgba(24, 12, 8, 0.08)',
+    backgroundUrl: GAME_ASSETS.chambers.dundubhiMandapa,
+    videoUrl: GAME_ASSETS.arenaVideos.dundubhiMandapa,
+    floorTint: 'transparent',
     isBossChamber: true,
     envEffect: 'lava_fissures',
     braziers: [
@@ -636,10 +773,12 @@ export const CHAMBERS: ChamberSpec[] = [
       { x: 0.82, y: 0.80, color: '#ff5218', radius: 210 },
     ],
     props: [
-      { type: 'dragon_pillar', x: 0.24, y: 0.34 },
-      { type: 'dragon_pillar', x: 0.76, y: 0.34 },
+      { type: 'kurukshetra_pillar', x: 0.26, y: 0.36 },
+      { type: 'kurukshetra_pillar', x: 0.74, y: 0.36 },
+      { type: 'kurukshetra_pillar', x: 0.26, y: 0.70 },
+      { type: 'kurukshetra_pillar', x: 0.74, y: 0.70 },
     ],
-    spawns: [{ type: 'xuemo', x: 0.64, y: 0.52, wave: 1 }],
+    spawns: [{ type: 'dundubhi', x: 0.64, y: 0.52, wave: 1 }],
   },
 
   // ==========================================================================
@@ -649,13 +788,15 @@ export const CHAMBERS: ChamberSpec[] = [
     id: 5,
     chapterTitle: 'Act II · The Asura Inner Sanctum',
     name: 'Brahmashira War-Camp Pyre',
-    chineseSubtitle: 'ब्रह्मशिर शिविर · CHAMBER V OF VIII',
+    sanskritSubtitle: 'ब्रह्मशिर शिविर · CHAMBER V OF VIII',
     strikethroughLie: '“The royal tents slumbered in peace after the final conch...”',
     sanjayaQuote:
       '“Ashvatthama’s celestial Brahmashira weapon scorches the horizon! Four-armed Kaliyuga Avatars prowl the burning war-tents!”',
     backgroundUrl: GAME_ASSETS.chambers.soulFireSanctum,
+    phase2BackgroundUrl: GAME_ASSETS.chambers.bossSanctumPhase2Eclipse,
     videoUrl: GAME_ASSETS.arenaVideos.fogClearingSanctum,
-    floorTint: 'rgba(22, 12, 8, 0.08)',
+    phase2VideoUrl: GAME_ASSETS.arenaVideos.furnacesSlagEclipse,
+    floorTint: 'transparent',
     isBossChamber: false,
     envEffect: 'lava_fissures',
     braziers: [
@@ -668,21 +809,22 @@ export const CHAMBERS: ChamberSpec[] = [
     ],
     props: [],
     spawns: [
-      // Wave 1: 2D Kaliyuga Cosmic Avatar + Preta Bowmen + Sharabha Hounds
-      { type: 'furnace_titan', x: 0.56, y: 0.48, wave: 1, trait: 'vajra_shield' },
-      { type: 'fire_monk', x: 0.72, y: 0.36, wave: 1, delay: 0.25 },
-      { type: 'fire_monk', x: 0.72, y: 0.66, wave: 1, delay: 0.45 },
-      // Wave 2: Sovereign of the Eternal Wheel + Frenzied Hounds
-      { type: 'stone_golem', x: 0.46, y: 0.40, wave: 2, trait: 'agni_aura' },
-      { type: 'wolf_guai', x: 0.38, y: 0.64, wave: 2, delay: 0.2, trait: 'rakshasa_frenzy' },
-      { type: 'wolf_guai', x: 0.70, y: 0.56, wave: 2, delay: 0.4, trait: 'rakshasa_frenzy' },
+      // Wave 1: Bloodmaw Brute + Ashen Oracles
+      { type: 'bloodmaw_brute', x: 0.56, y: 0.48, wave: 1, trait: 'vajra_shield' },
+      { type: 'ashen_oracle', x: 0.72, y: 0.36, wave: 1, delay: 0.25 },
+      { type: 'ashen_oracle', x: 0.72, y: 0.66, wave: 1, delay: 0.45 },
+      // Wave 2: Sovereign of the Eternal Wheel + Frenzied Ghouls
+      { type: 'ironmaw_gladiator', x: 0.46, y: 0.40, wave: 2, trait: 'agni_aura' },
+      { type: 'charnel_ghoul', x: 0.38, y: 0.64, wave: 2, delay: 0.2, trait: 'rakshasa_frenzy' },
+      { type: 'charnel_ghoul', x: 0.70, y: 0.56, wave: 2, delay: 0.4, trait: 'rakshasa_frenzy' },
       {
-        type: 'furnace_titan',
+        type: 'semi_boss_bloodforge',
         x: 0.64,
         y: 0.50,
         wave: 2,
         delay: 0.55,
         trait: 'vajra_shield',
+        wardenRigKey: 'semi_boss_bloodforge',
         wardenTitle: 'BHAIRAVA · ETERNAL WHEEL AVATAR',
       },
     ],
@@ -695,13 +837,13 @@ export const CHAMBERS: ChamberSpec[] = [
     id: 6,
     chapterTitle: 'Act II · The Asura Inner Sanctum',
     name: 'Asura Molten Forge Ring',
-    chineseSubtitle: 'असुर अग्निकुण्ड · CHAMBER VI OF VIII',
+    sanskritSubtitle: 'असुर अग्निकुण्ड · CHAMBER VI OF VIII',
     strikethroughLie: '“Pilgrims walked unharmed across the temple causeway...”',
     sanjayaQuote:
       '“Every flagstone is rigged with bloodied iron spikes and Agni lotus vents. Lure the Rakshasa bruisers onto the plates!”',
     backgroundUrl: GAME_ASSETS.chambers.gopuramCausewayAlt,
     videoUrl: GAME_ASSETS.arenaVideos.lavaArena,
-    floorTint: 'rgba(24, 10, 10, 0.08)',
+    floorTint: 'transparent',
     isBossChamber: false,
     envEffect: 'lava_fissures',
     braziers: [
@@ -714,22 +856,22 @@ export const CHAMBERS: ChamberSpec[] = [
     ],
     props: [],
     spawns: [
-      // Wave 1: 2D Swarm Mobs
-      { type: 'stone_golem', x: 0.52, y: 0.42, wave: 1, trait: 'vajra_shield' },
-      { type: 'stone_golem', x: 0.64, y: 0.62, wave: 1, delay: 0.3 },
-      { type: 'fire_monk', x: 0.74, y: 0.46, wave: 1, delay: 0.5, trait: 'agni_aura' },
+      // Wave 1: Swarm Mobs
+      { type: 'ironmaw_gladiator', x: 0.52, y: 0.42, wave: 1, trait: 'vajra_shield' },
+      { type: 'ironmaw_gladiator', x: 0.64, y: 0.62, wave: 1, delay: 0.3 },
+      { type: 'ashen_oracle', x: 0.74, y: 0.46, wave: 1, delay: 0.5, trait: 'agni_aura' },
       // Wave 2: Agnimukha, The Molten Warlord
       {
-        type: 'furnace_titan',
+        type: 'bloodmaw_brute',
         x: 0.60,
         y: 0.50,
         wave: 2,
         trait: 'agni_aura',
         wardenTitle: 'AGNIMUKHA · MOLTEN WARLORD',
       },
-      { type: 'wolf_guai', x: 0.40, y: 0.36, wave: 2, delay: 0.25, trait: 'rakshasa_frenzy' },
-      { type: 'wolf_guai', x: 0.42, y: 0.68, wave: 2, delay: 0.45 },
-      { type: 'fire_monk', x: 0.76, y: 0.54, wave: 2, delay: 0.6 },
+      { type: 'charnel_ghoul', x: 0.40, y: 0.36, wave: 2, delay: 0.25, trait: 'rakshasa_frenzy' },
+      { type: 'charnel_ghoul', x: 0.42, y: 0.68, wave: 2, delay: 0.45 },
+      { type: 'ashen_oracle', x: 0.76, y: 0.54, wave: 2, delay: 0.6 },
     ],
   },
 
@@ -740,14 +882,14 @@ export const CHAMBERS: ChamberSpec[] = [
     id: 7,
     chapterTitle: 'Act II · Threshold of the Sovereign',
     name: 'Sealed Gate of Jatharagni',
-    chineseSubtitle: 'जाठराग्नि द्वार · CHAMBER VII OF VIII',
+    sanskritSubtitle: 'जाठराग्नि द्वार · CHAMBER VII OF VIII',
     strikethroughLie: '“The golden gates of the sanctum opened to welcome the peacemakers...”',
     sanjayaQuote:
       '“Golden chains and an Om padlock bind Vrikodara’s threshold! Slaughter the Royal Asura Guard to shatter the seal!”',
     backgroundUrl: GAME_ASSETS.chambers.asuraLavaLocked,
-    unlockedBackgroundUrl: GAME_ASSETS.chambers.asuraLavaLocked,
+    unlockedBackgroundUrl: GAME_ASSETS.chambers.asuraLavaUnlocked,
     videoUrl: GAME_ASSETS.arenaVideos.mythicEnvB,
-    floorTint: 'rgba(26, 10, 8, 0.06)',
+    floorTint: 'transparent',
     isBossChamber: false,
     envEffect: 'lava_fissures',
     braziers: [
@@ -757,27 +899,28 @@ export const CHAMBERS: ChamberSpec[] = [
       { x: 0.84, y: 0.76, color: '#ff5218', radius: 205 },
     ],
     props: [
-      { type: 'dragon_pillar', x: 0.36, y: 0.40 },
-      { type: 'dragon_pillar', x: 0.64, y: 0.40 },
-      { type: 'incense_cauldron', x: 0.50, y: 0.54 },
-      { type: 'pagoda_lantern', x: 0.34, y: 0.70 },
+      { type: 'kurukshetra_pillar', x: 0.36, y: 0.40 },
+      { type: 'kurukshetra_pillar', x: 0.64, y: 0.40 },
+      { type: 'homa_cauldron', x: 0.50, y: 0.54 },
+      { type: 'deepa_lantern', x: 0.34, y: 0.70 },
       { type: 'weapon_rack', x: 0.66, y: 0.70 },
     ],
     spawns: [
-      // Wave 1: Bloodforge Gatekeeper + 2D Royal Escort
+      // Wave 1: Bloodforge Gatekeeper + Royal Escort
       {
-        type: 'furnace_titan',
+        type: 'semi_boss_bloodforge',
         x: 0.58,
         y: 0.46,
         wave: 1,
-        trait: 'agni_aura',
+        trait: 'vajra_shield',
+        wardenRigKey: 'semi_boss_bloodforge',
         wardenTitle: 'GATEKEEPER · BLOODFORGE COLOSSUS',
       },
-      { type: 'stone_golem', x: 0.66, y: 0.64, wave: 1, delay: 0.25, trait: 'vajra_shield' },
-      { type: 'fire_monk', x: 0.74, y: 0.38, wave: 1, delay: 0.45 },
+      { type: 'ironmaw_gladiator', x: 0.66, y: 0.64, wave: 1, delay: 0.25, trait: 'vajra_shield' },
+      { type: 'ashen_oracle', x: 0.74, y: 0.38, wave: 1, delay: 0.45 },
       // Wave 2: Twin Gate Guardians
       {
-        type: 'furnace_titan',
+        type: 'bloodmaw_brute',
         x: 0.52,
         y: 0.42,
         wave: 2,
@@ -785,7 +928,7 @@ export const CHAMBERS: ChamberSpec[] = [
         wardenTitle: 'SEAL-GUARD · ETERNAL WHEEL AVATAR',
       },
       {
-        type: 'furnace_titan',
+        type: 'bloodmaw_brute',
         x: 0.66,
         y: 0.58,
         wave: 2,
@@ -793,8 +936,8 @@ export const CHAMBERS: ChamberSpec[] = [
         trait: 'rakshasa_frenzy',
         wardenTitle: 'SEAL-GUARD · JATHARAGNI COLOSSUS',
       },
-      { type: 'wolf_guai', x: 0.40, y: 0.62, wave: 2, delay: 0.5, trait: 'rakshasa_frenzy' },
-      { type: 'fire_monk', x: 0.76, y: 0.50, wave: 2, delay: 0.65, trait: 'agni_aura' },
+      { type: 'charnel_ghoul', x: 0.40, y: 0.62, wave: 2, delay: 0.5, trait: 'rakshasa_frenzy' },
+      { type: 'ashen_oracle', x: 0.76, y: 0.50, wave: 2, delay: 0.65, trait: 'agni_aura' },
     ],
   },
 
@@ -805,15 +948,15 @@ export const CHAMBERS: ChamberSpec[] = [
     id: 8,
     chapterTitle: 'Final Sovereign · The Bleeding Crown',
     name: 'Sanctum of the Infernal Maw',
-    chineseSubtitle: 'वृकोदर गर्भगृह · CHAMBER VIII OF VIII',
+    sanskritSubtitle: 'वृकोदर गर्भगृह · CHAMBER VIII OF VIII',
     strikethroughLie: '“And the righteous Pandava general laid down his mace in peace...”',
     sanjayaQuote:
       '“Behold Vrikodara! Ten thousand chariots burn inside his abdominal furnace—and when the blood-eclipse rises, his twin Tridents tear the cosmos!”',
     backgroundUrl: GAME_ASSETS.chambers.bossSanctumPhase1,
-    phase2BackgroundUrl: GAME_ASSETS.chambers.bossSanctumPhase1,
+    phase2BackgroundUrl: GAME_ASSETS.chambers.bossSanctumPhase2Eclipse,
     videoUrl: GAME_ASSETS.arenaVideos.mythicEnvC,
-    phase2VideoUrl: GAME_ASSETS.arenaVideos.mythicEnvC,
-    floorTint: 'rgba(22, 6, 10, 0.06)',
+    phase2VideoUrl: GAME_ASSETS.arenaVideos.furnacesSlagEclipse,
+    floorTint: 'transparent',
     isBossChamber: true,
     envEffect: 'eclipse_wind',
     braziers: [
@@ -825,10 +968,10 @@ export const CHAMBERS: ChamberSpec[] = [
       { x: 0.78, y: 0.84, color: '#ff6a18', radius: 215 },
     ],
     props: [
-      { type: 'dragon_pillar', x: 0.34, y: 0.36 },
-      { type: 'dragon_pillar', x: 0.66, y: 0.36 },
-      { type: 'dragon_pillar', x: 0.34, y: 0.70 },
-      { type: 'dragon_pillar', x: 0.66, y: 0.70 },
+      { type: 'kurukshetra_pillar', x: 0.34, y: 0.36 },
+      { type: 'kurukshetra_pillar', x: 0.66, y: 0.36 },
+      { type: 'kurukshetra_pillar', x: 0.34, y: 0.70 },
+      { type: 'kurukshetra_pillar', x: 0.66, y: 0.70 },
     ],
     spawns: [{ type: 'vrikodara', x: 0.64, y: 0.52, wave: 1 }],
   },

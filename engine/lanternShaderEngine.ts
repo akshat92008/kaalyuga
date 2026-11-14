@@ -9,6 +9,11 @@
 // ============================================================================
 
 import { ACT1_LOOK_OBJECTS, LanternLightState, LookObjectSpec } from './v7StoryEngine';
+import {
+  drawAdditiveFlipbookRowProgress,
+  PHASE2_VFX_SHEETS,
+  VRIKODARA_FLIPBOOK_ROWS,
+} from '@/lib/game/vfxFlipbook';
 
 export interface MoltenSlagFissure {
   x1: number;
@@ -244,7 +249,7 @@ export function renderBossMythicMechanics(
   }
 
   // 2. Dundubhi's 3-Second Tusk-Lodge Banner when baited into a ruined pillar
-  if (boss.type === 'xuemo' && (boss.tuskLodgedTimer ?? 0) > 0) {
+  if ((boss.type === 'dundubhi' || boss.type === 'xuemo') && (boss.tuskLodgedTimer ?? 0) > 0) {
     const rem = boss.tuskLodgedTimer ?? 0;
     ctx.save();
     ctx.font = 'bold 12px monospace';
@@ -261,20 +266,24 @@ export function renderBossMythicMechanics(
     ctx.restore();
   }
 
-  // 3. Vrikodara's Furnace-Belly Vacuum Vortex (Phase 1 & 2 Inhale Pull)
+  // 3. Vrikodara's Furnace-Belly Vacuum Vortex (Phase 1 & 2 Inhale Pull -> us4plh Row 0 Gravitational Vortex)
   if (boss.type === 'vrikodara' && (boss.vacuumActiveTimer ?? 0) > 0) {
-    ctx.save();
-    ctx.translate(boss.x, boss.y - 24);
-    for (let r = 0; r < 4; r++) {
-      const ringProg = ((time * 1.8 + r * 0.25) % 1);
-      const radius = (1 - ringProg) * 260 + 28;
-      ctx.strokeStyle = `rgba(255, 118, 42, ${(ringProg * 0.55).toFixed(2)})`;
-      ctx.lineWidth = 2.2;
-      ctx.beginPath();
-      ctx.ellipse(0, 0, radius, radius * 0.58, time * 2.5 + r, 0, Math.PI * 1.65);
-      ctx.stroke();
-    }
-    ctx.restore();
+    const vrikSheet = PHASE2_VFX_SHEETS.vrikodaraVacuumAndSlag4x2;
+    const vortexProg = (time * 3.6) % 1;
+    drawAdditiveFlipbookRowProgress(ctx, {
+      sheetUrl: vrikSheet.url,
+      cols: vrikSheet.cols,
+      rows: vrikSheet.rows,
+      rowIndex: VRIKODARA_FLIPBOOK_ROWS.FURNACE_GRAVITATIONAL_VORTEX,
+      progress: vortexProg,
+      x: boss.x,
+      y: boss.y - 26,
+      size: 256,
+      rotationRad: -(time * 2.8) % (Math.PI * 2),
+      scaleX: 1,
+      scaleY: 0.72,
+      alpha: 0.85,
+    });
   }
 
   ctx.restore();

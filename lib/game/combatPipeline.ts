@@ -5,10 +5,14 @@
 
 import { applyPostureDamage, StaffStance } from './rules';
 
-export const HITSTOP_MIN_SEC = 0.03; // 30ms minimum hitstop freeze-frame
-export const HITSTOP_MAX_SEC = 0.06; // 60ms maximum hitstop freeze-frame
+export const HITSTOP_MIN_SEC = 0.03; // 30ms minimum hitstop freeze-frame (light hits)
+export const HITSTOP_MAX_SEC = 0.07; // 70ms maximum hitstop freeze-frame (Heavy/Parry/Finisher)
+export const HEAVY_PARRY_FINISHER_HITSTOP_MIN_SEC = 0.045; // 45ms crisp hit-stop floor for Heavy/Parry/Finisher
+export const HEAVY_PARRY_FINISHER_HITSTOP_MAX_SEC = 0.07; // 70ms crisp hit-stop ceiling for Heavy/Parry/Finisher
 export const WHITE_HIT_FLASH_SEC = 0.048; // Crisp 1-to-3 frame white hit-flash
 export const MAX_CLAMPED_CAMERA_TRAUMA = 0.85; // Clamped trauma ceiling so stacked hits never disorient
+export const KALIYUGA_CRIT_GOLD_COLOR = '#ffd86b'; // Kaliyuga gold for critical / riposte / finisher hits
+export const KALIYUGA_NORMAL_BONE_WHITE_COLOR = '#f5ebd6'; // Bone-white for standard normal hits
 
 export type CombatHitWeight =
   | 'light'
@@ -92,20 +96,22 @@ export interface ReceiveHitOutput {
   whiteHitFlashSec: number;
   impulseVx: number;
   impulseVy: number;
+  cameraKickX: number;
+  cameraKickY: number;
   spraySpec: DirectionalSpraySpec;
   spray: DirectionalSpraySpec;
 }
 
 const DEFAULT_HITSTOP_BY_WEIGHT: Record<CombatHitWeight, number> = {
   light: 0.032,
-  dash_strike: 0.042,
-  riposte: 0.05,
-  heavy: 0.052,
-  finisher: 0.056,
-  execute: 0.06,
-  boss_slam: 0.058,
-  boss_strike: 0.056,
-  boss: 0.055,
+  dash_strike: 0.045,
+  riposte: 0.054,
+  heavy: 0.058,
+  finisher: 0.064,
+  execute: 0.07,
+  boss_slam: 0.064,
+  boss_strike: 0.058,
+  boss: 0.058,
   projectile: 0.034,
   hazard: 0.03,
 };
@@ -281,6 +287,22 @@ export function receiveHit(
     speed: effectiveWeight === 'execute' ? 235 : isHeavyClass ? 195 : 155,
   };
 
+  // Directional camera micro-kick (crisp 4-11px kick along impact vector for tactile weight)
+  const kickMagnitude =
+    effectiveWeight === 'execute'
+      ? 10.5
+      : effectiveWeight === 'finisher' || effectiveWeight === 'heavy'
+      ? 8.5
+      : effectiveWeight === 'riposte' || effectiveWeight === 'dash_strike'
+      ? 6.5
+      : 3.2;
+  const cameraKickX = Number(
+    (Math.cos(input.knockbackAngleRad) * kickMagnitude).toFixed(2)
+  );
+  const cameraKickY = Number(
+    (Math.sin(input.knockbackAngleRad) * kickMagnitude * 0.72).toFixed(2)
+  );
+
   return {
     hpLost,
     nextHp,
@@ -298,8 +320,70 @@ export function receiveHit(
     whiteHitFlashSec: WHITE_HIT_FLASH_SEC,
     impulseVx,
     impulseVy,
+    cameraKickX,
+    cameraKickY,
     spraySpec,
     spray: spraySpec,
+  };
+}
+
+export interface CleanDamagePopSpec {
+  text: string;
+  color: string;
+  scale: number;
+  x: number;
+  y: number;
+  isCrit: boolean;
+  mergedIntoExistingIndex: number;
+}
+
+/**
+ * Formats damage numbers into compact, single-pop Hades-style readouts:
+ * - Kaliyuga gold (`#ffd86b`) for crits/finishers/backstabs
+ * - Bone-white (`#f5ebd6`) for normal hits
+ * - Anti-overlap radial de-stacking so rapid hits never form noisy overlapping walls of text.
+ */
+export function formatCleanDamageNumber(params: {
+  amount: number;
+  isCrit: boolean;
+  x: number;
+  y: number;
+  existingPops?: Array<{ x: number; y: number; text: string; life: number }>;
+}): CleanDamagePopSpec {
+  const rounded = Math.max(1, Math.round(params.amount));
+  const isCrit = Boolean(params.isCrit);
+  const color = isCrit
+    ? KALIYUGA_CRIT_GOLD_COLOR
+    : KALIYUGA_NORMAL_BONE_WHITE_COLOR;
+  const text = isCrit ? `${rounded}!` : `${rounded}`;
+  const scale = isCrit ? 1.18 : 0.96;
+
+  let spawnX = params.x;
+  let spawnY = params.y;
+  let mergedIdx = -1;
+
+  const existing = params.existingPops ?? [];
+  let nearbyCount = 0;
+  for (let i = 0; i < existing.length; i++) {
+    const p = existing[i];
+    if (p.life <= 0.15) continue;
+    const dist = Math.hypot(p.x - spawnX, p.y - spawnY);
+    if (dist < 42) {
+      nearbyCount++;
+      const angle = ((nearbyCount * 2.1) % (Math.PI * 2));
+      spawnX += Math.cos(angle) * 20;
+      spawnY -= 14;
+    }
+  }
+
+  return {
+    text,
+    color,
+    scale,
+    x: Number(spawnX.toFixed(1)),
+    y: Number(spawnY.toFixed(1)),
+    isCrit,
+    mergedIntoExistingIndex: mergedIdx,
   };
 }
 
