@@ -186,6 +186,32 @@ async function fetchFromGitHub(segments: string[]): Promise<Buffer | null> {
   }
 }
 
+export async function HEAD(
+  _req: NextRequest,
+  context: { params: Promise<{ path: string[] }> }
+) {
+  const { path: segments } = await context.params;
+  if (!segments || segments.length === 0) {
+    return new NextResponse(null, { status: 400 });
+  }
+  const buffer = await fetchFromGitHub(segments);
+  if (!buffer) {
+    return new NextResponse(null, { status: 404 });
+  }
+  const lastSegment = segments[segments.length - 1] || '';
+  const ext = path.extname(lastSegment).toLowerCase();
+  const contentType = MIME_MAP[ext] || 'application/octet-stream';
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      'Accept-Ranges': 'bytes',
+      'Content-Length': String(buffer.byteLength),
+      'Content-Type': contentType,
+      'Cache-Control': 'public, max-age=31536000, immutable',
+    },
+  });
+}
+
 export async function GET(
   req: NextRequest,
   context: { params: Promise<{ path: string[] }> }

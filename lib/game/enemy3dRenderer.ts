@@ -961,8 +961,8 @@ export class Enemy3DRenderer {
 
     const activeKey = slot.key;
     const normalizedYaw = ((facingAngleRad % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
-    const yawIndex = Math.round((normalizedYaw / (Math.PI * 2)) * 12) % 12;
-    const quantizedYaw = (yawIndex / 12) * Math.PI * 2;
+    const yawIndex = Math.round((normalizedYaw / (Math.PI * 2)) * 10) % 10;
+    const quantizedYaw = (yawIndex / 10) * Math.PI * 2;
 
     const isActionState =
       state === 'windup' || state === 'attack' || state === 'hurt' || state === 'death';
@@ -971,7 +971,7 @@ export class Enemy3DRenderer {
       (state === 'windup' || state === 'attack' ? slot.actions.attack || slot.actions.chase : undefined) ||
       slot.actions.idle;
     const clipDur = targetAction ? Math.max(0.4, targetAction.getClip().duration) : 1.0;
-    const stepsPerCycle = state === 'idle' ? 10 : 12;
+    const stepsPerCycle = state === 'idle' ? 8 : 10;
 
     const stepIndex =
       isActionState && typeof stateProgress === 'number' && Number.isFinite(stateProgress)
@@ -982,7 +982,9 @@ export class Enemy3DRenderer {
         : Math.floor(((Math.max(0, animTimeSec) % clipDur) / clipDur) * stepsPerCycle);
     const quantizedTime = (stepIndex / stepsPerCycle) * clipDur;
 
-    const flashTag = hitFlash ? 'flash' : isElite ? 'elite' : 'norm';
+    const baseTag = isElite ? 'elite' : 'norm';
+    const baseCacheKey = `${activeKey}:${state}:y${yawIndex}:f${stepIndex}:${baseTag}`;
+    const flashTag = hitFlash ? 'flash' : baseTag;
     const cacheKey = `${activeKey}:${state}:y${yawIndex}:f${stepIndex}:${flashTag}`;
 
     const cached = this.atlasFrameCache.get(cacheKey);
@@ -991,15 +993,40 @@ export class Enemy3DRenderer {
       return cached;
     }
 
+    // Fast-path: if hitFlash is active and the un-flashed sprite frame is already cached, reuse it in 2D without invoking WebGL
+    if (hitFlash) {
+      const baseCached = this.atlasFrameCache.get(baseCacheKey) || this.slotLastCanvas.get(activeKey);
+      if (baseCached && typeof document !== 'undefined') {
+        const flashCanvas = document.createElement('canvas');
+        flashCanvas.width = baseCached.width;
+        flashCanvas.height = baseCached.height;
+        const fCtx = flashCanvas.getContext('2d');
+        if (fCtx) {
+          fCtx.drawImage(baseCached, 0, 0);
+          fCtx.globalCompositeOperation = 'source-atop';
+          fCtx.fillStyle = 'rgba(255, 248, 225, 0.82)';
+          fCtx.fillRect(0, 0, flashCanvas.width, flashCanvas.height);
+          fCtx.globalCompositeOperation = 'source-over';
+          if (this.atlasFrameCache.size > 840) {
+            const oldestKey = this.atlasFrameCache.keys().next().value;
+            if (oldestKey) this.atlasFrameCache.delete(oldestKey);
+          }
+          this.atlasFrameCache.set(cacheKey, flashCanvas);
+          this.lastActiveCanvas = flashCanvas;
+          return flashCanvas;
+        }
+      }
+    }
+
     if (!bypassBudget) {
-      // Per-frame WebGL render budget: cap at 3 uncached enemy WebGL renders per 8ms window
+      // Per-frame WebGL render budget: cap at 2 uncached enemy WebGL renders per 10ms window
       const nowMs = typeof performance !== 'undefined' ? performance.now() : 0;
-      if (nowMs - this.frameBudgetWindowMs > 8) {
+      if (nowMs - this.frameBudgetWindowMs > 10) {
         this.frameBudgetWindowMs = nowMs;
         this.rendersInCurrentWindow = 0;
       }
       const fallbackCanvas = this.slotLastCanvas.get(activeKey);
-      if (this.rendersInCurrentWindow >= 3 && fallbackCanvas && !hitFlash) {
+      if (this.rendersInCurrentWindow >= 2 && fallbackCanvas) {
         this.lastActiveCanvas = fallbackCanvas;
         return fallbackCanvas;
       }
@@ -1042,7 +1069,7 @@ export class Enemy3DRenderer {
       cacheFrame: false,
     });
 
-    if (this.atlasFrameCache.size > 380) {
+    if (this.atlasFrameCache.size > 840) {
       const oldestKey = this.atlasFrameCache.keys().next().value;
       if (oldestKey) this.atlasFrameCache.delete(oldestKey);
     }

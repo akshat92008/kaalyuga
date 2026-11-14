@@ -366,14 +366,14 @@ export function computeWeaponTipGlintPosition(params: {
   coreColor: string;
 } {
   const wp = Math.max(0, Math.min(1, params.windupProgress));
-  const liftY = (params.isBoss ? 58 : 42) + wp * (params.isBoss ? 18 : 12);
-  const reachX = params.facing * ((params.isBoss ? 24 : 16) - wp * 4);
+  const liftY = (params.isBoss ? 46 : 32) + wp * (params.isBoss ? 12 : 9);
+  const reachX = params.facing * ((params.isBoss ? 18 : 12) - wp * 3);
   const isParriable = params.attackKind !== 'shockwave';
 
   return {
     x: Number((params.enemyX + reachX).toFixed(2)),
     y: Number((params.enemyY - liftY).toFixed(2)),
-    starRadius: Number(((params.isBoss ? 22 : 15) * (0.85 + wp * 0.35)).toFixed(2)),
+    starRadius: Number(((params.isBoss ? 19 : 13) * (0.85 + wp * 0.35)).toFixed(2)),
     isParriable,
     primaryColor: isParriable ? '#ffd86b' : '#ff2a3c',
     coreColor: isParriable ? '#fffdf2' : '#ffd6d9',
@@ -486,6 +486,27 @@ export function renderBattleScarsOnFloor(
   ctx.restore();
 }
 
+let cachedShadowStampCanvas: HTMLCanvasElement | null = null;
+
+function getSharedShadowStampCanvas(): HTMLCanvasElement | null {
+  if (typeof document === 'undefined') return null;
+  if (cachedShadowStampCanvas) return cachedShadowStampCanvas;
+  const c = document.createElement('canvas');
+  c.width = 64;
+  c.height = 64;
+  const sCtx = c.getContext('2d');
+  if (sCtx) {
+    const grad = sCtx.createRadialGradient(32, 32, 2, 32, 32, 32);
+    grad.addColorStop(0, 'rgba(0, 0, 0, 1)');
+    grad.addColorStop(0.58, 'rgba(6, 3, 4, 0.56)');
+    grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    sCtx.fillStyle = grad;
+    sCtx.fillRect(0, 0, 64, 64);
+  }
+  cachedShadowStampCanvas = c;
+  return cachedShadowStampCanvas;
+}
+
 export function drawGrounded3DContactShadow(
   ctx: CanvasRenderingContext2D,
   params: {
@@ -498,61 +519,48 @@ export function drawGrounded3DContactShadow(
   }
 ): void {
   const shadow = computeGroundedContactShadow(params);
+  const stamp = getSharedShadowStampCanvas();
 
   ctx.save();
   ctx.translate(params.worldX, params.worldY);
 
-  // 1. Directional skewed soft penumbra cast away from nearest brazier light
-  ctx.save();
-  ctx.translate(shadow.directionalOffsetX, shadow.directionalOffsetY);
-  ctx.transform(1, 0, shadow.directionalSkewX, 1, 0, 0);
-  const penGrad = ctx.createRadialGradient(
-    0,
-    0,
-    shadow.penumbraRadiusX * 0.1,
-    0,
-    0,
-    shadow.penumbraRadiusX
-  );
-  penGrad.addColorStop(0, `rgba(0, 0, 0, ${shadow.penumbraAlpha})`);
-  penGrad.addColorStop(0.6, `rgba(0, 0, 0, ${(shadow.penumbraAlpha * 0.45).toFixed(3)})`);
-  penGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-  ctx.fillStyle = penGrad;
-  ctx.scale(1, shadow.penumbraRadiusY / Math.max(1, shadow.penumbraRadiusX));
-  ctx.beginPath();
-  ctx.arc(0, 0, shadow.penumbraRadiusX, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
+  if (stamp) {
+    // 1. Directional skewed soft penumbra (zero gradient allocation)
+    ctx.save();
+    ctx.translate(shadow.directionalOffsetX, shadow.directionalOffsetY);
+    ctx.transform(1, 0, shadow.directionalSkewX, 1, 0, 0);
+    ctx.globalAlpha = shadow.penumbraAlpha;
+    ctx.drawImage(
+      stamp,
+      -shadow.penumbraRadiusX,
+      -shadow.penumbraRadiusY,
+      shadow.penumbraRadiusX * 2,
+      shadow.penumbraRadiusY * 2
+    );
+    ctx.restore();
 
-  // 2. Tight boot-level Ambient Occlusion contact shadow core (anchors feet to stone with high contrast)
-  ctx.save();
-  const aoGrad = ctx.createRadialGradient(
-    0,
-    0,
-    shadow.aoCoreRadiusX * 0.08,
-    0,
-    0,
-    shadow.aoCoreRadiusX * 1.15
-  );
-  aoGrad.addColorStop(0, `rgba(0, 0, 0, ${Math.min(0.92, shadow.aoCoreAlpha * 1.15).toFixed(3)})`);
-  aoGrad.addColorStop(0.65, `rgba(6, 3, 4, ${(shadow.aoCoreAlpha * 0.68).toFixed(3)})`);
-  aoGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-  ctx.fillStyle = aoGrad;
-  ctx.scale(1, shadow.aoCoreRadiusY / Math.max(1, shadow.aoCoreRadiusX));
-  ctx.beginPath();
-  ctx.arc(0, 0, shadow.aoCoreRadiusX * 1.15, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
+    // 2. Tight boot-level AO core
+    ctx.save();
+    ctx.globalAlpha = Math.min(0.9, shadow.aoCoreAlpha * 1.1);
+    const coreRx = shadow.aoCoreRadiusX * 1.15;
+    const coreRy = shadow.aoCoreRadiusY * 1.15;
+    ctx.drawImage(stamp, -coreRx, -coreRy, coreRx * 2, coreRy * 2);
+    ctx.restore();
+  } else {
+    ctx.fillStyle = `rgba(0, 0, 0, ${shadow.aoCoreAlpha.toFixed(2)})`;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, shadow.aoCoreRadiusX, shadow.aoCoreRadiusY, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
 
-  // 3. Subtle warm subsurface firelight rim bounce on the stone under the warrior (Hades floor separation)
+  // 3. Crisp rim contact ring under actor
   const rimCol = params.accentColor || '#ff7b29';
   ctx.save();
-  ctx.globalCompositeOperation = 'screen';
-  ctx.globalAlpha = Math.max(0.22, shadow.warmBounceAlpha * 0.72);
+  ctx.globalAlpha = Math.max(0.2, shadow.warmBounceAlpha * 0.65);
   ctx.strokeStyle = rimCol;
-  ctx.lineWidth = 1.5;
+  ctx.lineWidth = 1.25;
   ctx.beginPath();
-  ctx.ellipse(0, 0, shadow.aoCoreRadiusX * 0.98, shadow.aoCoreRadiusY * 0.98, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, 0, shadow.aoCoreRadiusX * 0.96, shadow.aoCoreRadiusY * 0.96, 0, 0, Math.PI * 2);
   ctx.stroke();
   ctx.restore();
 

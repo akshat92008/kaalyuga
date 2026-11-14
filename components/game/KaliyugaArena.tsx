@@ -416,7 +416,7 @@ const MAX_AMBIENT_MOTES = 48;
 const WORLD_SCALE = 1.18;
 const CANONICAL_WORLD_W = Math.round(1440 * WORLD_SCALE);
 const CANONICAL_WORLD_H = Math.round(900 * WORLD_SCALE);
-const BASE_CAMERA_ZOOM = 0.96;
+const BASE_CAMERA_ZOOM = 0.88;
 type HadesCameraPreset = 'dynamic_action' | 'tactical_wide' | 'hades_close';
 type EnemyRenderMode = 'hybrid_2d_3d' | 'all_3d';
 
@@ -874,7 +874,7 @@ export default function KaliyugaArena() {
       maxLife: 0.34,
       composite: 'screen' as GlobalCompositeOperation,
     })),
-    videoBgEnabled: false,
+    videoBgEnabled: true,
     lowEndMode: false,
     ambientMotes: Array.from({ length: MAX_AMBIENT_MOTES }, (_, idx) => ({
       x: (idx * 97) % 1440,
@@ -976,11 +976,11 @@ export default function KaliyugaArena() {
 
   // Path A Stylized Hybrid Pipeline — 60FPS 3D Animated Rudra + Bosses + Hand-Painted 2D Enemy Horde
   useEffect(() => {
-    const r3d = new Rudra3DRenderer(256);
+    const r3d = new Rudra3DRenderer(192);
     rudra3dRef.current = r3d;
-    const b3d = new Boss3DRenderer(288);
+    const b3d = new Boss3DRenderer(224);
     boss3dRef.current = b3d;
-    const e3d = new Enemy3DRenderer(256);
+    const e3d = new Enemy3DRenderer(192);
     enemy3dRef.current = e3d;
 
     let ticks = 0;
@@ -1738,7 +1738,7 @@ export default function KaliyugaArena() {
       }
       if (clampedIdx === 3 || clampedIdx === 7) {
         if (!boss3dRef.current) {
-          boss3dRef.current = new Boss3DRenderer(288);
+          boss3dRef.current = new Boss3DRenderer(224);
         }
         const bossKind = clampedIdx === 3 ? 'dundubhi' : 'vrikodara';
         if (typeof window !== 'undefined') {
@@ -5239,7 +5239,7 @@ export default function KaliyugaArena() {
     const resizeCanvas = () => {
       const vw = window.innerWidth || 1440;
       const vh = window.innerHeight || 900;
-      const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+      const dpr = Math.min(window.devicePixelRatio || 1, 1.0);
       canvas.width = Math.round(vw * dpr);
       canvas.height = Math.round(vh * dpr);
       simRef.current.viewportW = vw;
@@ -5270,13 +5270,13 @@ export default function KaliyugaArena() {
 
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = 'high';
+      ctx.imageSmoothingQuality = 'medium';
 
       // FPS counter
       sim.frameCounter += 1;
       sim.fpsAccum += rawDt;
       if (sim.fpsAccum >= 0.5) {
-        sim.fps = Math.min(60, Math.max(30, Math.round(sim.frameCounter / sim.fpsAccum)));
+        sim.fps = Math.min(60, Math.max(1, Math.round(sim.frameCounter / sim.fpsAccum)));
         sim.frameCounter = 0;
         sim.fpsAccum = 0;
       }
@@ -5304,9 +5304,9 @@ export default function KaliyugaArena() {
       const activeBoss = sim.enemies.find((e) => e.isBoss && e.aiState !== 'ko' && e.hp > 0);
       const rawPresetZoom =
         sim.cameraPreset === 'tactical_wide'
-          ? 0.90
+          ? 0.82
           : sim.cameraPreset === 'hades_close'
-          ? 1.12
+          ? 0.98
           : BASE_CAMERA_ZOOM;
       const presetBaseZoom = cw < 640 ? rawPresetZoom * 0.78 : rawPresetZoom;
       const targetZoom =
@@ -7725,7 +7725,11 @@ export default function KaliyugaArena() {
       const flicker = 0.88 + Math.sin(now * 0.008) * 0.08 + Math.cos(now * 0.019) * 0.04;
       const primaryLightX = (chamberSpec.braziers[0]?.x ?? 0.5) * worldW;
 
-      // Step 2: Render Hand-Painted 16:9 Isometric Arena, Exit Gate Archways, Reward Orbs & Surface Craters
+      // Step 2: Render Full-Color 1080p Animated MP4 Arena (or Painted Fallback), Exit Gate Archways & Surface Scars
+      const resolvedChamberVideoUrl =
+        activeBoss && activeBoss.phase >= 2 && chamberSpec.phase2VideoUrl
+          ? chamberSpec.phase2VideoUrl
+          : chamberSpec.videoUrl;
       renderIsometricChamberPlatform(
         ctx,
         worldW,
@@ -7737,25 +7741,6 @@ export default function KaliyugaArena() {
         isChamberCleared,
         Boolean(nextSpec?.isBossChamber),
         () => {
-          // Subtle Atmospheric Edge Vignette to frame the hand-painted chamber without darkening the playfield
-          ctx.save();
-          const chamberGrade = ctx.createRadialGradient(
-            worldW * 0.5,
-            worldH * 0.52,
-            worldW * 0.34,
-            worldW * 0.5,
-            worldH * 0.52,
-            worldW * 0.72
-          );
-          chamberGrade.addColorStop(0, 'rgba(0, 0, 0, 0)');
-          chamberGrade.addColorStop(0.75, 'rgba(6, 4, 5, 0.06)');
-          chamberGrade.addColorStop(1, 'rgba(3, 2, 4, 0.22)');
-          ctx.fillStyle = chamberGrade;
-          ctx.fillRect(0, 0, worldW, worldH);
-          ctx.restore();
-
-          // 1.7. Pillar 1: Persistent Battle Scars & Warzone Floor Decals (Blood Splatters, Charred Marks, Shattered Armor, Footstep Ash)
-          // Stage B (Step 12): Removed persistent glowing Sanskrit Om Yantra floor ring decals (sim.craters) that looked like active hazards.
           renderBattleScarsOnFloor(ctx, sim.battleScars);
           void vedicVfxAsset;
           void skullAndLotusVfxAsset;
@@ -7764,7 +7749,7 @@ export default function KaliyugaArena() {
           void impactsAsset;
           void brazierFlameAsset;
         },
-        chamberSpec.videoUrl,
+        resolvedChamberVideoUrl,
         !sim.videoBgEnabled
       );
 
@@ -7852,26 +7837,26 @@ export default function KaliyugaArena() {
       // Step 2.4: Keep ground flagstone art crystal clear without radial orange/pink GI blob noise during combat
       void renderWorldSpaceLumenGI;
 
-      // 2. Living Background Animation: 4-Frame Hand-Painted Roaring Agni Brazier Flame Flipbook (vqynauvqynauvqyn_da9af05e.png)
+      // 2. Brazier floor glow pools only needed in static artwork fallback (MP4 arenas already contain dynamic fire lighting)
       ctx.save();
-      chamberSpec.braziers.forEach((b, bIdx) => {
-        const bx = b.x * worldW;
-        const by = b.y * worldH;
-        const r = b.radius * 1.35 * flicker;
-
-        // Warm additive floor light pool around each brazier
-        ctx.save();
-        ctx.globalCompositeOperation = 'screen';
-        const grad = ctx.createRadialGradient(bx, by, 4, bx, by, r);
-        grad.addColorStop(0, b.color + '78');
-        grad.addColorStop(0.45, b.color + '28');
-        grad.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx.fillStyle = grad;
-        ctx.beginPath();
-        ctx.arc(bx, by, r, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-      });
+      if (!sim.videoBgEnabled) {
+        chamberSpec.braziers.forEach((b) => {
+          const bx = b.x * worldW;
+          const by = b.y * worldH;
+          const r = b.radius * 1.15 * flicker;
+          ctx.save();
+          ctx.globalCompositeOperation = 'screen';
+          const grad = ctx.createRadialGradient(bx, by, 4, bx, by, r);
+          grad.addColorStop(0, b.color + '55');
+          grad.addColorStop(0.5, b.color + '1c');
+          grad.addColorStop(1, 'rgba(0,0,0,0)');
+          ctx.fillStyle = grad;
+          ctx.beginPath();
+          ctx.arc(bx, by, r, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        });
+      }
 
       // Draw Active Hades Multi-Wave Summoning Pentagram Rifts using Hand-Painted Ground Decal Frame 3
       for (const rift of sim.summoningRifts) {
@@ -8030,9 +8015,9 @@ export default function KaliyugaArena() {
           ctx.translate(e.x, e.y);
           ctx.scale(1, 0.56);
           ctx.strokeStyle = 'rgba(255, 216, 107, 0.72)';
-          ctx.lineWidth = 2.6;
+          ctx.lineWidth = 2.2;
           ctx.beginPath();
-          ctx.arc(0, 0, 34, e.aimAngle - 0.85, e.aimAngle + 0.85);
+          ctx.arc(0, 0, 24, e.aimAngle - 0.85, e.aimAngle + 0.85);
           ctx.stroke();
           ctx.restore();
         }
@@ -8444,7 +8429,7 @@ export default function KaliyugaArena() {
 
             if (use3DBakedBoss && sim.state !== 'title') {
               if (!boss3dRef.current) {
-                boss3dRef.current = new Boss3DRenderer(288);
+                boss3dRef.current = new Boss3DRenderer(224);
               }
               const boss3d = boss3dRef.current;
               const bossType = e.type === 'xuemo' ? 'dundubhi' : 'vrikodara';
@@ -8475,13 +8460,13 @@ export default function KaliyugaArena() {
                 drawGrounded3DContactShadow(ctx, {
                   worldX: e.x,
                   worldY: e.y,
-                  baseRadius: (e.type === 'vrikodara' ? 30 : 28) * growthMult,
+                  baseRadius: (e.type === 'vrikodara' ? 21 : 19) * growthMult,
                   elevationY: bob,
                   lightSourceX: primaryLightX,
                   accentColor: e.aiState === 'windup' || e.phase >= 2 ? '#ff3b2f' : '#ffbe55',
                 });
 
-                const baseSize = e.type === 'vrikodara' ? 176 : 164;
+                const baseSize = e.type === 'vrikodara' ? 132 : 122;
                 const drawSize = Math.round(baseSize * growthMult);
                 const anchorX = -drawSize * 0.5;
                 const anchorY = -drawSize * 0.79;
@@ -8507,7 +8492,7 @@ export default function KaliyugaArena() {
                 e.animTime,
                 bossStateProgress
               );
-              const bossTargetH = Math.round((e.type === 'vrikodara' ? 162 : 148) * growthMult);
+              const bossTargetH = Math.round((e.type === 'vrikodara' ? 116 : 108) * growthMult);
               drawSpriteFrame(
                 ctx,
                 boss2DAsset,
@@ -8522,7 +8507,7 @@ export default function KaliyugaArena() {
                 bossScaleY,
                 isFlash,
                 bob,
-                (e.type === 'vrikodara' ? 30 : 28) * growthMult,
+                (e.type === 'vrikodara' ? 21 : 19) * growthMult,
                 'gold',
                 enemySkewX,
                 primaryLightX,
@@ -8593,15 +8578,15 @@ export default function KaliyugaArena() {
                 ? Math.floor(e.animTime * 8.0) % 4
                 : Math.floor(e.animTime * 3.2) % 2;
 
-            // Crisp HD stature (98–116px) so every enemy reads with crystal clarity
+            // Scaled Hades-level stature (66-78px 2D / 92-110px 3D) so the arena chamber feels wide & monumental
             const targetH =
               e.type === 'furnace_titan'
-                ? 116
+                ? 78
                 : e.type === 'stone_golem'
-                ? 106
+                ? 72
                 : e.type === 'fire_monk'
-                ? 98
-                : 98;
+                ? 66
+                : 66;
 
             // Fluent combat squash/stretch & lunge interpolation during windup/attack
             const windupCoil =
@@ -8654,7 +8639,7 @@ export default function KaliyugaArena() {
                 worldX: e.x + lungeOffsetX,
                 worldY: e.y + lungeOffsetY,
                 baseRadius:
-                  e.type === 'furnace_titan' ? 22 : e.type === 'stone_golem' ? 20 : 18,
+                  e.type === 'furnace_titan' ? 14 : e.type === 'stone_golem' ? 13 : 11,
                 elevationY: bob,
                 lightSourceX: primaryLightX,
                 accentColor:
@@ -8667,12 +8652,12 @@ export default function KaliyugaArena() {
 
               const drawSize =
                 e.type === 'furnace_titan'
-                  ? 166
+                  ? 110
                   : e.type === 'stone_golem'
-                  ? 152
+                  ? 100
                   : e.type === 'fire_monk'
-                  ? 142
-                  : 142;
+                  ? 92
+                  : 92;
               const anchorX = -drawSize * 0.5;
               const anchorY = -drawSize * 0.78;
               const activeEnemyCanvas = enemy3d.getActiveCanvas();
@@ -8719,25 +8704,25 @@ export default function KaliyugaArena() {
             const wProg = Math.max(0, Math.min(1, 1 - (e.ironGuardWindupTimer || 0) / 0.22));
             ctx.save();
             ctx.globalCompositeOperation = 'screen';
-            ctx.translate(e.x + e.facing * 12, e.y - (e.isBoss ? 28 : 20));
+            ctx.translate(e.x + e.facing * 9, e.y - (e.isBoss ? 22 : 15));
             ctx.strokeStyle = '#ffe484';
             ctx.lineWidth = 2.0 + wProg * 1.2;
             ctx.setLineDash([4, 3]);
             ctx.beginPath();
             const gAng = e.facing >= 0 ? 0 : Math.PI;
-            ctx.arc(0, 0, (e.isBoss ? 26 : 18) * (1.25 - wProg * 0.25), gAng - 1.05, gAng + 1.05);
+            ctx.arc(0, 0, (e.isBoss ? 20 : 14) * (1.25 - wProg * 0.25), gAng - 1.05, gAng + 1.05);
             ctx.stroke();
             ctx.setLineDash([]);
             ctx.restore();
           } else if (e.parryStanceTimer > 0 && e.aiState !== 'ko') {
             ctx.save();
             ctx.globalCompositeOperation = 'screen';
-            ctx.translate(e.x + e.facing * 12, e.y - (e.isBoss ? 28 : 20));
+            ctx.translate(e.x + e.facing * 9, e.y - (e.isBoss ? 22 : 15));
             ctx.strokeStyle = '#ffd86b';
-            ctx.lineWidth = 2.4;
+            ctx.lineWidth = 2.2;
             ctx.beginPath();
             const gAng = e.facing >= 0 ? 0 : Math.PI;
-            ctx.arc(0, 0, e.isBoss ? 22 : 14, gAng - 0.9, gAng + 0.9);
+            ctx.arc(0, 0, e.isBoss ? 17 : 11, gAng - 0.9, gAng + 0.9);
             ctx.stroke();
             ctx.restore();
           }
@@ -8748,16 +8733,16 @@ export default function KaliyugaArena() {
             ctx.globalCompositeOperation = 'screen';
             for (let cIdx = 0; cIdx < count; cIdx++) {
               const orbitAng = now * 0.0055 + (cIdx * Math.PI * 2) / count;
-              const ox = e.x + Math.cos(orbitAng) * (e.isBoss ? 20 : 14);
-              const oy = e.y - (e.isBoss ? 28 : 20) + Math.sin(orbitAng) * 8;
+              const ox = e.x + Math.cos(orbitAng) * (e.isBoss ? 15 : 10);
+              const oy = e.y - (e.isBoss ? 22 : 15) + Math.sin(orbitAng) * 6;
               ctx.fillStyle = '#ff2a4b';
               ctx.strokeStyle = '#ffe14d';
               ctx.lineWidth = 1.2;
               ctx.beginPath();
-              ctx.moveTo(ox, oy - 5);
-              ctx.lineTo(ox + 3.5, oy);
-              ctx.lineTo(ox, oy + 5);
-              ctx.lineTo(ox - 3.5, oy);
+              ctx.moveTo(ox, oy - 4.5);
+              ctx.lineTo(ox + 3, oy);
+              ctx.lineTo(ox, oy + 4.5);
+              ctx.lineTo(ox - 3, oy);
               ctx.closePath();
               ctx.fill();
               ctx.stroke();
@@ -8803,9 +8788,9 @@ export default function KaliyugaArena() {
           }
 
           if (e.isWarden3D && e.aiState !== 'ko') {
-            const bw = 64;
+            const bw = 56;
             const bx = e.x - bw * 0.5;
-            const by = e.y - 84;
+            const by = e.y - 60;
             ctx.save();
             ctx.font = "bold 8px 'Cinzel', Georgia, serif";
             ctx.textAlign = 'center';
@@ -8828,9 +8813,9 @@ export default function KaliyugaArena() {
             e.aiState !== 'ko' &&
             (e.hp < e.maxHp || e.posture < e.maxPosture * 0.98)
           ) {
-            const bw = 28;
+            const bw = 24;
             const bx = e.x - bw * 0.5;
-            const by = e.y - (e.type === 'stone_golem' || e.type === 'furnace_titan' ? 62 : 52);
+            const by = e.y - (e.type === 'stone_golem' || e.type === 'furnace_titan' ? 46 : 38);
             ctx.fillStyle = 'rgba(0,0,0,0.65)';
             ctx.fillRect(bx, by, bw, 3.2);
             ctx.fillStyle = 'rgba(255, 232, 168, 0.80)';
@@ -8882,9 +8867,9 @@ export default function KaliyugaArena() {
           ctx.translate(p.x, p.y);
           const isDashing = p.action === 'dodge';
           ctx.strokeStyle = isDashing ? 'rgba(99, 242, 255, 0.55)' : 'rgba(212, 165, 72, 0.42)';
-          ctx.lineWidth = 1.4;
+          ctx.lineWidth = 1.25;
           ctx.beginPath();
-          ctx.ellipse(0, 0, 15, 8, 0, 0, Math.PI * 2);
+          ctx.ellipse(0, 0, 11, 6, 0, 0, Math.PI * 2);
           ctx.stroke();
           ctx.restore();
 
@@ -8920,13 +8905,13 @@ export default function KaliyugaArena() {
             drawGrounded3DContactShadow(ctx, {
               worldX: p.x,
               worldY: p.y,
-              baseRadius: 19,
+              baseRadius: 13,
               elevationY: 0,
               lightSourceX: primaryLightX,
               accentColor: '#d4a548',
             });
 
-            const drawSize = 152;
+            const drawSize = 100;
             const anchorX = -drawSize * 0.5;
             const anchorY = -drawSize * 0.77;
 
@@ -8949,14 +8934,14 @@ export default function KaliyugaArena() {
               1,
               p.x,
               p.y,
-              96,
-              96,
+              68,
+              68,
               p.facing,
               1,
               1,
               p.hitFlashTimer > 0 || p.action === 'dodge',
               walkBob,
-              22,
+              16,
               playerRim,
               0,
               primaryLightX
@@ -8968,7 +8953,7 @@ export default function KaliyugaArena() {
             const isHeavy = p.action === 'heavy_unleash' || p.action === 'execute';
             const isSpin = !isHeavy && p.comboStep === 3;
             const swingProg = Math.max(0.10, Math.min(0.86, p.weaponSwingProgress));
-            const smearRadius = isHeavy ? 88 : isSpin ? 74 : 64;
+            const smearRadius = isHeavy ? 68 : isSpin ? 58 : 50;
             const reverseFlip = !isHeavy && p.comboStep === 2 ? -1 : 1;
             const dynamicSweepAngle =
               p.slashAngle +
@@ -8978,7 +8963,7 @@ export default function KaliyugaArena() {
 
             const ribbonMesh = computeWeaponSlashRibbon({
               originX: p.x,
-              originY: p.y - 22,
+              originY: p.y - 15,
               aimAngle: dynamicSweepAngle,
               swingProgress: (swingProg - 0.10) / 0.76,
               radius: smearRadius,
@@ -9001,14 +8986,14 @@ export default function KaliyugaArena() {
           sim.enemies.some(
             (e) =>
               e.aiState !== 'ko' &&
-              e.y >= p.y - 12 &&
-              Math.hypot(e.x - p.x, (e.y - p.y) * 1.2) < 62
+              e.y >= p.y - 10 &&
+              Math.hypot(e.x - p.x, (e.y - p.y) * 1.2) < 46
           ) ||
           sim.props.some(
             (pr) =>
               !pr.destroyed &&
               pr.y >= p.y - 8 &&
-              Math.hypot(pr.x - p.x, (pr.y - p.y) * 1.2) < 48
+              Math.hypot(pr.x - p.x, (pr.y - p.y) * 1.2) < 38
           );
 
         const rudra3d = rudra3dRef.current;
@@ -9016,16 +9001,16 @@ export default function KaliyugaArena() {
           // Crisp golden ground ring + silhouette highlight when obscured by enemies, VFX, or pillars
           ctx.save();
           ctx.strokeStyle = '#ffd86b';
-          ctx.lineWidth = 2.4;
+          ctx.lineWidth = 2.0;
           ctx.setLineDash([5, 3]);
           ctx.beginPath();
-          ctx.ellipse(p.x, p.y, 24, 13, 0, 0, Math.PI * 2);
+          ctx.ellipse(p.x, p.y, 17, 9, 0, 0, Math.PI * 2);
           ctx.stroke();
           ctx.setLineDash([]);
           ctx.restore();
 
           if (rudra3d && rudra3d.isReady) {
-            const drawSize = 76;
+            const drawSize = 52;
             ctx.save();
             ctx.globalCompositeOperation = 'screen';
             ctx.globalAlpha = 0.68;
@@ -9039,19 +9024,19 @@ export default function KaliyugaArena() {
           ctx.font = '700 10px sans-serif';
           ctx.textAlign = 'center';
           ctx.fillStyle = '#ffd86b';
-          ctx.fillText('▼ RUDRA', p.x, p.y - 64 - p.elevationY - walkBob);
+          ctx.fillText('▼ RUDRA', p.x, p.y - 48 - p.elevationY - walkBob);
           ctx.restore();
         }
 
         if (p.hp < p.maxHp * 0.9) {
-          const markerY = p.y - 46 - p.elevationY - walkBob;
-          const barW = 30;
+          const markerY = p.y - 34 - p.elevationY - walkBob;
+          const barW = 24;
           const barX = p.x - barW * 0.5;
           ctx.save();
           ctx.fillStyle = 'rgba(0, 0, 0, 0.72)';
-          ctx.fillRect(barX - 1, markerY - 1, barW + 2, 4.5);
+          ctx.fillRect(barX - 1, markerY - 1, barW + 2, 4.0);
           ctx.fillStyle = '#3ee0a8';
-          ctx.fillRect(barX, markerY, barW * Math.max(0, p.hp / p.maxHp), 2.5);
+          ctx.fillRect(barX, markerY, barW * Math.max(0, p.hp / p.maxHp), 2.2);
           ctx.restore();
         }
       }
@@ -9430,33 +9415,33 @@ export default function KaliyugaArena() {
         ctx.restore();
       }
 
-      // 11. Subtle Cinematic Peripheral Vignette + Low-HP Crimson Pulse + Impact Flash
-      ctx.save();
+      // 11. Low-HP Crimson Warning Pulse Only (Zero dark vignette shading over bright arena colors)
       const isLowHp = sim.player.hp > 0 && sim.player.hp / sim.player.maxHp < 0.32;
-      const vMaxDim = Math.max(cw, ch);
-      const vGrad = ctx.createRadialGradient(
-        cw * 0.5,
-        ch * 0.5,
-        vMaxDim * 0.42,
-        cw * 0.5,
-        ch * 0.5,
-        vMaxDim * 0.82
-      );
-      vGrad.addColorStop(0, 'rgba(0,0,0,0)');
-      vGrad.addColorStop(
-        1,
-        isLowHp ? 'rgba(185, 20, 20, 0.38)' : 'rgba(4, 3, 6, 0.18)'
-      );
-      ctx.fillStyle = vGrad;
-      ctx.fillRect(0, 0, cw, ch);
-
-      if (sim.screenFlashAlpha > 0) {
-        ctx.globalCompositeOperation = 'screen';
-        ctx.globalAlpha = Math.min(0.08, sim.screenFlashAlpha);
-        ctx.fillStyle = sim.screenFlashColor;
-        ctx.fillRect(0, 0, cw, ch);
+      if (isLowHp || sim.screenFlashAlpha > 0) {
+        ctx.save();
+        if (isLowHp) {
+          const vMaxDim = Math.max(cw, ch);
+          const vGrad = ctx.createRadialGradient(
+            cw * 0.5,
+            ch * 0.5,
+            vMaxDim * 0.45,
+            cw * 0.5,
+            ch * 0.5,
+            vMaxDim * 0.84
+          );
+          vGrad.addColorStop(0, 'rgba(0,0,0,0)');
+          vGrad.addColorStop(1, 'rgba(185, 20, 20, 0.34)');
+          ctx.fillStyle = vGrad;
+          ctx.fillRect(0, 0, cw, ch);
+        }
+        if (sim.screenFlashAlpha > 0) {
+          ctx.globalCompositeOperation = 'screen';
+          ctx.globalAlpha = Math.min(0.08, sim.screenFlashAlpha);
+          ctx.fillStyle = sim.screenFlashColor;
+          ctx.fillRect(0, 0, cw, ch);
+        }
+        ctx.restore();
       }
-      ctx.restore();
 
       // 11.5. Stage B (Step 13): Hide DIVYA RADAR minimap behind ?debug=1 query flag
       if (isDebugMode && sim.modernSettings.showMinimap && sim.state === 'playing') {

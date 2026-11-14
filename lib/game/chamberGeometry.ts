@@ -1,7 +1,6 @@
 // Hades-Style Isometric Chamber Collision Boundaries, Asset-Driven Exit Gates, Reward Orbs, Floor Traps & Foreground Parallax
 import { GAME_ASSETS } from './assets';
 import { getProcessedSpriteSync } from './spriteProcessor';
-import { computeArenaFloorGradeSpec } from './hadesSpriteBaker';
 
 export interface NormPoint {
   x: number;
@@ -361,40 +360,54 @@ export function renderParallaxAbyss(
   ctx.restore();
 }
 
-// Singleton Low-End-Optimized Arena Video Pool (Only 1 active decoder at a time + 30Hz offscreen frame blit cache)
+// Singleton 60 FPS Arena Video Pool (Only 1 active GPU-accelerated decoder at a time, zero double-blit)
 const arenaVideoPool = new Map<string, HTMLVideoElement>();
 let currentPlayingVideoUrl: string | null = null;
-let offscreenVideoCanvas: HTMLCanvasElement | null = null;
-let offscreenVideoCtx: CanvasRenderingContext2D | null = null;
-let lastVideoBlitTimeMs = 0;
-let lastBlittedVideoUrl: string | null = null;
-
 const arenaVideoPlayPending = new Set<string>();
+let videoGestureUnlockBound = false;
+
+function bindVideoGestureUnlock(): void {
+  if (videoGestureUnlockBound || typeof window === 'undefined') return;
+  videoGestureUnlockBound = true;
+  const resumeActiveVideo = () => {
+    if (!currentPlayingVideoUrl) return;
+    const active = arenaVideoPool.get(currentPlayingVideoUrl);
+    if (active && active.paused && active.readyState >= 2) {
+      active.play().catch(() => {});
+    }
+  };
+  window.addEventListener('pointerdown', resumeActiveVideo, { passive: true });
+  window.addEventListener('keydown', resumeActiveVideo, { passive: true });
+}
 
 export function getOrStartArenaVideo(videoUrl: string | undefined, paused: boolean = false): HTMLVideoElement | null {
   if (typeof window === 'undefined' || typeof document === 'undefined' || !videoUrl) {
     return null;
   }
+  bindVideoGestureUnlock();
   let video = arenaVideoPool.get(videoUrl);
   if (!video) {
     video = document.createElement('video');
+    video.crossOrigin = 'anonymous';
     video.muted = true;
     video.defaultMuted = true;
     video.loop = true;
     video.playsInline = true;
     video.preload = 'auto';
-    video.src = videoUrl;
+    video.src = encodeURI(videoUrl);
     const targetVid = video;
-    targetVid.addEventListener('canplay', () => {
+    const tryStart = () => {
       if (currentPlayingVideoUrl === videoUrl && targetVid.paused) {
         targetVid.play().catch(() => {});
       }
-    });
+    };
+    targetVid.addEventListener('loadeddata', tryStart);
+    targetVid.addEventListener('canplay', tryStart);
     targetVid.load();
     arenaVideoPool.set(videoUrl, video);
   }
 
-  // Pause all other chamber videos so low-end devices only ever decode 1 stream
+  // Pause all other chamber videos so devices only decode 1 active arena MP4
   if (currentPlayingVideoUrl !== videoUrl) {
     arenaVideoPool.forEach((otherVid, url) => {
       if (url !== videoUrl && !otherVid.paused) {
@@ -431,7 +444,7 @@ export function renderIsometricChamberPlatform(
   worldW: number,
   worldH: number,
   bgImg: HTMLImageElement | undefined,
-  floorTint: string,
+  _floorTint: string,
   chamberIndex: number,
   now: number,
   isChamberCleared: boolean,
@@ -451,41 +464,13 @@ export function renderIsometricChamberPlatform(
     activeVideo!.videoWidth > 0 &&
     activeVideo!.videoHeight > 0;
 
-  // 1. Full Bleed 1080p HD Animated Arena Video OR Hand-Painted 16:9 Isometric Chamber Artwork
+  // 1. Full Bleed 1080p HD Animated Arena Video (Direct GPU Video -> Canvas Draw, Zero Dark Color Shading!) OR Artwork Fallback
   if (isVideoReady && activeVideo) {
-    const targetVidW = Math.min(1920, activeVideo.videoWidth || 1920);
-    const targetVidH = Math.min(1080, activeVideo.videoHeight || 1080);
-    if (
-      (!offscreenVideoCanvas ||
-        offscreenVideoCanvas.width !== targetVidW ||
-        offscreenVideoCanvas.height !== targetVidH) &&
-      typeof document !== 'undefined'
-    ) {
-      offscreenVideoCanvas = document.createElement('canvas');
-      offscreenVideoCanvas.width = targetVidW;
-      offscreenVideoCanvas.height = targetVidH;
-      offscreenVideoCtx = offscreenVideoCanvas.getContext('2d', { alpha: false });
-    }
-    if (
-      offscreenVideoCanvas &&
-      offscreenVideoCtx &&
-      (now - lastVideoBlitTimeMs >= 16 || lastBlittedVideoUrl !== resolvedVideoUrl)
-    ) {
-      offscreenVideoCtx.drawImage(
-        activeVideo,
-        0,
-        0,
-        offscreenVideoCanvas.width,
-        offscreenVideoCanvas.height
-      );
-      lastVideoBlitTimeMs = now;
-      lastBlittedVideoUrl = resolvedVideoUrl || null;
-    }
-    ctx.drawImage(offscreenVideoCanvas || activeVideo, 0, 0, worldW, worldH);
+    ctx.drawImage(activeVideo, 0, 0, worldW, worldH);
   } else if (bgImg && bgImg.complete && bgImg.naturalWidth > 0) {
     ctx.drawImage(bgImg, 0, 0, worldW, worldH);
   } else {
-    // Instant Painted-Style Vedic Stone Sanctuary Floor Fallback while high-res PNG finishes streaming
+    // Instant Painted-Style Vedic Stone Sanctuary Floor Fallback while high-res media finishes streaming
     const floorGrad = ctx.createRadialGradient(
       worldW * 0.5,
       worldH * 0.52,
@@ -518,65 +503,12 @@ export function renderIsometricChamberPlatform(
     ctx.restore();
   }
 
-  // 1.5. Stage B (Step 8) — Color-grade active arena plates into consistent dark-ash/ember backgrounds:
-  // Darkens and slightly desaturates walkable stone floors across Vaitarani + Act I arenas so brightly lit
-  // characters (75-90% value) and crimson/gold telegraphs (100% value) pop cleanly.
-  ctx.save();
-  const gradeSpec = computeArenaFloorGradeSpec(chamberIndex);
-
-  // Subtle desaturation pass on high-chroma floor areas so arena plates read as dark volcanic stone/ash
-  ctx.globalCompositeOperation = 'saturation';
-  ctx.fillStyle = 'rgba(28, 22, 24, 0.28)';
-  ctx.fillRect(0, 0, worldW, worldH);
-
-  // Cohesive dark-ash/ember multiply pass across all chambers
-  ctx.globalCompositeOperation = 'multiply';
-  const eclipseTone = ctx.createRadialGradient(
-    worldW * 0.5,
-    worldH * 0.56,
-    worldW * 0.08,
-    worldW * 0.5,
-    worldH * 0.54,
-    worldW * 0.66
-  );
-  eclipseTone.addColorStop(0, gradeSpec.multiplyInner);
-  eclipseTone.addColorStop(0.56, gradeSpec.multiplyMid);
-  eclipseTone.addColorStop(1, gradeSpec.multiplyOuter);
-  ctx.fillStyle = eclipseTone;
-  ctx.fillRect(0, 0, worldW, worldH);
-
-  // Dark-ash atmospheric veil over walkable floor plate
-  ctx.globalCompositeOperation = 'source-over';
-  ctx.fillStyle = gradeSpec.ashTintOverlay;
-  ctx.fillRect(0, 0, worldW, worldH);
-
-  // Atmospheric obsidian-crimson perimeter vignette + top canopy shadow for crisp HUD & character contrast
-  const vignette = ctx.createRadialGradient(
-    worldW * 0.5,
-    worldH * 0.56,
-    worldW * 0.24,
-    worldW * 0.5,
-    worldH * 0.54,
-    worldW * 0.68
-  );
-  vignette.addColorStop(0, gradeSpec.vignetteInner);
-  vignette.addColorStop(0.68, gradeSpec.vignetteMid);
-  vignette.addColorStop(1, gradeSpec.vignetteOuter);
-  ctx.fillStyle = vignette;
-  ctx.fillRect(0, 0, worldW, worldH);
-
-  if (floorTint) {
-    ctx.globalAlpha = 0.10;
-    ctx.fillStyle = floorTint;
-    ctx.fillRect(0, 0, worldW, worldH);
+  // Only run procedural water/ember atmosphere if MP4 isn't active yet so the live MP4 plays at 60 FPS with zero extra fill-rate
+  if (!isVideoReady) {
+    renderProceduralArenaAtmosphere(ctx, worldW, worldH, chamberIndex, now);
   }
-  ctx.restore();
 
-  // 1.6. Stage B (Step 9) — Lightweight Procedural Arena Atmosphere (60 FPS, near-zero decode overhead):
-  // Layers Vaitarani water/magma shimmer, brazier flicker light pools, and drifting ash/ember particles over the color-graded plate.
-  renderProceduralArenaAtmosphere(ctx, worldW, worldH, chamberIndex, now);
-
-  // 2. Surface decals, craters, and ambient brazier floor pools
+  // 2. Surface decals, craters, and ambient details
   renderSurfaceDetailsCallback();
 
   // ============================================================================

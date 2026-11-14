@@ -862,7 +862,7 @@ export class Boss3DRenderer {
     const turnSpeed = params.aiState === 'attack' || params.aiState === 'windup' ? 24 : 14;
     this.currentYaw += angleDiff * Math.min(1, turnSpeed * dt);
 
-    // Compute Hades 2D Stepped Sprite-Sheet Frame Key (16 directions x 14 steps for zero cache thrashing)
+    // Compute Hades 2D Stepped Sprite-Sheet Frame Key (12 directions x 10 steps for smooth 60 FPS caching)
     this.clipAnimTime += dt * targetTimeScale;
     const isBossAction =
       params.aiState === 'windup' ||
@@ -877,21 +877,21 @@ export class Boss3DRenderer {
       clipDuration,
       yawRad: this.currentYaw,
       isAttacking: isBossAction,
-      isHurt: params.isHitFlash,
+      isHurt: false,
       isParrying: Boolean(params.isParrying),
       phase: params.phase,
-      yawDirections: 16,
-      stepsPerClip: 14,
+      yawDirections: 12,
+      stepsPerClip: 10,
     });
     const actionSubStep =
       params.aiState === 'windup'
-        ? `w${Math.round(params.windupProgress * 6)}`
+        ? `w${Math.round(params.windupProgress * 4)}`
         : params.aiState === 'attack'
-        ? `a${Math.round((1 - this.attackSwingTimer / Math.max(0.05, this.attackSwingDuration)) * 8)}`
+        ? `a${Math.round((1 - this.attackSwingTimer / Math.max(0.05, this.attackSwingDuration)) * 6)}`
         : 'loc';
     const frameKey = `${baseKey}:${actionSubStep}`;
 
-    const cached = !params.isHitFlash ? this.frameCache.get(frameKey) : undefined;
+    const cached = this.frameCache.get(frameKey);
     if (cached) {
       this.canvas = cached;
       rig.mixer.update(dt);

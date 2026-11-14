@@ -401,8 +401,8 @@ export class Rudra3DRenderer {
     if (!this.isReady || !this.model || !this.mixer) return null;
 
     const normalizedYaw = ((facingAngleRad % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
-    const yawIndex = Math.round((normalizedYaw / (Math.PI * 2)) * 16) % 16;
-    const quantizedYaw = (yawIndex / 16) * Math.PI * 2;
+    const yawIndex = Math.round((normalizedYaw / (Math.PI * 2)) * 12) % 12;
+    const quantizedYaw = (yawIndex / 12) * Math.PI * 2;
 
     const isAttack =
       state === 'attack1' ||
@@ -417,7 +417,7 @@ export class Rudra3DRenderer {
       this.actions.idle;
 
     const clipDur = action ? Math.max(0.4, action.getClip().duration) : 1.0;
-    const steps = isAttack ? 18 : 14;
+    const steps = isAttack ? 12 : 10;
 
     // For attacks, animTimeSec is normalized progress [0..1]; for locomotion, it's elapsed seconds
     const stepIndex = isAttack
@@ -453,7 +453,7 @@ export class Rudra3DRenderer {
       cacheFrame: false,
     });
 
-    if (this.frameCache.size > 280) {
+    if (this.frameCache.size > 720) {
       const oldest = this.frameCache.keys().next().value;
       if (oldest) this.frameCache.delete(oldest);
     }
