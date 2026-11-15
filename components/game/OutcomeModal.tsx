@@ -31,12 +31,12 @@ interface OutcomeModalProps {
 const PAUSE_SHORTCUTS = [
   { key: 'LMB / [J]', label: 'Light Cleave Combo (Builds ♦ Focus)' },
   { key: 'RMB / [K]', label: 'Heavy Stance Unleash (Spends ♦ Focus)' },
-  { key: '[SPACE]', label: 'Phantom Step Dash (Invulnerable Frames)' },
-  { key: '[1 / 2 / 3]', label: 'Cycle Stance (Smash / Pillar / Thrust)' },
-  { key: '[Q]', label: 'Kalaripayattu Parry (Shatters Posture)' },
-  { key: '[R]', label: 'Kalasha Heal (+1 Charge Each Chamber)' },
-  { key: '[F]', label: 'Astra Bow (Ranged) / Lethal Execute' },
-  { key: '[E]', label: 'Switch Weapon (Gada / Khadga / Parashu)' },
+  { key: '[SPACE]', label: 'Agni-Step Dash (Invulnerable Frames)' },
+  { key: '[SHIFT]', label: 'Kalaripayattu Parry & Riposte' },
+  { key: '[Q / E / R]', label: 'Agneyastra / Vayavyastra / Vajrastra' },
+  { key: '[H]', label: 'Kalasha Heal (+1 Charge Each Chamber)' },
+  { key: '[F / L]', label: 'Lethal Execute / Blood-Shard Cast' },
+  { key: '[1/2/3] / [Alt+1-3]', label: 'Cycle Stance / Switch Weapon' },
 ];
 
 function formatDuration(sec: number): string {
@@ -90,11 +90,11 @@ function getBuildInsight(
   if (mode === 'defeat') {
     if ((recap?.parriesLanded || 0) === 0) {
       nextRunTip =
-        'NEXT RUN TIP: Press [Q] right as a red hostile ring fills to Parry—it negates 100% of damage, grants +1 ♦ Focus Diamond, and shatters 58 Posture for an instant [F] Execute.';
+        'NEXT RUN TIP: Press [SHIFT] right as a gold/red ring fills to Parry—it negates 100% of damage, grants +1 ♦ Focus Diamond, and shatters Posture for an instant [F] Execute.';
     } else if (chamberId === 4) {
       nextRunTip =
         'DUNDUBHI TIP: Switch to Pillar Stance [2] when Dundubhi winds up his Bronze War-Drum Quake—Pillar Heavy Unleash grants Quake Immunity!';
-    } else if (chamberId === 8) {
+    } else if (chamberId === 5) {
       nextRunTip =
         'VRIKODARA TIP: Dash [SPACE] behind Vrikodara during his Crimson Conflagration cone for +35% Backstab damage, and spend ♦ Focus on Smash Stance [1] to break his Posture.';
     } else if (boons.length === 0) {
@@ -136,7 +136,7 @@ export default function OutcomeModal({
     defeatedByName ||
     (chamberId === 4
       ? 'Dundubhi, The Bronze War-Drum Behemoth'
-      : chamberId === 8
+      : chamberId === 5
       ? 'Vrikodara, The Iron Rakshasa'
       : null);
 
@@ -156,7 +156,7 @@ export default function OutcomeModal({
           ? 'Act One Complete'
           : 'You Are Dead'
       }
-      className="fixed inset-0 z-40 flex items-center justify-center bg-black/88 backdrop-blur-sm p-3 md:p-4 pointer-events-auto select-none overflow-y-auto"
+      className="fixed inset-0 z-40 flex items-center justify-center bg-black/90 p-3 md:p-4 pointer-events-auto select-none overflow-y-auto"
     >
       {mode === 'defeat' ? (
         /* ================================================================== */
@@ -245,7 +245,7 @@ export default function OutcomeModal({
                   <span className="text-[#a89688] block text-[10px] tracking-wider uppercase">
                     PARRIES / DODGES
                   </span>
-                  <strong className="text-[#5ce6ff] text-sm">
+                  <strong className="text-[#f5ebd6] text-sm">
                     {runRecap?.parriesLanded || 0} / {runRecap?.dodgesCompleted || 0}
                   </strong>
                 </div>
@@ -253,7 +253,7 @@ export default function OutcomeModal({
                   <span className="text-[#a89688] block text-[10px] tracking-wider uppercase">
                     KARMA EARNED
                   </span>
-                  <strong className="text-[#3ee0a8] text-sm">+{karmaEarnedThisRun}</strong>
+                  <strong className="text-[#d4a548] text-sm">+{karmaEarnedThisRun}</strong>
                 </div>
                 <div>
                   <span className="text-[#a89688] block text-[10px] tracking-wider uppercase">
@@ -295,7 +295,7 @@ export default function OutcomeModal({
                     {insight.standoutTitle}
                   </strong>
                   <span className="text-[#d8c9b8] block mb-1">{insight.standoutDetail}</span>
-                  <span className="text-[#3ee0a8] font-mono-num">{insight.nextRunTip}</span>
+                  <span className="text-[#d4a548] font-mono-num">{insight.nextRunTip}</span>
                 </div>
               )}
             </div>
@@ -466,13 +466,13 @@ export default function OutcomeModal({
                   </div>
                   <div className="bg-[#181520] p-2 border border-white/5">
                     <div className="text-[10px] text-[#9c917e] uppercase">PARRIES</div>
-                    <div className="text-sm font-bold text-[#5ce6ff]">
+                    <div className="text-sm font-bold text-[#f5ebd6]">
                       {runRecap?.parriesLanded || 0}
                     </div>
                   </div>
                   <div className="bg-[#181520] p-2 border border-white/5">
                     <div className="text-[10px] text-[#9c917e] uppercase">DODGES</div>
-                    <div className="text-sm font-bold text-[#3ee0a8]">
+                    <div className="text-sm font-bold text-[#d4a548]">
                       {runRecap?.dodgesCompleted || 0}
                     </div>
                   </div>
@@ -484,7 +484,7 @@ export default function OutcomeModal({
                   </div>
                   <div className="bg-[#181520] p-2 border border-white/5">
                     <div className="text-[10px] text-[#9c917e] uppercase">KARMA EARNED</div>
-                    <div className="text-sm font-bold text-[#3ee0a8]">+{karmaEarnedThisRun}</div>
+                    <div className="text-sm font-bold text-[#f2c45a]">+{karmaEarnedThisRun}</div>
                   </div>
                 </div>
 
@@ -517,8 +517,8 @@ export default function OutcomeModal({
 
                 {/* Standout Build Interaction & Next Run Idea */}
                 {insight && (
-                  <div className="p-3 bg-[#17141f] border-l-2 border-[#a8ff78] text-xs leading-relaxed">
-                    <div className="font-mono-num font-bold text-[#a8ff78] mb-0.5">
+                  <div className="p-3 bg-[#17141f] border-l-2 border-[#d4a548] text-xs leading-relaxed">
+                    <div className="font-mono-num font-bold text-[#d4a548] mb-0.5">
                       ✦ {insight.standoutTitle}
                     </div>
                     <div className="text-[#e2d6c3] mb-1.5">{insight.standoutDetail}</div>

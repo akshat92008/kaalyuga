@@ -97,8 +97,8 @@ export function regradeTextureToHadesPalette(
 
   try {
     const workCanvas = document.createElement('canvas');
-    const w = Math.min(1024, img.width);
-    const h = Math.min(1024, img.height);
+    const w = Math.min(512, img.width);
+    const h = Math.min(512, img.height);
     workCanvas.width = w;
     workCanvas.height = h;
     const ctx = workCanvas.getContext('2d');
@@ -328,6 +328,31 @@ export interface SharedStudioRigLights {
 }
 
 let sharedStudioWebGLRenderer: THREE.WebGLRenderer | null = null;
+let cachedIsSoftwareWebGL: boolean | null = null;
+
+/**
+ * Detects CPU/software WebGL backends (SwiftShader, llvmpipe, Microsoft Basic Render)
+ * so background atlas prewarming can yield gracefully and never stall the browser main thread.
+ */
+export function isSoftwareWebGLRenderer(): boolean {
+  if (cachedIsSoftwareWebGL !== null) return cachedIsSoftwareWebGL;
+  if (typeof window === 'undefined' || !sharedStudioWebGLRenderer) return false;
+  try {
+    const gl = sharedStudioWebGLRenderer.getContext();
+    let rendererStr = String(gl.getParameter(gl.RENDERER) || '');
+    const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+    if (dbg) {
+      const unmasked = gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL);
+      if (unmasked) rendererStr += ' ' + String(unmasked);
+    }
+    cachedIsSoftwareWebGL = /swiftshader|llvmpipe|software|microsoft basic render|angle \(google/i.test(
+      rendererStr
+    );
+  } catch {
+    cachedIsSoftwareWebGL = false;
+  }
+  return cachedIsSoftwareWebGL;
+}
 
 /**
  * Returns a single shared offscreen WebGLRenderer used across Rudra3DRenderer,
@@ -350,6 +375,8 @@ export function getSharedStudioWebGLRenderer(size: number): THREE.WebGLRenderer 
       sharedStudioWebGLRenderer.toneMappingExposure = 1.0;
       sharedStudioWebGLRenderer.shadowMap.enabled = false;
       sharedStudioWebGLRenderer.setClearColor(0x000000, 0);
+      cachedIsSoftwareWebGL = null;
+      isSoftwareWebGLRenderer();
     } catch (e) {
       console.warn('[SharedStudioWebGLRenderer] WebGL initialization skipped:', e);
       sharedStudioWebGLRenderer = null;

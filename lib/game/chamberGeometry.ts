@@ -565,14 +565,14 @@ export function renderIsometricChamberPlatform(
   const gateOverlaysAsset = getProcessedSpriteSync(GAME_ASSETS.gateOverlays2x2);
   const rewardOrbsAsset = getProcessedSpriteSync(GAME_ASSETS.rewardOrbs2x2);
 
-  if (chamberIndex < 7) {
+  if (chamberIndex < 4) {
     const gates = [
       {
         pos: geom.leftGate,
         orbFrame: isNextChamberBoss ? 3 : 0,
         label: isNextChamberBoss ? 'PATH OF THE SOVEREIGN' : 'PATH OF DEVA BOONS',
         subLabel: isNextChamberBoss ? 'BOSS SANCTUM AHEAD' : 'DIVINE ASTRAS & BLESSINGS',
-        accent: isNextChamberBoss ? '#ff384c' : '#ffd86b',
+        accent: isNextChamberBoss ? '#b81d2a' : '#ffd86b',
         angle: -0.34,
       },
       {
@@ -580,7 +580,7 @@ export function renderIsometricChamberPlatform(
         orbFrame: isNextChamberBoss ? 2 : 1,
         label: isNextChamberBoss ? 'PATH OF THE SHRINE' : 'PATH OF AMRITA',
         subLabel: isNextChamberBoss ? 'SANCTUARY + RESTORE' : 'SACRED NECTAR +35 HP',
-        accent: isNextChamberBoss ? '#38e8ff' : '#3ee0a8',
+        accent: isNextChamberBoss ? '#d4a548' : '#f2c45a',
         angle: 0.34,
       },
     ];

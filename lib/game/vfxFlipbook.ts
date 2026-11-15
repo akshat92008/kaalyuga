@@ -537,45 +537,169 @@ function buildMaskedAdditiveCanvas(
   const sheetMaskH = Math.ceil(h * 0.065);
   ctx.clearRect(w - sheetMaskW, h - sheetMaskH, sheetMaskW, sheetMaskH);
 
-  // 2. Clean near-black background pixels so additive ('lighter') blending has zero grey box halo
+  // 2. Auto-detect whether this sheet has a baked neutral-grey checkerboard (JPG VFX sheets) vs #000000 black background
   try {
     const imgData = ctx.getImageData(0, 0, w, h);
     const data = imgData.data;
     const cellW = w / Math.max(1, cols);
     const cellH = h / Math.max(1, rows);
 
-    for (let y = 0; y < h; y++) {
-      const localY = (y % cellH) / cellH;
-      const edgeFadeY =
-        localY < 0.03 ? localY / 0.03 : localY > 0.97 ? (1 - localY) / 0.03 : 1;
-      for (let x = 0; x < w; x++) {
-        const idx = (y * w + x) * 4;
-        const r = data[idx];
-        const g = data[idx + 1];
-        const b = data[idx + 2];
-        const maxCh = Math.max(r, g, b);
-
-        // Strip dark background noise so pure #000000 is 100% transparent under 'lighter'
-        if (maxCh <= 24) {
-          data[idx] = 0;
-          data[idx + 1] = 0;
-          data[idx + 2] = 0;
-          data[idx + 3] = 0;
-          continue;
+    let brightNeutralCornerCount = 0;
+    const sampleMaxX = Math.min(w, 32);
+    const sampleMaxY = Math.min(h, 32);
+    for (let sy = 0; sy < sampleMaxY; sy += 2) {
+      for (let sx = 0; sx < sampleMaxX; sx += 2) {
+        const sIdx = (sy * w + sx) * 4;
+        const sr = data[sIdx];
+        const sg = data[sIdx + 1];
+        const sb = data[sIdx + 2];
+        const sMax = Math.max(sr, sg, sb);
+        const sMin = Math.min(sr, sg, sb);
+        if (sMax > 28 && sMax <= 140 && sMax - sMin <= 20) {
+          brightNeutralCornerCount++;
         }
+      }
+    }
+    const hasBakedCheckerboard = brightNeutralCornerCount >= 16;
 
-        const localX = (x % cellW) / cellW;
-        const edgeFadeX =
-          localX < 0.03 ? localX / 0.03 : localX > 0.97 ? (1 - localX) / 0.03 : 1;
-        const borderAtten = Math.min(edgeFadeX, edgeFadeY);
+    if (hasBakedCheckerboard) {
+      // Border-seeded BFS floodfill per sheet border + cell grid seams to strip neutral grey checkerboards cleanly
+      const totalPx = w * h;
+      const visited = new Uint8Array(totalPx);
+      const queue = new Int32Array(totalPx);
+      let head = 0;
+      let tail = 0;
 
-        // Soft knee ramp for dark penumbra pixels (24..56) so edges feather smoothly into #000000
-        const knee = maxCh < 56 ? (maxCh - 24) / 32 : 1;
-        const factor = knee * borderAtten;
-        if (factor < 0.999) {
-          data[idx] = Math.round(r * factor);
-          data[idx + 1] = Math.round(g * factor);
-          data[idx + 2] = Math.round(b * factor);
+      const isBgNeutral = (idx4: number): boolean => {
+        if (data[idx4 + 3] === 0) return true;
+        const r = data[idx4];
+        const g = data[idx4 + 1];
+        const b = data[idx4 + 2];
+        const maxC = Math.max(r, g, b);
+        const minC = Math.min(r, g, b);
+        return maxC <= 138 && maxC - minC <= 22;
+      };
+
+      const trySeed = (px: number, py: number) => {
+        if (px < 0 || px >= w || py < 0 || py >= h) return;
+        const p = py * w + px;
+        if (visited[p]) return;
+        if (isBgNeutral(p * 4)) {
+          visited[p] = 1;
+          queue[tail++] = p;
+        }
+      };
+
+      for (let x = 0; x < w; x++) {
+        trySeed(x, 0);
+        trySeed(x, h - 1);
+      }
+      for (let y = 0; y < h; y++) {
+        trySeed(0, y);
+        trySeed(w - 1, y);
+      }
+      for (let c = 1; c < cols; c++) {
+        const sx = Math.round(c * cellW);
+        for (let y = 0; y < h; y++) trySeed(sx, y);
+      }
+      for (let r = 1; r < rows; r++) {
+        const sy = Math.round(r * cellH);
+        for (let x = 0; x < w; x++) trySeed(x, sy);
+      }
+
+      while (head < tail) {
+        const curr = queue[head++];
+        const cx = curr % w;
+        const cy = (curr - cx) / w;
+        const idx4 = curr * 4;
+        data[idx4] = 0;
+        data[idx4 + 1] = 0;
+        data[idx4 + 2] = 0;
+        data[idx4 + 3] = 0;
+
+        if (cx > 0) trySeed(cx - 1, cy);
+        if (cx + 1 < w) trySeed(cx + 1, cy);
+        if (cy > 0) trySeed(cx, cy - 1);
+        if (cy + 1 < h) trySeed(cx, cy + 1);
+      }
+
+      // Clear enclosed checkerboard pockets (e.g. inside closed shockwave rings) without touching dark rock outlines (<40) or colored VFX
+      for (let p = 0; p < totalPx; p++) {
+        if (visited[p]) continue;
+        const idx4 = p * 4;
+        const r = data[idx4];
+        const g = data[idx4 + 1];
+        const b = data[idx4 + 2];
+        const maxC = Math.max(r, g, b);
+        const minC = Math.min(r, g, b);
+        if (maxC >= 40 && maxC <= 114 && maxC - minC <= 14) {
+          data[idx4] = 0;
+          data[idx4 + 1] = 0;
+          data[idx4 + 2] = 0;
+          data[idx4 + 3] = 0;
+          visited[p] = 1;
+        }
+      }
+
+      // Soften 1-2px neutral edge halo next to cleared checkerboard pixels
+      for (let y = 1; y < h - 1; y++) {
+        for (let x = 1; x < w - 1; x++) {
+          const p = y * w + x;
+          if (visited[p]) continue;
+          const idx4 = p * 4;
+          const r = data[idx4];
+          const g = data[idx4 + 1];
+          const b = data[idx4 + 2];
+          const maxC = Math.max(r, g, b);
+          const minC = Math.min(r, g, b);
+          if (maxC - minC <= 26 && maxC <= 130) {
+            if (
+              visited[p - 1] ||
+              visited[p + 1] ||
+              visited[p - w] ||
+              visited[p + w]
+            ) {
+              data[idx4] = Math.round(r * 0.25);
+              data[idx4 + 1] = Math.round(g * 0.25);
+              data[idx4 + 2] = Math.round(b * 0.25);
+              data[idx4 + 3] = Math.round(data[idx4 + 3] * 0.35);
+            }
+          }
+        }
+      }
+    } else {
+      // Clean near-black background pixels so additive/screen blending has zero grey box halo
+      for (let y = 0; y < h; y++) {
+        const localY = (y % cellH) / cellH;
+        const edgeFadeY =
+          localY < 0.03 ? localY / 0.03 : localY > 0.97 ? (1 - localY) / 0.03 : 1;
+        for (let x = 0; x < w; x++) {
+          const idx = (y * w + x) * 4;
+          const r = data[idx];
+          const g = data[idx + 1];
+          const b = data[idx + 2];
+          const maxCh = Math.max(r, g, b);
+
+          if (maxCh <= 24) {
+            data[idx] = 0;
+            data[idx + 1] = 0;
+            data[idx + 2] = 0;
+            data[idx + 3] = 0;
+            continue;
+          }
+
+          const localX = (x % cellW) / cellW;
+          const edgeFadeX =
+            localX < 0.03 ? localX / 0.03 : localX > 0.97 ? (1 - localX) / 0.03 : 1;
+          const borderAtten = Math.min(edgeFadeX, edgeFadeY);
+
+          const knee = maxCh < 56 ? (maxCh - 24) / 32 : 1;
+          const factor = knee * borderAtten;
+          if (factor < 0.999) {
+            data[idx] = Math.round(r * factor);
+            data[idx + 1] = Math.round(g * factor);
+            data[idx + 2] = Math.round(b * factor);
+          }
         }
       }
     }
@@ -628,12 +752,48 @@ export function getOrLoadFlipbookSheet(
   return null;
 }
 
+function resolveRenderableFlipbookSource(
+  url: string,
+  cols: number,
+  rows: number,
+  col: number,
+  row: number
+): { url: string; cols: number; rows: number; col: number; row: number } {
+  // kogf7y is a grey-background Minotaur Warrior concept sheet mis-assigned to dundubhiShockwaveAndShatter4x2;
+  // route its two semantic rows cleanly to the real 4x2 Expanding Shockwave & Flying Stone Fragments sheets.
+  if (url === GAME_ASSETS.vfxFlipbooks.dundubhiShockwaveAndShatter4x2) {
+    if (row === DUNDUBHI_FLIPBOOK_ROWS.PILLAR_SANDSTONE_SHATTER) {
+      return {
+        url: GAME_ASSETS.vfxFlipbooks.stoneFragments4x2,
+        cols: 4,
+        rows: 2,
+        col: Math.max(0, Math.min(3, col)),
+        row: 0,
+      };
+    }
+    return {
+      url: GAME_ASSETS.vfxFlipbooks.expandingShockwave,
+      cols: 4,
+      rows: 2,
+      col: Math.max(0, Math.min(3, col)),
+      row: 0,
+    };
+  }
+  return { url, cols, rows, col, row };
+}
+
 /**
- * Preloads all 5 Phase 2 hand-painted #000000 VFX & telegraph flipbook sheets into the additive cache.
+ * Preloads all Phase 2 hand-painted VFX & telegraph flipbook sheets into the cache
+ * (routing dundubhiShockwaveAndShatter4x2 to the real shockwave & stone-fragment 4x2 sheets).
  */
 export function preloadPhase2VfxSheets(): void {
   if (typeof window === 'undefined') return;
   Object.values(PHASE2_VFX_SHEETS).forEach((spec) => {
+    if (spec.id === 'dundubhiShockwaveAndShatter4x2') {
+      getOrLoadFlipbookSheet(GAME_ASSETS.vfxFlipbooks.expandingShockwave, 4, 2);
+      getOrLoadFlipbookSheet(GAME_ASSETS.vfxFlipbooks.stoneFragments4x2, 4, 2);
+      return;
+    }
     getOrLoadFlipbookSheet(spec.url, spec.cols, spec.rows);
   });
 }
@@ -670,21 +830,29 @@ export function drawAdditiveFlipbookCell(
   const alpha = params.alpha ?? 0.78;
   if (alpha <= 0.01) return false;
 
-  const url = params.sheetSpec ? params.sheetSpec.url : (params.sheetUrl ?? '');
-  const cols = params.sheetSpec ? params.sheetSpec.cols : (params.cols ?? 1);
-  const rows = params.sheetSpec ? params.sheetSpec.rows : (params.rows ?? 1);
-  if (!url) return false;
+  const rawUrl = params.sheetSpec ? params.sheetSpec.url : (params.sheetUrl ?? '');
+  const rawCols = params.sheetSpec ? params.sheetSpec.cols : (params.cols ?? 1);
+  const rawRows = params.sheetSpec ? params.sheetSpec.rows : (params.rows ?? 1);
+  if (!rawUrl) return false;
 
-  const sheet = getOrLoadFlipbookSheet(url, cols, rows);
+  const resolved = resolveRenderableFlipbookSource(
+    rawUrl,
+    rawCols,
+    rawRows,
+    params.col,
+    params.row
+  );
+
+  const sheet = getOrLoadFlipbookSheet(resolved.url, resolved.cols, resolved.rows);
   if (!sheet || !sheet.ready) return false;
 
   const cell = computeFlipbookGridCell(
     sheet.width,
     sheet.height,
-    cols,
-    rows,
-    params.col,
-    params.row,
+    resolved.cols,
+    resolved.rows,
+    resolved.col,
+    resolved.row,
     CORNER_WATERMARK_MASK_RATIO
   );
 

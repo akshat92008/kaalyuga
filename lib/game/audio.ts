@@ -554,7 +554,7 @@ class SoundEngine {
 
     // Active combat / paused / look inside a chamber — hooked dynamic BGM progression
     const duck = mode === 'paused' ? 0.34 : mode === 'look' ? 0.12 : 1.0;
-    if (isBoss || chamberId === 2 || chamberId === 8) {
+    if (isBoss || chamberId === 2 || chamberId === 5) {
       return { url: SoundEngine.BGM_TRACKS.titansFinalStride, baseVol: 0.46, duck };
     }
     if (chamberId === 1) {

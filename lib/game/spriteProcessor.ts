@@ -969,9 +969,9 @@ export function loadAndProcessSprite(
                       nData[dIdx + 2] = item.pixels[sIdx + 2];
                       nData[dIdx + 3] = a;
 
-                      nfData[dIdx] = 255;
-                      nfData[dIdx + 1] = 244;
-                      nfData[dIdx + 2] = 212;
+                      nfData[dIdx] = Math.min(255, Math.round(item.pixels[sIdx] * 0.62 + 255 * 0.38));
+                      nfData[dIdx + 1] = Math.min(255, Math.round(item.pixels[sIdx + 1] * 0.62 + 184 * 0.38));
+                      nfData[dIdx + 2] = Math.min(255, Math.round(item.pixels[sIdx + 2] * 0.62 + 71 * 0.38));
                       nfData[dIdx + 3] = a;
                     }
                   }
@@ -1992,9 +1992,9 @@ export function loadAndProcessSprite(
               }
               const lumNorm = Math.min(1, luma / 220);
 
-              fData[idx] = 255;
-              fData[idx + 1] = 248;
-              fData[idx + 2] = 225;
+              fData[idx] = Math.min(255, Math.round(r * 0.62 + 255 * 0.38));
+              fData[idx + 1] = Math.min(255, Math.round(g * 0.62 + 184 * 0.38));
+              fData[idx + 2] = Math.min(255, Math.round(b * 0.62 + 71 * 0.38));
               fData[idx + 3] = a;
 
               gData[idx] = Math.round(215 + lumNorm * 40);

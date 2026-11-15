@@ -299,7 +299,7 @@ export function SacredChakraController({
           {showComboDrawer && (
             <div
               data-testid="mudra-combo-drawer"
-              className="w-64 sm:w-72 bg-[#0c0907]/95 backdrop-blur-md border border-[#c89d46]/75 rounded-lg p-2 shadow-[0_12px_36px_rgba(0,0,0,0.95)] text-[9px] space-y-1"
+              className="w-64 sm:w-72 bg-[#0c0907]/96 border border-[#c89d46]/75 rounded-lg p-2 shadow-[0_12px_36px_rgba(0,0,0,0.95)] text-[9px] space-y-1"
             >
               <div className="flex items-center justify-between border-b border-[#c89d46]/30 pb-1 mb-1">
                 <span className="font-display font-bold text-[#ffd86b] tracking-wider uppercase text-[9.5px]">

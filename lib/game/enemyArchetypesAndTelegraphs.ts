@@ -680,7 +680,7 @@ export function renderEnemyAndBossGroundTelegraph(
     ctx.save();
     ctx.font = 'bold 10px monospace';
     ctx.textAlign = 'center';
-    ctx.fillStyle = '#7DFFBA';
+    ctx.fillStyle = '#f2c45a';
     ctx.fillText('DASH BEHIND [SPACE] · BACKSTAB', e.x, e.y - e.radius - 42);
     ctx.restore();
   } else if (

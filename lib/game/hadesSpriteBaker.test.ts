@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import {
+  BOSS_SCALE_AUTHORITY,
   SHARED_STUDIO_OUTLINE_COLOR,
   SHARED_STUDIO_OUTLINE_THICKNESS,
   gradePixelToHadesPalette,
@@ -129,5 +130,41 @@ describe('Hades 2D Sprite Sheet Baker & Texture Re-Grader', () => {
     const ch4Grade = computeArenaFloorGradeSpec(4);
     assert.ok(ch0Grade.multiplyInner.startsWith('rgba('));
     assert.ok(ch4Grade.ashTintOverlay.startsWith('rgba('));
+  });
+
+  it('enforces BOSS_SCALE_AUTHORITY multiples, distinct hurt/norm frameKeys, and Chamber 5 Vrikodara boss BGM', () => {
+    assert.equal(BOSS_SCALE_AUTHORITY.semi_boss, 1.75);
+    assert.equal(BOSS_SCALE_AUTHORITY.dundubhi, 2.15);
+    assert.equal(BOSS_SCALE_AUTHORITY.vrikodara, 2.35);
+
+    const hurtKey = computeSpriteSheetFrameKey({
+      id: 'boss_dundubhi',
+      animName: 'Combat_Idle',
+      animTime: 0.4,
+      clipDuration: 1.2,
+      yawRad: 0.5,
+      isAttacking: false,
+      isHurt: true,
+      isParrying: false,
+      phase: 1,
+      yawDirections: 12,
+      stepsPerClip: 10,
+    });
+    const normKey = computeSpriteSheetFrameKey({
+      id: 'boss_dundubhi',
+      animName: 'Combat_Idle',
+      animTime: 0.4,
+      clipDuration: 1.2,
+      yawRad: 0.5,
+      isAttacking: false,
+      isHurt: false,
+      isParrying: false,
+      phase: 1,
+      yawDirections: 12,
+      stepsPerClip: 10,
+    });
+    assert.notEqual(hurtKey.frameKey, normKey.frameKey);
+    assert.ok(hurtKey.frameKey.endsWith(':H1'));
+    assert.ok(normKey.frameKey.endsWith(':1'));
   });
 });

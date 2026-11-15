@@ -296,7 +296,7 @@ export function TitleScreen({
           role="dialog"
           aria-modal="true"
           aria-label="Options and Keyboard Shortcuts"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4"
         >
           <div className="w-full max-w-3xl bg-[#0b090c] border border-[#c89d46]/65 p-6 md:p-8 shadow-[0_24px_80px_rgba(0,0,0,0.98)] max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-[#c89d46]/30 pb-4 mb-6">
@@ -361,8 +361,8 @@ export function TitleScreen({
                       onClick={onToggleMute}
                       className={`px-3 py-1 border text-[11px] font-mono-num font-bold uppercase cursor-pointer ${
                         !muted
-                          ? 'bg-[#172922] border-[#3ee0a8] text-[#3ee0a8]'
-                          : 'bg-[#2b1418] border-[#ff6b78] text-[#ff6b78]'
+                          ? 'bg-[#1d160c] border-[#d4a548] text-[#f5ebd6]'
+                          : 'bg-[#2b1418] border-[#b81d2a] text-[#ff8a94]'
                       }`}
                     >
                       {!muted ? 'AUDIO: ON' : 'AUDIO: MUTED'}
@@ -435,7 +435,7 @@ export function TitleScreen({
           role="dialog"
           aria-modal="true"
           aria-label="Treasures and Sanctuary"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4"
         >
           <div className="w-full max-w-xl bg-[#0b090c] border border-[#c89d46]/65 p-6 md:p-8 shadow-[0_24px_80px_rgba(0,0,0,0.98)]">
             <div className="flex items-center justify-between border-b border-[#c89d46]/30 pb-4 mb-6">

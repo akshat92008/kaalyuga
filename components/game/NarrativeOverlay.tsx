@@ -525,7 +525,7 @@ export function NarrativeOverlay({
         className="fixed inset-0 z-30 pointer-events-none flex flex-col justify-between p-4 md:p-6 select-none"
       >
         {/* Top Sanctuary Bar (Compact, non-blocking) */}
-        <div className="pointer-events-auto max-w-6xl w-full mx-auto flex flex-wrap items-center justify-between gap-3 border border-[#c89d46]/35 bg-[#09080c]/82 backdrop-blur-sm px-4 py-2">
+        <div className="pointer-events-auto max-w-6xl w-full mx-auto flex flex-wrap items-center justify-between gap-3 border border-[#c89d46]/35 bg-[#09080c]/92 px-4 py-2">
           <div className="flex items-center gap-3">
             <span
               className="w-3 h-3 rounded-full"
@@ -614,7 +614,7 @@ export function NarrativeOverlay({
                   <span
                     className={
                       lastRunSummary.outcome === 'victory'
-                        ? 'text-[#3ee0a8] font-bold'
+                        ? 'text-[#f2c45a] font-bold'
                         : 'text-[#ff7b54] font-bold'
                     }
                   >
@@ -626,14 +626,14 @@ export function NarrativeOverlay({
                     CHAMBERS: <strong>{lastRunSummary.chambersCleared}/5</strong>
                   </div>
                   <div>
-                    DAMAGE: <strong className="text-[#3ee0a8]">{lastRunSummary.damageDealt}</strong>
+                    DAMAGE: <strong className="text-[#f2c45a]">{lastRunSummary.damageDealt}</strong>
                   </div>
                   <div>
                     ASTRAS: <strong className="text-[#ffd86b]">{lastRunSummary.astrasInvoked}</strong>
                   </div>
                   <div>
                     UPASAMHARA:{' '}
-                    <strong className="text-[#63f2ff]">{lastRunSummary.upasamharaWithdrawals}</strong>
+                    <strong className="text-[#f5ebd6]">{lastRunSummary.upasamharaWithdrawals}</strong>
                   </div>
                   <div>
                     PARRIES: <strong>{lastRunSummary.parriesLanded}</strong>
@@ -767,10 +767,10 @@ export function NarrativeOverlay({
         )}
 
         {/* Bottom Walkable Shore Action Strip (leaves center 85%+ of 2.5D canvas completely free!) */}
-        <div className="pointer-events-auto max-w-6xl w-full mx-auto flex flex-wrap items-center justify-between gap-2.5 border border-[#c89d46]/35 bg-[#09080c]/86 backdrop-blur-sm px-3.5 py-2.5">
+        <div className="pointer-events-auto max-w-6xl w-full mx-auto flex flex-wrap items-center justify-between gap-2.5 border border-[#c89d46]/35 bg-[#09080c]/92 px-3.5 py-2.5">
           <div className="text-[11px] font-mono-num text-[#d4c7b0]">
             <strong className="text-[#f5c451]">WASD / ARROWS:</strong> WALK ASH SHORE ·{' '}
-            <strong className="text-[#3ee0a8]">[E]:</strong> INTERACT AT STATIONS · WALK NORTH INTO FERRY GATE TO BEGIN
+            <strong className="text-[#d4a548]">[E]:</strong> INTERACT AT STATIONS · WALK NORTH INTO FERRY GATE TO BEGIN
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <button

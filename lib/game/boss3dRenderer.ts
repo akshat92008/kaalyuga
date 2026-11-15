@@ -278,7 +278,7 @@ export class Boss3DRenderer {
     this.scene = new THREE.Scene();
 
     // True 2.5D Hades Dimetric (2:1) Isometric Orthographic Camera (~27° elevation, matching Rudra3DRenderer)
-    const frustumHalf = 108;
+    const frustumHalf = 124;
     this.camera = new THREE.OrthographicCamera(
       -frustumHalf,
       frustumHalf,
@@ -288,7 +288,7 @@ export class Boss3DRenderer {
       1200
     );
     this.camera.position.set(0, 154, 300);
-    this.camera.lookAt(0, 84, 0);
+    this.camera.lookAt(0, 82, 0);
 
     // Unified Hades Studio Lighting Rig (distanceScale=60 for centimeter boss frustum)
     const studioLights = setupSharedStudioLightingRig(this.scene, 60);
@@ -532,7 +532,7 @@ export class Boss3DRenderer {
       const dunStandingHipY = extractStandingHipY(dundubhiGroup);
       const dunRawBox = new THREE.Box3().setFromObject(dundubhiGroup);
       const dunRawH = Math.max(0.01, dunRawBox.max.y - dunRawBox.min.y);
-      const dunScale = 156 / dunRawH;
+      const dunScale = 140 / dunRawH;
 
       const dundubhiRoot = new THREE.Group();
       dundubhiGroup.scale.setScalar(dunScale);
@@ -986,7 +986,7 @@ export class Boss3DRenderer {
       const vrikStandingHipY = extractStandingHipY(vrikodaraGroup);
       const vrikRawBox = new THREE.Box3().setFromObject(vrikodaraGroup);
       const vrikRawH = Math.max(0.01, vrikRawBox.max.y - vrikRawBox.min.y);
-      const vrikScale = 158 / vrikRawH;
+      const vrikScale = 148 / vrikRawH;
 
       const vrikodaraRoot = new THREE.Group();
       vrikodaraGroup.scale.setScalar(vrikScale);
@@ -1494,7 +1494,20 @@ export class Boss3DRenderer {
 
     // Fast-path: if hitFlash is active and the un-flashed norm frame is already cached, apply warm amber-gold emissive tint without skipping or re-rendering WebGL
     if (params.isHitFlash) {
-      const normKey = `${baseKey.replace(/:hurt$/, ':norm')}:${actionSubStep}:norm`;
+      const { frameKey: normBaseKey } = computeSpriteSheetFrameKey({
+        id: params.kind,
+        animName: rig.activeKey || desiredClip,
+        animTime: this.clipAnimTime,
+        clipDuration,
+        yawRad: this.currentYaw,
+        isAttacking: isBossAction,
+        isHurt: false,
+        isParrying: Boolean(params.isParrying),
+        phase: params.phase,
+        yawDirections: 12,
+        stepsPerClip: 10,
+      });
+      const normKey = `${normBaseKey}:${actionSubStep}:norm`;
       const baseCached = this.frameCache.get(normKey) || this.frameCache.get(`${baseKey}:${actionSubStep}:norm`);
       if (baseCached && typeof document !== 'undefined') {
         const flashCanvas = document.createElement('canvas');
@@ -1706,17 +1719,34 @@ export class Boss3DRenderer {
   }
 
   /**
-   * Stage B (Step 10): Pre-bake core boss idle/chase/windup/attack sprite frames on load
+   * Stage B (Step 10): Pre-bake core boss idle/chase/windup/attack sprite frames lazily on load
    */
   public prewarmBossAtlas(kind: Boss3DKind): void {
     this.ensureBossLoaded(kind);
     const rig = this.rigs[kind];
     if (!rig || !this.renderer || this.prewarmedKinds.has(kind)) return;
     this.prewarmedKinds.add(kind);
-    for (const params of buildBossPrewarmParamsList(kind)) {
-      this.updateAndRender(params);
+    const list = [...buildBossPrewarmParamsList(kind)];
+    if (typeof window === 'undefined') {
+      for (const params of list) {
+        this.updateAndRender(params);
+      }
+      this.lastRenderTime = -999;
+      return;
     }
-    this.lastRenderTime = -999;
+    const flushChunk = () => {
+      if (this.disposed || !this.renderer) return;
+      for (let i = 0; i < 2 && list.length > 0; i++) {
+        const params = list.shift();
+        if (params) this.updateAndRender(params);
+      }
+      if (list.length > 0) {
+        window.setTimeout(flushChunk, 16);
+      } else {
+        this.lastRenderTime = -999;
+      }
+    };
+    window.setTimeout(flushChunk, 16);
   }
 
   public dispose(): void {

@@ -10,6 +10,7 @@ import {
   applyHadesCelShadingToHierarchy,
   bake2DSpriteFrameFromCanvas,
   getSharedStudioWebGLRenderer,
+  isSoftwareWebGLRenderer,
   setupSharedStudioLightingRig,
 } from './hadesSpriteBaker';
 import { loadFbxCached, simplifyBufferGeometry } from './meshSimplifier';
@@ -201,6 +202,9 @@ export class Rudra3DRenderer {
   private stateElapsedSec = 0;
   private lastAnimState: RudraAnimState = 'idle';
   private frameCache: Map<string, HTMLCanvasElement> = new Map();
+  private disposed = false;
+  private prewarmQueue: Array<() => void> = [];
+  private prewarmTimer: number | null = null;
 
   constructor(size = 256) {
     this.size = size;
@@ -395,15 +399,21 @@ export class Rudra3DRenderer {
             for (const k of Array.from(this.frameCache.keys())) {
               if (k.startsWith(prefix)) this.frameCache.delete(k);
             }
-            // Pre-bake key strike frames immediately when attack1/heavy/hurt finish loading
+            // Pre-bake key strike frames lazily when attack1/heavy/hurt finish loading
             if (state === 'attack1' || state === 'heavy' || state === 'hurt') {
-              const warmAngles = [0, Math.PI * 0.5, Math.PI, Math.PI * 1.5];
-              const warmSteps = state === 'hurt' ? [0.15, 0.5] : [0.15, 0.38, 0.62, 0.85];
+              const warmAngles = isSoftwareWebGLRenderer()
+                ? [0, Math.PI]
+                : [0, Math.PI * 0.5, Math.PI, Math.PI * 1.5];
+              const warmSteps = state === 'hurt' ? [0.15] : [0.2, 0.5];
+              const tasks: Array<() => void> = [];
               for (const ang of warmAngles) {
                 for (const prog of warmSteps) {
-                  this.renderFrame(state, prog, ang, false);
+                  tasks.push(() => {
+                    this.renderFrame(state, prog, ang, false);
+                  });
                 }
               }
+              this.enqueuePrewarmTasks(tasks);
             }
           });
         });
@@ -411,29 +421,75 @@ export class Rudra3DRenderer {
     );
   }
 
+  private enqueuePrewarmTasks(tasks: Array<() => void>): void {
+    if (this.disposed || tasks.length === 0) return;
+    this.prewarmQueue.push(...tasks);
+    if (this.prewarmTimer !== null) return;
+    if (typeof window === 'undefined') {
+      while (this.prewarmQueue.length > 0 && !this.disposed) {
+        const fn = this.prewarmQueue.shift();
+        fn?.();
+      }
+      return;
+    }
+    const flushChunk = () => {
+      this.prewarmTimer = null;
+      if (this.disposed) {
+        this.prewarmQueue.length = 0;
+        return;
+      }
+      const batchSize = isSoftwareWebGLRenderer() ? 1 : 2;
+      for (let i = 0; i < batchSize && this.prewarmQueue.length > 0; i++) {
+        const fn = this.prewarmQueue.shift();
+        fn?.();
+      }
+      if (this.prewarmQueue.length > 0) {
+        this.prewarmTimer = window.setTimeout(flushChunk, 16);
+      }
+    };
+    this.prewarmTimer = window.setTimeout(flushChunk, 16);
+  }
+
   /**
    * Pre-bakes Rudra's core idle, run, attack1, heavy, and hurt frames across primary facing directions
-   * during chamber transitions so first swings hit the sprite cache with zero runtime baking lag.
+   * asynchronously in small chunks so the main thread and compositor never hitch.
    */
   public prewarmCoreAtlas(): void {
-    if (!this.isReady || !this.model || !this.mixer) return;
-    const warmAngles = [0, Math.PI * 0.5, Math.PI, Math.PI * 1.5];
+    if (!this.isReady || !this.model || !this.mixer || this.disposed) return;
+    const warmAngles = isSoftwareWebGLRenderer()
+      ? [0, Math.PI]
+      : [0, Math.PI * 0.5, Math.PI, Math.PI * 1.5];
+    const tasks: Array<() => void> = [];
     for (const ang of warmAngles) {
-      this.renderFrame('idle', 0.0, ang, false);
-      this.renderFrame('idle', 0.35, ang, false);
-      this.renderFrame('run', 0.0, ang, false);
-      this.renderFrame('run', 0.25, ang, false);
-      this.renderFrame('run', 0.5, ang, false);
-      if (this.actions.attack1) {
-        this.renderFrame('attack1', 0.2, ang, false);
-        this.renderFrame('attack1', 0.5, ang, false);
-        this.renderFrame('attack1', 0.8, ang, false);
+      tasks.push(() => {
+        this.renderFrame('idle', 0.0, ang, false);
+      });
+      tasks.push(() => {
+        this.renderFrame('run', 0.0, ang, false);
+      });
+      if (!isSoftwareWebGLRenderer()) {
+        tasks.push(() => {
+          this.renderFrame('idle', 0.35, ang, false);
+        });
+        tasks.push(() => {
+          this.renderFrame('run', 0.35, ang, false);
+        });
       }
-      if (this.actions.heavy) {
-        this.renderFrame('heavy', 0.25, ang, false);
-        this.renderFrame('heavy', 0.55, ang, false);
+      if (this.actions.attack1) {
+        tasks.push(() => {
+          this.renderFrame('attack1', 0.25, ang, false);
+        });
+        tasks.push(() => {
+          this.renderFrame('attack1', 0.55, ang, false);
+        });
+      }
+      if (this.actions.heavy && !isSoftwareWebGLRenderer()) {
+        tasks.push(() => {
+          this.renderFrame('heavy', 0.35, ang, false);
+        });
       }
     }
+    this.enqueuePrewarmTasks(tasks);
   }
 
   public updateAndRender(input: RudraRenderInput): boolean {
@@ -544,6 +600,12 @@ export class Rudra3DRenderer {
   }
 
   public dispose(): void {
+    this.disposed = true;
+    this.prewarmQueue.length = 0;
+    if (this.prewarmTimer !== null && typeof window !== 'undefined') {
+      window.clearTimeout(this.prewarmTimer);
+      this.prewarmTimer = null;
+    }
     this.frameCache.clear();
   }
 }

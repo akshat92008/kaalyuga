@@ -550,8 +550,8 @@ export function drawGrounded3DContactShadow(
     const saffronStamp = getSharedSaffronFootStampCanvas();
     if (saffronStamp) {
       ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      ctx.globalAlpha = 0.68;
+      ctx.globalCompositeOperation = 'screen';
+      ctx.globalAlpha = 0.58;
       const ringRx = params.baseRadius * 1.48;
       const ringRy = params.baseRadius * 0.68;
       ctx.drawImage(saffronStamp, -ringRx, -ringRy, ringRx * 2, ringRy * 2);

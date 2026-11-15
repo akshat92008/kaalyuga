@@ -6,6 +6,7 @@ import {
   applyHadesCelShadingToHierarchy,
   bake2DSpriteFrameFromCanvas,
   getSharedStudioWebGLRenderer,
+  isSoftwareWebGLRenderer,
   setupSharedStudioLightingRig,
 } from './hadesSpriteBaker';
 import { loadFbxCached, simplifyBufferGeometry } from './meshSimplifier';
@@ -966,9 +967,11 @@ export class Enemy3DRenderer {
     });
   }
 
+  private prewarmTimers: number[] = [];
+
   /**
-   * Stage B (Step 10): Pre-bake core sprite atlas frames for a slot during chamber transition
-   * so combat encounters zero runtime baking hitches (rendersInCurrentWindow drops) on first swing.
+   * Stage B (Step 10): Pre-bake core sprite atlas frames for a slot asynchronously in tiny chunks
+   * so combat and headless/software WebGL never lock the main thread.
    */
   public prewarmSlotFrames(
     slotKey: string,
@@ -976,15 +979,35 @@ export class Enemy3DRenderer {
   ): void {
     const slot = this.slots.get(slotKey);
     if (!slot || !slot.ready || !this.renderer) return;
+    if (isSoftwareWebGLRenderer()) return;
     const primaryAngles = [0, Math.PI, Math.PI * 0.5, Math.PI * 1.5];
+    const tasks: Array<() => void> = [];
     for (const st of states) {
       for (const yaw of primaryAngles) {
-        this.renderSlotFrame(slotKey, st, 0.0, yaw, false, false, 0.25, true);
+        tasks.push(() => {
+          this.renderSlotFrame(slotKey, st, 0.0, yaw, false, false, 0.25, true);
+        });
         if (st === 'attack' || st === 'windup') {
-          this.renderSlotFrame(slotKey, st, 0.35, yaw, false, false, 0.55, true);
+          tasks.push(() => {
+            this.renderSlotFrame(slotKey, st, 0.35, yaw, false, false, 0.55, true);
+          });
         }
       }
     }
+    if (typeof window === 'undefined') return;
+    const flushChunk = () => {
+      if (!this.renderer) return;
+      for (let i = 0; i < 2 && tasks.length > 0; i++) {
+        const fn = tasks.shift();
+        fn?.();
+      }
+      if (tasks.length > 0) {
+        const tid = window.setTimeout(flushChunk, 16);
+        this.prewarmTimers.push(tid);
+      }
+    };
+    const tid = window.setTimeout(flushChunk, 16);
+    this.prewarmTimers.push(tid);
   }
 
   public prewarmChamberSlots(
@@ -1234,6 +1257,12 @@ export class Enemy3DRenderer {
   }
 
   public dispose(): void {
+    if (typeof window !== 'undefined') {
+      for (const tid of this.prewarmTimers) {
+        window.clearTimeout(tid);
+      }
+    }
+    this.prewarmTimers.length = 0;
     this.atlasFrameCache.clear();
     this.renderer = null;
   }

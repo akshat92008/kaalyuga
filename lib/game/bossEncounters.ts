@@ -618,7 +618,7 @@ export function renderBossArenaHazards(
     ctx.save();
     ctx.font = 'bold 10px monospace';
     ctx.textAlign = 'center';
-    ctx.fillStyle = baitPillar.willImpact ? '#3ee0a8' : '#ffd86b';
+    ctx.fillStyle = baitPillar.willImpact ? '#d4a548' : '#ffd86b';
     ctx.fillText(
       baitPillar.willImpact
         ? '⚡ PILLAR IMPACT LOCKED! (4.5s ARMOR BREAK)'
