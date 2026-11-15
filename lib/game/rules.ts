@@ -1,16 +1,22 @@
 export type StaffStance = 'smash' | 'pillar' | 'thrust';
-export type WeaponId = 'twin_blades' | 'jingu_bang' | 'dragon_glaive';
+export type WeaponId = 'parashu' | 'khanda_dual' | 'trishula_great';
 export type UpgradeId =
-  | 'simian_marrow'
-  | 'jade_gourd'
-  | 'qi_vessel'
-  | 'suozi_armor'
-  | 'relic_curio'
-  | 'lifesaving_strand';
+  | 'prana_marrow'
+  | 'amrita_kalasha'
+  | 'tapas_vessel'
+  | 'kavacha_mail'
+  | 'kurukshetra_seal'
+  | 'mrityunjaya_vow';
+
+export function normalizeWeaponId(id: string | null | undefined): WeaponId {
+  if (id === 'khanda_dual' || id === 'twin_blades') return 'khanda_dual';
+  if (id === 'trishula_great' || id === 'dragon_glaive') return 'trishula_great';
+  return 'parashu';
+}
 
 export interface ShrineUpgradeSpec {
   id: UpgradeId;
-  chineseName: string;
+  sanskritName: string;
   title: string;
   description: string;
   effectText: string;
@@ -23,8 +29,8 @@ export type ShrineRanks = Record<UpgradeId, number>;
 
 export const SHRINE_UPGRADES: ShrineUpgradeSpec[] = [
   {
-    id: 'simian_marrow',
-    chineseName: 'PRANA MARROW',
+    id: 'prana_marrow',
+    sanskritName: 'PRANA MARROW',
     title: 'ASH-FORGED PRANA MARROW',
     description: 'Permanently increases Rudra’s Maximum Vitality at the start of every Kurukshetra run.',
     effectText: '+30 Max HP per Rank',
@@ -33,8 +39,8 @@ export const SHRINE_UPGRADES: ShrineUpgradeSpec[] = [
     costStep: 20,
   },
   {
-    id: 'jade_gourd',
-    chineseName: 'AMRITA KALASHA',
+    id: 'amrita_kalasha',
+    sanskritName: 'AMRITA KALASHA',
     title: 'CHOLA BRASS AMRITA KALASHA',
     description: 'Increases the number of golden Amrita Kalasha draughts you carry into battle.',
     effectText: '+1 Kalasha Sip per Rank',
@@ -43,8 +49,8 @@ export const SHRINE_UPGRADES: ShrineUpgradeSpec[] = [
     costStep: 35,
   },
   {
-    id: 'qi_vessel',
-    chineseName: 'TAPAS VESSEL',
+    id: 'tapas_vessel',
+    sanskritName: 'TAPAS VESSEL',
     title: 'AWAKENED TAPAS CHAKRA',
     description: 'Begin every arena with pre-charged Tapas Focus Orbs ready for Heavy Khanda Cleaves.',
     effectText: '+1 Starting Focus Orb per Rank',
@@ -53,8 +59,8 @@ export const SHRINE_UPGRADES: ShrineUpgradeSpec[] = [
     costStep: 30,
   },
   {
-    id: 'suozi_armor',
-    chineseName: 'KAVACHA MAIL',
+    id: 'kavacha_mail',
+    sanskritName: 'KAVACHA MAIL',
     title: 'CHOLA BRONZE KAVACHA MAIL',
     description: 'Ancient Chola war-plate that amplifies all Khanda, Stance, and Vedic Astra damage.',
     effectText: '+12% All Damage per Rank',
@@ -63,8 +69,8 @@ export const SHRINE_UPGRADES: ShrineUpgradeSpec[] = [
     costStep: 25,
   },
   {
-    id: 'relic_curio',
-    chineseName: 'KURUKSHETRA SEAL',
+    id: 'kurukshetra_seal',
+    sanskritName: 'KURUKSHETRA SEAL',
     title: 'SEAL OF THE BLEEDING CROWN',
     description: 'Vanquished Dharma-Rot legions and Rakshasa Sovereigns yield significantly more Ashen Karma.',
     effectText: '+25% Ashen Karma per Rank',
@@ -73,8 +79,8 @@ export const SHRINE_UPGRADES: ShrineUpgradeSpec[] = [
     costStep: 25,
   },
   {
-    id: 'lifesaving_strand',
-    chineseName: 'MRITYUNJAYA VOW',
+    id: 'mrityunjaya_vow',
+    sanskritName: 'MRITYUNJAYA VOW',
     title: 'MRITYUNJAYA DEATHLESS VOW',
     description: 'Defy death once per run through the Ash-Bound curse, rising from the pyre with 70% HP.',
     effectText: '+1 Auto-Revive per Run',
@@ -85,19 +91,19 @@ export const SHRINE_UPGRADES: ShrineUpgradeSpec[] = [
 ];
 
 export const INITIAL_SHRINE_RANKS: ShrineRanks = {
-  simian_marrow: 1,
-  jade_gourd: 0,
-  qi_vessel: 1,
-  suozi_armor: 1,
-  relic_curio: 0,
-  lifesaving_strand: 0,
+  prana_marrow: 1,
+  amrita_kalasha: 0,
+  tapas_vessel: 1,
+  kavacha_mail: 1,
+  kurukshetra_seal: 0,
+  mrityunjaya_vow: 0,
 };
 
 export const INITIAL_ASHEN_KARMA = 5447;
 
 export interface StanceConfig {
   id: StaffStance;
-  chineseName: string;
+  sanskritName: string;
   englishName: string;
   shortDesc: string;
   heavyDamageBase: number;
@@ -109,7 +115,7 @@ export interface StanceConfig {
 export const STANCE_CONFIGS: Record<StaffStance, StanceConfig> = {
   smash: {
     id: 'smash',
-    chineseName: 'SMASH',
+    sanskritName: 'SMASH',
     englishName: 'Rakshasa Crushing Stance (Cone Cleave)',
     shortDesc: 'Overhead Broken Gada crush · Sends molten fissures forward when unlocked',
     heavyDamageBase: 96,
@@ -119,7 +125,7 @@ export const STANCE_CONFIGS: Record<StaffStance, StanceConfig> = {
   },
   pillar: {
     id: 'pillar',
-    chineseName: 'PILLAR',
+    sanskritName: 'PILLAR',
     englishName: 'Pillar Stance (360° Shockwave)',
     shortDesc: 'Vaults above ground quakes · 360° radial Gada shockwave slam',
     heavyDamageBase: 84,
@@ -129,7 +135,7 @@ export const STANCE_CONFIGS: Record<StaffStance, StanceConfig> = {
   },
   thrust: {
     id: 'thrust',
-    chineseName: 'THRUST',
+    sanskritName: 'THRUST',
     englishName: 'Thrust Stance (Armor-Piercing Lunge)',
     shortDesc: 'Long-reach forward Gada haft drive · Pierces guard & lodges in pillars',
     heavyDamageBase: 108,
@@ -144,7 +150,7 @@ export interface WeaponConfig {
   key: '1' | '2' | '3';
   hotkey: '1' | '2' | '3';
   name: string;
-  chineseName: string;
+  sanskritName: string;
   englishName: string;
   shortLabel: string;
   damageMultiplier: number;
@@ -155,42 +161,42 @@ export interface WeaponConfig {
 }
 
 export const WEAPON_CONFIGS: Record<WeaponId, WeaponConfig> = {
-  twin_blades: {
-    id: 'twin_blades',
+  khanda_dual: {
+    id: 'khanda_dual',
     key: '1',
     hotkey: '1',
-    name: 'Broken Gada · Swift Haft',
-    chineseName: 'SWIFT GADA',
-    englishName: 'Broken Iron Gada (Swift Grip)',
-    shortLabel: 'Swift-Gada',
+    name: 'Khanda Dual-Edge · Swift Parashu',
+    sanskritName: 'KHANDA-DWAYA',
+    englishName: 'Swift Khanda-Parashu (Twin Edge)',
+    shortLabel: 'Khanda Dual',
     damageMultiplier: 0.88,
     attackSpeedMultiplier: 1.35,
     focusGainPerHit: 0.30,
     reachPx: 108,
     accentColor: '#3be8d0',
   },
-  jingu_bang: {
-    id: 'jingu_bang',
+  parashu: {
+    id: 'parashu',
     key: '2',
     hotkey: '2',
-    name: 'Broken Gada · Spiral Mark',
-    chineseName: 'BROKEN GADA',
-    englishName: 'The Broken Gada (Spiral-Stamped Mace)',
-    shortLabel: 'Broken Gada',
+    name: 'Bloodforged Parashu · Spiral Mark',
+    sanskritName: 'PARASHU',
+    englishName: 'Bloodforged Khanda-Parashu (Signature Axe)',
+    shortLabel: 'Parashu',
     damageMultiplier: 1.12,
     attackSpeedMultiplier: 1.0,
     focusGainPerHit: 0.38,
     reachPx: 132,
     accentColor: '#f5be4f',
   },
-  dragon_glaive: {
-    id: 'dragon_glaive',
+  trishula_great: {
+    id: 'trishula_great',
     key: '3',
     hotkey: '3',
-    name: 'Reforged Gada · Rakshasa Weight',
-    chineseName: 'CRUSHING GADA',
-    englishName: 'Furnace-Weighted Great Gada',
-    shortLabel: 'Great-Gada',
+    name: 'Trishula Great-Axe · Rakshasa Weight',
+    sanskritName: 'TRISHULA-MAHA',
+    englishName: 'Furnace-Weighted Trishula Great-Axe',
+    shortLabel: 'Trishula Great',
     damageMultiplier: 1.36,
     attackSpeedMultiplier: 0.82,
     focusGainPerHit: 0.46,
@@ -240,12 +246,12 @@ export function purchaseShrineUpgrade(
 
 export function computeDerivedPlayerStats(ranks: ShrineRanks) {
   const baseHp = 220;
-  const maxHp = baseHp + (ranks.simian_marrow ?? 0) * 30;
-  const maxGourdSips = 3 + (ranks.jade_gourd ?? 0);
-  const startingFocusOrbs = Math.min(4, (ranks.qi_vessel ?? 0));
-  const damageMultiplier = 1 + (ranks.suozi_armor ?? 0) * 0.12;
-  const karmaMultiplier = 1 + (ranks.relic_curio ?? 0) * 0.25;
-  const extraLives = ranks.lifesaving_strand ?? 0;
+  const maxHp = baseHp + (ranks.prana_marrow ?? 0) * 30;
+  const maxGourdSips = 3 + (ranks.amrita_kalasha ?? 0);
+  const startingFocusOrbs = Math.min(4, (ranks.tapas_vessel ?? 0));
+  const damageMultiplier = 1 + (ranks.kavacha_mail ?? 0) * 0.12;
+  const karmaMultiplier = 1 + (ranks.kurukshetra_seal ?? 0) * 0.25;
+  const extraLives = ranks.mrityunjaya_vow ?? 0;
 
   return {
     maxHp,

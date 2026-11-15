@@ -524,7 +524,7 @@ export function PartyCommandModal({
                   </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  {(['twin_blades', 'jingu_bang', 'dragon_glaive'] as WeaponId[]).map((wId) => {
+                  {(['khanda_dual', 'parashu', 'trishula_great'] as WeaponId[]).map((wId) => {
                     const wCfg = WEAPON_CONFIGS[wId];
                     const isEquipped = selectedWeapon === wId;
                     const aspectBonus = computeWeaponAspectBonuses(wId, weaponAspectRanks);
@@ -543,7 +543,7 @@ export function PartyCommandModal({
                       >
                         <div>
                           <div className="flex items-center justify-between text-xs font-mono-num text-[#d4a548]">
-                            <span>[{wCfg.hotkey}] {wCfg.chineseName}</span>
+                            <span>[{wCfg.hotkey}] {wCfg.sanskritName}</span>
                             <span style={{ color: aspectBonus.aspectSpec.accentColor }}>
                               ASPECT RANK {aspectBonus.aspectRank}/5
                             </span>

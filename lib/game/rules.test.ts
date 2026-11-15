@@ -26,7 +26,7 @@ import {
 
 test('computeDerivedPlayerStats calculates correct baseline with initial shrine ranks', () => {
   const stats = computeDerivedPlayerStats(INITIAL_SHRINE_RANKS);
-  // Base 220 + 1 rank of simian_marrow (+30) = 250
+  // Base 220 + 1 rank of prana_marrow (+30) = 250
   assert.equal(stats.maxHp, 250);
   assert.equal(stats.maxGourdSips, 3);
   assert.equal(stats.startingFocusOrbs, 1);
@@ -34,13 +34,13 @@ test('computeDerivedPlayerStats calculates correct baseline with initial shrine 
 });
 
 test('purchaseShrineUpgrade deducts karma and increments upgrade rank up to maxRank', () => {
-  const cost = getUpgradeCost('simian_marrow', INITIAL_SHRINE_RANKS.simian_marrow);
+  const cost = getUpgradeCost('prana_marrow', INITIAL_SHRINE_RANKS.prana_marrow);
   assert.equal(cost, 70);
-  assert.equal(canPurchaseUpgrade('simian_marrow', INITIAL_SHRINE_RANKS, INITIAL_ASHEN_KARMA), true);
+  assert.equal(canPurchaseUpgrade('prana_marrow', INITIAL_SHRINE_RANKS, INITIAL_ASHEN_KARMA), true);
 
-  const res = purchaseShrineUpgrade('simian_marrow', INITIAL_SHRINE_RANKS, INITIAL_ASHEN_KARMA);
+  const res = purchaseShrineUpgrade('prana_marrow', INITIAL_SHRINE_RANKS, INITIAL_ASHEN_KARMA);
   assert.equal(res.purchased, true);
-  assert.equal(res.ranks.simian_marrow, 2);
+  assert.equal(res.ranks.prana_marrow, 2);
   assert.equal(res.availableKarma, INITIAL_ASHEN_KARMA - 70);
   assert.equal(computeDerivedPlayerStats(res.ranks).maxHp, 280);
 });
@@ -54,12 +54,12 @@ test('stance cycling rotates smash -> pillar -> thrust -> smash', () => {
 test('light and heavy attack damage scale with combo steps, focus orbs, and stance', () => {
   const hit1 = calculateLightHitDamage({
     comboStep: 1,
-    weapon: 'jingu_bang',
+    weapon: 'parashu',
     ranks: INITIAL_SHRINE_RANKS,
   });
   const hit4 = calculateLightHitDamage({
     comboStep: 4,
-    weapon: 'jingu_bang',
+    weapon: 'parashu',
     ranks: INITIAL_SHRINE_RANKS,
   });
   assert.ok(hit4.hpDamage > hit1.hpDamage);
@@ -68,13 +68,13 @@ test('light and heavy attack damage scale with combo steps, focus orbs, and stan
   const heavy1 = calculateStanceHeavyDamage({
     stance: 'smash',
     focusOrbsConsumed: 1,
-    weapon: 'jingu_bang',
+    weapon: 'parashu',
     ranks: INITIAL_SHRINE_RANKS,
   });
   const heavy3 = calculateStanceHeavyDamage({
     stance: 'smash',
     focusOrbsConsumed: 3,
-    weapon: 'jingu_bang',
+    weapon: 'parashu',
     ranks: INITIAL_SHRINE_RANKS,
   });
   assert.ok(heavy3.hpDamage > heavy1.hpDamage * 1.8);
@@ -255,9 +255,9 @@ test('smart enemy pacing, predictive aim lead, and 3-stage Agni-Step dash curve 
   assert.ok(thrustHeavy.forwardLungePx > smashHeavy.forwardLungePx);
 });
 
-test('all 8 Act I chambers have HD animated arena videos and VFX flipbook sheets registered', async () => {
+test('all 5 Act I chambers have HD animated arena videos and VFX flipbook sheets registered', async () => {
   const { CHAMBERS, GAME_ASSETS } = await import('./assets');
-  assert.equal(CHAMBERS.length, 8);
+  assert.equal(CHAMBERS.length, 5);
   for (const chamber of CHAMBERS) {
     assert.ok(chamber.videoUrl && chamber.videoUrl.startsWith('/videos/') && chamber.videoUrl.endsWith('.mp4'));
     assert.ok(!chamber.videoUrl.includes('…'), `Chamber ${chamber.id} videoUrl must not contain ellipsis`);
@@ -285,12 +285,14 @@ test('all 8 Act I chambers have HD animated arena videos and VFX flipbook sheets
   // Chamber 4: Dundubhi — Mandapa of the War-Drum (bc2kjf + new Dundubhi Arena MP4)
   assert.equal(CHAMBERS[3].backgroundUrl, '/arenas/Gemini_Generated_Image_bc2kjfbc2kjfbc2k.png');
   assert.equal(CHAMBERS[3].videoUrl, '/videos/Flames_flickering_around_stone_f_09be2052.mp4');
+  assert.equal(CHAMBERS[3].spawns[0].type, 'dundubhi');
 
-  // Vrikodara — Sanctum of the Infernal Maw (Phase 1 -> Phase 2 Blood Eclipse)
-  assert.equal(CHAMBERS[7].backgroundUrl, GAME_ASSETS.chambers.bossSanctumPhase1);
-  assert.equal(CHAMBERS[7].videoUrl, '/videos/Animate_mythological_game_enviro_f7acefd6_1080p.mp4');
-  assert.equal(CHAMBERS[7].phase2BackgroundUrl, '/arenas/Gemini_Generated_Image_3ay6rk3ay6rk3ay6.png');
-  assert.equal(CHAMBERS[7].phase2VideoUrl, '/videos/Furnaces_spewing_flames_and_slag_baeefd93_1080p.mp4');
+  // Chamber 5: Vrikodara — Sanctum of the Infernal Maw (Phase 1 -> Phase 2 Blood Eclipse)
+  assert.equal(CHAMBERS[4].backgroundUrl, GAME_ASSETS.chambers.bossSanctumPhase1);
+  assert.equal(CHAMBERS[4].videoUrl, '/videos/Animate_mythological_game_enviro_f7acefd6_1080p.mp4');
+  assert.equal(CHAMBERS[4].phase2BackgroundUrl, '/arenas/Gemini_Generated_Image_3ay6rk3ay6rk3ay6.png');
+  assert.equal(CHAMBERS[4].phase2VideoUrl, '/videos/Furnaces_spewing_flames_and_slag_baeefd93_1080p.mp4');
+  assert.equal(CHAMBERS[4].spawns[0].type, 'vrikodara');
 
   // Ensure zero Unicode ellipsis across all arenaVideos
   for (const [k, url] of Object.entries(GAME_ASSETS.arenaVideos)) {

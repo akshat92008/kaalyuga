@@ -770,3 +770,176 @@ export function drawAdditiveFlipbookRowProgress(
     anchorY: params.anchorY,
   });
 }
+
+export type ParticleFlipbookArchetype =
+  | 'blood_splatter'
+  | 'ember_dust'
+  | 'magic_spell'
+  | 'bronze_spark';
+
+export interface ParticleFlipbookMapping {
+  sheetSpec: FlipbookSheetSpec;
+  row: number;
+  colOffset: number;
+  singleCol: boolean;
+  alignToVelocity: boolean;
+  baseScale: number;
+  maxAlpha: number;
+  maxSizePx: number;
+}
+
+/**
+ * Maps each particle archetype in `particleAndAudioEngine.ts` to an authentic Phase 2
+ * hand-painted `#000000` flipbook cell rendered via additive blending (`globalCompositeOperation = 'lighter'`).
+ * Uses crisp spark/droplet cells (Col 3 / Row 1) at compact particle scale so bursts never stack into blown-out disks.
+ */
+export function resolveParticleFlipbookSpec(
+  archetype: ParticleFlipbookArchetype
+): ParticleFlipbookMapping {
+  switch (archetype) {
+    case 'blood_splatter':
+      return {
+        sheetSpec: PHASE2_VFX_SHEETS.parryAndHitSparks4x2,
+        row: PARRY_SPARKS_FLIPBOOK_ROWS.DIRECTIONAL_HIT_SPLATTER,
+        colOffset: 1,
+        singleCol: false,
+        alignToVelocity: true,
+        baseScale: 2.1,
+        maxAlpha: 0.44,
+        maxSizePx: 16,
+      };
+    case 'bronze_spark':
+      return {
+        sheetSpec: PHASE2_VFX_SHEETS.parryAndHitSparks4x2,
+        row: PARRY_SPARKS_FLIPBOOK_ROWS.VEDIC_PARRY_FLASH,
+        colOffset: 3,
+        singleCol: true,
+        alignToVelocity: true,
+        baseScale: 1.9,
+        maxAlpha: 0.48,
+        maxSizePx: 14,
+      };
+    case 'magic_spell':
+      return {
+        sheetSpec: PHASE2_VFX_SHEETS.parryAndHitSparks4x2,
+        row: PARRY_SPARKS_FLIPBOOK_ROWS.VEDIC_PARRY_FLASH,
+        colOffset: 3,
+        singleCol: true,
+        alignToVelocity: false,
+        baseScale: 1.8,
+        maxAlpha: 0.42,
+        maxSizePx: 13,
+      };
+    case 'ember_dust':
+    default:
+      return {
+        sheetSpec: PHASE2_VFX_SHEETS.parryAndHitSparks4x2,
+        row: PARRY_SPARKS_FLIPBOOK_ROWS.DIRECTIONAL_HIT_SPLATTER,
+        colOffset: 3,
+        singleCol: true,
+        alignToVelocity: true,
+        baseScale: 1.6,
+        maxAlpha: 0.36,
+        maxSizePx: 11,
+      };
+  }
+}
+
+export interface LightningArcFlipbookSegment {
+  sheetSpec: FlipbookSheetSpec;
+  col: number;
+  row: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotationRad: number;
+  alpha: number;
+}
+
+/**
+ * Builds chained additive flipbook stamps from `(x1, y1)` to `(x2, y2)` so chain-lightning
+ * and Astra discharges render purely via hand-painted flipbooks rather than `ctx.stroke()`.
+ */
+export function computeLightningArcFlipbookSegments(params: {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  lifeRatio: number;
+  seed?: number;
+}): LightningArcFlipbookSegment[] {
+  const dx = params.x2 - params.x1;
+  const dy = params.y2 - params.y1;
+  const dist = Math.hypot(dx, dy);
+  const alpha = Math.max(0, Math.min(0.85, params.lifeRatio * 0.85));
+  if (dist < 1 || alpha <= 0.01) return [];
+
+  const baseAngle = Math.atan2(dy, dx);
+  const segCount = Math.max(1, Math.min(5, Math.ceil(dist / 96)));
+  const segLen = dist / segCount;
+  const seed = params.seed ?? 0;
+  const out: LightningArcFlipbookSegment[] = [];
+
+  for (let i = 0; i < segCount; i++) {
+    const midT = (i + 0.5) / segCount;
+    const jitter = Math.sin((seed + 1) * 12.9898 + i * 7.23) * 0.14;
+    out.push({
+      sheetSpec: PHASE2_VFX_SHEETS.parashuSlashes3x3,
+      col: (i + Math.floor((1 - params.lifeRatio) * 3)) % 3,
+      row: PARASHU_FLIPBOOK_ROWS.DOWNWARD_CRUSH_FISSURE,
+      x: params.x1 + dx * midT,
+      y: params.y1 + dy * midT,
+      width: Math.max(42, segLen * 1.25),
+      height: Math.max(24, Math.min(48, segLen * 0.38)),
+      rotationRad: baseAngle + jitter,
+      alpha,
+    });
+  }
+
+  out.push({
+    sheetSpec: PHASE2_VFX_SHEETS.parryAndHitSparks4x2,
+    col: 0,
+    row: PARRY_SPARKS_FLIPBOOK_ROWS.DIRECTIONAL_HIT_SPLATTER,
+    x: params.x2,
+    y: params.y2,
+    width: 34,
+    height: 26,
+    rotationRad: baseAngle,
+    alpha: Math.min(0.75, alpha * 0.9),
+  });
+
+  return out;
+}
+
+/**
+ * Renders a chain-lightning / Astra discharge arc using hand-painted additive flipbook segments.
+ */
+export function renderLightningArcFlipbooks(
+  ctx: CanvasRenderingContext2D,
+  params: {
+    x1: number;
+    y1: number;
+    x2: number;
+    y2: number;
+    lifeRatio: number;
+    seed?: number;
+  }
+): void {
+  const segments = computeLightningArcFlipbookSegments(params);
+  for (let i = 0; i < segments.length; i++) {
+    const seg = segments[i];
+    drawAdditiveFlipbookCell(ctx, {
+      sheetSpec: seg.sheetSpec,
+      col: seg.col,
+      row: seg.row,
+      x: seg.x,
+      y: seg.y,
+      width: seg.width,
+      height: seg.height,
+      rotationRad: seg.rotationRad,
+      alpha: seg.alpha,
+    });
+  }
+}
+

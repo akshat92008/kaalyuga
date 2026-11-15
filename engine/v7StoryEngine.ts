@@ -380,11 +380,11 @@ export const ACT1_LOOK_OBJECTS: LookObjectSpec[] = [
   },
   {
     id: 'broken_gada_spiral',
-    chamberId: 5,
-    x: 640,
-    y: 425,
+    chamberId: 0,
+    x: 330,
+    y: 500,
     title: 'Maker’s Mark on the Broken Gada',
-    subtitle: 'LOOK SEED · SOUL-FIRE SANCTUM',
+    subtitle: 'LOOK SEED · VAITARANI ASH HUB',
     observation:
       'Beneath three millennia of river-silt on the haft of your own broken iron mace sits a tiny chiselled spiral—the exact mark stamped on the Shishira tally-leaves.',
     savitriComment: '“Your father forged that haft. I knew the first hour I pulled you out.”',
@@ -392,11 +392,11 @@ export const ACT1_LOOK_OBJECTS: LookObjectSpec[] = [
   },
   {
     id: 'healer_tent_stake',
-    chamberId: 7,
+    chamberId: 5,
     x: 640,
-    y: 270,
+    y: 280,
     title: 'Charred Tent Stake — Third from the East Gate',
-    subtitle: 'LOOK SEED · SEALED GATE OF JATHARAGNI',
+    subtitle: 'LOOK SEED · SANCTUM OF THE INFERNAL MAW',
     observation:
       'A medicinal mortar of ground neem and a strip of linen bandage fused into glass by white fire. A brass tag reads: “TENT III · EAST GATE — NACHIKETA & ILA.”',
     savitriComment: '“A wound has no side. That was what she always said.”',

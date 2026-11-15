@@ -2,7 +2,7 @@
 // KALIYUGA: THE BLEEDING CROWN — AAA PC Modern Combat Engine
 // Combines mechanics from:
 // 1. God of War (Golden Glint Parry, Shield-Shatter Posture Break, Vajra Riposte)
-// 2. Black Myth: Wukong (See-Through Resolute Counter mid-combo, 3-Stance Flow)
+// 2. Rudra Resolute Counter (See-Through mid-combo counter, 3-Stance Flow)
 // 3. Prince of Persia (Kala-Rewind Temporal State Buffer & Chrono-Slow Rift)
 // 4. Assassin's Creed (Shadow Prana Blink Backstab & Chain-Assassination Reset)
 // 5. Hades / Devil May Cry (Dynamic Style Rank Meter D -> C -> B -> A -> S -> SSS)
@@ -23,6 +23,9 @@ export interface ParryEvaluationResult {
   postureDamageDealt: number;
   grantsRiposteWindow: boolean;
   riposteWindowDurationSec: number;
+  grantsCritWindow: boolean;
+  critWindowDurationSec: number;
+  pranaBurstAmount: number;
   focusOrbsGranted: number;
   healAmount: number;
   hitstopSec: number;
@@ -42,6 +45,9 @@ export function evaluateParryImpact(input: ParryEvaluationInput): ParryEvaluatio
       postureDamageDealt: 10,
       grantsRiposteWindow: false,
       riposteWindowDurationSec: 0,
+      grantsCritWindow: false,
+      critWindowDurationSec: 0,
+      pranaBurstAmount: 0,
       focusOrbsGranted: 0,
       healAmount: 0,
       hitstopSec: 0.03,
@@ -57,11 +63,14 @@ export function evaluateParryImpact(input: ParryEvaluationInput): ParryEvaluatio
       postureDamageDealt: Math.max(48, Math.round(input.attackerMaxPosture * 0.65)),
       grantsRiposteWindow: true,
       riposteWindowDurationSec: 2.2,
+      grantsCritWindow: true,
+      critWindowDurationSec: 2.6,
+      pranaBurstAmount: 25,
       focusOrbsGranted: 1,
       healAmount: 14,
-      hitstopSec: 0.095,
+      hitstopSec: 0.068,
       calloutTitle: 'PERFECT VAJRA PARRY!',
-      calloutSubtitle: 'PRESS [LMB / J] OR [RMB / K] FOR LETHAL RIPOSTE COUNTER (2.65× DMG)',
+      calloutSubtitle: '100% CRIT WINDOW +25 PRANA · [LMB / RMB] RIPOSTE COUNTER',
     };
   }
 
@@ -72,11 +81,14 @@ export function evaluateParryImpact(input: ParryEvaluationInput): ParryEvaluatio
       postureDamageDealt: Math.max(22, Math.round(input.attackerMaxPosture * 0.25)),
       grantsRiposteWindow: false,
       riposteWindowDurationSec: 0.8,
+      grantsCritWindow: false,
+      critWindowDurationSec: 0,
+      pranaBurstAmount: 10,
       focusOrbsGranted: 0,
       healAmount: 0,
-      hitstopSec: 0.045,
+      hitstopSec: 0.048,
       calloutTitle: 'KALARIPAYATTU IRON GUARD',
-      calloutSubtitle: '85% DAMAGE DEFLECTED',
+      calloutSubtitle: '85% DAMAGE DEFLECTED · +10 PRANA BURST',
     };
   }
 
@@ -86,6 +98,9 @@ export function evaluateParryImpact(input: ParryEvaluationInput): ParryEvaluatio
     postureDamageDealt: 0,
     grantsRiposteWindow: false,
     riposteWindowDurationSec: 0,
+    grantsCritWindow: false,
+    critWindowDurationSec: 0,
+    pranaBurstAmount: 0,
     focusOrbsGranted: 0,
     healAmount: 0,
     hitstopSec: 0,
@@ -289,7 +304,7 @@ export function stepEnemyIronGuardState(input: IronGuardStepInput): IronGuardSte
 }
 
 // ----------------------------------------------------------------------------
-// Black Myth: Wukong — "See-Through" Resolute Strike Evaluation
+// Rudra — "See-Through" Resolute Strike Evaluation
 // ----------------------------------------------------------------------------
 
 export interface SeeThroughCounterInput {

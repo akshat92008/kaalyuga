@@ -14,6 +14,34 @@ export const MAX_CLAMPED_CAMERA_TRAUMA = 0.85; // Clamped trauma ceiling so stac
 export const KALIYUGA_CRIT_GOLD_COLOR = '#ffd86b'; // Kaliyuga gold for critical / riposte / finisher hits
 export const KALIYUGA_NORMAL_BONE_WHITE_COLOR = '#f5ebd6'; // Bone-white for standard normal hits
 
+/**
+ * Kurukshetra Sandstone Pillars in boss arenas can only be destroyed by explicit heavy/bull-charge impacts,
+ * never by generic shockwaves, dodge bursts, decoy explosions, or light sword sweeps.
+ */
+export function shouldDamageProp(
+  propType: string,
+  allowKurukshetraPillars = false
+): boolean {
+  if (propType === 'kurukshetra_pillar') {
+    return allowKurukshetraPillars;
+  }
+  return true;
+}
+
+/**
+ * Kurukshetra Sandstone Pillars in boss arenas can only be destroyed by explicit heavy/bull-charge impacts,
+ * never by generic shockwaves, dodge bursts, decoy explosions, or light sword sweeps.
+ */
+export function shouldDamageProp(
+  propType: string,
+  allowKurukshetraPillars = false
+): boolean {
+  if (propType === 'kurukshetra_pillar') {
+    return allowKurukshetraPillars;
+  }
+  return true;
+}
+
 export type CombatHitWeight =
   | 'light'
   | 'heavy'

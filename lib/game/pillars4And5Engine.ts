@@ -14,9 +14,9 @@ import { ACT1_LOOK_OBJECTS, LookObjectSpec, SANJAYA_CORRECTIONS, SanjayaCorrecti
 export type WeaponAspectRanks = Record<WeaponId, number>;
 
 export const INITIAL_WEAPON_ASPECT_RANKS: WeaponAspectRanks = {
-  twin_blades: 1,
-  jingu_bang: 1,
-  dragon_glaive: 1,
+  parashu: 1,
+  khanda_dual: 1,
+  trishula_great: 1,
 };
 
 export interface WeaponAspectSpec {
@@ -33,8 +33,8 @@ export interface WeaponAspectSpec {
 }
 
 export const WEAPON_ASPECT_SPECS: Record<WeaponId, WeaponAspectSpec> = {
-  twin_blades: {
-    weaponId: 'twin_blades',
+  khanda_dual: {
+    weaponId: 'khanda_dual',
     aspectName: 'Aspect of Raktabeeja’s Fang',
     sanskritTitle: 'रक्तबीज दंष्ट्रा · HEMORRHAGE CLEAVERS',
     passiveTitle: 'Crimson Hemorrhage Detonation',
@@ -46,10 +46,10 @@ export const WEAPON_ASPECT_SPECS: Record<WeaponId, WeaponAspectSpec> = {
     bonusCritPctPerRank: 4,
     bonusPosturePctPerRank: 5,
   },
-  jingu_bang: {
-    weaponId: 'jingu_bang',
+  parashu: {
+    weaponId: 'parashu',
     aspectName: 'Aspect of Mahabali’s Oath',
-    sanskritTitle: 'महाबलि गदा · SEISMIC KHANDA-PARASHU',
+    sanskritTitle: 'महाबलि परशु · SEISMIC KHANDA-PARASHU',
     passiveTitle: 'Patala Tectonic Tremor',
     passiveDescription:
       'Heavy Stance Unleash and Golden Parry Ripostes trigger a secondary Patala Seismic Shockwave and amplify Posture Shatter per rank.',
@@ -59,8 +59,8 @@ export const WEAPON_ASPECT_SPECS: Record<WeaponId, WeaponAspectSpec> = {
     bonusCritPctPerRank: 3,
     bonusPosturePctPerRank: 9,
   },
-  dragon_glaive: {
-    weaponId: 'dragon_glaive',
+  trishula_great: {
+    weaponId: 'trishula_great',
     aspectName: 'Aspect of the Brahmashira',
     sanskritTitle: 'ब्रह्मशिर त्रिशूल · ASTRAL TRIDENT-AXE',
     passiveTitle: 'White-Fire Astral Lance',

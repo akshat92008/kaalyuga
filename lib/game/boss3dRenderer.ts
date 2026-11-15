@@ -30,7 +30,7 @@ import {
 } from './hadesSpriteBaker';
 import { GAME_ASSETS } from './assets';
 
-export type Boss3DKind = 'dundubhi' | 'vrikodara' | 'semi_boss';
+export type Boss3DKind = 'dundubhi' | 'vrikodara' | 'semi_boss' | 'savitri_hub';
 
 export interface Boss3DUpdateParams {
   kind: Boss3DKind;
@@ -48,6 +48,75 @@ export interface Boss3DUpdateParams {
   isPostureBroken: boolean;
   isHitFlash: boolean;
   isParrying?: boolean;
+  bypassSoftwareThrottle?: boolean;
+}
+
+export interface BossPbrMaterialMaps {
+  map?: THREE.Texture | null;
+  normalMap?: THREE.Texture | null;
+  roughnessMap?: THREE.Texture | null;
+  metalnessMap?: THREE.Texture | null;
+  fallbackRoughness?: number;
+  fallbackMetalness?: number;
+  normalScale?: number;
+  emissiveHex?: number;
+  emissiveIntensity?: number;
+  colorHex?: number;
+}
+
+/**
+ * Resolves Three.js MeshStandardMaterial parameters so bound roughness/metalness maps
+ * always receive `1.0` scalar multipliers (preventing 0.08/0.24 from suppressing the map).
+ */
+export function resolveBossPbrMaterialConfig(opts: BossPbrMaterialMaps) {
+  const hasRoughnessMap = Boolean(opts.roughnessMap);
+  const hasMetalnessMap = Boolean(opts.metalnessMap);
+  const nScale = opts.normalScale ?? 0.35;
+  return {
+    color: opts.colorHex ?? 0xffffff,
+    map: opts.map || undefined,
+    normalMap: opts.normalMap || undefined,
+    normalScale: new THREE.Vector2(nScale, nScale),
+    roughnessMap: opts.roughnessMap || undefined,
+    metalnessMap: opts.metalnessMap || undefined,
+    roughness: hasRoughnessMap ? 1.0 : (opts.fallbackRoughness ?? 0.84),
+    metalness: hasMetalnessMap ? 1.0 : (opts.fallbackMetalness ?? 0.14),
+    envMapIntensity: hasMetalnessMap ? 0.35 : 0.0,
+    emissive: new THREE.Color(opts.emissiveHex ?? 0x000000),
+    emissiveIntensity: opts.emissiveIntensity ?? 0.0,
+  };
+}
+
+export function createBossPbrMaterial(opts: BossPbrMaterialMaps): THREE.MeshStandardMaterial {
+  return new THREE.MeshStandardMaterial(resolveBossPbrMaterialConfig(opts));
+}
+
+export function buildBossPrewarmParamsList(kind: Boss3DKind): Boss3DUpdateParams[] {
+  const states: Array<Boss3DUpdateParams['aiState']> = ['idle', 'chase', 'windup', 'attack'];
+  const angles = [0, Math.PI];
+  const list: Boss3DUpdateParams[] = [];
+  for (const st of states) {
+    for (const ang of angles) {
+      list.push({
+        kind,
+        dt: 0.033,
+        vx: st === 'chase' ? Math.cos(ang) * 140 : 0,
+        vy: st === 'chase' ? Math.sin(ang) * 140 : 0,
+        facing: ang === 0 ? 1 : -1,
+        aimAngle: ang,
+        aiState: st,
+        attackKind: 'cone',
+        attackPattern: 0,
+        windupProgress: st === 'windup' ? 0.5 : 0,
+        phase: 1,
+        armorCracked: false,
+        isPostureBroken: false,
+        isHitFlash: false,
+        bypassSoftwareThrottle: true,
+      });
+    }
+  }
+  return list;
 }
 
 export type BossClipKey =
@@ -169,6 +238,7 @@ export class Boss3DRenderer {
 
   private rigs: Partial<Record<Boss3DKind, LoadedBossRig>> = {};
   private loadingByKind: Partial<Record<Boss3DKind, Promise<void>>> = {};
+  private prewarmedKinds = new Set<Boss3DKind>();
   private activeKind: Boss3DKind | null = null;
   private currentYaw = 0;
   private targetYaw = 0;
@@ -273,16 +343,13 @@ export class Boss3DRenderer {
   }
 
   private loadTex(url: string, isColor = false): Promise<THREE.Texture | null> {
+    if (!url) return Promise.resolve(null);
     const texLoader = new THREE.TextureLoader();
     return new Promise<THREE.Texture | null>((resolve) => {
-      if (IS_SOFTWARE_WEBGL && !isColor) {
-        resolve(null);
-        return;
-      }
       texLoader.load(
         encodeURI(url),
         (t) => {
-          if (isColor) t.colorSpace = THREE.SRGBColorSpace;
+          t.colorSpace = isColor ? THREE.SRGBColorSpace : THREE.NoColorSpace;
           if (IS_SOFTWARE_WEBGL) {
             t.generateMipmaps = false;
             t.minFilter = THREE.LinearFilter;
@@ -302,8 +369,106 @@ export class Boss3DRenderer {
       this.loadingByKind[kind] = this.loadDundubhiRig();
     } else if (kind === 'semi_boss') {
       this.loadingByKind[kind] = this.loadSemiBossRig();
+    } else if (kind === 'savitri_hub') {
+      this.loadingByKind[kind] = this.loadSavitriHubRig();
     } else {
       this.loadingByKind[kind] = this.loadVrikodaraRig();
+    }
+  }
+
+  private async loadSavitriHubRig(): Promise<void> {
+    try {
+      const cfg = GAME_ASSETS.models3d.lotusEmpress;
+      const [lotusGroup, idleAnimFbx, baseTex, normTex, roughTex, metalTex] = await Promise.all([
+        loadFbxCached(cfg.textureFbx, false),
+        loadFbxCached(cfg.idleAnimFbx, false),
+        this.loadTex(cfg.textures.baseColor, true),
+        this.loadTex(cfg.textures.normal, false),
+        this.loadTex(cfg.textures.roughness, false),
+        this.loadTex(cfg.textures.metalness, false),
+      ]);
+
+      if (this.disposed) return;
+
+      const savitriMat = createBossPbrMaterial({
+        map: baseTex,
+        normalMap: normTex,
+        roughnessMap: roughTex,
+        metalnessMap: metalTex,
+        fallbackRoughness: 0.78,
+        fallbackMetalness: 0.18,
+        normalScale: 0.35,
+        emissiveHex: 0x3b280a,
+        emissiveIntensity: 0.25,
+      });
+
+      let hasBones = false;
+      lotusGroup.traverse((obj) => {
+        if ((obj as THREE.Bone).isBone || (obj as THREE.SkinnedMesh).isSkinnedMesh) {
+          hasBones = true;
+        }
+        const mesh = obj as THREE.Mesh;
+        if (mesh.isMesh) {
+          mesh.material = savitriMat;
+          mesh.castShadow = false;
+          mesh.receiveShadow = false;
+        }
+      });
+
+      applyHadesCelShadingToHierarchy(lotusGroup);
+
+      const rawBox = new THREE.Box3().setFromObject(lotusGroup);
+      const rawH = Math.max(0.01, rawBox.max.y - rawBox.min.y);
+      const targetScale = 128 / rawH;
+
+      const savitriRoot = new THREE.Group();
+      lotusGroup.scale.setScalar(targetScale);
+      lotusGroup.position.set(0, -rawBox.min.y * targetScale, 0);
+      savitriRoot.add(lotusGroup);
+      lotusGroup.updateMatrixWorld(true);
+
+      const mixer = new THREE.AnimationMixer(lotusGroup);
+      const actions: Partial<Record<BossClipKey, THREE.AnimationAction>> = {};
+      const srcIdle = lotusGroup.animations?.[0] || (hasBones ? idleAnimFbx.animations?.[0] : undefined);
+      if (srcIdle) {
+        const standingHipY = extractStandingHipY(lotusGroup);
+        const stabilized = buildStabilizedInPlaceClip(srcIdle, lotusGroup, standingHipY);
+        stabilized.name = 'savitri_hub_idle';
+        const act = mixer.clipAction(stabilized);
+        act.setLoop(THREE.LoopRepeat, Infinity);
+        actions.idle = act;
+      }
+
+      this.rigs.savitri_hub = {
+        root: savitriRoot,
+        mixer,
+        actions,
+        activeKey: null,
+        materials: [savitriMat],
+        weaponMaterials: [],
+        rightWeaponSocket: null,
+        leftWeaponSocket: null,
+        weaponTipNode: new THREE.Object3D(),
+        weaponBaseNode: new THREE.Object3D(),
+        bones: {
+          spine1: null,
+          spine2: null,
+          rightArm: null,
+          rightForeArm: null,
+          rightHand: null,
+          leftArm: null,
+        },
+      };
+
+      if (actions.idle) {
+        this.transitionToClip(this.rigs.savitri_hub, 'idle', 0.05, 0.85, 0, true);
+        mixer.update(0.016);
+      }
+      this.loadProgress = 100;
+      this.isReady = true;
+    } catch (err) {
+      console.warn('Boss3DRenderer Savitri Hub load warning:', err);
+      this.loadProgress = 100;
     }
   }
 
@@ -329,6 +494,8 @@ export class Boss3DRenderer {
         mDeathFbx,
         dunBase,
         dunNorm,
+        dunRough,
+        dunMetal,
       ] = await Promise.all([
         loadFbxCached(GAME_ASSETS.models3d.dundubhiFbx, false),
         loadFbxCached(GAME_ASSETS.models3d.dundubhiTextureFbx, false),
@@ -341,21 +508,21 @@ export class Boss3DRenderer {
         loadFbxCached(GAME_ASSETS.models3d.dundubhiAnims.death, false),
         this.loadTex(GAME_ASSETS.models3d.dundubhiTex.baseColor, true),
         this.loadTex(GAME_ASSETS.models3d.dundubhiTex.normal, false),
+        this.loadTex(GAME_ASSETS.models3d.dundubhiTex.roughness, false),
+        this.loadTex(GAME_ASSETS.models3d.dundubhiTex.metallic, false),
       ]);
 
       if (this.disposed) return;
 
       const dundubhiMaterials: THREE.MeshStandardMaterial[] = [];
-      const dunCharMat = new THREE.MeshStandardMaterial({
-        color: new THREE.Color(0xffffff),
-        map: dunBase || undefined,
-        normalMap: dunNorm || undefined,
-        normalScale: new THREE.Vector2(0.35, 0.35),
-        roughness: 0.86,
-        metalness: 0.12,
-        envMapIntensity: 0.0,
-        emissive: new THREE.Color(0x000000),
-        emissiveIntensity: 0.0,
+      const dunCharMat = createBossPbrMaterial({
+        map: dunBase,
+        normalMap: dunNorm,
+        roughnessMap: dunRough,
+        metalnessMap: dunMetal,
+        fallbackRoughness: 0.86,
+        fallbackMetalness: 0.12,
+        normalScale: 0.35,
       });
       dundubhiMaterials.push(dunCharMat);
 
@@ -487,8 +654,16 @@ export class Boss3DRenderer {
         shieldFbx,
         semiBase,
         semiNorm,
+        semiRough,
+        semiMetal,
         swordTex,
+        swordNorm,
+        swordRough,
+        swordMetal,
         shieldTex,
+        shieldNorm,
+        shieldRough,
+        shieldMetal,
       ] = await Promise.all([
         loadFbxCached(cfg.riggedFbx, false),
         loadFbxCached(cfg.textureFbx, false),
@@ -506,20 +681,28 @@ export class Boss3DRenderer {
         loadFbxCached(cfg.shieldFbx, true),
         this.loadTex(cfg.textures.baseColor, true),
         this.loadTex(cfg.textures.normal, false),
+        this.loadTex(cfg.textures.roughness, false),
+        this.loadTex(cfg.textures.metalness, false),
         this.loadTex(cfg.swordTex.baseColor, true),
+        this.loadTex(cfg.swordTex.normal, false),
+        this.loadTex(cfg.swordTex.roughness, false),
+        this.loadTex(cfg.swordTex.metallic, false),
         this.loadTex(cfg.shieldTex.baseColor, true),
+        this.loadTex(cfg.shieldTex.normal, false),
+        this.loadTex(cfg.shieldTex.roughness, false),
+        this.loadTex(cfg.shieldTex.metallic, false),
       ]);
 
       if (this.disposed) return;
 
-      const semiCharMat = new THREE.MeshStandardMaterial({
-        color: new THREE.Color(0xffffff),
-        map: semiBase || undefined,
-        normalMap: semiNorm || undefined,
-        normalScale: new THREE.Vector2(0.35, 0.35),
-        roughness: 0.84,
-        metalness: 0.14,
-        envMapIntensity: 0.0,
+      const semiCharMat = createBossPbrMaterial({
+        map: semiBase,
+        normalMap: semiNorm,
+        roughnessMap: semiRough,
+        metalnessMap: semiMetal,
+        fallbackRoughness: 0.84,
+        fallbackMetalness: 0.14,
+        normalScale: 0.35,
       });
 
       bindTexturedGeometryToSkeleton(semiGroup, semiTexGroup, semiCharMat);
@@ -567,17 +750,21 @@ export class Boss3DRenderer {
       let semiLeftSocket: THREE.Group | null = null;
       const wepMaterials: THREE.MeshStandardMaterial[] = [];
 
-      // Socket Crescent_Reaver Sword onto RightHand
+      // Socket Emberfang Sword onto RightHand with full PBR maps (baseColor, normal, roughness, metallic)
       if (semiBones.rightHand && swordFbx) {
         const handScaleVec = new THREE.Vector3();
         semiBones.rightHand.getWorldScale(handScaleVec);
         const handScale = Math.max(1e-5, handScaleVec.x);
 
-        const swordMat = new THREE.MeshStandardMaterial({
-          map: swordTex || undefined,
-          roughness: 0.72,
-          metalness: 0.24,
-          emissive: new THREE.Color(0x3a0c10),
+        const swordMat = createBossPbrMaterial({
+          map: swordTex,
+          normalMap: swordNorm,
+          roughnessMap: swordRough,
+          metalnessMap: swordMetal,
+          fallbackRoughness: 0.72,
+          fallbackMetalness: 0.24,
+          normalScale: 0.45,
+          emissiveHex: 0x3a0c10,
           emissiveIntensity: 0.12,
         });
         wepMaterials.push(swordMat);
@@ -612,7 +799,7 @@ export class Boss3DRenderer {
         semiBones.rightHand.add(semiRightSocket);
       }
 
-      // Socket Molten_Oni_Aegis Shield onto LeftForeArm / LeftHand
+      // Socket Molten_Oni_Aegis Shield onto LeftForeArm / LeftHand with full PBR maps
       const leftArmBone = findSemiBone([
         'mixamorigLeftForeArm',
         'LeftForeArm',
@@ -624,11 +811,15 @@ export class Boss3DRenderer {
         leftArmBone.getWorldScale(armScaleVec);
         const armScale = Math.max(1e-5, armScaleVec.x);
 
-        const shieldMat = new THREE.MeshStandardMaterial({
-          map: shieldTex || undefined,
-          roughness: 0.72,
-          metalness: 0.28,
-          emissive: new THREE.Color(0x3a0c10),
+        const shieldMat = createBossPbrMaterial({
+          map: shieldTex,
+          normalMap: shieldNorm,
+          roughnessMap: shieldRough,
+          metalnessMap: shieldMetal,
+          fallbackRoughness: 0.72,
+          fallbackMetalness: 0.28,
+          normalScale: 0.45,
+          emissiveHex: 0x3a0c10,
           emissiveIntensity: 0.10,
         });
         wepMaterials.push(shieldMat);
@@ -752,9 +943,16 @@ export class Boss3DRenderer {
         tridentFbx,
         vrikBase,
         vrikNorm,
+        vrikRough,
+        vrikMetal,
         maceTex,
+        maceNorm,
+        maceRough,
+        maceMetal,
         wepBaseTex,
         wepNormTex,
+        wepRoughTex,
+        wepMetalTex,
       ] = await Promise.all([
         loadFbxCached(GAME_ASSETS.models3d.vrikodaraFbx, false),
         loadFbxCached(GAME_ASSETS.models3d.vrikodaraTextureFbx, false),
@@ -771,9 +969,16 @@ export class Boss3DRenderer {
         loadFbxCached(GAME_ASSETS.models3d.tridentFbx, true),
         this.loadTex(GAME_ASSETS.models3d.vrikodaraTex.baseColor, true),
         this.loadTex(GAME_ASSETS.models3d.vrikodaraTex.normal, false),
+        this.loadTex(GAME_ASSETS.models3d.vrikodaraTex.roughness, false),
+        this.loadTex(GAME_ASSETS.models3d.vrikodaraTex.metallic, false),
         this.loadTex(GAME_ASSETS.models3d.embermawMaceTex.baseColor, true),
+        this.loadTex(GAME_ASSETS.models3d.embermawMaceTex.normal, false),
+        this.loadTex(GAME_ASSETS.models3d.embermawMaceTex.roughness, false),
+        this.loadTex(GAME_ASSETS.models3d.embermawMaceTex.metallic, false),
         this.loadTex(`${wepBase}/Meshy_AI_Bloodforged_Trident_A_1025041928_texture.png`, true),
         this.loadTex(`${wepBase}/Meshy_AI_Bloodforged_Trident_A_1025041928_texture_normal.png`, false),
+        this.loadTex(GAME_ASSETS.models3d.tridentTex.roughness, false),
+        this.loadTex(GAME_ASSETS.models3d.tridentTex.metallic, false),
       ]);
 
       if (this.disposed) return;
@@ -789,35 +994,37 @@ export class Boss3DRenderer {
       vrikodaraRoot.add(vrikodaraGroup);
 
       const vrikMaterials: THREE.MeshStandardMaterial[] = [];
-      const vrikMaceMat = new THREE.MeshStandardMaterial({
-        map: maceTex || wepBaseTex || undefined,
-        roughness: 0.78,
-        metalness: 0.18,
-        envMapIntensity: 0.0,
-        emissive: new THREE.Color(0x38080c),
+      const vrikMaceMat = createBossPbrMaterial({
+        map: maceTex || wepBaseTex,
+        normalMap: maceNorm,
+        roughnessMap: maceRough,
+        metalnessMap: maceMetal,
+        fallbackRoughness: 0.78,
+        fallbackMetalness: 0.18,
+        normalScale: 0.45,
+        emissiveHex: 0x38080c,
         emissiveIntensity: 0.16,
       });
-      const vrikWepMat = new THREE.MeshStandardMaterial({
-        map: wepBaseTex || undefined,
-        normalMap: wepNormTex || undefined,
-        normalScale: new THREE.Vector2(0.45, 0.45),
-        roughness: 0.92,
-        metalness: 0.0,
-        envMapIntensity: 0.0,
-        emissive: new THREE.Color(0x38080c),
+      const vrikWepMat = createBossPbrMaterial({
+        map: wepBaseTex,
+        normalMap: wepNormTex,
+        roughnessMap: wepRoughTex,
+        metalnessMap: wepMetalTex,
+        fallbackRoughness: 0.92,
+        fallbackMetalness: 0.0,
+        normalScale: 0.45,
+        emissiveHex: 0x38080c,
         emissiveIntensity: 0.14,
       });
 
-      const vrikCharMat = new THREE.MeshStandardMaterial({
-        color: new THREE.Color(0xffffff),
-        map: vrikBase || undefined,
-        normalMap: vrikNorm || undefined,
-        normalScale: new THREE.Vector2(0.35, 0.35),
-        roughness: 0.88,
-        metalness: 0.08,
-        envMapIntensity: 0.0,
-        emissive: new THREE.Color(0x000000),
-        emissiveIntensity: 0.0,
+      const vrikCharMat = createBossPbrMaterial({
+        map: vrikBase,
+        normalMap: vrikNorm,
+        roughnessMap: vrikRough,
+        metalnessMap: vrikMetal,
+        fallbackRoughness: 0.88,
+        fallbackMetalness: 0.08,
+        normalScale: 0.35,
       });
       vrikMaterials.push(vrikCharMat);
 
@@ -1155,6 +1362,7 @@ export class Boss3DRenderer {
     if (
       IS_SOFTWARE_WEBGL &&
       !params.isHitFlash &&
+      !params.bypassSoftwareThrottle &&
       this.elapsedTime - this.lastRenderTime < 0.022
     ) {
       return true;
@@ -1262,7 +1470,7 @@ export class Boss3DRenderer {
       clipDuration,
       yawRad: this.currentYaw,
       isAttacking: isBossAction,
-      isHurt: false,
+      isHurt: Boolean(params.isHitFlash),
       isParrying: Boolean(params.isParrying),
       phase: params.phase,
       yawDirections: 12,
@@ -1274,7 +1482,8 @@ export class Boss3DRenderer {
         : params.aiState === 'attack'
           ? `a${Math.round((1 - this.attackSwingTimer / Math.max(0.05, this.attackSwingDuration)) * 6)}`
           : 'loc';
-    const frameKey = `${baseKey}:${actionSubStep}`;
+    const flashSuffix = params.isHitFlash ? 'flash' : 'norm';
+    const frameKey = `${baseKey}:${actionSubStep}:${flashSuffix}`;
 
     const cached = this.frameCache.get(frameKey);
     if (cached) {
@@ -1389,13 +1598,11 @@ export class Boss3DRenderer {
       cacheFrame: false,
     });
     this.canvas = baked;
-    if (!params.isHitFlash) {
-      if (this.frameCache.size > 1200) {
-        const oldest = this.frameCache.keys().next().value;
-        if (oldest) this.frameCache.delete(oldest);
-      }
-      this.frameCache.set(frameKey, baked);
+    if (this.frameCache.size > 1200) {
+      const oldest = this.frameCache.keys().next().value;
+      if (oldest) this.frameCache.delete(oldest);
     }
+    this.frameCache.set(frameKey, baked);
     return true;
   }
 
@@ -1479,30 +1686,14 @@ export class Boss3DRenderer {
    * Stage B (Step 10): Pre-bake core boss idle/chase/windup/attack sprite frames on load
    */
   public prewarmBossAtlas(kind: Boss3DKind): void {
+    this.ensureBossLoaded(kind);
     const rig = this.rigs[kind];
-    if (!rig || !this.renderer) return;
-    const states: Array<Boss3DUpdateParams['aiState']> = ['idle', 'chase', 'windup', 'attack'];
-    const angles = [0, Math.PI];
-    for (const st of states) {
-      for (const ang of angles) {
-        this.updateAndRender({
-          kind,
-          dt: 0.016,
-          vx: st === 'chase' ? Math.cos(ang) * 140 : 0,
-          vy: st === 'chase' ? Math.sin(ang) * 140 : 0,
-          facing: ang === 0 ? 1 : -1,
-          aimAngle: ang,
-          aiState: st,
-          attackKind: 'cone',
-          attackPattern: 0,
-          windupProgress: st === 'windup' ? 0.5 : 0,
-          phase: 1,
-          armorCracked: false,
-          isPostureBroken: false,
-          isHitFlash: false,
-        });
-      }
+    if (!rig || !this.renderer || this.prewarmedKinds.has(kind)) return;
+    this.prewarmedKinds.add(kind);
+    for (const params of buildBossPrewarmParamsList(kind)) {
+      this.updateAndRender(params);
     }
+    this.lastRenderTime = -999;
   }
 
   public dispose(): void {

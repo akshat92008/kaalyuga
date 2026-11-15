@@ -73,7 +73,7 @@ export default function KeepersShrineModal({
                 <div>
                   <div className="flex items-center justify-between gap-2 mb-2">
                     <span className="text-xs text-[#d4a548] tracking-wider">
-                      {spec.chineseName}
+                      {spec.sanskritName}
                     </span>
                     <span className="px-2 py-0.5 text-[11px] font-mono-num bg-[#1b1920] border border-[#c89d46]/30 text-[#e7dcc6]">
                       RANK {currentRank}/{spec.maxRank}
@@ -131,12 +131,12 @@ export default function KeepersShrineModal({
               type="button"
               data-testid="jump-boss2-btn"
               onClick={() => {
-                onStartChamber(7);
+                onStartChamber(4);
                 onClose();
               }}
               className="px-3.5 py-2.5 bg-[#291910] hover:bg-[#3b2416] text-[#ffaa5c] border border-[#b86b28]/60 text-xs font-bold tracking-[0.1em] uppercase transition-colors cursor-pointer whitespace-nowrap"
             >
-              [CHAMBER 8 BOSS] VRIKODARA · 3D IRON RAKSHASA
+              [CHAMBER 5 BOSS] VRIKODARA · 3D IRON RAKSHASA
             </button>
           </div>
 
@@ -150,7 +150,7 @@ export default function KeepersShrineModal({
               }}
               className="px-5 py-2.5 bg-[#d4a548] hover:bg-[#e4b85c] text-[#090807] font-bold text-xs tracking-[0.12em] uppercase border border-[#f5dca0] transition-colors cursor-pointer whitespace-nowrap"
             >
-              START FULL 8-CHAMBER KURUKSHETRA RUN
+              START FULL 5-CHAMBER KURUKSHETRA RUN
             </button>
             <button
               type="button"

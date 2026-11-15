@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 import {
   bindTexturedGeometryToSkeleton,
   buildStabilizedInPlaceClip,
@@ -47,7 +46,116 @@ export interface RudraRenderInput {
   stance: string;
   focusOrbs: number;
   elevationY: number;
+  stateProgress?: number;
   finisherVariant?: 'downward_crush' | 'spin_360_cleave' | 'impaling_lunge' | null;
+}
+
+export function isNormalizedRudraActionState(state: RudraAnimState): boolean {
+  return (
+    state === 'attack1' ||
+    state === 'attack2' ||
+    state === 'attack3' ||
+    state === 'heavy' ||
+    state === 'cast' ||
+    state === 'dash' ||
+    state === 'block' ||
+    state === 'hurt'
+  );
+}
+
+export function resolveRudraDesiredState(
+  input: Pick<
+    RudraRenderInput,
+    | 'isHurt'
+    | 'isDefeated'
+    | 'isParrying'
+    | 'isCasting'
+    | 'isHeavyAttack'
+    | 'isAttacking'
+    | 'isDodging'
+    | 'comboStep'
+    | 'finisherVariant'
+    | 'vx'
+    | 'vy'
+  >,
+  availableActions: Partial<Record<RudraAnimState, unknown>> = {}
+): RudraAnimState {
+  if (input.isHurt || input.isDefeated) return 'hurt';
+  if (input.isParrying) return 'block';
+  if (input.isCasting) return 'cast';
+  if (input.isHeavyAttack) {
+    if (input.finisherVariant === 'spin_360_cleave' && availableActions.cast) {
+      return 'cast';
+    }
+    if (input.finisherVariant === 'impaling_lunge' && availableActions.attack3) {
+      return 'attack3';
+    }
+    return 'heavy';
+  }
+  if (input.isAttacking) {
+    if (input.comboStep >= 4 && input.finisherVariant) {
+      if (input.finisherVariant === 'downward_crush' && availableActions.heavy) return 'heavy';
+      if (input.finisherVariant === 'spin_360_cleave' && availableActions.cast) return 'cast';
+      return 'attack3';
+    }
+    return input.comboStep === 2 ? 'attack2' : input.comboStep >= 3 ? 'attack3' : 'attack1';
+  }
+  if (input.isDodging) return 'dash';
+  if (Math.hypot(input.vx, input.vy) > 14) return 'run';
+  return 'idle';
+}
+
+/**
+ * Resolves Rudra's normalized `[0..1)` action clock for action states (`dash`, `block`, `hurt`, `cast`, `attack1..3`, `heavy`)
+ * so dashes, parries, and hit-reactions always start cleanly at frame 0 instead of mid-clip on global uptime.
+ */
+export function resolveRudraAnimStateAndClock(
+  input: RudraRenderInput,
+  stateElapsedSec: number,
+  globalElapsedSec: number,
+  availableActions: Partial<Record<RudraAnimState, unknown>> = {}
+): {
+  state: RudraAnimState;
+  animClock: number;
+  usesNormalizedProgress: boolean;
+} {
+  const state = resolveRudraDesiredState(input, availableActions);
+  const usesNormalizedProgress = isNormalizedRudraActionState(state);
+
+  if (!usesNormalizedProgress) {
+    return {
+      state,
+      animClock: globalElapsedSec,
+      usesNormalizedProgress: false,
+    };
+  }
+
+  if (state === 'attack1' || state === 'attack2' || state === 'attack3' || state === 'heavy') {
+    const prog = Number.isFinite(input.attackProgress)
+      ? input.attackProgress
+      : stateElapsedSec / 0.44;
+    return {
+      state,
+      animClock: Math.max(0, Math.min(0.99, prog)),
+      usesNormalizedProgress: true,
+    };
+  }
+
+  if (typeof input.stateProgress === 'number' && Number.isFinite(input.stateProgress)) {
+    return {
+      state,
+      animClock: Math.max(0, Math.min(0.99, input.stateProgress)),
+      usesNormalizedProgress: true,
+    };
+  }
+
+  const defaultDur =
+    state === 'dash' ? 0.16 : state === 'block' ? 0.62 : state === 'cast' ? 0.42 : 0.25;
+  return {
+    state,
+    animClock: Math.max(0, Math.min(0.99, stateElapsedSec / defaultDur)),
+    usesNormalizedProgress: true,
+  };
 }
 
 // Exact 1:1 vertex match (493,632 verts === 493,632 verts) between Pro Melee Axe Pack rig & Ashen_Warborn texture FBX!
@@ -90,6 +198,8 @@ export class Rudra3DRenderer {
   public loadProgress = 0;
   public canvas: HTMLCanvasElement;
   private elapsedSec = 0;
+  private stateElapsedSec = 0;
+  private lastAnimState: RudraAnimState = 'idle';
   private frameCache: Map<string, HTMLCanvasElement> = new Map();
 
   constructor(size = 256) {
@@ -124,7 +234,6 @@ export class Rudra3DRenderer {
   }
 
   private loadRudraModelAndAnimations(): void {
-    const loader = new FBXLoader();
     const texLoader = new THREE.TextureLoader();
     this.loadProgress = 0.25;
 
@@ -143,19 +252,12 @@ export class Rudra3DRenderer {
       });
 
     const loadFbx = (url: string): Promise<THREE.Group | null> =>
-      new Promise((resolve) => {
-        loader.load(
-          encodeURI(url),
-          (group) => resolve(group),
-          undefined,
-          () => resolve(null)
-        );
-      });
+      loadFbxCached(url, true).catch(() => null);
 
     Promise.all([
-      loadFbxCached(RUDRA_RIGGED_FBX_URL).catch(() => loadFbx(RUDRA_RIGGED_FBX_URL)),
+      loadFbx(RUDRA_RIGGED_FBX_URL),
       loadFbx(RUDRA_TEXTURE_FBX_URL),
-      loadFbxCached(PARASHU_WEAPON_FBX_URL).catch(() => loadFbx(PARASHU_WEAPON_FBX_URL)),
+      loadFbx(PARASHU_WEAPON_FBX_URL),
       loadTex(RUDRA_DIFFUSE_URL),
       loadTex(PARASHU_DIFFUSE_URL),
       loadFbx(RUDRA_ANIM_URLS.idle),
@@ -336,48 +438,23 @@ export class Rudra3DRenderer {
 
   public updateAndRender(input: RudraRenderInput): boolean {
     if (!this.isReady) return false;
-    this.elapsedSec += Math.max(0, Math.min(0.1, input.dt || 0.016));
+    const stepDt = Math.max(0, Math.min(0.1, input.dt || 0.016));
+    this.elapsedSec += stepDt;
 
-    let state: RudraAnimState = 'idle';
-    let animClock = this.elapsedSec;
-
-    if (input.isHurt || input.isDefeated) {
-      state = 'hurt';
-    } else if (input.isParrying) {
-      state = 'block';
-    } else if (input.isCasting) {
-      state = 'cast';
-    } else if (input.isHeavyAttack) {
-      if (input.finisherVariant === 'spin_360_cleave' && this.actions.cast) {
-        state = 'cast';
-      } else if (input.finisherVariant === 'impaling_lunge' && this.actions.attack3) {
-        state = 'attack3';
-      } else {
-        state = 'heavy';
-      }
-      animClock = Math.max(0, Math.min(0.99, input.attackProgress));
-    } else if (input.isAttacking) {
-      if (input.comboStep >= 4 && input.finisherVariant) {
-        state =
-          input.finisherVariant === 'downward_crush' && this.actions.heavy
-            ? 'heavy'
-            : input.finisherVariant === 'spin_360_cleave' && this.actions.cast
-              ? 'cast'
-              : 'attack3';
-      } else {
-        state =
-          input.comboStep === 2
-            ? 'attack2'
-            : input.comboStep >= 3
-              ? 'attack3'
-              : 'attack1';
-      }
-      animClock = Math.max(0, Math.min(0.99, input.attackProgress));
-    } else if (input.isDodging) {
-      state = 'dash';
-    } else if (Math.hypot(input.vx, input.vy) > 14) {
-      state = 'run';
+    const nextState = resolveRudraDesiredState(input, this.actions);
+    if (nextState !== this.lastAnimState) {
+      this.stateElapsedSec = 0;
+      this.lastAnimState = nextState;
+    } else {
+      this.stateElapsedSec += stepDt;
     }
+
+    const { state, animClock } = resolveRudraAnimStateAndClock(
+      input,
+      this.stateElapsedSec,
+      this.elapsedSec,
+      this.actions
+    );
 
     const facingAngle =
       input.isAttacking || input.isHeavyAttack
@@ -410,6 +487,7 @@ export class Rudra3DRenderer {
       state === 'attack3' ||
       state === 'heavy' ||
       state === 'cast';
+    const isAction = isNormalizedRudraActionState(state);
 
     const action =
       this.actions[state] ||
@@ -419,10 +497,11 @@ export class Rudra3DRenderer {
     const clipDur = action ? Math.max(0.4, action.getClip().duration) : 1.0;
     const steps = isAttack ? 12 : 10;
 
-    // For attacks, animTimeSec is normalized progress [0..1]; for locomotion, it's elapsed seconds
-    const stepIndex = isAttack
+    // For action states (attacks, cast, dash, block, hurt), animTimeSec is normalized progress [0..1];
+    // for locomotion (idle, run), it's continuous elapsed seconds.
+    const stepIndex = isAction
       ? Math.min(steps - 1, Math.floor(Math.max(0, Math.min(0.999, animTimeSec)) * steps))
-      : Math.floor(((animTimeSec % clipDur) / clipDur) * steps);
+      : Math.floor(((Math.max(0, animTimeSec) % clipDur) / clipDur) * steps);
     const quantizedTime = (stepIndex / steps) * clipDur;
 
     const flashTag = hitFlash ? 'flash' : 'norm';

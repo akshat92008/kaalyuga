@@ -12,10 +12,22 @@
 
 import * as THREE from 'three';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
+import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { IS_SOFTWARE_WEBGL } from '../../engine/ue5GraphicsEngine';
 
-// Disabled .skinned.bin overrides so all characters and weapons use their true FBX geometry & 1:1 UV maps
-const LITE_SKINNED_BIN_MAP: Record<string, string> = {};
+// Pre-baked lightweight binary meshes for heavy static weapons (zero runtime FBX parsing or decimation)
+export const LITE_SKINNED_BIN_MAP: Record<string, string> = {
+  '/new_3d_assets/3D Models/Weapons/Minotaur_War_Axe_20261111/Meshy_AI_Minotaur_War_Axe_20261111_texture.fbx':
+    '/models_lite/minotaur_axe.mesh.bin',
+  '/new_3d_assets/3D Models/Weapons/Bloodforged_Trident_Axe_20261025/Meshy_AI_Bloodforged_Trident_Axe_20261025_texture.fbx':
+    '/models_lite/trident_axe.mesh.bin',
+  '/models/Meshy_AI_Bloodforged_Trident_A_1025041928_texture_fbx/Meshy_AI_Bloodforged_Trident_A_1025041928_texture.fbx':
+    '/models_lite/trident_axe.mesh.bin',
+};
+
+export function getLiteSkinnedBinUrl(url: string): string | null {
+  return LITE_SKINNED_BIN_MAP[url] || LITE_SKINNED_BIN_MAP[decodeURI(url)] || null;
+}
 
 interface FloatChunkRef {
   offsetFloats: number;
@@ -60,8 +72,228 @@ interface SkinnedBinHeader {
 }
 
 const skinnedBinBufferCache = new Map<string, Promise<ArrayBuffer>>();
+const fbxTemplateCache = new Map<string, Promise<THREE.Group>>();
+const textEncoder = new TextEncoder();
 
-function buildGroupFromSkinnedBinBuffer(buf: ArrayBuffer): THREE.Group {
+const IDB_DB_NAME = 'kaliyuga_mesh_bin_v1';
+const IDB_STORE_NAME = 'buffers';
+let idbPromise: Promise<IDBDatabase | null> | null = null;
+
+function openMeshCacheDb(): Promise<IDBDatabase | null> {
+  if (typeof indexedDB === 'undefined') return Promise.resolve(null);
+  if (idbPromise) return idbPromise;
+  idbPromise = new Promise((resolve) => {
+    try {
+      const req = indexedDB.open(IDB_DB_NAME, 1);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(IDB_STORE_NAME)) {
+          db.createObjectStore(IDB_STORE_NAME);
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+  return idbPromise;
+}
+
+async function idbGetMeshBin(key: string): Promise<ArrayBuffer | null> {
+  try {
+    const db = await openMeshCacheDb();
+    if (!db) return null;
+    return await new Promise((resolve) => {
+      const tx = db.transaction(IDB_STORE_NAME, 'readonly');
+      const req = tx.objectStore(IDB_STORE_NAME).get(key);
+      req.onsuccess = () => resolve(req.result instanceof ArrayBuffer ? req.result : null);
+      req.onerror = () => resolve(null);
+    });
+  } catch {
+    return null;
+  }
+}
+
+async function idbPutMeshBin(key: string, buf: ArrayBuffer): Promise<void> {
+  try {
+    const db = await openMeshCacheDb();
+    if (!db) return;
+    await new Promise<void>((resolve) => {
+      const tx = db.transaction(IDB_STORE_NAME, 'readwrite');
+      tx.objectStore(IDB_STORE_NAME).put(buf, key);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    });
+  } catch {}
+}
+
+function cloneGroupSafe(template: THREE.Group): THREE.Group {
+  let hasSkinned = false;
+  template.traverse((obj) => {
+    if ((obj as THREE.SkinnedMesh).isSkinnedMesh) {
+      hasSkinned = true;
+    }
+  });
+  const cloned = (hasSkinned ? SkeletonUtils.clone(template) : template.clone(true)) as THREE.Group;
+  if (template.animations && template.animations.length > 0) {
+    cloned.animations = template.animations;
+  }
+  return cloned;
+}
+
+/**
+ * Serializes a simplified static or single-SkinnedMesh `THREE.Group` (plus animations)
+ * into a compact 4-byte-aligned `.skinned.bin` binary buffer for instant reload without FBX parsing.
+ */
+export function serializeGroupToSkinnedBinBuffer(group: THREE.Group): ArrayBuffer | null {
+  let skinnedMesh: THREE.SkinnedMesh | null = null;
+  let staticMesh: THREE.Mesh | null = null;
+  let meshCount = 0;
+
+  group.traverse((obj) => {
+    if ((obj as THREE.SkinnedMesh).isSkinnedMesh) {
+      skinnedMesh = obj as THREE.SkinnedMesh;
+      meshCount++;
+    } else if ((obj as THREE.Mesh).isMesh) {
+      staticMesh = obj as THREE.Mesh;
+      meshCount++;
+    }
+  });
+
+  if (meshCount > 1) return null;
+
+  const chunks: Float32Array[] = [];
+  let totalFloats = 0;
+  const pushFloatArray = (arr: ArrayLike<number>): FloatChunkRef => {
+    const f = arr instanceof Float32Array ? arr : Float32Array.from(arr);
+    const ref: FloatChunkRef = { offsetFloats: totalFloats, lenFloats: f.length };
+    chunks.push(f);
+    totalFloats += f.length;
+    return ref;
+  };
+
+  if (!skinnedMesh && staticMesh && (group.animations?.length ?? 0) === 0) {
+    const mesh = staticMesh as THREE.Mesh;
+    const rawGeo = mesh.geometry;
+    const nonIdx = rawGeo.index ? rawGeo.toNonIndexed() : rawGeo;
+    const pos = nonIdx.attributes.position as THREE.BufferAttribute | undefined;
+    if (!pos) return null;
+    const vCount = pos.count;
+    const norm = nonIdx.attributes.normal as THREE.BufferAttribute | undefined;
+    const uv = nonIdx.attributes.uv as THREE.BufferAttribute | undefined;
+
+    const headerObj = { isStaticMesh: true, vertexCount: vCount };
+    const headerBytes = textEncoder.encode(JSON.stringify(headerObj));
+    const binOffset = (4 + headerBytes.byteLength + 3) & ~3;
+    const posLen = vCount * 3;
+    const normLen = vCount * 3;
+    const uvLen = vCount * 2;
+    const buf = new ArrayBuffer(binOffset + (posLen + normLen + uvLen) * 4);
+    new DataView(buf).setUint32(0, headerBytes.byteLength, true);
+    new Uint8Array(buf, 4, headerBytes.byteLength).set(headerBytes);
+
+    const f32 = new Float32Array(buf, binOffset);
+    f32.set(pos.array as Float32Array, 0);
+    if (norm) f32.set(norm.array as Float32Array, posLen);
+    if (uv) f32.set(uv.array as Float32Array, posLen + normLen);
+    return buf;
+  }
+
+  if (!skinnedMesh) return null;
+
+  const sm = skinnedMesh as THREE.SkinnedMesh;
+  const rawGeo = sm.geometry;
+  const geo = rawGeo.index ? rawGeo.toNonIndexed() : rawGeo;
+  const posAttr = geo.attributes.position as THREE.BufferAttribute | undefined;
+  if (!posAttr || !sm.skeleton) return null;
+
+  const nodeToIdx = new Map<THREE.Object3D, number>();
+  const nodes: SkinnedBinHeader['nodes'] = [];
+  const walk = (obj: THREE.Object3D, parentIdx: number) => {
+    const idx = nodes.length;
+    nodeToIdx.set(obj, idx);
+    const kind = (obj as THREE.SkinnedMesh).isSkinnedMesh
+      ? 'SkinnedMesh'
+      : (obj as THREE.Bone).isBone
+        ? 'Bone'
+        : 'Group';
+    nodes.push({
+      name: obj.name,
+      kind,
+      parentIdx,
+      pos: [obj.position.x, obj.position.y, obj.position.z],
+      quat: [obj.quaternion.x, obj.quaternion.y, obj.quaternion.z, obj.quaternion.w],
+      scale: [obj.scale.x, obj.scale.y, obj.scale.z],
+    });
+    for (const child of obj.children) {
+      walk(child, idx);
+    }
+  };
+  walk(group, -1);
+
+  const skinnedMeshNodeIdx = nodeToIdx.get(sm) ?? -1;
+  if (skinnedMeshNodeIdx < 0) return null;
+
+  const boneNodeIndices = sm.skeleton.bones.map((b) => nodeToIdx.get(b) ?? 0);
+  const boneInverses = sm.skeleton.boneInverses.map((m) => Array.from(m.elements));
+
+  const normAttr = geo.attributes.normal as THREE.BufferAttribute | undefined;
+  const uvAttr = geo.attributes.uv as THREE.BufferAttribute | undefined;
+  const siAttr = geo.attributes.skinIndex as THREE.BufferAttribute | undefined;
+  const swAttr = geo.attributes.skinWeight as THREE.BufferAttribute | undefined;
+  if (!normAttr || !uvAttr || !siAttr || !swAttr) return null;
+
+  const geoRefs: SkinnedBinHeader['geo'] = {
+    vertexCount: posAttr.count,
+    pos: pushFloatArray(posAttr.array as Float32Array),
+    norm: pushFloatArray(normAttr.array as Float32Array),
+    uv: pushFloatArray(uvAttr.array as Float32Array),
+    skinIndex: pushFloatArray(siAttr.array as ArrayLike<number>),
+    skinWeight: pushFloatArray(swAttr.array as Float32Array),
+  };
+
+  const animations: SkinnedBinHeader['animations'] = (group.animations || []).map((clip) => ({
+    name: clip.name,
+    duration: clip.duration,
+    tracks: clip.tracks
+      .filter((t) => t.ValueTypeName === 'vector' || t.ValueTypeName === 'quaternion')
+      .map((t) => ({
+        name: t.name,
+        type: t.ValueTypeName === 'quaternion' ? ('quaternion' as const) : ('vector' as const),
+        times: pushFloatArray(t.times),
+        values: pushFloatArray(t.values),
+      })),
+  }));
+
+  const header: SkinnedBinHeader = {
+    nodes,
+    skinnedMeshNodeIdx,
+    bindMode: sm.bindMode,
+    bindMatrix: Array.from(sm.bindMatrix.elements),
+    bindMatrixInverse: Array.from(sm.bindMatrixInverse.elements),
+    boneNodeIndices,
+    boneInverses,
+    geo: geoRefs,
+    animations,
+  };
+
+  const headerBytes = textEncoder.encode(JSON.stringify(header));
+  const binOffset = (4 + headerBytes.byteLength + 3) & ~3;
+  const buf = new ArrayBuffer(binOffset + totalFloats * 4);
+  new DataView(buf).setUint32(0, headerBytes.byteLength, true);
+  new Uint8Array(buf, 4, headerBytes.byteLength).set(headerBytes);
+
+  const outF32 = new Float32Array(buf, binOffset);
+  let cursor = 0;
+  for (const chunk of chunks) {
+    outF32.set(chunk, cursor);
+    cursor += chunk.length;
+  }
+  return buf;
+}
+
+export function buildGroupFromSkinnedBinBuffer(buf: ArrayBuffer): THREE.Group {
   const dv = new DataView(buf);
   const headerLen = dv.getUint32(0, true);
   const headerBytes = new Uint8Array(buf, 4, headerLen);
@@ -182,7 +414,7 @@ function buildGroupFromSkinnedBinBuffer(buf: ArrayBuffer): THREE.Group {
 }
 
 export async function loadFbxCached(url: string, _unusedShared = false): Promise<THREE.Group> {
-  const liteBinUrl = LITE_SKINNED_BIN_MAP[url] || LITE_SKINNED_BIN_MAP[decodeURI(url)];
+  const liteBinUrl = getLiteSkinnedBinUrl(url);
   if (liteBinUrl) {
     try {
       let bufPromise = skinnedBinBufferCache.get(liteBinUrl);
@@ -196,22 +428,50 @@ export async function loadFbxCached(url: string, _unusedShared = false): Promise
       const buf = await bufPromise;
       return buildGroupFromSkinnedBinBuffer(buf);
     } catch {
-      // Fallback to raw FBXLoader if .skinned.bin is unavailable
+      // Fallback to FBXLoader if .mesh.bin/.skinned.bin is unavailable
     }
   }
 
-  const loader = new FBXLoader();
-  return new Promise<THREE.Group>((resolve, reject) => {
-    loader.load(
-      url,
-      (group) => {
-        simplifyGroupGeometries(group, 56, 32000);
-        resolve(group);
-      },
-      undefined,
-      reject
-    );
-  });
+  const cacheKey = decodeURI(url);
+  let templatePromise = fbxTemplateCache.get(cacheKey);
+  if (!templatePromise) {
+    templatePromise = (async () => {
+      const cachedBin = await idbGetMeshBin(`mesh_v1:${cacheKey}`);
+      if (cachedBin) {
+        try {
+          return buildGroupFromSkinnedBinBuffer(cachedBin);
+        } catch {
+          // Re-parse FBX if cached binary is corrupt or schema-mismatched
+        }
+      }
+
+      const loader = new FBXLoader();
+      const group = await new Promise<THREE.Group>((resolve, reject) => {
+        loader.load(
+          encodeURI(cacheKey),
+          (loaded) => {
+            simplifyGroupGeometries(loaded, 56, 32000);
+            resolve(loaded);
+          },
+          undefined,
+          reject
+        );
+      });
+
+      const bin = serializeGroupToSkinnedBinBuffer(group);
+      if (bin) {
+        void idbPutMeshBin(`mesh_v1:${cacheKey}`, bin);
+      }
+      return group;
+    })();
+    fbxTemplateCache.set(cacheKey, templatePromise);
+    templatePromise.catch(() => {
+      fbxTemplateCache.delete(cacheKey);
+    });
+  }
+
+  const template = await templatePromise;
+  return cloneGroupSafe(template);
 }
 
 export function simplifyGroupGeometries(

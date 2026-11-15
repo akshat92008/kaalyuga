@@ -12,15 +12,15 @@ import {
 
 test('Pillar 4: upgradeWeaponAspectRank deducts karma and scales aspect proc & posture bonuses up to rank 5', () => {
   const initial = { ...INITIAL_WEAPON_ASPECT_RANKS };
-  const baseBonus = computeWeaponAspectBonuses('jingu_bang', initial);
+  const baseBonus = computeWeaponAspectBonuses('parashu', initial);
   assert.equal(baseBonus.aspectRank, 1);
 
-  const res = upgradeWeaponAspectRank('jingu_bang', initial, 200);
+  const res = upgradeWeaponAspectRank('parashu', initial, 200);
   assert.equal(res.upgraded, true);
-  assert.equal(res.ranks.jingu_bang, 2);
+  assert.equal(res.ranks.parashu, 2);
   assert.equal(res.availableKarma, 125); // 200 - 75
 
-  const rank2Bonus = computeWeaponAspectBonuses('jingu_bang', res.ranks);
+  const rank2Bonus = computeWeaponAspectBonuses('parashu', res.ranks);
   assert.equal(rank2Bonus.procDamage > baseBonus.procDamage, true);
   assert.equal(rank2Bonus.postureMultiplier > baseBonus.postureMultiplier, true);
   assert.equal(rank2Bonus.damageMultiplier > 1.0, true);

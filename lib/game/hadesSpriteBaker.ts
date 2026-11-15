@@ -447,13 +447,13 @@ export function applyHadesCelShadingToHierarchy(
       if (!m) return m;
       const std = m as THREE.MeshStandardMaterial;
       if ('roughness' in std) {
-        std.roughness = 0.84;
+        std.roughness = std.roughnessMap ? 1.0 : 0.84;
       }
       if ('metalness' in std) {
-        std.metalness = 0.08;
+        std.metalness = std.metalnessMap ? 1.0 : 0.08;
       }
       if ('envMapIntensity' in std) {
-        std.envMapIntensity = 0.0;
+        std.envMapIntensity = std.metalnessMap ? 0.35 : 0.0;
       }
       if ('emissive' in std && std.emissive) {
         std.emissive.setHex(0x000000);

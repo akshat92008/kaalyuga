@@ -34,7 +34,7 @@ const KEYBOARD_SHORTCUTS = [
 
 export function TitleScreen({
   ashenKarma,
-  selectedWeapon = 'jingu_bang',
+  selectedWeapon = 'parashu',
   onSelectWeapon,
   onStartOdyssey,
   onOpenPrologue,
@@ -325,7 +325,7 @@ export function TitleScreen({
                     STARTING WEAPON ASPECT
                   </div>
                   <div className="grid grid-cols-3 gap-2">
-                    {(['jingu_bang', 'twin_blades', 'dragon_glaive'] as WeaponId[]).map((wId) => {
+                    {(['parashu', 'khanda_dual', 'trishula_great'] as WeaponId[]).map((wId) => {
                       const cfg = WEAPON_CONFIGS[wId];
                       const active = selectedWeapon === wId;
                       return (

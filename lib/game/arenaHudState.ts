@@ -2,7 +2,7 @@ import type { StaffStance, WeaponId } from './rules';
 import type { CompanionId } from './partySystem';
 import type { CombatStyleStatus } from './modernCombat';
 import type { AstraId, NarayanastraTrialState } from './astraEngine';
-import type { BossCounterplayKind } from './bossEncounters';
+import type { BossCounterplayKind, ConsumableAbilitySlot } from './bossEncounters';
 
 export interface HudSnapshot {
   chamberId: number;
@@ -67,12 +67,16 @@ export interface HudSnapshot {
     posture: number;
     maxPosture: number;
     phase: 1 | 2 | 3;
+    isSemiBoss?: boolean;
+    guardBroken?: boolean;
     armorCracked?: boolean;
     tuskLodgedTimer?: number;
     signatureMoveTitle?: string;
     signatureCounterplayHint?: string;
     signatureCounterplayKind?: BossCounterplayKind;
   } | null;
+  consumedAbility?: ConsumableAbilitySlot | null;
+  consumedTimer?: number;
   playerX?: number;
   playerY?: number;
   videoBgEnabled?: boolean;
@@ -114,6 +118,8 @@ export function shouldSyncHudSnapshot(
     prev.activeUpasamharaZones.length !== next.activeUpasamharaZones.length ||
     prev.narayanastraTrial.active !== next.narayanastraTrial.active ||
     prev.styleStatus.grade !== next.styleStatus.grade ||
+    prev.consumedAbility !== next.consumedAbility ||
+    Math.abs((prev.consumedTimer || 0) - (next.consumedTimer || 0)) >= 0.25 ||
     Boolean(prev.boss) !== Boolean(next.boss)
   ) {
     return true;
@@ -125,6 +131,8 @@ export function shouldSyncHudSnapshot(
       Math.abs(prev.boss.displayHp - next.boss.displayHp) >= 3 ||
       prev.boss.posture !== next.boss.posture ||
       prev.boss.phase !== next.boss.phase ||
+      prev.boss.isSemiBoss !== next.boss.isSemiBoss ||
+      prev.boss.guardBroken !== next.boss.guardBroken ||
       prev.boss.armorCracked !== next.boss.armorCracked ||
       prev.boss.signatureMoveTitle !== next.boss.signatureMoveTitle ||
       Math.abs((prev.boss.tuskLodgedTimer || 0) - (next.boss.tuskLodgedTimer || 0)) >= 0.2

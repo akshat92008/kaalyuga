@@ -192,16 +192,16 @@ export const GAME_ASSETS = {
           '/new_3d_assets/3D Models/Molten_Oni_Aegis/Meshy_AI_Molten_Oni_Aegis_20261114_texture_fbx/Meshy_AI_Molten_Oni_Aegis_20261114_texture_metallic.png',
       },
       swordFbx:
-        '/new_3d_assets/3D Models/Crescent_Reaver/Meshy_AI_Crescent_Reaver_20261111_texture_fbx/Meshy_AI_Crescent_Reaver_20261111_texture.fbx',
+        '/new_3d_assets/3D Models/Emberfang/Meshy_AI_Emberfang_20261114_texture.fbx',
       swordTex: {
         baseColor:
-          '/new_3d_assets/3D Models/Crescent_Reaver/Meshy_AI_Crescent_Reaver_20261111_texture_fbx/Meshy_AI_Crescent_Reaver_20261111_texture.png',
+          '/new_3d_assets/3D Models/Emberfang/Meshy_AI_Emberfang_20261114_texture.png',
         normal:
-          '/new_3d_assets/3D Models/Crescent_Reaver/Meshy_AI_Crescent_Reaver_20261111_texture_fbx/Meshy_AI_Crescent_Reaver_20261111_texture_normal.png',
+          '/new_3d_assets/3D Models/Emberfang/Meshy_AI_Emberfang_20261114_texture_normal.png',
         roughness:
-          '/new_3d_assets/3D Models/Crescent_Reaver/Meshy_AI_Crescent_Reaver_20261111_texture_fbx/Meshy_AI_Crescent_Reaver_20261111_texture_roughness.png',
+          '/new_3d_assets/3D Models/Emberfang/Meshy_AI_Emberfang_20261114_texture_roughness.png',
         metallic:
-          '/new_3d_assets/3D Models/Crescent_Reaver/Meshy_AI_Crescent_Reaver_20261111_texture_fbx/Meshy_AI_Crescent_Reaver_20261111_texture_metallic.png',
+          '/new_3d_assets/3D Models/Emberfang/Meshy_AI_Emberfang_20261114_texture_metallic.png',
       },
       anims: {
         idle: '/new_3d_assets/Animations/Pro Sword and Shield Pack/sword and shield idle.fbx',
@@ -342,6 +342,21 @@ export const GAME_ASSETS = {
           '/models/Meshy_AI_Sovereign_of_the_Eternal_Wheel_20261031_texture_fbx/Meshy_AI_Sovereign_of_the_Eternal_Wheel_20261031_texture_metallic.png',
       },
     },
+    lotusEmpress: {
+      textureFbx:
+        '/new_3d_assets/3D Models/Lotus_Empress/Meshy_AI_Lotus_Empress_20261114_texture_fbx/Meshy_AI_Lotus_Empress_20261114_texture.fbx',
+      idleAnimFbx: '/new_3d_assets/Animations/Pro Magic Pack/standing idle.fbx',
+      textures: {
+        baseColor:
+          '/new_3d_assets/3D Models/Lotus_Empress/Meshy_AI_Lotus_Empress_20261114_texture_fbx/Meshy_AI_Lotus_Empress_20261114_texture.png',
+        normal:
+          '/new_3d_assets/3D Models/Lotus_Empress/Meshy_AI_Lotus_Empress_20261114_texture_fbx/Meshy_AI_Lotus_Empress_20261114_texture_normal.png',
+        roughness:
+          '/new_3d_assets/3D Models/Lotus_Empress/Meshy_AI_Lotus_Empress_20261114_texture_fbx/Meshy_AI_Lotus_Empress_20261114_texture_roughness.png',
+        metalness:
+          '/new_3d_assets/3D Models/Lotus_Empress/Meshy_AI_Lotus_Empress_20261114_texture_fbx/Meshy_AI_Lotus_Empress_20261114_texture_metallic.png',
+      },
+    },
     modelsV2: {
       bellhornWarlordFbx:
         '/new_3d_assets/3D Models/Bellhorn_Warlord/Meshy_AI_Bellhorn_Warlord_20261114_texture_fbx/Meshy_AI_Bellhorn_Warlord_20261114_texture.fbx',
@@ -349,8 +364,6 @@ export const GAME_ASSETS = {
         '/new_3d_assets/3D Models/Crimson_Skull_Warlord_v2/Meshy_AI_Crimson_Skull_Warlord_20261030_texture_fbx/Meshy_AI_Crimson_Skull_Warlord_20261030_texture.fbx',
       emberfangFbx:
         '/new_3d_assets/3D Models/Emberfang/Meshy_AI_Emberfang_20261114_texture.fbx',
-      emberforgedTitanFbx:
-        '/new_3d_assets/3D Models/Emberforged_Titan/Meshy_AI_Emberforged_Titan_20261114_texture_fbx/Meshy_AI_Emberforged_Titan_20261114_texture.fbx',
       embermawMaceFbx:
         '/new_3d_assets/3D Models/Embermaw_Mace/Meshy_AI_Embermaw_Mace_20261114_texture_fbx/Meshy_AI_Embermaw_Mace_20261114_texture.fbx',
       hornedBloodforgeV2Fbx:
@@ -361,8 +374,6 @@ export const GAME_ASSETS = {
         '/new_3d_assets/3D Models/Molten_Oni_Aegis/Meshy_AI_Molten_Oni_Aegis_20261114_texture_fbx/Meshy_AI_Molten_Oni_Aegis_20261114_texture.fbx',
       ashenWarlordFbx:
         '/new_3d_assets/3D Models/The_Ashen_Warlord/Meshy_AI_The_Ashen_Warlord_20261114_texture_fbx/Meshy_AI_The_Ashen_Warlord_20261114_texture.fbx',
-      crescentReaverFbx:
-        '/new_3d_assets/3D Models/Crescent_Reaver/Meshy_AI_Crescent_Reaver_20261111_texture_fbx/Meshy_AI_Crescent_Reaver_20261111_texture.fbx',
     },
   },
 
@@ -613,13 +624,13 @@ export const GAME_ASSETS = {
 
 export const CHAMBERS: ChamberSpec[] = [
   // ==========================================================================
-  // CHAMBER I: VAITARANI RIVER GHAT (EXPANSIVE HADES SCROLLING ARENA)
+  // CHAMBER I: VAITARANI FERRY GHAT (ASH SHORE SKIRMISH)
   // ==========================================================================
   {
     id: 1,
     chapterTitle: 'Act I · The Boiling Crossing',
     name: 'Vaitarani Ferry Ghat',
-    sanskritSubtitle: 'वैतरणी घाट · CHAMBER I OF VIII',
+    sanskritSubtitle: 'वैतरणी घाट · CHAMBER I OF V',
     strikethroughLie: '“The fallen heroes crossed into heaven upon golden lotus barges...”',
     sanjayaQuote:
       '“Lies! The Vaitarani boils with marrow and broken crowns. Sharabha hounds feast on the unburied.”',
@@ -638,12 +649,10 @@ export const CHAMBERS: ChamberSpec[] = [
     ],
     props: [],
     spawns: [
-      // Wave 1: Bleeding Crown Ghouls + Ashen Oracle across the courtyard
       { type: 'charnel_ghoul', x: 0.48, y: 0.46, wave: 1 },
       { type: 'charnel_ghoul', x: 0.62, y: 0.64, wave: 1, delay: 0.25 },
       { type: 'ashen_oracle', x: 0.72, y: 0.42, wave: 1, delay: 0.5 },
       { type: 'charnel_ghoul', x: 0.38, y: 0.32, wave: 1, delay: 0.75 },
-      // Wave 2: Ashen Oracles + Bloodmaw Brute Ghat-Warden
       { type: 'charnel_ghoul', x: 0.36, y: 0.40, wave: 2, trait: 'rakshasa_frenzy' },
       { type: 'ashen_oracle', x: 0.74, y: 0.38, wave: 2, delay: 0.25 },
       {
@@ -658,16 +667,16 @@ export const CHAMBERS: ChamberSpec[] = [
   },
 
   // ==========================================================================
-  // CHAMBER II: SEALED THRESHOLD OF RAKTABIJA (LOCKED -> UNLOCKED GATE ARENA)
+  // CHAMBER II: SEALED GATE OF RAKTABIJA (SEMI-BOSS SWORD & SHIELD)
   // ==========================================================================
   {
     id: 2,
     chapterTitle: 'Act I · The Boiling Crossing',
     name: 'Sealed Gate of Raktabija',
-    sanskritSubtitle: 'रक्तबीज द्वार · CHAMBER II OF VIII',
+    sanskritSubtitle: 'रक्तबीज द्वार · CHAMBER II OF V',
     strikethroughLie: '“Sacred soma was poured into the temple cisterns at dawn...”',
     sanjayaQuote:
-      '“Golden chains seal the northern archway to another path! Slaughter Raktabija’s pack to shatter the gate seal!”',
+      '“Golden chains seal the northern archway to the Charnel Pyres! Break Raktabija’s Molten Aegis to shatter the gate seal!”',
     backgroundUrl: GAME_ASSETS.chambers.asuraLavaLocked,
     unlockedBackgroundUrl: GAME_ASSETS.chambers.asuraLavaUnlocked,
     videoUrl: GAME_ASSETS.arenaVideos.templeEnvironment,
@@ -684,12 +693,10 @@ export const CHAMBERS: ChamberSpec[] = [
     ],
     props: [],
     spawns: [
-      // Wave 1: Swarm Mobs
       { type: 'ashen_oracle', x: 0.58, y: 0.36, wave: 1 },
       { type: 'ashen_oracle', x: 0.74, y: 0.60, wave: 1, delay: 0.25 },
       { type: 'ironmaw_gladiator', x: 0.50, y: 0.52, wave: 1, delay: 0.4 },
       { type: 'charnel_ghoul', x: 0.40, y: 0.70, wave: 1, delay: 0.55 },
-      // Wave 2: Semi-Boss Sword & Shield (Horned Warlord of the Bloodforge v2) + Guards
       {
         type: 'semi_boss_bloodforge',
         x: 0.64,
@@ -705,16 +712,16 @@ export const CHAMBERS: ChamberSpec[] = [
   },
 
   // ==========================================================================
-  // CHAMBER III: KURUKSHETRA CHARIOT BONEFIELD (EXPANSIVE HADES ARENA)
+  // CHAMBER III: KURUKSHETRA CHARIOT PYRE (CHARNEL BATTLEGROUND)
   // ==========================================================================
   {
     id: 3,
     chapterTitle: 'Act I · The Boiling Crossing',
     name: 'Kurukshetra Chariot Pyre',
-    sanskritSubtitle: 'रथश्मशान · CHAMBER III OF VIII',
+    sanskritSubtitle: 'रथश्मशान · CHAMBER III OF V',
     strikethroughLie: '“Eighteen aksauhinis stood in gleaming golden formation...”',
     sanjayaQuote:
-      '“The axles are fused with molten brass and bone. Rakshasa bruisers prowl the wreckage!”',
+      '“The axles are fused with molten brass and bone. Shatter the Ironmaw Legion before Dundubhi’s war-drum sounds!”',
     backgroundUrl: GAME_ASSETS.chambers.kurukshetraCharnel,
     videoUrl: GAME_ASSETS.arenaVideos.funeralPyres,
     floorTint: 'transparent',
@@ -730,22 +737,19 @@ export const CHAMBERS: ChamberSpec[] = [
     ],
     props: [],
     spawns: [
-      // Wave 1: Swarm Mobs
       { type: 'ironmaw_gladiator', x: 0.54, y: 0.46, wave: 1, trait: 'vajra_shield' },
       { type: 'charnel_ghoul', x: 0.66, y: 0.34, wave: 1, delay: 0.2 },
       { type: 'charnel_ghoul', x: 0.66, y: 0.66, wave: 1, delay: 0.4 },
       { type: 'ashen_oracle', x: 0.76, y: 0.50, wave: 1, delay: 0.6 },
-      // Wave 2: Raktaksha, Horned Warlord of the Bloodforge (Semi-Boss Sword & Shield)
       {
-        type: 'semi_boss_bloodforge',
+        type: 'bloodmaw_brute',
         x: 0.62,
         y: 0.52,
         wave: 2,
-        trait: 'vajra_shield',
-        wardenRigKey: 'semi_boss_bloodforge',
-        wardenTitle: 'RAKTAKSHA · HORNED BLOODFORGE WARDEN',
+        trait: 'agni_aura',
+        wardenTitle: 'AGNIMUKHA · PYRE COLOSSUS',
       },
-      { type: 'ironmaw_gladiator', x: 0.42, y: 0.38, wave: 2, delay: 0.3 },
+      { type: 'ironmaw_gladiator', x: 0.42, y: 0.38, wave: 2, delay: 0.3, trait: 'vajra_shield' },
       { type: 'ashen_oracle', x: 0.74, y: 0.40, wave: 2, delay: 0.5, trait: 'agni_aura' },
     ],
   },
@@ -757,7 +761,7 @@ export const CHAMBERS: ChamberSpec[] = [
     id: 4,
     chapterTitle: 'Act I Sovereign · The Bronze Behemoth',
     name: 'Mandapa of the War-Drum',
-    sanskritSubtitle: 'दुन्दुभि मण्डप · CHAMBER IV OF VIII',
+    sanskritSubtitle: 'दुन्दुभि मण्डप · CHAMBER IV OF V',
     strikethroughLie: '“The temple bull bowed before the royal standard of Hastinapura...”',
     sanjayaQuote:
       '“Dundubhi’s Chola-bronze hide deflects raw steel! Bait his horn-charge into the outer Kurukshetra Pillars to crack his armor!”',
@@ -782,173 +786,13 @@ export const CHAMBERS: ChamberSpec[] = [
   },
 
   // ==========================================================================
-  // CHAMBER V: KURUKSHETRA BRAHMASHIRA PYRE (ACT II — BURNING WAR-CAMP)
+  // CHAMBER V: ACT I FINAL BOSS — VRIKODARA (PHASE 1 -> PHASE 2 BLOOD ECLIPSE)
   // ==========================================================================
   {
     id: 5,
-    chapterTitle: 'Act II · The Asura Inner Sanctum',
-    name: 'Brahmashira War-Camp Pyre',
-    sanskritSubtitle: 'ब्रह्मशिर शिविर · CHAMBER V OF VIII',
-    strikethroughLie: '“The royal tents slumbered in peace after the final conch...”',
-    sanjayaQuote:
-      '“Ashvatthama’s celestial Brahmashira weapon scorches the horizon! Four-armed Kaliyuga Avatars prowl the burning war-tents!”',
-    backgroundUrl: GAME_ASSETS.chambers.soulFireSanctum,
-    phase2BackgroundUrl: GAME_ASSETS.chambers.bossSanctumPhase2Eclipse,
-    videoUrl: GAME_ASSETS.arenaVideos.fogClearingSanctum,
-    phase2VideoUrl: GAME_ASSETS.arenaVideos.furnacesSlagEclipse,
-    floorTint: 'transparent',
-    isBossChamber: false,
-    envEffect: 'lava_fissures',
-    braziers: [
-      { x: 0.20, y: 0.22, color: '#ff6a18', radius: 200 },
-      { x: 0.80, y: 0.22, color: '#ff6a18', radius: 200 },
-      { x: 0.16, y: 0.54, color: '#ff4218', radius: 190 },
-      { x: 0.84, y: 0.54, color: '#ff4218', radius: 190 },
-      { x: 0.22, y: 0.80, color: '#ff6a18', radius: 195 },
-      { x: 0.78, y: 0.80, color: '#ff6a18', radius: 195 },
-    ],
-    props: [],
-    spawns: [
-      // Wave 1: Bloodmaw Brute + Ashen Oracles
-      { type: 'bloodmaw_brute', x: 0.56, y: 0.48, wave: 1, trait: 'vajra_shield' },
-      { type: 'ashen_oracle', x: 0.72, y: 0.36, wave: 1, delay: 0.25 },
-      { type: 'ashen_oracle', x: 0.72, y: 0.66, wave: 1, delay: 0.45 },
-      // Wave 2: Sovereign of the Eternal Wheel + Frenzied Ghouls
-      { type: 'ironmaw_gladiator', x: 0.46, y: 0.40, wave: 2, trait: 'agni_aura' },
-      { type: 'charnel_ghoul', x: 0.38, y: 0.64, wave: 2, delay: 0.2, trait: 'rakshasa_frenzy' },
-      { type: 'charnel_ghoul', x: 0.70, y: 0.56, wave: 2, delay: 0.4, trait: 'rakshasa_frenzy' },
-      {
-        type: 'semi_boss_bloodforge',
-        x: 0.64,
-        y: 0.50,
-        wave: 2,
-        delay: 0.55,
-        trait: 'vajra_shield',
-        wardenRigKey: 'semi_boss_bloodforge',
-        wardenTitle: 'BHAIRAVA · ETERNAL WHEEL AVATAR',
-      },
-    ],
-  },
-
-  // ==========================================================================
-  // CHAMBER VI: ASURA MOLTEN FORGE RING (EXPANSIVE OPEN ARENA)
-  // ==========================================================================
-  {
-    id: 6,
-    chapterTitle: 'Act II · The Asura Inner Sanctum',
-    name: 'Asura Molten Forge Ring',
-    sanskritSubtitle: 'असुर अग्निकुण्ड · CHAMBER VI OF VIII',
-    strikethroughLie: '“Pilgrims walked unharmed across the temple causeway...”',
-    sanjayaQuote:
-      '“Every flagstone is rigged with bloodied iron spikes and Agni lotus vents. Lure the Rakshasa bruisers onto the plates!”',
-    backgroundUrl: GAME_ASSETS.chambers.gopuramCausewayAlt,
-    videoUrl: GAME_ASSETS.arenaVideos.lavaArena,
-    floorTint: 'transparent',
-    isBossChamber: false,
-    envEffect: 'lava_fissures',
-    braziers: [
-      { x: 0.20, y: 0.22, color: '#ff6a18', radius: 195 },
-      { x: 0.80, y: 0.22, color: '#ff6a18', radius: 195 },
-      { x: 0.16, y: 0.54, color: '#ff2a3a', radius: 190 },
-      { x: 0.84, y: 0.54, color: '#ff2a3a', radius: 190 },
-      { x: 0.22, y: 0.82, color: '#ff2a3a', radius: 195 },
-      { x: 0.78, y: 0.82, color: '#ff2a3a', radius: 195 },
-    ],
-    props: [],
-    spawns: [
-      // Wave 1: Swarm Mobs
-      { type: 'ironmaw_gladiator', x: 0.52, y: 0.42, wave: 1, trait: 'vajra_shield' },
-      { type: 'ironmaw_gladiator', x: 0.64, y: 0.62, wave: 1, delay: 0.3 },
-      { type: 'ashen_oracle', x: 0.74, y: 0.46, wave: 1, delay: 0.5, trait: 'agni_aura' },
-      // Wave 2: Agnimukha, The Molten Warlord
-      {
-        type: 'bloodmaw_brute',
-        x: 0.60,
-        y: 0.50,
-        wave: 2,
-        trait: 'agni_aura',
-        wardenTitle: 'AGNIMUKHA · MOLTEN WARLORD',
-      },
-      { type: 'charnel_ghoul', x: 0.40, y: 0.36, wave: 2, delay: 0.25, trait: 'rakshasa_frenzy' },
-      { type: 'charnel_ghoul', x: 0.42, y: 0.68, wave: 2, delay: 0.45 },
-      { type: 'ashen_oracle', x: 0.76, y: 0.54, wave: 2, delay: 0.6 },
-    ],
-  },
-
-  // ==========================================================================
-  // CHAMBER VII: ASURA LAVA SANCTUM (LOCKED -> UNLOCKED LIVE GATE TRANSITION!)
-  // ==========================================================================
-  {
-    id: 7,
-    chapterTitle: 'Act II · Threshold of the Sovereign',
-    name: 'Sealed Gate of Jatharagni',
-    sanskritSubtitle: 'जाठराग्नि द्वार · CHAMBER VII OF VIII',
-    strikethroughLie: '“The golden gates of the sanctum opened to welcome the peacemakers...”',
-    sanjayaQuote:
-      '“Golden chains and an Om padlock bind Vrikodara’s threshold! Slaughter the Royal Asura Guard to shatter the seal!”',
-    backgroundUrl: GAME_ASSETS.chambers.asuraLavaLocked,
-    unlockedBackgroundUrl: GAME_ASSETS.chambers.asuraLavaUnlocked,
-    videoUrl: GAME_ASSETS.arenaVideos.mythicEnvB,
-    floorTint: 'transparent',
-    isBossChamber: false,
-    envEffect: 'lava_fissures',
-    braziers: [
-      { x: 0.18, y: 0.24, color: '#ff7a18', radius: 205 },
-      { x: 0.82, y: 0.24, color: '#ff7a18', radius: 205 },
-      { x: 0.16, y: 0.76, color: '#ff5218', radius: 205 },
-      { x: 0.84, y: 0.76, color: '#ff5218', radius: 205 },
-    ],
-    props: [
-      { type: 'kurukshetra_pillar', x: 0.36, y: 0.40 },
-      { type: 'kurukshetra_pillar', x: 0.64, y: 0.40 },
-      { type: 'homa_cauldron', x: 0.50, y: 0.54 },
-      { type: 'deepa_lantern', x: 0.34, y: 0.70 },
-      { type: 'weapon_rack', x: 0.66, y: 0.70 },
-    ],
-    spawns: [
-      // Wave 1: Bloodforge Gatekeeper + Royal Escort
-      {
-        type: 'semi_boss_bloodforge',
-        x: 0.58,
-        y: 0.46,
-        wave: 1,
-        trait: 'vajra_shield',
-        wardenRigKey: 'semi_boss_bloodforge',
-        wardenTitle: 'GATEKEEPER · BLOODFORGE COLOSSUS',
-      },
-      { type: 'ironmaw_gladiator', x: 0.66, y: 0.64, wave: 1, delay: 0.25, trait: 'vajra_shield' },
-      { type: 'ashen_oracle', x: 0.74, y: 0.38, wave: 1, delay: 0.45 },
-      // Wave 2: Twin Gate Guardians
-      {
-        type: 'bloodmaw_brute',
-        x: 0.52,
-        y: 0.42,
-        wave: 2,
-        trait: 'vajra_shield',
-        wardenTitle: 'SEAL-GUARD · ETERNAL WHEEL AVATAR',
-      },
-      {
-        type: 'bloodmaw_brute',
-        x: 0.66,
-        y: 0.58,
-        wave: 2,
-        delay: 0.35,
-        trait: 'rakshasa_frenzy',
-        wardenTitle: 'SEAL-GUARD · JATHARAGNI COLOSSUS',
-      },
-      { type: 'charnel_ghoul', x: 0.40, y: 0.62, wave: 2, delay: 0.5, trait: 'rakshasa_frenzy' },
-      { type: 'ashen_oracle', x: 0.76, y: 0.50, wave: 2, delay: 0.65, trait: 'agni_aura' },
-    ],
-  },
-
-  // ==========================================================================
-  // CHAMBER VIII: FINAL BOSS — 3D VRIKODARA (PHASE 1 NAGA -> PHASE 2 ECLIPSE!)
-  // ==========================================================================
-  {
-    id: 8,
-    chapterTitle: 'Final Sovereign · The Bleeding Crown',
+    chapterTitle: 'Act I Finale · The Bleeding Crown',
     name: 'Sanctum of the Infernal Maw',
-    sanskritSubtitle: 'वृकोदर गर्भगृह · CHAMBER VIII OF VIII',
+    sanskritSubtitle: 'वृकोदर गर्भगृह · CHAMBER V OF V',
     strikethroughLie: '“And the righteous Pandava general laid down his mace in peace...”',
     sanjayaQuote:
       '“Behold Vrikodara! Ten thousand chariots burn inside his abdominal furnace—and when the blood-eclipse rises, his twin Tridents tear the cosmos!”',

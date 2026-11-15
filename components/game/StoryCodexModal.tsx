@@ -433,7 +433,7 @@ export default function StoryCodexModal({
                   badge: 'Build A · Signature Parashu',
                   title: 'The Ash-Bound Warlord',
                   stance: 'smash' as StaffStance,
-                  weapon: 'jingu_bang' as WeaponId,
+                  weapon: 'parashu' as WeaponId,
                   details:
                     'Pairs the Bloodforged Khanda-Parashu Axe with Asura Cleave Stance. Build Tapas with 4-hit Great-Axe combos, bind the boss with Agneyastra [Q], and land a 3-Orb Parashu Unleash.',
                 },
@@ -442,16 +442,16 @@ export default function StoryCodexModal({
                   badge: 'Build B · High-Speed Lunge',
                   title: 'The Rakta-Parashu Duelist',
                   stance: 'thrust' as StaffStance,
-                  weapon: 'twin_blades' as WeaponId,
+                  weapon: 'khanda_dual' as WeaponId,
                   details:
-                    'Uses Rakta-Parashu Twin Cleavers (+38% speed) to generate Tapas rapidly, then switches to Trishula Lunge Stance to pierce bosses from 235px range after a Perfect Dash.',
+                    'Uses Khanda Dual-Edge Cleavers (+38% speed) to generate Tapas rapidly, then switches to Trishula Lunge Stance to pierce bosses from 235px range after a Perfect Dash.',
                 },
                 {
                   id: 'spellburst',
                   badge: 'Build C · Juggernaut Breaker',
                   title: 'The Brahmashira Breaker',
                   stance: 'pillar' as StaffStance,
-                  weapon: 'dragon_glaive' as WeaponId,
+                  weapon: 'trishula_great' as WeaponId,
                   details:
                     'Combines the heavy Brahmashira Trishula Great-Axe with Tandava Vault Stance and Maya Phantoms [E] to obliterate Boss Posture and trigger lethal [F] Executions.',
                 },

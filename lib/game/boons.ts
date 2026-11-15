@@ -28,7 +28,7 @@ export type CelestialBoonId =
 export interface ImmortalPatronSpec {
   id: ImmortalPatronId;
   name: string;
-  chineseName: string;
+  sanskritName: string;
   title: string;
   domain: string;
   accentColor: string;
@@ -70,6 +70,10 @@ export interface BoonCombatModifiers {
   heavyVortexPull: boolean;
   heavyBonusMultiplier: number;
   castLodgedDamageBonus: number;
+  parryFireBoltsCount: number;
+  heavyFaultLineDamage: number;
+  finisherRageDurationSec: number;
+  finisherRageAttackSpeedBonus: number;
 }
 
 export const IMMORTAL_PATRONS: Record<ImmortalPatronId, ImmortalPatronSpec> = {
@@ -333,10 +337,15 @@ export function computeBoonModifiers(activeBoons: CelestialBoonId[]): BoonCombat
   let heavyVortexPull = false;
   let heavyBonusMultiplier = 1.0;
   let castLodgedDamageBonus = 0.25; // Base +25% damage per lodged Agni Blood-Shard Cast
+  let parryFireBoltsCount = 0;
+  let heavyFaultLineDamage = 0;
+  let finisherRageDurationSec = 0;
+  let finisherRageAttackSpeedBonus = 0;
 
   if (set.has('nezha_scorch_strike')) {
     damageMultiplier += 0.12;
     scorchDps += 32;
+    parryFireBoltsCount = Math.max(parryFireBoltsCount, 3);
   }
   if (set.has('nezha_blazing_dash')) {
     dashFireNovaDamage += 72;
@@ -352,6 +361,7 @@ export function computeBoonModifiers(activeBoons: CelestialBoonId[]): BoonCombat
   if (set.has('guanyin_divine_deflect')) {
     deflectProjectilesOnDash = true;
     perfectDodgeHeal += 12;
+    parryFireBoltsCount = Math.max(parryFireBoltsCount, 3);
   }
   if (set.has('guanyin_ambrosia_gourd')) {
     gourdBonusMaxSips += 1;
@@ -359,10 +369,12 @@ export function computeBoonModifiers(activeBoons: CelestialBoonId[]): BoonCombat
   }
   if (set.has('aoguang_tidal_slam')) {
     wallSlamMultiplier += 0.9;
+    heavyFaultLineDamage += 68;
   }
   if (set.has('aoguang_undertow_unleash')) {
     heavyVortexPull = true;
     heavyBonusMultiplier += 0.35;
+    heavyFaultLineDamage += 54;
   }
   if (set.has('subhuti_astral_qi')) {
     focusGainMultiplier += 0.6;
@@ -374,10 +386,14 @@ export function computeBoonModifiers(activeBoons: CelestialBoonId[]): BoonCombat
   if (set.has('sage_phantom_echo')) {
     attackSpeedMultiplier += 0.2;
     echoStrikeRatio = 0.35;
+    finisherRageDurationSec = 3.0;
+    finisherRageAttackSpeedBonus = 0.35;
   }
   if (set.has('sage_sovereign_breaker')) {
     postureDamageMultiplier += 0.45;
     damageMultiplier += 0.15;
+    finisherRageDurationSec = Math.max(finisherRageDurationSec, 3.0);
+    finisherRageAttackSpeedBonus = Math.max(finisherRageAttackSpeedBonus, 0.35);
   }
 
   // Duo Boon Synergies
@@ -385,18 +401,22 @@ export function computeBoonModifiers(activeBoons: CelestialBoonId[]): BoonCombat
     chainLightningDamage += 45;
     scorchDps += 28;
     critMultiplier += 0.2;
+    parryFireBoltsCount = Math.max(parryFireBoltsCount, 3);
   }
   if (set.has('duo_varuna_rudra_riptide')) {
     damageMultiplier += 0.3;
     postureDamageMultiplier += 0.4;
     heavyVortexPull = true;
     castLodgedDamageBonus += 0.15;
+    heavyFaultLineDamage += 85;
   }
   if (set.has('duo_ashvin_indra_mirage')) {
     deflectProjectilesOnDash = true;
     perfectDodgeHeal += 18;
     dashStrikeMultiplier += 0.35;
     critChance += 0.15;
+    finisherRageDurationSec = Math.max(finisherRageDurationSec, 3.0);
+    finisherRageAttackSpeedBonus = Math.max(finisherRageAttackSpeedBonus, 0.35);
   }
 
   return {
@@ -421,6 +441,10 @@ export function computeBoonModifiers(activeBoons: CelestialBoonId[]): BoonCombat
     heavyVortexPull,
     heavyBonusMultiplier: Number(heavyBonusMultiplier.toFixed(2)),
     castLodgedDamageBonus: Number(castLodgedDamageBonus.toFixed(2)),
+    parryFireBoltsCount,
+    heavyFaultLineDamage,
+    finisherRageDurationSec,
+    finisherRageAttackSpeedBonus,
   };
 }
 
@@ -554,3 +578,23 @@ export function rollCelestialBoonOffer(
   }
   return picked;
 }
+
+export const LOHIT_SHARD_PICKUP_CELL = { col: 0, row: 0 };
+
+/**
+ * Maps a Boon Patron / Rarity to its visual orb cell inside the 2x2 `lohitShardAndBoonOrbs2x2` (`ho5a8g...png`) sheet:
+ * - (0,0): Lohit Blood-Shard Crystal
+ * - (1,0): Agni / Crimson Ember Boon Orb
+ * - (0,1): Vajra / Gold Sovereign Boon Orb
+ * - (1,1): Prana / Emerald-Astral Boon Orb
+ */
+export function getBoonOrbCell(patronId: ImmortalPatronId, rarity?: BoonRarity): { col: number; row: number } {
+  if (rarity === 'Duo' || patronId === 'greatsage') {
+    return { col: 0, row: 1 };
+  }
+  if (patronId === 'nezha' || patronId === 'aoguang') {
+    return { col: 1, row: 0 };
+  }
+  return { col: 1, row: 1 };
+}
+

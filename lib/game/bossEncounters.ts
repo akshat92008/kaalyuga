@@ -245,6 +245,24 @@ export const BOSS_SIGNATURE_MOVES: Record<BossArchetypeId, BossSignatureMoveSpec
       triggersVacuumPull: true,
     },
     {
+      id: 'vrikodara_consume_lunge',
+      bossType: 'vrikodara',
+      minPhase: 2,
+      title: 'JATHARAGNI CONSUME GRAB',
+      sanskritSubtitle: 'PRANA-BHAKSHANA GRAHANA',
+      counterplayHint: 'VACUUM PULL + ABILITY CONSUME · HEAVY SMASH BELLY TO RECLAIM',
+      counterplayKind: 'dash_outward',
+      attackKind: 'shockwave',
+      windupDurationSec: 0.82,
+      telegraphRadiusPx: 168,
+      corridorLengthPx: 0,
+      comboFollowups: 0,
+      damageMultiplier: 1.18,
+      spawnsMoltenSlag: false,
+      spawnsSonicZone: false,
+      triggersVacuumPull: true,
+    },
+    {
       id: 'rudra_jaw_guillotine',
       bossType: 'vrikodara',
       minPhase: 2,
@@ -680,4 +698,233 @@ export function evaluateVrikodaraTelegraphHit(params: {
 
   return { hit: dist <= 185, inSafeEscapeGap: dist > 185 };
 }
+
+/**
+ * Exact 3-phase thresholds for Vrikodara (Chamber 8):
+ * - Phase 1: 100% -> 65% HP (Embermaw Mace, slower heavy slams)
+ * - Phase 2: 65% -> 25% HP (Blood Eclipse MP4 swap, Vacuum Pull + Consume ability)
+ * - Phase 3: < 25% HP (Molten Slag Geysers & fastest cadence)
+ */
+export function computeVrikodaraPhase(currentHp: number, maxHp: number): 1 | 2 | 3 {
+  const ratio = maxHp > 0 ? currentHp / maxHp : 0;
+  if (ratio > 0.65) return 1;
+  if (ratio >= 0.25) return 2;
+  return 3;
+}
+
+export const SEMI_BOSS_GUARD_BREAK_PUNISH_SEC = 1.8;
+
+export interface SemiBossGuardBreakInput {
+  isGuarding: boolean;
+  isFromBehind: boolean;
+  attackKind: 'light' | 'heavy' | 'parry_riposte' | 'finisher' | 'astra';
+}
+
+export interface SemiBossGuardBreakResult {
+  deflected: boolean;
+  guardBroken: boolean;
+  punishDurationSec: number;
+  damageMultiplier: number;
+  postureDamageBonus: number;
+  calloutText: string;
+}
+
+/**
+ * Semi-Boss Sword & Shield (Molten_Oni_Aegis):
+ * Frontal Light spam is deflected cleanly until the player either:
+ * - Dashes behind his back (Backstab bypasses & cracks guard),
+ * - Lands an Iron Guard Parry / Riposte, or
+ * - Lands a Heavy Smash / Finisher to shatter his Molten_Oni_Aegis for a 1.8s punish window.
+ */
+export function evaluateSemiBossGuardBreak(
+  input: SemiBossGuardBreakInput
+): SemiBossGuardBreakResult {
+  if (!input.isGuarding) {
+    return {
+      deflected: false,
+      guardBroken: false,
+      punishDurationSec: 0,
+      damageMultiplier: input.isFromBehind ? 1.35 : 1.0,
+      postureDamageBonus: 0,
+      calloutText: '',
+    };
+  }
+
+  if (
+    input.isFromBehind ||
+    input.attackKind === 'heavy' ||
+    input.attackKind === 'parry_riposte' ||
+    input.attackKind === 'finisher'
+  ) {
+    return {
+      deflected: false,
+      guardBroken: true,
+      punishDurationSec: SEMI_BOSS_GUARD_BREAK_PUNISH_SEC,
+      damageMultiplier: 1.45,
+      postureDamageBonus: 85,
+      calloutText: input.isFromBehind
+        ? 'AEGIS FLANKED! GUARD SHATTERED (1.8s PUNISH)'
+        : 'MOLTEN AEGIS CRACKED! (1.8s PUNISH)',
+    };
+  }
+
+  return {
+    deflected: true,
+    guardBroken: false,
+    punishDurationSec: 0,
+    damageMultiplier: 0.15,
+    postureDamageBonus: 6,
+    calloutText: 'MOLTEN AEGIS DEFLECT · DASH BEHIND / HEAVY SMASH / PARRY',
+  };
+}
+
+export type ConsumableAbilitySlot = 'astra' | 'parry';
+export const VRIKODARA_CONSUME_DURATION_SEC = 8.0;
+
+export function selectConsumeAbility(
+  currentConsumed: ConsumableAbilitySlot | null,
+  attackIndex: number
+): ConsumableAbilitySlot {
+  if (currentConsumed === 'astra') return 'parry';
+  if (currentConsumed === 'parry') return 'astra';
+  return attackIndex % 2 === 0 ? 'astra' : 'parry';
+}
+
+export const VRIKODARA_INHALE_HEAL_RATIO = 0.04;
+export const VRIKODARA_FURNACE_EMPOWER_SEC = 7.0;
+
+export function resolveVrikodaraInhaleImpact(params: {
+  connectedOnPlayer: boolean;
+  interruptedDuringWindup: boolean;
+  currentHp: number;
+  maxHp: number;
+  attackIndex: number;
+  currentConsumed: ConsumableAbilitySlot | null;
+}): {
+  cancelledWindup: boolean;
+  staggerSec: number;
+  healedAmount: number;
+  nextHp: number;
+  furnaceEmpoweredSec: number;
+  consumedSlot: ConsumableAbilitySlot | null;
+  calloutText: string;
+} {
+  if (params.interruptedDuringWindup) {
+    return {
+      cancelledWindup: true,
+      staggerSec: 1.4,
+      healedAmount: 0,
+      nextHp: params.currentHp,
+      furnaceEmpoweredSec: 0,
+      consumedSlot: null,
+      calloutText: 'FURNACE INHALE INTERRUPTED! (STAGGERED)',
+    };
+  }
+  if (!params.connectedOnPlayer) {
+    return {
+      cancelledWindup: false,
+      staggerSec: 0,
+      healedAmount: 0,
+      nextHp: params.currentHp,
+      furnaceEmpoweredSec: 0,
+      consumedSlot: null,
+      calloutText: '',
+    };
+  }
+  const healedAmount = Math.max(12, Math.round(params.maxHp * VRIKODARA_INHALE_HEAL_RATIO));
+  const nextHp = Math.min(params.maxHp, params.currentHp + healedAmount);
+  const consumedSlot = selectConsumeAbility(params.currentConsumed, params.attackIndex);
+  return {
+    cancelledWindup: false,
+    staggerSec: 0,
+    healedAmount,
+    nextHp,
+    furnaceEmpoweredSec: VRIKODARA_FURNACE_EMPOWER_SEC,
+    consumedSlot,
+    calloutText: `VRIKODARA CONSUMED ${consumedSlot.toUpperCase()}! +${healedAmount} HP & FURNACE EMPOWER`,
+  };
+}
+
+export const VRIKODARA_INHALE_HEAL_RATIO = 0.04;
+export const VRIKODARA_FURNACE_EMPOWER_SEC = 7.0;
+
+export function resolveVrikodaraInhaleImpact(params: {
+  connectedOnPlayer: boolean;
+  interruptedDuringWindup: boolean;
+  currentHp: number;
+  maxHp: number;
+  attackIndex: number;
+  currentConsumed: ConsumableAbilitySlot | null;
+}): {
+  cancelledWindup: boolean;
+  staggerSec: number;
+  healedAmount: number;
+  nextHp: number;
+  furnaceEmpoweredSec: number;
+  consumedSlot: ConsumableAbilitySlot | null;
+  calloutText: string;
+} {
+  if (params.interruptedDuringWindup) {
+    return {
+      cancelledWindup: true,
+      staggerSec: 1.4,
+      healedAmount: 0,
+      nextHp: params.currentHp,
+      furnaceEmpoweredSec: 0,
+      consumedSlot: null,
+      calloutText: 'FURNACE INHALE INTERRUPTED! (STAGGERED)',
+    };
+  }
+  if (!params.connectedOnPlayer) {
+    return {
+      cancelledWindup: false,
+      staggerSec: 0,
+      healedAmount: 0,
+      nextHp: params.currentHp,
+      furnaceEmpoweredSec: 0,
+      consumedSlot: null,
+      calloutText: '',
+    };
+  }
+  const healedAmount = Math.max(12, Math.round(params.maxHp * VRIKODARA_INHALE_HEAL_RATIO));
+  const nextHp = Math.min(params.maxHp, params.currentHp + healedAmount);
+  const consumedSlot = selectConsumeAbility(params.currentConsumed, params.attackIndex);
+  return {
+    cancelledWindup: false,
+    staggerSec: 0,
+    healedAmount,
+    nextHp,
+    furnaceEmpoweredSec: VRIKODARA_FURNACE_EMPOWER_SEC,
+    consumedSlot,
+    calloutText: `VRIKODARA CONSUMED ${consumedSlot.toUpperCase()}! +${healedAmount} HP & FURNACE EMPOWER`,
+  };
+}
+
+export function resolveConsumeFurnacePunish(params: {
+  consumedAbility: ConsumableAbilitySlot | null;
+  attackKind: 'light' | 'heavy' | 'finisher' | 'parry_riposte' | 'astra';
+  furnaceExposed: boolean;
+}): {
+  freedAbility: ConsumableAbilitySlot | null;
+  pranaBurst: number;
+  calloutText: string;
+} {
+  if (!params.consumedAbility) {
+    return { freedAbility: null, pranaBurst: 0, calloutText: '' };
+  }
+  const canBurst =
+    params.furnaceExposed &&
+    (params.attackKind === 'heavy' ||
+      params.attackKind === 'finisher' ||
+      params.attackKind === 'parry_riposte');
+  if (!canBurst) {
+    return { freedAbility: null, pranaBurst: 0, calloutText: '' };
+  }
+  return {
+    freedAbility: params.consumedAbility,
+    pranaBurst: 35,
+    calloutText: `FURNACE RUPTURED! ${params.consumedAbility.toUpperCase()} RECLAIMED (+35 PRANA)`,
+  };
+}
+
 

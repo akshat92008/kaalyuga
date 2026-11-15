@@ -1,4 +1,4 @@
-// Procedural Web Audio API synthesizer for Black Myth: Wukong — Ashen Mandate
+// Procedural Web Audio API synthesizer for Kaalyuga: The Bleeding Crown
 import {
   FoleyMaterialKind,
   computeMaterialFoleySpec,

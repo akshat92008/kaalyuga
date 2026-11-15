@@ -28,7 +28,7 @@ test('computeBoonModifiers computes accurate baseline and stacked Immortal Boon 
   assert.equal(stacked.spellCooldownMultiplier, 0.68);
 });
 
-test('isShadowStrikeBackstab detects when Wukong strikes from behind enemy facing vector', () => {
+test('isShadowStrikeBackstab detects when Rudra strikes from behind enemy facing vector', () => {
   // Enemy at x=500 facing right (+1): player at x=450 is behind
   assert.equal(isShadowStrikeBackstab({ playerX: 450, enemyX: 500, enemyFacing: 1 }), true);
   assert.equal(isShadowStrikeBackstab({ playerX: 550, enemyX: 500, enemyFacing: 1 }), false);

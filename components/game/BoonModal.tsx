@@ -396,7 +396,7 @@ export default function BoonModal({
                   {isExpanded && (
                     <div className="mb-2.5 p-2 bg-[#0d0b12] border border-white/10 text-[11px] text-[#c2b6a3] leading-relaxed">
                       <div className="text-[10px] font-mono-num text-[#d4a548] mb-0.5">
-                        {boon.chineseName} · {patron.title}
+                        {boon.sanskritName} · {patron.title}
                       </div>
                       {boon.summary}
                     </div>

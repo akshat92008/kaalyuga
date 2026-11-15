@@ -29,6 +29,8 @@ interface NarrativeOverlayProps {
   difficulty?: CombatDifficulty;
   onChangeDifficulty?: (diff: CombatDifficulty) => void;
   lastRunSummary?: RunSummaryStats | null;
+  hubBoatDrawerOpen?: boolean;
+  onSetHubBoatDrawer?: (open: boolean) => void;
   onCloseLookModal: () => void;
   onAdvanceStage: (nextStage: SliceStageId, updatedFlags?: Partial<StoryMemoryFlags>) => void;
   onOpenShrine: () => void;
@@ -43,6 +45,8 @@ export function NarrativeOverlay({
   difficulty = 'normal',
   onChangeDifficulty,
   lastRunSummary,
+  hubBoatDrawerOpen,
+  onSetHubBoatDrawer,
   onCloseLookModal,
   onAdvanceStage,
   onOpenShrine,
@@ -54,9 +58,16 @@ export function NarrativeOverlay({
   const [hillLookAttempted, setHillLookAttempted] = useState(false);
   const [brahmashiraFired, setBrahmashiraFired] = useState(false);
   const [showAstraMatrix, setShowAstraMatrix] = useState(false);
+  const [localBoatDrawerOpen, setLocalBoatDrawerOpen] = useState(false);
   const [ferryChoiceId, setFerryChoiceId] = useState<'silence' | 'ask_ila' | 'apologize' | null>(
     storyFlags.ferry1Choice
   );
+
+  const isBoatDrawerOpen = hubBoatDrawerOpen ?? localBoatDrawerOpen;
+  const setBoatDrawerOpen = (open: boolean) => {
+    setLocalBoatDrawerOpen(open);
+    onSetHubBoatDrawer?.(open);
+  };
 
   const lantern = getLanternLightState(storyFlags);
 
@@ -504,47 +515,34 @@ export function NarrativeOverlay({
   }
 
   // ==========================================================================
-  // STAGE 3: THE HUB — SAVITRI'S BOAT ON THE VAITARANI (Section 8, 9, 28)
+  // STAGE 3: THE WALKABLE 2.5D HUB — VAITARANI SIMPLE ASH SHORE
   // ==========================================================================
   if (stage === 'vaitarani_hub' || stage === 'opening_wake') {
     const foldedPageLooked = storyFlags.looks.includes('boat_folded_page');
     return (
       <div
         data-testid="vaitarani-ash-hub"
-        className="fixed inset-0 z-50 bg-[#060609] flex flex-col justify-between p-6 md:p-10 overflow-y-auto select-none"
+        className="fixed inset-0 z-30 pointer-events-none flex flex-col justify-between p-4 md:p-6 select-none"
       >
-        {/* Full-bleed Vaitarani Simple Ash Hub Living MP4 + Baked Dark-Ash Floor Artwork (ol56bv) */}
-        <video
-          data-testid="vaitarani-hub-bg-video"
-          src={GAME_ASSETS.arenaVideos.ashHubRiver}
-          poster={GAME_ASSETS.chambers.vaitaraniAshHub}
-          autoPlay
-          loop
-          muted
-          playsInline
-          className="fixed inset-0 w-full h-full object-cover opacity-45 pointer-events-none z-0"
-        />
-
-        {/* Top Bar: Lantern State, Difficulty Selector & Story Flags */}
-        <div className="relative z-10 max-w-6xl w-full mx-auto flex flex-wrap items-center justify-between gap-4 border-b border-[#c89d46]/30 pb-3.5 bg-[#09080c]/75 px-4 py-2.5">
+        {/* Top Sanctuary Bar (Compact, non-blocking) */}
+        <div className="pointer-events-auto max-w-6xl w-full mx-auto flex flex-wrap items-center justify-between gap-3 border border-[#c89d46]/35 bg-[#09080c]/82 backdrop-blur-sm px-4 py-2">
           <div className="flex items-center gap-3">
             <span
-              className="w-3.5 h-3.5 rounded-full"
+              className="w-3 h-3 rounded-full"
               style={{
                 backgroundColor: lantern.flameColor,
-                boxShadow: `0 0 16px ${lantern.flameColor}`,
+                boxShadow: `0 0 14px ${lantern.flameColor}`,
               }}
             />
-            <span className="font-mono-num text-xs tracking-[0.22em] text-[#f5ebd6] uppercase">
-              THE HUB · SAVITRI’S BOAT ON THE VAITARANI · LANTERN:{' '}
+            <span className="font-mono-num text-[11px] md:text-xs tracking-[0.2em] text-[#f5ebd6] uppercase">
+              VAITARANI ASH HUB · LANTERN:{' '}
               <strong style={{ color: lantern.flameColor }}>{lantern.label}</strong>
             </span>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 text-xs font-mono-num text-[#c4b7a2]">
-            {/* Difficulty Selector (Story / Normal / Hard) */}
+          <div className="flex flex-wrap items-center gap-3 text-[11px] font-mono-num text-[#c4b7a2]">
             {onChangeDifficulty && (
-              <div className="flex items-center gap-1 bg-[#120f16] border border-[#c89d46]/40 px-2 py-1">
+              <div className="flex items-center gap-1 bg-[#120f16] border border-[#c89d46]/40 px-2 py-0.5">
                 <span className="text-[10px] text-[#a99e8b] mr-1">MODE:</span>
                 {(['story', 'normal', 'hard'] as CombatDifficulty[]).map((d) => (
                   <button
@@ -575,18 +573,14 @@ export function NarrativeOverlay({
           </div>
         </div>
 
-        {/* Center Boat Scene */}
-        <div className="relative z-10 max-w-6xl w-full mx-auto my-auto grid grid-cols-1 lg:grid-cols-12 gap-8 items-start py-5">
-          {/* Vaitarani Simple Ash Hub Visual (ol56bv.png + Ash_drifting_across_river_landscape_2b693e5d.mp4) & Previous Run Summary */}
-          <div className="lg:col-span-5 space-y-4">
-            <div className="relative border border-[#c89d46]/50 bg-[#0c0a0e] overflow-hidden shadow-[0_24px_80px_rgba(0,0,0,0.95)]">
-              <img
-                data-testid="vaitarani-hub-card-img"
-                src={GAME_ASSETS.chambers.vaitaraniAshHub}
-                alt="Vaitarani Simple Ash Hub Sanctuary"
-                className="w-full h-64 md:h-80 object-cover object-center"
-              />
-              <div className="absolute bottom-3 left-3 right-3 p-3.5 bg-[#0b090d]/92 border border-[#c89d46]/40 flex items-start gap-3">
+        {/* Optional Savitri Boat & Sanjaya Chronicle Pop-Over Drawer (opened via [E] at Savitri's Boat or button) */}
+        {isBoatDrawerOpen && (
+          <div
+            data-testid="vaitarani-hub-drawer"
+            className="pointer-events-auto max-w-4xl w-full mx-auto my-auto bg-[#0b090d]/95 border-2 border-[#c89d46]/65 shadow-[0_24px_80px_rgba(0,0,0,0.95)] p-5 space-y-4 max-h-[72vh] overflow-y-auto"
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-[#c89d46]/30 pb-3">
+              <div className="flex items-start gap-3">
                 <img
                   src={GAME_ASSETS.portraits.savitri}
                   alt="Savitri"
@@ -596,19 +590,23 @@ export function NarrativeOverlay({
                   <div className="text-[10px] font-mono-num tracking-[0.22em] text-[#d4a548] uppercase">
                     SAVITRI · LAST FERRYWOMAN ({lantern.savitriVoiceTone})
                   </div>
-                  <p className="text-xs text-[#fff6e8] leading-relaxed">
-                    {lantern.savitriWakeLine}
-                  </p>
+                  <p className="text-xs text-[#fff6e8] leading-relaxed">{lantern.savitriWakeLine}</p>
                   <p className="text-[11px] text-[#d4a548] italic">
                     “At the end, you answer one question. Will you still be here?”
                   </p>
                 </div>
               </div>
+              <button
+                type="button"
+                onClick={() => setBoatDrawerOpen(false)}
+                className="px-3 py-1 bg-[#1e1824] hover:bg-[#2c2235] border border-[#c89d46]/50 text-xs font-mono-num text-[#f5ebd6] uppercase cursor-pointer shrink-0"
+              >
+                CLOSE [ESC]
+              </button>
             </div>
 
-            {/* Previous Run Summary Board */}
             {lastRunSummary && (
-              <div className="p-3.5 bg-[#110e15] border border-[#c89d46]/45 text-xs font-mono-num space-y-1.5">
+              <div className="p-3 bg-[#110e15] border border-[#c89d46]/40 text-xs font-mono-num space-y-1.5">
                 <div className="flex items-center justify-between border-b border-[#c89d46]/25 pb-1">
                   <span className="text-[#f5c451] font-bold uppercase">
                     LAST EXPEDITION RECORD ({difficulty.toUpperCase()})
@@ -623,7 +621,7 @@ export function NarrativeOverlay({
                     {lastRunSummary.outcome === 'victory' ? 'ACT I CLEARED' : 'RETURNED BY RIVER'}
                   </span>
                 </div>
-                <div className="grid grid-cols-3 gap-2 text-[11px] text-[#dfd3be]">
+                <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 text-[11px] text-[#dfd3be]">
                   <div>
                     CHAMBERS: <strong>{lastRunSummary.chambersCleared}/5</strong>
                   </div>
@@ -634,96 +632,33 @@ export function NarrativeOverlay({
                     ASTRAS: <strong className="text-[#ffd86b]">{lastRunSummary.astrasInvoked}</strong>
                   </div>
                   <div>
-                    UPASAMHARA: <strong className="text-[#63f2ff]">{lastRunSummary.upasamharaWithdrawals}</strong>
+                    UPASAMHARA:{' '}
+                    <strong className="text-[#63f2ff]">{lastRunSummary.upasamharaWithdrawals}</strong>
                   </div>
                   <div>
                     PARRIES: <strong>{lastRunSummary.parriesLanded}</strong>
                   </div>
                   <div>
-                    STILLNESS: <strong className="text-[#f5c451]">{lastRunSummary.narayanastraTrialsPassed}</strong>
+                    STILLNESS:{' '}
+                    <strong className="text-[#f5c451]">
+                      {lastRunSummary.narayanastraTrialsPassed}
+                    </strong>
                   </div>
                 </div>
               </div>
             )}
-          </div>
 
-          {/* Hub Actions, Look Seed, Sanjaya's Chronicle & 3x3 Stance x Astra Matrix */}
-          <div className="lg:col-span-7 space-y-4">
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <div>
-                <div className="text-xs font-mono-num tracking-[0.28em] text-[#d4a548] uppercase">
-                  ACT I · THE CHARNEL PLAINS (VERTICAL SLICE)
-                </div>
-                <h2 className="font-display text-2xl md:text-3xl font-bold text-[#f7efe0] mt-1">
-                  Three Thousand Years Later
-                </h2>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowAstraMatrix((prev) => !prev)}
-                className="px-3 py-1.5 bg-[#1b150e] hover:bg-[#2a2014] border border-[#f5c451]/70 text-[11px] font-mono-num text-[#ffd86b] uppercase cursor-pointer"
-              >
-                {showAstraMatrix ? 'HIDE 3×3 ASTRA MATRIX ▴' : 'VIEW 3×3 STANCE × ASTRA MATRIX ▾'}
-              </button>
-            </div>
-
-            {showAstraMatrix ? (
-              <div className="p-4 bg-[#110e14] border border-[#f5c451]/55 space-y-3 text-xs">
-                <div className="flex items-center justify-between border-b border-[#c89d46]/30 pb-1.5">
-                  <span className="font-mono-num font-bold text-[#ffd86b] uppercase">
-                    3 STANCES (1/2/3) × 3 ASTRAS ([Q] AGNI · [E] VAYU · [R] VAJRA) + UPASAMHARA
-                  </span>
-                  <span className="text-[10px] font-mono-num text-[#3ee0a8]">
-                    SECOND PRESS = +10 ASTRA REFUND
-                  </span>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                  {(['agneyastra', 'vayavyastra', 'vajrastra'] as const).map((aId) => {
-                    const meta = ASTRA_METADATA[aId];
-                    return (
-                      <div
-                        key={aId}
-                        className="p-2.5 bg-[#0c0a0f] border border-[#c89d46]/30 space-y-1.5"
-                      >
-                        <div className="font-mono-num font-bold" style={{ color: meta.color }}>
-                          [{meta.keybind}] {meta.name.toUpperCase()} ({meta.baseEnergyCost} ASTRA)
-                        </div>
-                        {(['smash', 'pillar', 'thrust'] as const).map((st) => {
-                          const spec = ASTRA_MANIFESTATION_MATRIX[aId][st];
-                          return (
-                            <div key={st} className="text-[11px] text-[#d8ccb8] leading-snug">
-                              <strong className="text-[#f5c451] uppercase">{st}:</strong>{' '}
-                              {spec.title}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : (
-              <p className="text-xs md:text-sm text-[#c7bba6] leading-relaxed">
-                Savitri has hauled you from the river of the dead. In your hand is your broken iron
-                <strong> Gada</strong>, stamped with a spiral mark. Invoke <strong>[Q] Agneyastra</strong>,{' '}
-                <strong>[E] Vayavyastra</strong>, and <strong>[R] Vajrastra</strong> across all 3
-                stances—and press active fire or wind zones a second time to trigger{' '}
-                <strong>Upasamhara Withdrawal (+10 Astra Energy)</strong>.
-              </p>
-            )}
-
-            {/* Sanjaya's Chronicle Status (Shows Strikethrough Correction #1 once Vrikodara's Shard is taken!) */}
-            <div className="p-4 bg-[#120f15] border border-[#c89d46]/35 flex items-start gap-3.5">
+            <div className="p-3.5 bg-[#120f15] border border-[#c89d46]/35 flex items-start gap-3.5">
               <img
                 src={GAME_ASSETS.portraits.sanjaya}
                 alt="Sanjaya"
-                className="w-12 h-12 object-cover border border-[#d4a548]/60 shrink-0"
+                className="w-11 h-11 object-cover border border-[#d4a548]/60 shrink-0"
               />
               <div className="space-y-1">
                 <div className="text-[10px] font-mono-num tracking-[0.22em] text-[#e6be6a] uppercase">
                   SANJAYA’S COURT CHRONICLE · LIVE RECORD
                 </div>
-                <p className="text-xs md:text-sm text-[#e5dac5]">
+                <p className="text-xs text-[#e5dac5]">
                   “On the Eighteenth Night, Rudra turned the Brahmashira upon{' '}
                   {storyFlags.shardsCollected >= 1 || storyFlags.shardsRecovered >= 1 ? (
                     <>
@@ -742,13 +677,12 @@ export function NarrativeOverlay({
               </div>
             </div>
 
-            {/* Boat [E] Look Object: The Folded Ledger Page in the Base of the Lantern */}
-            <div className="p-4 bg-[#141116] border border-[#c89d46]/30 flex items-center justify-between gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-[#141116] border border-[#c89d46]/30">
               <div>
                 <div className="text-[10px] font-mono-num text-[#f5c451] uppercase tracking-wider">
                   [E] LOOK OBJECT ON THE BOAT
                 </div>
-                <div className="text-xs md:text-sm font-bold text-[#f7efe0]">
+                <div className="text-xs font-bold text-[#f7efe0]">
                   Folded Ledger Page in the Base of Savitri’s Lantern
                 </div>
                 {foldedPageLooked && (
@@ -758,55 +692,55 @@ export function NarrativeOverlay({
                   </p>
                 )}
               </div>
-              <button
-                type="button"
-                onClick={() => {
-                  if (!foldedPageLooked) {
-                    onAdvanceStage('vaitarani_hub', {
-                      looks: [...storyFlags.looks, 'boat_folded_page'],
-                    });
-                  }
-                }}
-                className="px-3.5 py-2 bg-[#241c12] hover:bg-[#332718] border border-[#f5c451]/60 text-xs font-mono-num text-[#f5c451] uppercase shrink-0 cursor-pointer"
-              >
-                {foldedPageLooked ? 'EXAMINED ✓' : '[E] LOOK AT LANTERN BASE'}
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!foldedPageLooked) {
+                      onAdvanceStage('vaitarani_hub', {
+                        looks: [...storyFlags.looks, 'boat_folded_page'],
+                      });
+                    }
+                  }}
+                  className="px-3 py-1.5 bg-[#241c12] hover:bg-[#332718] border border-[#f5c451]/60 text-xs font-mono-num text-[#f5c451] uppercase cursor-pointer"
+                >
+                  {foldedPageLooked ? 'EXAMINED ✓' : '[E] EXAMINE LEDGER PAGE'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowAstraMatrix((prev) => !prev)}
+                  className="px-3 py-1.5 bg-[#1b150e] hover:bg-[#2a2014] border border-[#f5c451]/50 text-xs font-mono-num text-[#ffd86b] uppercase cursor-pointer"
+                >
+                  {showAstraMatrix ? 'HIDE 3×3 MATRIX' : '3×3 ASTRA MATRIX'}
+                </button>
+              </div>
             </div>
 
-            {/* Primary Hub Buttons */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-              <button
-                type="button"
-                onClick={() => onStartAct1Run(0)}
-                className="px-6 py-3.5 bg-gradient-to-r from-[#b81d2a] via-[#d94426] to-[#cf8c28] text-[#fff8eb] font-display font-bold text-xs tracking-[0.16em] uppercase border border-[#f5d061] cursor-pointer"
-              >
-                STEP ONTO THE CHARNEL PLAINS (ACT I) →
-              </button>
-
-              <button
-                type="button"
-                onClick={onOpenShrine}
-                className="px-5 py-3.5 bg-[#151218] hover:bg-[#221c26] text-[#f2c45a] font-display font-bold text-xs tracking-[0.15em] uppercase border border-[#c89d46]/60 cursor-pointer"
-              >
-                SHRINE OF ASHEN KARMA
-              </button>
-
-              <button
-                type="button"
-                onClick={() => onStartAct1Run(3)}
-                className="px-4 py-2.5 bg-[#1b1316] hover:bg-[#2b1c22] text-[#ff8a94] font-mono-num text-[11px] tracking-wider uppercase border border-[#a83240]/50 cursor-pointer"
-              >
-                [JUMP TO MINI-BOSS] 3D DUNDUBHI
-              </button>
-
-              <button
-                type="button"
-                onClick={() => onStartAct1Run(7)}
-                className="px-4 py-2.5 bg-[#1f1612] hover:bg-[#30211a] text-[#ffba78] font-mono-num text-[11px] tracking-wider uppercase border border-[#b86b28]/50 cursor-pointer"
-              >
-                [JUMP TO WARDEN] 3D VRIKODARA (SHARD #1)
-              </button>
-            </div>
+            {showAstraMatrix && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+                {(['agneyastra', 'vayavyastra', 'vajrastra'] as const).map((aId) => {
+                  const meta = ASTRA_METADATA[aId];
+                  return (
+                    <div
+                      key={aId}
+                      className="p-2.5 bg-[#0c0a0f] border border-[#c89d46]/30 space-y-1.5"
+                    >
+                      <div className="font-mono-num font-bold" style={{ color: meta.color }}>
+                        [{meta.keybind}] {meta.name.toUpperCase()} ({meta.baseEnergyCost} ASTRA)
+                      </div>
+                      {(['smash', 'pillar', 'thrust'] as const).map((st) => {
+                        const spec = ASTRA_MANIFESTATION_MATRIX[aId][st];
+                        return (
+                          <div key={st} className="text-[11px] text-[#d8ccb8] leading-snug">
+                            <strong className="text-[#f5c451] uppercase">{st}:</strong> {spec.title}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
             <div className="flex items-center justify-between pt-1 text-[11px] font-mono-num text-[#8f8472]">
               <button
@@ -829,6 +763,51 @@ export function NarrativeOverlay({
                 </button>
               )}
             </div>
+          </div>
+        )}
+
+        {/* Bottom Walkable Shore Action Strip (leaves center 85%+ of 2.5D canvas completely free!) */}
+        <div className="pointer-events-auto max-w-6xl w-full mx-auto flex flex-wrap items-center justify-between gap-2.5 border border-[#c89d46]/35 bg-[#09080c]/86 backdrop-blur-sm px-3.5 py-2.5">
+          <div className="text-[11px] font-mono-num text-[#d4c7b0]">
+            <strong className="text-[#f5c451]">WASD / ARROWS:</strong> WALK ASH SHORE ·{' '}
+            <strong className="text-[#3ee0a8]">[E]:</strong> INTERACT AT STATIONS · WALK NORTH INTO FERRY GATE TO BEGIN
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setBoatDrawerOpen(!isBoatDrawerOpen)}
+              className="px-3 py-1.5 bg-[#1b150e] hover:bg-[#2a2014] border border-[#f5c451]/60 text-[11px] font-mono-num text-[#ffd86b] uppercase cursor-pointer"
+            >
+              {isBoatDrawerOpen ? 'HIDE CHRONICLE' : 'BOAT & CHRONICLE'}
+            </button>
+            <button
+              type="button"
+              onClick={onOpenShrine}
+              className="px-3 py-1.5 bg-[#151218] hover:bg-[#221c26] text-[#f2c45a] font-mono-num text-[11px] uppercase border border-[#c89d46]/60 cursor-pointer"
+            >
+              SHRINE OF ASHEN KARMA
+            </button>
+            <button
+              type="button"
+              onClick={() => onStartAct1Run(3)}
+              className="px-3 py-1.5 bg-[#1b1316] hover:bg-[#2b1c22] text-[#ff8a94] font-mono-num text-[11px] uppercase border border-[#a83240]/50 cursor-pointer"
+            >
+              CH.4: DUNDUBHI
+            </button>
+            <button
+              type="button"
+              onClick={() => onStartAct1Run(4)}
+              className="px-3 py-1.5 bg-[#1f1612] hover:bg-[#30211a] text-[#ffba78] font-mono-num text-[11px] uppercase border border-[#b86b28]/50 cursor-pointer"
+            >
+              CH.5: VRIKODARA
+            </button>
+            <button
+              type="button"
+              onClick={() => onStartAct1Run(0)}
+              className="px-4 py-1.5 bg-gradient-to-r from-[#b81d2a] via-[#d94426] to-[#cf8c28] text-[#fff8eb] font-display font-bold text-[11px] tracking-[0.14em] uppercase border border-[#f5d061] cursor-pointer"
+            >
+              STEP ONTO THE CHARNEL PLAINS →
+            </button>
           </div>
         </div>
       </div>

@@ -8,6 +8,8 @@
 // 4. Material-Specific Combat Foley Specifications (Flesh, Bronze Armor, Obsidian Stone, Golden Parry, Astral Spell)
 // ============================================================================
 
+import { drawAdditiveFlipbookCell, resolveParticleFlipbookSpec } from './vfxFlipbook';
+
 export type ParticleArchetype =
   | 'blood_splatter'
   | 'ember_dust'
@@ -302,119 +304,52 @@ export function stepParticleSimulation(
 }
 
 /**
- * Renders all active particles in the pool using archetype-specific geometry:
- * - 'blood_splatter': Rich normal-blended arterial crimson teardrop streaks (never washed out by screen blend!)
- * - 'ember_dust': Screen-blended incandescent diamond embers with hot inner core
- * - 'magic_spell': Screen-blended 4-point astral star motes with pulsing aura
- * - 'bronze_spark': Razor-sharp white-gold metallic ricochet needles
+ * Renders all active particles in the pool using Phase 2 hand-painted `#000000`
+ * additive flipbook cells (`globalCompositeOperation = 'lighter'`) with zero procedural polygon fills.
  */
 export function renderParticlePoolCanvas(
   ctx: CanvasRenderingContext2D,
   pool: SimParticleNode[]
 ): void {
-  // Pass 1: Normal-blended arterial 'blood_splatter' droplets so deep crimson reads with visceral contrast
-  ctx.save();
-  ctx.globalCompositeOperation = 'source-over';
+  let particlesRendered = 0;
   for (let i = 0; i < pool.length; i++) {
     const pt = pool[i];
-    if (!pt.active || pt.archetype !== 'blood_splatter') continue;
+    if (!pt.active) continue;
+    if (particlesRendered >= 42) break;
+    particlesRendered++;
 
+    const mapping = resolveParticleFlipbookSpec(pt.archetype);
     const spd = Math.hypot(pt.vx, pt.vy);
-    const ux = spd > 1 ? pt.vx / spd : 1;
-    const uy = spd > 1 ? pt.vy / spd : 0;
-    const px = -uy;
-    const py = ux;
-    const stretch = Math.min(16, Math.max(4, spd * 0.032));
-    const r = Math.max(1.3, pt.size * 0.52);
+    const rot = mapping.alignToVelocity
+      ? Math.atan2(pt.vy, pt.vx)
+      : pt.phase * 0.6;
+    const stretch = mapping.alignToVelocity
+      ? Math.min(1.5, Math.max(0.85, spd / 260))
+      : 1.0;
+    const lifeNorm = 1 - Math.max(0, Math.min(0.999, pt.life / Math.max(0.01, pt.maxLife)));
+    const colCount = mapping.sheetSpec.cols;
+    const col = mapping.singleCol
+      ? mapping.colOffset
+      : (mapping.colOffset + Math.floor(lifeNorm * colCount)) % colCount;
+    const drawW = Math.min(mapping.maxSizePx * stretch, Math.max(6, pt.size * mapping.baseScale * stretch));
+    const drawH = Math.min(
+      mapping.maxSizePx,
+      Math.max(6, pt.size * mapping.baseScale * (mapping.alignToVelocity ? 0.72 : 1.0))
+    );
+    const alpha = Math.min(mapping.maxAlpha, pt.alpha * mapping.maxAlpha);
 
-    ctx.globalAlpha = Math.min(0.95, pt.alpha * 1.15);
-    ctx.fillStyle = pt.color;
-    ctx.beginPath();
-    ctx.moveTo(pt.x + ux * r * 1.3, pt.y + uy * r * 1.3);
-    ctx.lineTo(pt.x + px * r, pt.y + py * r);
-    ctx.lineTo(pt.x - ux * stretch, pt.y - uy * stretch);
-    ctx.lineTo(pt.x - px * r, pt.y - py * r);
-    ctx.closePath();
-    ctx.fill();
+    drawAdditiveFlipbookCell(ctx, {
+      sheetSpec: mapping.sheetSpec,
+      col,
+      row: mapping.row,
+      x: pt.x,
+      y: pt.y,
+      width: drawW,
+      height: drawH,
+      rotationRad: rot,
+      alpha,
+    });
   }
-  ctx.restore();
-
-  // Pass 2: Additive/Screen-blended 'ember_dust', 'magic_spell', and 'bronze_spark'
-  // Stage B (Step 12): Enforce additive/screen cap so stacked hit sparks never wash out Rudra
-  ctx.save();
-  ctx.globalCompositeOperation = 'screen';
-  let screenParticlesRendered = 0;
-  for (let i = 0; i < pool.length; i++) {
-    const pt = pool[i];
-    if (!pt.active || pt.archetype === 'blood_splatter') continue;
-    if (screenParticlesRendered >= 64) break;
-    screenParticlesRendered++;
-
-    ctx.globalAlpha = Math.min(0.58, pt.alpha * 0.64);
-
-    if (pt.archetype === 'magic_spell') {
-      const pulse = 0.8 + 0.25 * Math.sin(pt.phase * 2.0);
-      const r = Math.max(1.8, pt.size * 0.75 * pulse);
-      const inner = r * 0.32;
-
-      ctx.fillStyle = pt.color;
-      ctx.beginPath();
-      ctx.moveTo(pt.x, pt.y - r * 1.45);
-      ctx.lineTo(pt.x + inner, pt.y - inner);
-      ctx.lineTo(pt.x + r * 1.45, pt.y);
-      ctx.lineTo(pt.x + inner, pt.y + inner);
-      ctx.lineTo(pt.x, pt.y + r * 1.45);
-      ctx.lineTo(pt.x - inner, pt.y + inner);
-      ctx.lineTo(pt.x - r * 1.45, pt.y);
-      ctx.lineTo(pt.x - inner, pt.y - inner);
-      ctx.closePath();
-      ctx.fill();
-
-      const coreR = inner * 0.85;
-      ctx.fillStyle = pt.coreColor;
-      ctx.beginPath();
-      ctx.moveTo(pt.x, pt.y - coreR);
-      ctx.lineTo(pt.x + coreR, pt.y);
-      ctx.lineTo(pt.x, pt.y + coreR);
-      ctx.lineTo(pt.x - coreR, pt.y);
-      ctx.closePath();
-      ctx.fill();
-    } else {
-      // 'ember_dust' or 'bronze_spark'
-      const spd = Math.hypot(pt.vx, pt.vy);
-      if (spd > 45) {
-        const ux = pt.vx / spd;
-        const uy = pt.vy / spd;
-        const px = -uy;
-        const py = ux;
-        const tailLen =
-          pt.archetype === 'bronze_spark'
-            ? Math.min(22, Math.max(7, spd * 0.036))
-            : Math.min(16, Math.max(5, spd * 0.024));
-        const halfW = Math.min(2.2, Math.max(0.8, pt.size * 0.38));
-
-        ctx.fillStyle = pt.color;
-        ctx.beginPath();
-        ctx.moveTo(pt.x + ux * (halfW * 1.5), pt.y + uy * (halfW * 1.5));
-        ctx.lineTo(pt.x + px * halfW, pt.y + py * halfW);
-        ctx.lineTo(pt.x - ux * tailLen, pt.y - uy * tailLen);
-        ctx.lineTo(pt.x - px * halfW, pt.y - py * halfW);
-        ctx.closePath();
-        ctx.fill();
-      } else {
-        const r = Math.min(2.6, Math.max(1.0, pt.size * 0.48));
-        ctx.fillStyle = pt.color;
-        ctx.beginPath();
-        ctx.moveTo(pt.x, pt.y - r);
-        ctx.lineTo(pt.x + r, pt.y);
-        ctx.lineTo(pt.x, pt.y + r);
-        ctx.lineTo(pt.x - r, pt.y);
-        ctx.closePath();
-        ctx.fill();
-      }
-    }
-  }
-  ctx.restore();
 }
 
 /**

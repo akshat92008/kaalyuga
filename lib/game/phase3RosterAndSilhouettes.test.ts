@@ -57,7 +57,7 @@ describe('Phase 3 — Wide-Camera (0.96) Silhouette Readability & 3D Character R
     );
   });
 
-  it('wires Semi-Boss Sword & Shield to Horned_Warlord_of_the_Bloodforge_v2 + Pro Sword and Shield Pack + Molten_Oni_Aegis & Crescent_Reaver', () => {
+  it('wires Semi-Boss Sword & Shield to Horned_Warlord_of_the_Bloodforge_v2 + Pro Sword and Shield Pack + Molten_Oni_Aegis & Emberfang', () => {
     const semiBoss = GAME_ASSETS.models3d.semiBossBloodforge;
     assert.ok(
       semiBoss.riggedFbx.includes(
@@ -82,7 +82,7 @@ describe('Phase 3 — Wide-Camera (0.96) Silhouette Readability & 3D Character R
     assert.ok(semiBoss.anims.powerUp.includes('sword and shield power up.fbx'));
     assert.ok(semiBoss.anims.death.includes('sword and shield death.fbx'));
     assert.ok(semiBoss.shieldFbx.includes('Molten_Oni_Aegis'));
-    assert.ok(semiBoss.swordFbx.includes('Crescent_Reaver'));
+    assert.ok(semiBoss.swordFbx.includes('Emberfang'));
   });
 
   it('wires Vrikodara to Crimson_Skull_Warlord_v2 + Pro Melee Axe Pack (5) + Embermaw_Mace (Phase 1) & Bloodforged_Trident_Axe (Phase 2)', () => {

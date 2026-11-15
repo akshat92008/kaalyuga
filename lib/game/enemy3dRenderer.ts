@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 import type { EnemyTrait, Warden3DRigKey } from './assets';
 import {
   SHARED_STUDIO_OUTLINE_COLOR,
@@ -10,8 +9,6 @@ import {
   setupSharedStudioLightingRig,
 } from './hadesSpriteBaker';
 import { loadFbxCached, simplifyBufferGeometry } from './meshSimplifier';
-
-const sharedAnimFbxCache = new Map<string, Promise<THREE.Group | null>>();
 
 export type RegularEnemy3DKind =
   | 'charnel_ghoul'
@@ -46,6 +43,7 @@ export interface Enemy3DRenderInput {
 }
 
 type EnemyWeaponKind = 'minotaur_axe' | 'trident_axe' | 'crescent_reaver' | 'none';
+type EnemyLeftBucklerKind = 'iron_buckler' | 'none';
 
 interface EnemyModelSlot {
   key: string;
@@ -54,6 +52,7 @@ interface EnemyModelSlot {
   diffuseUrl: string;
   weaponKind: EnemyWeaponKind;
   hasLeftShield?: boolean;
+  leftBucklerKind?: EnemyLeftBucklerKind;
   animUrls: Record<Enemy3DAnimState, string>;
   rimColor: number;
   rimIntensity: number;
@@ -72,8 +71,58 @@ const TRIDENT_AXE_FBX_URL = `${MODEL_BASE}/Weapons/Bloodforged_Trident_Axe_20261
 const TRIDENT_AXE_TEX_URL = `/models/Meshy_AI_Bloodforged_Trident_A_1025041928_texture_fbx/Meshy_AI_Bloodforged_Trident_A_1025041928_texture.png`;
 const CRESCENT_REAVER_FBX_URL = `${MODEL_BASE}/Crescent_Reaver/Meshy_AI_Crescent_Reaver_20261111_texture_fbx/Meshy_AI_Crescent_Reaver_20261111_texture.fbx`;
 const CRESCENT_REAVER_TEX_URL = `${MODEL_BASE}/Crescent_Reaver/Meshy_AI_Crescent_Reaver_20261111_texture_fbx/Meshy_AI_Crescent_Reaver_20261111_texture.png`;
-const MOLTEN_ONI_AEGIS_FBX_URL = `${MODEL_BASE}/Molten_Oni_Aegis/Meshy_AI_Molten_Oni_Aegis_20261114_texture_fbx/Meshy_AI_Molten_Oni_Aegis_20261114_texture.fbx`;
-const MOLTEN_ONI_AEGIS_TEX_URL = `${MODEL_BASE}/Molten_Oni_Aegis/Meshy_AI_Molten_Oni_Aegis_20261114_texture_fbx/Meshy_AI_Molten_Oni_Aegis_20261114_texture.png`;
+
+/**
+ * Builds a compact 3-part forged Iron Buckler (`THREE.Group`) for regular `shield_gladiator` mobs
+ * so `Molten_Oni_Aegis` remains exclusively reserved for `semiBossBloodforge`.
+ */
+export function createProceduralIronBucklerGroup(): THREE.Group {
+  const buckler = new THREE.Group();
+  buckler.name = 'IronBucklerGroup';
+
+  const forgedIronMat = new THREE.MeshStandardMaterial({
+    color: 0x5c6470,
+    roughness: 0.36,
+    metalness: 0.78,
+    envMapIntensity: 0.35,
+  });
+  const tarnishedBronzeMat = new THREE.MeshStandardMaterial({
+    color: 0x9b7644,
+    roughness: 0.42,
+    metalness: 0.72,
+    envMapIntensity: 0.35,
+  });
+  const bossCoreMat = new THREE.MeshStandardMaterial({
+    color: 0x7d8592,
+    roughness: 0.28,
+    metalness: 0.85,
+    envMapIntensity: 0.4,
+  });
+
+  // 1. Main beveled circular iron shield plate
+  const plateGeo = new THREE.CylinderGeometry(0.42, 0.46, 0.06, 16);
+  plateGeo.rotateX(Math.PI * 0.5);
+  const plateMesh = new THREE.Mesh(plateGeo, forgedIronMat);
+  plateMesh.frustumCulled = false;
+  buckler.add(plateMesh);
+
+  // 2. Tarnished bronze reinforced outer rim
+  const rimGeo = new THREE.TorusGeometry(0.44, 0.042, 8, 18);
+  const rimMesh = new THREE.Mesh(rimGeo, tarnishedBronzeMat);
+  rimMesh.position.z = 0.015;
+  rimMesh.frustumCulled = false;
+  buckler.add(rimMesh);
+
+  // 3. Raised central iron boss dome + cross brace
+  const domeGeo = new THREE.SphereGeometry(0.14, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.5);
+  domeGeo.rotateX(Math.PI * 0.5);
+  const domeMesh = new THREE.Mesh(domeGeo, bossCoreMat);
+  domeMesh.position.z = 0.025;
+  domeMesh.frustumCulled = false;
+  buckler.add(domeMesh);
+
+  return buckler;
+}
 
 /**
  * Curated Phase 3 Act 1 regular mob roster with distinct rigged/textured enemies and 1:1 UV maps.
@@ -143,7 +192,8 @@ export const ENEMY_MODEL_SLOTS: Record<
     textureFbxUrl: `${MODEL_BASE}/Ironmaw_Gladiator/Meshy_AI_Ironmaw_Gladiator_20261111_texture_fbx/Meshy_AI_Ironmaw_Gladiator_20261111_texture.fbx`,
     diffuseUrl: `${MODEL_BASE}/Ironmaw_Gladiator/Meshy_AI_Ironmaw_Gladiator_20261111_texture_fbx/Meshy_AI_Ironmaw_Gladiator_20261111_texture.png`,
     weaponKind: 'minotaur_axe',
-    hasLeftShield: true,
+    hasLeftShield: false,
+    leftBucklerKind: 'iron_buckler',
     animUrls: {
       idle: `${ANIM_BASE}/Pro Melee Axe Pack/standing block idle.fbx`,
       chase: `${ANIM_BASE}/Pro Melee Axe Pack/standing walk forward.fbx`,
@@ -598,7 +648,7 @@ export class Enemy3DRenderer {
   private frameBudgetWindowMs = 0;
   private rendersInCurrentWindow = 0;
   private sharedWeaponTemplates: Partial<
-    Record<'minotaur_axe' | 'trident_axe' | 'crescent_reaver' | 'molten_aegis', Promise<THREE.Group | null>>
+    Record<'minotaur_axe' | 'trident_axe' | 'crescent_reaver', Promise<THREE.Group | null>>
   > = {};
 
   constructor(size = 256) {
@@ -638,7 +688,7 @@ export class Enemy3DRenderer {
   }
 
   private getSharedWeaponTemplate(
-    kind: 'minotaur_axe' | 'trident_axe' | 'crescent_reaver' | 'molten_aegis'
+    kind: 'minotaur_axe' | 'trident_axe' | 'crescent_reaver'
   ): Promise<THREE.Group | null> {
     if (this.sharedWeaponTemplates[kind]) {
       return this.sharedWeaponTemplates[kind]!;
@@ -649,15 +699,11 @@ export class Enemy3DRenderer {
         ? MINOTAUR_AXE_FBX_URL
         : kind === 'crescent_reaver'
           ? CRESCENT_REAVER_FBX_URL
-          : kind === 'molten_aegis'
-            ? MOLTEN_ONI_AEGIS_FBX_URL
-            : TRIDENT_AXE_FBX_URL;
+          : TRIDENT_AXE_FBX_URL;
     const texUrl =
       kind === 'crescent_reaver'
         ? CRESCENT_REAVER_TEX_URL
-        : kind === 'molten_aegis'
-          ? MOLTEN_ONI_AEGIS_TEX_URL
-          : TRIDENT_AXE_TEX_URL;
+        : TRIDENT_AXE_TEX_URL;
     const promise = loadFbxCached(fbxUrl)
       .then(
         (group) =>
@@ -694,7 +740,8 @@ export class Enemy3DRenderer {
   }
 
   private attachWeaponToRig(baseGroup: THREE.Group, slot: EnemyModelSlot): void {
-    if (slot.weaponKind === 'none' && !slot.hasLeftShield) return;
+    const wantsBuckler = slot.leftBucklerKind === 'iron_buckler';
+    if (slot.weaponKind === 'none' && !wantsBuckler) return;
     baseGroup.updateMatrixWorld(true);
 
     const findBone = (names: string[]): THREE.Object3D | null => {
@@ -755,7 +802,7 @@ export class Enemy3DRenderer {
       }
     }
 
-    if (slot.hasLeftShield) {
+    if (wantsBuckler) {
       const leftArmBone = findBone([
         'mixamorigLeftForeArm',
         'LeftForeArm',
@@ -767,25 +814,22 @@ export class Enemy3DRenderer {
         leftArmBone.getWorldScale(armScaleVec);
         const armScale = Math.max(1e-5, armScaleVec.x);
 
-        this.getSharedWeaponTemplate('molten_aegis').then((shieldTemplate) => {
-          if (!shieldTemplate) return;
-          const clonedShield = shieldTemplate.clone(true);
-          const shBox = new THREE.Box3().setFromObject(clonedShield);
-          const shSize = new THREE.Vector3();
-          shBox.getSize(shSize);
-          const maxDim = Math.max(0.001, shSize.x, shSize.y, shSize.z);
-          const desiredShieldLen = 0.72 * slot.scaleMultiplier;
-          const localShieldScale = desiredShieldLen / (maxDim * armScale);
+        const bucklerGroup = createProceduralIronBucklerGroup();
+        const shBox = new THREE.Box3().setFromObject(bucklerGroup);
+        const shSize = new THREE.Vector3();
+        shBox.getSize(shSize);
+        const maxDim = Math.max(0.001, shSize.x, shSize.y, shSize.z);
+        const desiredBucklerLen = 0.48 * slot.scaleMultiplier;
+        const localShieldScale = desiredBucklerLen / (maxDim * armScale);
 
-          const shieldSocket = new THREE.Group();
-          clonedShield.scale.setScalar(localShieldScale);
-          clonedShield.rotation.set(0, Math.PI * 0.5, 0);
-          clonedShield.position.set(-0.08 * maxDim * localShieldScale, 0, 0.12 * maxDim * localShieldScale);
-          shieldSocket.add(clonedShield);
-          applyHadesCelShadingToHierarchy(shieldSocket);
-          leftArmBone.add(shieldSocket);
-          flushCache();
-        });
+        const shieldSocket = new THREE.Group();
+        bucklerGroup.scale.setScalar(localShieldScale);
+        bucklerGroup.rotation.set(0, Math.PI * 0.5, 0);
+        bucklerGroup.position.set(-0.06 * maxDim * localShieldScale, 0, 0.1 * maxDim * localShieldScale);
+        shieldSocket.add(bucklerGroup);
+        applyHadesCelShadingToHierarchy(shieldSocket);
+        leftArmBone.add(shieldSocket);
+        flushCache();
       }
     }
   }
@@ -796,7 +840,6 @@ export class Enemy3DRenderer {
     if (!slot || slot.ready) return;
 
     this.loadingSlots.add(slotKey);
-    const fbxLoader = new FBXLoader();
     const texLoader = new THREE.TextureLoader();
 
     const loadTex = (url: string): Promise<THREE.Texture | null> =>
@@ -819,21 +862,7 @@ export class Enemy3DRenderer {
 
     const loadRawFbx = (url: string, cacheableAnim = false): Promise<THREE.Group | null> => {
       if (!url) return Promise.resolve(null);
-      if (cacheableAnim && sharedAnimFbxCache.has(url)) {
-        return sharedAnimFbxCache.get(url)!;
-      }
-      const p = new Promise<THREE.Group | null>((resolve) => {
-        fbxLoader.load(
-          encodeURI(url),
-          (group) => resolve(group),
-          undefined,
-          () => resolve(null)
-        );
-      });
-      if (cacheableAnim) {
-        sharedAnimFbxCache.set(url, p);
-      }
-      return p;
+      return loadFbxCached(url, cacheableAnim).catch(() => null);
     };
 
     // STAGE 1: Load character rig, 1:1 texture FBX, diffuse PNG, and idle & chase clips first
