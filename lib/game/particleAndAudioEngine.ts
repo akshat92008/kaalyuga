@@ -175,8 +175,8 @@ export function emitParticleBurst(
       // Ballistic arterial blood droplets: strong downward gravity, crimson-obsidian palette
       pt.vy -= 45 + r2 * 65; // initial upward arc before falling to floorY
       pt.size = (2.8 + r3 * 3.2) * sizeMult;
-      pt.color = cfg.primaryColor ?? (r2 > 0.35 ? '#d9162a' : '#8a0a18');
-      pt.coreColor = cfg.secondaryColor ?? '#ff5e6c';
+      pt.color = cfg.primaryColor ?? (r2 > 0.35 ? '#c81928' : '#7a0c16');
+      pt.coreColor = cfg.secondaryColor ?? '#ff6b3d';
       pt.maxLife = 0.22 + r1 * 0.16;
       pt.life = pt.maxLife;
       pt.gravity = 420;
@@ -188,8 +188,8 @@ export function emitParticleBurst(
       // Buoyant thermal embers & Kurukshetra ash: upward thermal lift + curl turbulence
       pt.vy -= 25 + r2 * 40;
       pt.size = (1.8 + r3 * 2.4) * sizeMult;
-      pt.color = cfg.primaryColor ?? (r2 > 0.45 ? '#ff7b29' : '#ffd86b');
-      pt.coreColor = cfg.secondaryColor ?? '#fff6d6';
+      pt.color = cfg.primaryColor ?? (r2 > 0.55 ? '#ff5924' : r2 > 0.22 ? '#ffb833' : '#3a2a26');
+      pt.coreColor = cfg.secondaryColor ?? '#ffe6a3';
       pt.maxLife = 0.30 + r1 * 0.22;
       pt.life = pt.maxLife;
       pt.gravity = -68 - r2 * 45;
@@ -200,8 +200,8 @@ export function emitParticleBurst(
     } else if (cfg.archetype === 'magic_spell') {
       // Astral Prana / Kala-Sands / Savitri Lotus spell motes: tangential swirl + harmonic glow
       pt.size = (2.4 + r3 * 2.8) * sizeMult;
-      pt.color = cfg.primaryColor ?? '#3ee0a8';
-      pt.coreColor = cfg.secondaryColor ?? '#e0f2fe';
+      pt.color = cfg.primaryColor ?? '#ffb833';
+      pt.coreColor = cfg.secondaryColor ?? '#fff0c2';
       pt.maxLife = 0.26 + r1 * 0.18;
       pt.life = pt.maxLife;
       pt.gravity = -22;

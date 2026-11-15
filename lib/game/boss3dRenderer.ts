@@ -1492,6 +1492,29 @@ export class Boss3DRenderer {
       return true;
     }
 
+    // Fast-path: if hitFlash is active and the un-flashed norm frame is already cached, apply warm amber-gold emissive tint without skipping or re-rendering WebGL
+    if (params.isHitFlash) {
+      const normKey = `${baseKey.replace(/:hurt$/, ':norm')}:${actionSubStep}:norm`;
+      const baseCached = this.frameCache.get(normKey) || this.frameCache.get(`${baseKey}:${actionSubStep}:norm`);
+      if (baseCached && typeof document !== 'undefined') {
+        const flashCanvas = document.createElement('canvas');
+        flashCanvas.width = baseCached.width;
+        flashCanvas.height = baseCached.height;
+        const fCtx = flashCanvas.getContext('2d');
+        if (fCtx) {
+          fCtx.drawImage(baseCached, 0, 0);
+          fCtx.globalCompositeOperation = 'source-atop';
+          fCtx.fillStyle = 'rgba(255, 184, 71, 0.34)';
+          fCtx.fillRect(0, 0, flashCanvas.width, flashCanvas.height);
+          fCtx.globalCompositeOperation = 'source-over';
+          this.frameCache.set(frameKey, flashCanvas);
+          this.canvas = flashCanvas;
+          rig.mixer.update(dt);
+          return true;
+        }
+      }
+    }
+
     // Advance base FBX animation mixer
     rig.mixer.update(dt);
 
@@ -1556,8 +1579,8 @@ export class Boss3DRenderer {
 
     for (const mat of rig.materials) {
       if (params.isHitFlash) {
-        mat.emissive.setHex(0xfff0d0);
-        mat.emissiveIntensity = 0.52;
+        mat.emissive.setHex(0xff9d2e);
+        mat.emissiveIntensity = 0.34;
       } else if (params.isParrying) {
         mat.emissive.setHex(0xffd86b);
         mat.emissiveIntensity = 0.24;
@@ -1592,7 +1615,7 @@ export class Boss3DRenderer {
     this.renderer.render(this.scene, this.camera);
     const baked = bake2DSpriteFrameFromCanvas(this.renderer.domElement, frameKey, {
       role: 'boss',
-      outlineColor: params.isHitFlash ? '#ffffff' : SHARED_STUDIO_OUTLINE_COLOR,
+      outlineColor: SHARED_STUDIO_OUTLINE_COLOR,
       outlineThickness: 2.5,
       hitFlash: params.isHitFlash,
       cacheFrame: false,

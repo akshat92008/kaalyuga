@@ -28,19 +28,6 @@ export function shouldDamageProp(
   return true;
 }
 
-/**
- * Kurukshetra Sandstone Pillars in boss arenas can only be destroyed by explicit heavy/bull-charge impacts,
- * never by generic shockwaves, dodge bursts, decoy explosions, or light sword sweeps.
- */
-export function shouldDamageProp(
-  propType: string,
-  allowKurukshetraPillars = false
-): boolean {
-  if (propType === 'kurukshetra_pillar') {
-    return allowKurukshetraPillars;
-  }
-  return true;
-}
 
 export type CombatHitWeight =
   | 'light'

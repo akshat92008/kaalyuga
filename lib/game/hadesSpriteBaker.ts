@@ -239,7 +239,7 @@ export class Hades2DSpriteBaker {
     if (!outCtx) return;
 
     const baked = bake2DSpriteFrameFromCanvas(webglCanvas, options.frameKey, {
-      outlineColor: options.isHurt ? '#ffffff' : '#120806',
+      outlineColor: '#120806',
       outlineThickness: options.outlinePx ?? 2,
       hitFlash: Boolean(options.isHurt),
       cacheFrame: options.cacheFrame,
@@ -304,16 +304,16 @@ export const SILHOUETTE_ROLE_PRESETS: Record<SilhouetteRole, SilhouetteRoleSpec>
     rimRgba: 'rgba(255, 90, 31, 0.88)',
     outlineColor: SHARED_STUDIO_OUTLINE_COLOR,
     outlineThickness: 2.6,
-    scaleAuthorityMin: 1.35,
-    scaleAuthorityMax: 1.55,
+    scaleAuthorityMin: 1.75,
+    scaleAuthorityMax: 2.35,
     footContactRingHex: '#ff5a1f',
   },
 };
 
 export const BOSS_SCALE_AUTHORITY = {
-  semi_boss: 1.35,
-  dundubhi: 1.45,
-  vrikodara: 1.55,
+  semi_boss: 1.75,
+  dundubhi: 2.15,
+  vrikodara: 2.35,
 } as const;
 
 export function getSilhouetteSpecForRole(role: SilhouetteRole): SilhouetteRoleSpec {
@@ -492,7 +492,7 @@ function getSharedSilhouetteCanvas(w: number, h: number): {
  * Fast GPU-accelerated 2D Sprite Baker that converts a rendered 3D WebGL frame into a crisp
  * Hades-style 2D sprite with unified #120806 dark comic-ink silhouette outlines, role-tuned directional
  * rim highlight (#ffb347 Rudra, #94a3b8/#ef4444 Regular Enemies, #ff5a1f Bosses/Semi-Boss),
- * and optional 1-frame white hit-flash.
+ * and controlled warm amber-gold hit-flash sheen that preserves 3D armor detail.
  */
 export function bake2DSpriteFrameFromCanvas(
   sourceCanvas: HTMLCanvasElement,
@@ -523,9 +523,10 @@ export function bake2DSpriteFrameFromCanvas(
     options?.outlineThickness ?? rolePreset?.outlineThickness ?? SHARED_STUDIO_OUTLINE_THICKNESS;
   const outlineColor =
     options?.outlineColor ?? rolePreset?.outlineColor ?? SHARED_STUDIO_OUTLINE_COLOR;
-  const rimHighlightStyle =
-    options?.rimColor ?? rolePreset?.rimRgba ?? SILHOUETTE_ROLE_PRESETS.rudra.rimRgba;
-  const rimOffset = options?.role === 'boss' ? -1.75 : options?.role === 'rudra' ? -1.5 : -1.25;
+  const rimHighlightStyle = options?.hitFlash
+    ? 'rgba(255, 204, 92, 0.96)'
+    : options?.rimColor ?? rolePreset?.rimRgba ?? SILHOUETTE_ROLE_PRESETS.rudra.rimRgba;
+  const rimOffset = options?.role === 'boss' ? -1.85 : options?.role === 'rudra' ? -1.6 : -1.35;
 
   // 1. Draw crisp 2D silhouette outline using GPU-composited directional offsets on reused scratch canvas
   const { canvas: silhouetteCanvas, ctx: sCtx } = getSharedSilhouetteCanvas(w, h);
@@ -541,6 +542,10 @@ export function bake2DSpriteFrameFromCanvas(
       [thickness, 0],
       [0, -thickness],
       [0, thickness],
+      [-thickness * 0.72, -thickness * 0.72],
+      [thickness * 0.72, -thickness * 0.72],
+      [-thickness * 0.72, thickness * 0.72],
+      [thickness * 0.72, thickness * 0.72],
     ];
     for (let i = 0; i < offsets.length; i++) {
       ctx.drawImage(silhouetteCanvas, offsets[i][0], offsets[i][1], w, h);
@@ -551,16 +556,19 @@ export function bake2DSpriteFrameFromCanvas(
     sCtx.fillStyle = rimHighlightStyle;
     sCtx.fillRect(0, 0, w, h);
     ctx.drawImage(silhouetteCanvas, rimOffset, rimOffset, w, h);
+    if (options?.hitFlash) {
+      ctx.drawImage(silhouetteCanvas, -rimOffset * 0.75, rimOffset * 0.75, w, h);
+    }
   }
 
   // 2. Draw crisp character sprite over the dark ink outline & directional rim
   ctx.globalCompositeOperation = 'source-over';
   ctx.drawImage(sourceCanvas, 0, 0, w, h);
 
-  // 3. Apply Hades white hit-flash when struck
+  // 3. Apply controlled warm amber-gold emissive sheen when struck (never opaque #FFFFFF chalk)
   if (options?.hitFlash) {
     ctx.globalCompositeOperation = 'source-atop';
-    ctx.fillStyle = 'rgba(255, 248, 225, 0.82)';
+    ctx.fillStyle = 'rgba(255, 184, 71, 0.34)';
     ctx.fillRect(0, 0, w, h);
     ctx.globalCompositeOperation = 'source-over';
   }

@@ -3,7 +3,7 @@ import type {NextConfig} from 'next';
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   eslint: {
-    ignoreDuringBuilds: true,
+    ignoreDuringBuilds: false,
   },
   typescript: {
     ignoreBuildErrors: false,
@@ -37,6 +37,7 @@ const nextConfig: NextConfig = {
       'vfx',
       'models',
       'models_v2',
+      'models_lite',
       'animations',
       'audio',
       'images',

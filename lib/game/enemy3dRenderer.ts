@@ -1082,7 +1082,7 @@ export class Enemy3DRenderer {
         if (fCtx) {
           fCtx.drawImage(baseCached, 0, 0);
           fCtx.globalCompositeOperation = 'source-atop';
-          fCtx.fillStyle = 'rgba(255, 248, 225, 0.82)';
+          fCtx.fillStyle = 'rgba(255, 184, 71, 0.34)';
           fCtx.fillRect(0, 0, flashCanvas.width, flashCanvas.height);
           fCtx.globalCompositeOperation = 'source-over';
           if (this.atlasFrameCache.size > 840) {
@@ -1138,7 +1138,7 @@ export class Enemy3DRenderer {
     this.renderer.clear();
     this.renderer.render(this.scene, this.camera);
 
-    const outlineHex = hitFlash ? '#ffffff' : SHARED_STUDIO_OUTLINE_COLOR;
+    const outlineHex = SHARED_STUDIO_OUTLINE_COLOR;
     const silhouetteRole =
       isElite || slot.rimColor === 0xef4444 ? 'regular_enemy_crimson' : 'regular_enemy';
 

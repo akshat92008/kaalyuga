@@ -1902,7 +1902,7 @@ export default function KaliyugaArena() {
       sim.worldW = worldW;
       sim.worldH = worldH;
       sim.chamberIndex = clampedIdx;
-      sim.chamberBannerTimer = 4.6;
+      sim.chamberBannerTimer = 2.5;
       sim.chamberClearTimer = 0;
       sim.bossPhaseBanner = null;
       sim.cameraZoom = BASE_CAMERA_ZOOM;
@@ -2210,13 +2210,16 @@ export default function KaliyugaArena() {
       // Stage B (Step 10): Pre-bake core sprite atlases at chamber load so first swing hits zero runtime baking hitches
       rudra3dRef.current?.prewarmCoreAtlas();
       if (clampedIdx === 3 || clampedIdx === 4 || hasSemiBossInChamber) {
+        if (!boss3dRef.current) {
+          boss3dRef.current = new Boss3DRenderer(224);
+        }
         const bossKind =
           clampedIdx === 3
             ? 'dundubhi'
             : clampedIdx === 4
               ? 'vrikodara'
               : 'semi_boss';
-        boss3dRef.current?.prewarmBossAtlas(bossKind);
+        boss3dRef.current.prewarmBossAtlas(bossKind);
       }
       enemy3dRef.current?.prewarmChamberSlots(
         sim.enemies
@@ -4550,29 +4553,20 @@ export default function KaliyugaArena() {
           e.x + Math.cos(heavyHitRes.spray.sprayAngleRad) * 8,
           e.y - 22,
           heavyHitRes.spray.sparkCount,
-          p.stance === 'pillar' ? '#38bdf8' : heavyHitRes.spray.sparkColor,
+          '#ffb833',
           heavyHitRes.spray.speed * 0.85,
           4.2,
           120
         );
-        sim.lightningArcs.push({
-          x1: e.x + (Math.random() - 0.5) * 95,
-          y1: e.y - 490,
-          x2: e.x,
-          y2: e.y - 16,
-          life: 0.34,
-          maxLife: 0.34,
-          color: p.stance === 'pillar' ? '#38bdf8' : '#a855f7',
-        });
-        sim.lightningArcs.push({
-          x1: p.x,
-          y1: p.y - 34,
-          x2: e.x,
-          y2: e.y - 28,
-          life: 0.28,
-          maxLife: 0.28,
-          color: '#ff2a3c',
-        });
+        spawnParticles(
+          e.x + Math.cos(heavyHitRes.spray.sprayAngleRad) * 6,
+          e.y - 18,
+          6,
+          '#3b2a26',
+          heavyHitRes.spray.speed * 0.65,
+          3.4,
+          140
+        );
         spawnFloatingText(
           e.x,
           e.y - 58,
@@ -4620,25 +4614,23 @@ export default function KaliyugaArena() {
       sim.comboResetTimer = 4.2;
       sim.score += 180 * Math.max(1, orbsUsed);
     } else {
-      const strikeX = p.x + Math.cos(p.slashAngle) * 95;
-      const strikeY = p.y + Math.sin(p.slashAngle) * 65;
-      sim.lightningArcs.push({
-        x1: strikeX + (Math.random() - 0.5) * 70,
-        y1: strikeY - 440,
-        x2: strikeX,
-        y2: strikeY,
-        life: 0.28,
-        maxLife: 0.28,
-        color: '#a855f7',
-      });
       spawnParticles(
         p.x + p.facing * 48,
         p.y,
-        22,
-        '#ff2a3c',
+        18,
+        '#e63926',
         165,
-        4.4,
+        4.2,
         130
+      );
+      spawnParticles(
+        p.x + p.facing * 42,
+        p.y - 8,
+        10,
+        '#ffb833',
+        135,
+        3.6,
+        110
       );
     }
   }, [addStylePoints, damagePropsNearPoint, gainAstraEnergy, recordQuestEvent, spawnAfterimage, spawnFlipbookVfx, spawnFloatingText, spawnParticles, spawnShockwave]);
@@ -5052,11 +5044,9 @@ export default function KaliyugaArena() {
           hitRes.spray.sparkCount,
           activeFinisherSpec
             ? activeFinisherSpec.accentColor
-            : isRiposteStrike
-            ? '#ffd86b'
-            : isDashStrike
-            ? '#38bdf8'
-            : hitRes.spray.sparkColor,
+            : isRiposteStrike || isDashStrike
+            ? '#ffb833'
+            : '#ff9d2e',
           hitRes.spray.speed,
           3.6,
           140
@@ -5065,7 +5055,7 @@ export default function KaliyugaArena() {
           e.x + Math.cos(hitRes.spray.sprayAngleRad) * 12,
           e.y - 18,
           hitRes.spray.bloodCount,
-          hitRes.spray.bloodColor,
+          '#c81928',
           hitRes.spray.speed * 0.85,
           3.2,
           190
@@ -7275,9 +7265,10 @@ export default function KaliyugaArena() {
             const triggerDist =
               e.type === 'ashen_oracle' ? 520 : e.isBoss ? 210 : e.type === 'charnel_ghoul' ? 125 : 135;
 
-            // Strict Hades Encounter Pacing: Cap simultaneous attackers to < 2 melee (max 1) + 1 ranged + Boss
+            // Strict Hades Encounter Pacing: Cap simultaneous attackers to < 2 melee (max 1) + 1 ranged + Boss/Semi-Boss
             const isRangedEnemy = e.type === 'ashen_oracle';
-            const withinRoleCap = e.isBoss
+            const isBossOrSemiBoss = e.isBoss || e.type === 'semi_boss_bloodforge';
+            const withinRoleCap = isBossOrSemiBoss
               ? true
               : isRangedEnemy
               ? activeRangedAttackers < 1
@@ -7285,9 +7276,9 @@ export default function KaliyugaArena() {
             if (
               e.aiTimer <= 0 &&
               dist <= triggerDist &&
-              (e.isBoss || (attackTokenHolders.has(String(e.id)) && withinRoleCap))
+              (isBossOrSemiBoss || (attackTokenHolders.has(String(e.id)) && withinRoleCap))
             ) {
-              if (!e.isBoss) {
+              if (!isBossOrSemiBoss) {
                 if (isRangedEnemy) activeRangedAttackers++;
                 else activeMeleeAttackers++;
               }
@@ -7301,7 +7292,49 @@ export default function KaliyugaArena() {
               e.aimAngle = predictedLead.aimAngle;
               e.facing = targetX - e.x >= 0 ? 1 : -1;
 
-              if (!e.isBoss) {
+              if (e.type === 'semi_boss_bloodforge') {
+                // Dedicated Bloodforge Warden (Semi-Boss) Sword & Shield Signature Moveset (Emberfang + Molten Oni Aegis)
+                if (e.attackPattern === 0) {
+                  e.activeBossMoveId = 'emberfang_triple_slash';
+                  e.signatureMoveTitle = 'EMBERFANG TRIPLE SLASH';
+                  e.signatureCounterplayHint = 'PARRY OR DASH BEHIND';
+                  e.signatureCounterplayKind = 'parry_gold';
+                  e.attackKind = 'cone';
+                  e.windupDuration = 0.52;
+                  e.aiTimer = 0.52;
+                  e.telegraphRadius = 152;
+                  e.comboHitsRemaining = 2;
+                } else if (e.attackPattern === 1) {
+                  e.activeBossMoveId = 'oni_aegis_shield_charge';
+                  e.signatureMoveTitle = 'MOLTEN AEGIS SHIELD CHARGE';
+                  e.signatureCounterplayHint = 'SIDESTEP CHARGE CORRIDOR';
+                  e.signatureCounterplayKind = 'dodge_crimson';
+                  e.attackKind = 'corridor';
+                  e.windupDuration = 0.58;
+                  e.aiTimer = 0.58;
+                  e.telegraphRadius = 215;
+                  e.corridorEndX = Math.max(
+                    minX,
+                    Math.min(maxX, e.x + Math.cos(e.aimAngle) * 215)
+                  );
+                  e.corridorEndY = Math.max(
+                    minY,
+                    Math.min(maxY, e.y + Math.sin(e.aimAngle) * 215)
+                  );
+                  e.comboHitsRemaining = 1;
+                } else {
+                  e.activeBossMoveId = 'bloodforge_anvil_cleave';
+                  e.signatureMoveTitle = 'BLOODFORGE ANVIL CLEAVE';
+                  e.signatureCounterplayHint = 'PILLAR VAULT OR DASH OUT';
+                  e.signatureCounterplayKind = 'pillar_stance_vault';
+                  e.attackKind = 'shockwave';
+                  e.windupDuration = 0.64;
+                  e.aiTimer = 0.64;
+                  e.telegraphRadius = 158;
+                  e.comboHitsRemaining = 1;
+                }
+                soundEngine.playTelegraph();
+              } else if (!e.isBoss) {
                 // Step 22: Sharpen enemy roles & telegraphs across the 3 Act I archetypes!
                 const archSpec = computeAct1ArchetypeAttackSpec({
                   enemyType: e.type,
@@ -7336,7 +7369,7 @@ export default function KaliyugaArena() {
                   e.yantraRadius = archSpec.yantraRadiusPx;
                   e.comboHitsRemaining = 1;
                 } else {
-                  // Ironmaw Gladiator / Bloodmaw Brute / Semi-Boss: Heavy overhead slam (550ms windup) vulnerable to Dash-behind backstab
+                  // Ironmaw Gladiator / Bloodmaw Brute: Heavy overhead slam (550ms windup) vulnerable to Dash-behind backstab
                   e.attackKind = 'cone';
                   e.telegraphRadius = archSpec.slamRangePx;
                   e.comboHitsRemaining = 1;
@@ -7471,8 +7504,8 @@ export default function KaliyugaArena() {
                 const yX = e.yantraTargetX ?? targetX;
                 const yY = e.yantraTargetY ?? targetY;
                 const yR = e.yantraRadius ?? 92;
-                spawnShockwave(yX, yY, yR, '#e040fb', 0.34);
-                spawnParticles(yX, yY - 12, 16, '#e040fb', 175, 4.0, 90);
+                spawnShockwave(yX, yY, yR, '#ff5924', 0.34);
+                spawnParticles(yX, yY - 12, 16, '#ffb833', 175, 4.0, 90);
                 if (Math.hypot(p.x - yX, p.y - yY) <= yR) {
                   yantraBurstHitPlayer = true;
                 }
@@ -7481,24 +7514,39 @@ export default function KaliyugaArena() {
                   e.vy = -(dy / dist) * 135;
                 }
               } else if (e.type === 'dundubhi' && (e.attackPattern === 1 || e.attackPattern === 4)) {
-                // Dundubhi beats his bronze war-drum chest and spawns ring of Sonic War-Drum Crescent Waves
+                // Dundubhi beats his bronze war-drum chest and projects grounded isometric Sonic War-Drum Resonance Rings (no floating orange dart rings!)
                 soundEngine.playDundubhiWarDrum();
-                const orbCount = e.phase >= 2 ? 12 : 8;
-                for (let k = 0; k < orbCount; k++) {
-                  const pr = sim.projectiles.find((item) => !item.active);
-                  if (pr) {
-                    const ang = (k / orbCount) * Math.PI * 2 + e.animTime;
-                    pr.active = true;
-                    pr.x = e.x + Math.cos(ang) * 44;
-                    pr.y = e.y - 24 + Math.sin(ang) * 32;
-                    pr.vx = Math.cos(ang) * 265;
-                    pr.vy = Math.sin(ang) * 215;
-                    pr.radius = 12.5;
-                    pr.damage = 34;
-                    pr.color = '#ffbe3b';
-                    pr.life = 3.2;
-                    pr.deflected = false;
-                  }
+                spawnFlipbookVfx(
+                  PHASE2_VFX_SHEETS.dundubhiShockwaveAndShatter4x2.url,
+                  e.x,
+                  e.y - 8,
+                  235,
+                  0.42,
+                  0,
+                  0.58,
+                  'screen',
+                  PHASE2_VFX_SHEETS.dundubhiShockwaveAndShatter4x2,
+                  DUNDUBHI_FLIPBOOK_ROWS.SONIC_BRONZE_RINGS
+                );
+                sim.sonicZones.push({
+                  id: ++sim.nextSonicZoneId,
+                  x: p.x,
+                  y: p.y,
+                  radius: e.phase >= 2 ? 114 : 96,
+                  timer: 1.35,
+                  maxTimer: 1.35,
+                  detonated: false,
+                });
+                if (e.phase >= 2) {
+                  sim.sonicZones.push({
+                    id: ++sim.nextSonicZoneId,
+                    x: Math.max(minX, Math.min(maxX, (e.x + p.x) * 0.5)),
+                    y: Math.max(minY, Math.min(maxY, (e.y + p.y) * 0.5)),
+                    radius: 104,
+                    timer: 1.65,
+                    maxTimer: 1.65,
+                    detonated: false,
+                  });
                 }
               } else if (e.type === 'vrikodara' && e.phase >= 2 && (e.attackPattern === 2 || e.attackPattern === 5)) {
                 // Vrikodara Phase 2/3 unleashes a 5-to-7-way Trident Fire-Lance Fan!
@@ -9253,13 +9301,14 @@ export default function KaliyugaArena() {
                 drawGrounded3DContactShadow(ctx, {
                   worldX: e.x,
                   worldY: e.y,
-                  baseRadius: Math.round(13.5 * scaleAuthority * growthMult),
+                  baseRadius: Math.round(15.5 * scaleAuthority * growthMult),
                   elevationY: bob,
                   lightSourceX: primaryLightX,
                   accentColor: '#ff5a1f',
                 });
 
-                const drawSize = Math.round(92 * scaleAuthority * growthMult);
+                // Boss Scale Authority: Semi-Boss ~1.75x Rudra (~238px), Dundubhi ~2.15x Rudra (~292px), Vrikodara ~2.35x Rudra (~320px)
+                const drawSize = Math.round(136 * scaleAuthority * growthMult);
                 const anchorX = -drawSize * 0.5;
                 const anchorY = -drawSize * 0.79;
 
@@ -9267,11 +9316,6 @@ export default function KaliyugaArena() {
                 ctx.translate(e.x, e.y);
                 ctx.scale(bossScaleX, bossScaleY);
                 ctx.drawImage(boss3d.canvas, anchorX, anchorY, drawSize, drawSize);
-                if (isFlash) {
-                  ctx.globalCompositeOperation = 'lighter';
-                  ctx.globalAlpha = 0.42;
-                  ctx.drawImage(boss3d.canvas, anchorX, anchorY, drawSize, drawSize);
-                }
                 ctx.restore();
                 drew3DBakedBoss = true;
               }
@@ -9294,7 +9338,9 @@ export default function KaliyugaArena() {
                   ? 1
                   : Math.floor(e.animTime * 4) % 4
                 : 0;
-              const bossTargetH = Math.round((e.type === 'vrikodara' ? 116 : 108) * growthMult);
+              const bossTargetH = Math.round(
+                (e.type === 'vrikodara' ? 168 : e.type === 'dundubhi' ? 154 : 134) * growthMult
+              );
               drawSpriteFrame(
                 ctx,
                 boss2DAsset,
@@ -9309,7 +9355,7 @@ export default function KaliyugaArena() {
                 bossScaleY,
                 isFlash,
                 bob,
-                (e.type === 'vrikodara' ? 21 : 19) * growthMult,
+                (e.type === 'vrikodara' ? 28 : 25) * growthMult,
                 'gold',
                 enemySkewX,
                 primaryLightX,
@@ -9326,7 +9372,7 @@ export default function KaliyugaArena() {
               drawGrounded3DContactShadow(ctx, {
                 worldX: e.x,
                 worldY: e.y,
-                baseRadius: Math.round(14 * scaleAuth * growthMult),
+                baseRadius: Math.round(15.5 * scaleAuth * growthMult),
                 elevationY: bob,
                 lightSourceX: primaryLightX,
                 accentColor: '#ff5a1f',
@@ -9334,22 +9380,22 @@ export default function KaliyugaArena() {
               ctx.save();
               ctx.translate(e.x, e.y);
               ctx.scale(e.facing * bossScaleX, bossScaleY);
-              const hPx = Math.round(92 * scaleAuth * growthMult);
+              const hPx = Math.round(98 * scaleAuth * growthMult);
               const bodyGrad = ctx.createLinearGradient(0, -hPx, 0, 0);
-              bodyGrad.addColorStop(0, isFlash ? '#fff3d1' : '#8b1e24');
-              bodyGrad.addColorStop(0.55, isFlash ? '#ffd89a' : '#3a1116');
+              bodyGrad.addColorStop(0, isFlash ? '#ffd86b' : '#8b1e24');
+              bodyGrad.addColorStop(0.55, isFlash ? '#c86428' : '#3a1116');
               bodyGrad.addColorStop(1, '#18080a');
               ctx.fillStyle = bodyGrad;
               ctx.strokeStyle = '#ff5a1f';
               ctx.lineWidth = 2.5;
               ctx.beginPath();
-              ctx.moveTo(-24, 0);
-              ctx.lineTo(-28, -hPx * 0.56);
-              ctx.lineTo(-16, -hPx * 0.86);
+              ctx.moveTo(-28, 0);
+              ctx.lineTo(-34, -hPx * 0.56);
+              ctx.lineTo(-20, -hPx * 0.86);
               ctx.lineTo(0, -hPx);
-              ctx.lineTo(18, -hPx * 0.86);
-              ctx.lineTo(28, -hPx * 0.54);
-              ctx.lineTo(24, 0);
+              ctx.lineTo(22, -hPx * 0.86);
+              ctx.lineTo(34, -hPx * 0.54);
+              ctx.lineTo(28, 0);
               ctx.closePath();
               ctx.fill();
               ctx.stroke();
@@ -9415,15 +9461,15 @@ export default function KaliyugaArena() {
                 ? Math.floor(e.animTime * 8.0) % 4
                 : Math.floor(e.animTime * 3.2) % 2;
 
-            // Scaled Hades-level stature (66-78px 2D / 92-108px 3D) so the arena chamber feels wide & monumental
+            // Scaled Hades-level stature (~1.35x larger: 90-105px 2D / 126-145px 3D) so silhouettes & weapon swings read effortlessly at 0.96 zoom
             const targetH =
               e.type === 'bloodmaw_brute'
-                ? 78
+                ? 105
                 : e.type === 'ironmaw_gladiator'
-                ? 72
+                ? 98
                 : e.type === 'ashen_oracle'
-                ? 66
-                : 66;
+                ? 90
+                : 90;
 
             // Fluent combat squash/stretch & lunge interpolation during windup/attack
             const windupCoil =
@@ -9476,7 +9522,7 @@ export default function KaliyugaArena() {
                 worldX: e.x + lungeOffsetX,
                 worldY: e.y + lungeOffsetY,
                 baseRadius:
-                  e.type === 'bloodmaw_brute' ? 14 : e.type === 'ironmaw_gladiator' ? 13 : 11,
+                  e.type === 'bloodmaw_brute' ? 18 : e.type === 'ironmaw_gladiator' ? 16 : 14,
                 elevationY: bob,
                 lightSourceX: primaryLightX,
                 accentColor:
@@ -9489,12 +9535,12 @@ export default function KaliyugaArena() {
 
               const drawSize =
                 e.type === 'bloodmaw_brute'
-                  ? 108
+                  ? 145
                   : e.type === 'ironmaw_gladiator'
-                  ? 100
+                  ? 136
                   : e.type === 'ashen_oracle'
-                  ? 92
-                  : 92;
+                  ? 126
+                  : 126;
               const anchorX = -drawSize * 0.5;
               const anchorY = -drawSize * 0.78;
               const activeEnemyCanvas = enemy3d.getActiveCanvas();
@@ -9506,11 +9552,6 @@ export default function KaliyugaArena() {
               );
               ctx.scale(animScaleX, animScaleY);
               ctx.drawImage(activeEnemyCanvas, anchorX, anchorY, drawSize, drawSize);
-              if (isFlash) {
-                ctx.globalCompositeOperation = 'lighter';
-                ctx.globalAlpha = 0.55;
-                ctx.drawImage(activeEnemyCanvas, anchorX, anchorY, drawSize, drawSize);
-              }
               ctx.restore();
             } else {
               drawSpriteFrame(
@@ -9621,10 +9662,10 @@ export default function KaliyugaArena() {
             ctx.restore();
           }
 
-          if (e.isWarden3D && e.aiState !== 'ko') {
+          if (e.isWarden3D && e.aiState !== 'ko' && e.type !== 'semi_boss_bloodforge') {
             const bw = 56;
             const bx = e.x - bw * 0.5;
-            const by = e.y - 60;
+            const by = e.y - 82;
             ctx.save();
             ctx.font = "bold 8px 'Cinzel', Georgia, serif";
             ctx.textAlign = 'center';
@@ -9644,18 +9685,15 @@ export default function KaliyugaArena() {
             ctx.restore();
           } else if (
             !e.isBoss &&
+            e.type !== 'semi_boss_bloodforge' &&
             e.aiState !== 'ko' &&
             (e.hp < e.maxHp || e.posture < e.maxPosture * 0.98)
           ) {
-            const bw = 24;
+            const bw = 28;
             const bx = e.x - bw * 0.5;
-          const by =
-            e.y -
-            (e.type === 'ironmaw_gladiator' ||
-            e.type === 'bloodmaw_brute' ||
-            e.type === 'semi_boss_bloodforge'
-              ? 46
-              : 38);
+            const by =
+              e.y -
+              (e.type === 'ironmaw_gladiator' || e.type === 'bloodmaw_brute' ? 66 : 56);
             ctx.fillStyle = 'rgba(0,0,0,0.65)';
             ctx.fillRect(bx, by, bw, 3.2);
             ctx.fillStyle = 'rgba(255, 232, 168, 0.80)';
@@ -9743,27 +9781,21 @@ export default function KaliyugaArena() {
             drawGrounded3DContactShadow(ctx, {
               worldX: p.x,
               worldY: p.y,
-              baseRadius: 14,
+              baseRadius: 18,
               elevationY: 0,
               lightSourceX: primaryLightX,
               accentColor: '#ffb347',
               isPlayer: true,
             });
 
-            const drawSize = 100;
+            // Rudra Scale Authority: ~1.36x larger (136px tall at 0.96 camera zoom)
+            const drawSize = 136;
             const anchorX = -drawSize * 0.5;
             const anchorY = -drawSize * 0.77;
 
             ctx.save();
             ctx.translate(p.x, p.y);
             ctx.drawImage(rudra3d.canvas, anchorX, anchorY, drawSize, drawSize);
-
-            if (p.hitFlashTimer > 0) {
-              ctx.globalCompositeOperation = 'screen';
-              ctx.globalAlpha = 0.42;
-              ctx.drawImage(rudra3d.canvas, anchorX, anchorY, drawSize, drawSize);
-            }
-
             ctx.restore();
           } else {
             drawSpriteFrame(
@@ -9773,14 +9805,14 @@ export default function KaliyugaArena() {
               1,
               p.x,
               p.y,
-              68,
-              68,
+              92,
+              92,
               p.facing,
               1,
               1,
               p.hitFlashTimer > 0 || p.action === 'dodge',
               walkBob,
-              16,
+              21,
               playerRim,
               0,
               primaryLightX
@@ -9801,16 +9833,16 @@ export default function KaliyugaArena() {
               p.finisherVariant === 'spin_360_cleave'
                 ? 0
                 : p.finisherVariant === 'impaling_lunge'
-                ? 36
-                : 24;
+                ? 42
+                : 28;
             const slashDrawX = p.x + Math.cos(p.slashAngle) * reachOffset;
-            const slashDrawY = p.y - 16 + Math.sin(p.slashAngle) * (reachOffset * 0.68);
+            const slashDrawY = p.y - 22 + Math.sin(p.slashAngle) * (reachOffset * 0.68);
             const baseSlashSize =
               p.action === 'execute' || p.action === 'heavy_unleash'
-                ? 154
+                ? 168
                 : p.finisherVariant
-                ? 142
-                : 116;
+                ? 154
+                : 128;
 
             drawAdditiveFlipbookCell(ctx, {
               sheetSpec: slashPlan.sheetSpec,
@@ -9822,7 +9854,7 @@ export default function KaliyugaArena() {
               height: baseSlashSize * slashPlan.scaleMultiplier,
               rotationRad: slashPlan.rotationRad,
               scaleY: p.finisherVariant === 'spin_360_cleave' ? 0.68 : 1,
-              alpha: Math.min(0.95, slashPlan.frameSync.alpha * p.slashArcAlpha),
+              alpha: Math.min(0.76, slashPlan.frameSync.alpha * p.slashArcAlpha),
             });
 
             if (slashPlan.secondaryRow !== null) {
@@ -9832,21 +9864,21 @@ export default function KaliyugaArena() {
                 row: slashPlan.secondaryRow,
                 x: slashDrawX + Math.cos(p.slashAngle) * 18,
                 y: slashDrawY + Math.sin(p.slashAngle) * 12,
-                width: baseSlashSize * 1.15,
-                height: baseSlashSize * 0.82,
+                width: baseSlashSize * 1.12,
+                height: baseSlashSize * 0.80,
                 rotationRad: slashPlan.rotationRad,
-                alpha: Math.min(0.88, slashPlan.frameSync.alpha * 0.85),
+                alpha: Math.min(0.62, slashPlan.frameSync.alpha * 0.65),
               });
             }
 
-            // Keep bespokeSlashArc as crisp accent layer during active frames
+            // Keep bespokeSlashArc as controlled 'screen' accent layer during active frames (never blows out to white)
             if (slashPlan.frameSync.phase === 'active') {
               const bespokeSlashAsset = getProcessedSpriteSync(GAME_ASSETS.bespokeSlashArc);
               if (bespokeSlashAsset) {
-                const arcSize = baseSlashSize * 0.92;
+                const arcSize = baseSlashSize * 0.90;
                 ctx.save();
-                ctx.globalCompositeOperation = 'lighter';
-                ctx.globalAlpha = Math.min(0.68, slashPlan.frameSync.alpha * 0.65);
+                ctx.globalCompositeOperation = 'screen';
+                ctx.globalAlpha = Math.min(0.46, slashPlan.frameSync.alpha * 0.45);
                 ctx.translate(slashDrawX, slashDrawY);
                 ctx.rotate(slashPlan.rotationRad);
                 ctx.drawImage(
@@ -9944,7 +9976,7 @@ export default function KaliyugaArena() {
           });
 
           if (rudra3d && rudra3d.isReady) {
-            const drawSize = 52;
+            const drawSize = 72;
             ctx.save();
             ctx.globalCompositeOperation = 'screen';
             ctx.globalAlpha = 0.68;
@@ -9958,18 +9990,18 @@ export default function KaliyugaArena() {
           ctx.font = '700 10px sans-serif';
           ctx.textAlign = 'center';
           ctx.fillStyle = '#ffd86b';
-          ctx.fillText('▼ RUDRA', p.x, p.y - 48 - p.elevationY - walkBob);
+          ctx.fillText('▼ RUDRA', p.x, p.y - 68 - p.elevationY - walkBob);
           ctx.restore();
         }
 
         if (p.hp < p.maxHp * 0.9) {
-          const markerY = p.y - 34 - p.elevationY - walkBob;
-          const barW = 24;
+          const markerY = p.y - 54 - p.elevationY - walkBob;
+          const barW = 28;
           const barX = p.x - barW * 0.5;
           ctx.save();
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.72)';
+          ctx.fillStyle = 'rgba(12, 8, 10, 0.82)';
           ctx.fillRect(barX - 1, markerY - 1, barW + 2, 4.0);
-          ctx.fillStyle = '#3ee0a8';
+          ctx.fillStyle = '#d92638';
           ctx.fillRect(barX, markerY, barW * Math.max(0, p.hp / p.maxHp), 2.2);
           ctx.restore();
         }
@@ -10036,7 +10068,7 @@ export default function KaliyugaArena() {
             height: drawSize,
             rotationRad: fx.angle || 0,
             scaleY: fx.scaleY || 1,
-            alpha: Math.max(0, Math.min(0.92, 0.92 * fadeOut)),
+            alpha: Math.max(0, Math.min(0.76, 0.76 * fadeOut)),
           });
           continue;
         }
@@ -10048,8 +10080,8 @@ export default function KaliyugaArena() {
         const drawH = drawSize;
         const drawW = (ff.sw / Math.max(1, ff.sh)) * drawH;
         ctx.save();
-        ctx.globalCompositeOperation = 'lighter';
-        const maxFxAlpha = 0.75;
+        ctx.globalCompositeOperation = 'screen';
+        const maxFxAlpha = 0.68;
         ctx.globalAlpha = Math.max(0, Math.min(maxFxAlpha, maxFxAlpha * fadeOut));
         ctx.translate(fx.x, fx.y);
         if (fx.scaleY !== 1) {
@@ -10173,15 +10205,15 @@ export default function KaliyugaArena() {
         }
       }
 
-      // 10. Top-Center Cinematic Chamber Inscription & Sanjaya Palimpsest Dialogue with Feathered Obsidian Ink-Wash Backing
+      // 10. Top-Center Cinematic Chamber Inscription & Sanjaya Palimpsest Dialogue with Feathered Obsidian Ink-Wash Backing (auto-fades after 2.5s, never collides with Boss HUD)
       if (sim.chamberBannerTimer > 0 && sim.state === 'playing') {
-        const bannerAlpha = Math.min(1, sim.chamberBannerTimer * 1.2);
+        const bannerAlpha = Math.min(1, sim.chamberBannerTimer / 0.65);
         ctx.save();
         ctx.globalAlpha = bannerAlpha;
         const hasBossHud =
           chamberSpec.isBossChamber ||
           sim.enemies.some((e) => (e.isBoss || e.type === 'semi_boss_bloodforge') && e.aiState !== 'ko');
-        const by = hasBossHud ? Math.max(146, ch * 0.17) : ch * 0.10;
+        const by = hasBossHud ? Math.max(162, ch * 0.20) : ch * 0.10;
 
         // Feathered dark obsidian ink-wash backing (no hard rectangle borders, 100% legible over bright arenas)
         ctx.save();
@@ -11103,87 +11135,87 @@ export default function KaliyugaArena() {
             </div>
           </div>
 
-          {/* Top-Center: Large, Prominent Sovereign Boss Bar (Dead-center across viewports) */}
+          {/* Top-Center: Sovereign Boss Bar (Centered across top-center in Title Screen Palette: Obsidian #0c0a0e, Antique Gold #d4a548, Blood Crimson #b81d2a, Warm Ivory #f5ebd6) */}
           {hud.boss && (
-            <div className="md:absolute md:left-1/2 md:-translate-x-1/2 md:top-3 z-30 pointer-events-none flex justify-center">
+            <div className="fixed top-3 left-1/2 -translate-x-1/2 z-30 pointer-events-none flex justify-center w-full max-w-[540px] px-3">
               <div
                 data-testid="boss-hud-panel"
-                className="pointer-events-auto bg-[#120d11]/95 border-2 border-[#b83240]/90 px-4 py-2 min-w-[260px] sm:min-w-[420px] max-w-[520px] shadow-[0_12px_32px_rgba(0,0,0,0.92)] shrink-0"
+                className="pointer-events-auto w-full bg-[#0c0a0e]/95 border-2 border-[#d4a548]/85 px-4 py-2 shadow-[0_14px_36px_rgba(0,0,0,0.95)]"
               >
-              <div className="flex items-center justify-between gap-2 mb-1.5">
-                <div className="font-display text-xs sm:text-base font-bold tracking-wider text-[#f7efe0] truncate">
-                  {hud.boss.name}
-                </div>
-                <div
-                  data-testid="boss-phase-badge"
-                  className="px-2 py-0.5 bg-[#331218] border border-[#b83240]/80 text-[10px] sm:text-xs font-mono-num font-bold text-[#ff8a94] uppercase shrink-0"
-                >
-                  {hud.boss.isSemiBoss ? 'WARDEN' : `PHASE ${hud.boss.phase}/3`}
-                </div>
-              </div>
-
-              <div className="relative w-full h-3.5 bg-[#261317] border border-[#59222b] overflow-hidden mb-1.5">
-                <div
-                  className="absolute inset-y-0 left-0 bg-[#ffe596]/85 transition-all duration-300"
-                  style={{
-                    width: `${Math.max(0, Math.min(100, (hud.boss.displayHp / hud.boss.maxHp) * 100))}%`,
-                  }}
-                />
-                <div
-                  className="relative h-full bg-gradient-to-r from-[#b82532] via-[#e03846] to-[#ff5e6c] transition-all duration-100"
-                  style={{
-                    width: `${Math.max(0, Math.min(100, (hud.boss.hp / hud.boss.maxHp) * 100))}%`,
-                  }}
-                />
-              </div>
-
-              <div className="flex items-center justify-between gap-3 text-[10px] sm:text-xs font-mono-num">
-                <div className="flex items-center gap-2 flex-1">
-                  <span className="text-[#c89d46] font-bold">POSTURE (STAGGER BAR)</span>
-                  <div className="flex-1 h-2 bg-[#241f16] border border-[#59482a]/60 overflow-hidden">
-                    <div
-                      className="h-full bg-[#f2c45a] transition-all duration-150"
-                      style={{
-                        width: `${Math.max(
-                          0,
-                          Math.min(100, (hud.boss.posture / hud.boss.maxPosture) * 100)
-                        )}%`,
-                      }}
-                    />
+                <div className="flex items-center justify-between gap-2 mb-1.5">
+                  <div className="font-display text-xs sm:text-base font-bold tracking-wider text-[#f5ebd6] truncate">
+                    {hud.boss.name}
+                  </div>
+                  <div
+                    data-testid="boss-phase-badge"
+                    className="px-2 py-0.5 bg-[#1f0d12] border border-[#d4a548]/70 text-[10px] sm:text-xs font-mono-num font-bold text-[#f5ebd6] uppercase shrink-0"
+                  >
+                    {hud.boss.isSemiBoss ? 'WARDEN' : `PHASE ${hud.boss.phase}/3`}
                   </div>
                 </div>
-                {hud.boss.type === 'dundubhi' && (
-                  <span data-testid="boss-armor-state" className="text-[#ffd86b] font-bold truncate">
-                    {(hud.boss.tuskLodgedTimer || 0) > 0
-                      ? 'TUSKS LODGED!'
-                      : hud.boss.armorCracked
-                      ? 'ARMOR CRACKED'
-                      : 'BRONZE SHELL'}
-                  </span>
-                )}
-                {hud.boss.isSemiBoss && (
-                  <span
-                    data-testid="boss-armor-state"
-                    className={`font-bold truncate ${hud.boss.guardBroken ? 'text-[#3ee0a8]' : 'text-[#ffd86b]'}`}
-                  >
-                    {hud.boss.guardBroken ? 'GUARD BROKEN!' : 'AEGIS SHIELDED'}
-                  </span>
-                )}
-              </div>
-              {hud.consumedAbility && (
-                <div
-                  data-testid="vrikodara-consumed-alert"
-                  className="mt-1.5 px-2.5 py-1 bg-[#3a0c12]/95 border border-[#ff5252] text-[10px] font-mono-num font-bold text-[#ffb4b4] uppercase flex items-center justify-between"
-                >
-                  <span>CONSUMED: [{hud.consumedAbility.toUpperCase()}] SEALED</span>
-                  <span>SMASH BELLY ({(hud.consumedTimer || 0).toFixed(1)}s)</span>
+
+                <div className="relative w-full h-3.5 bg-[#1a0d10] border border-[#d4a548]/55 overflow-hidden mb-1.5">
+                  <div
+                    className="absolute inset-y-0 left-0 bg-[#d4a548]/80 transition-all duration-300"
+                    style={{
+                      width: `${Math.max(0, Math.min(100, (hud.boss.displayHp / hud.boss.maxHp) * 100))}%`,
+                    }}
+                  />
+                  <div
+                    className="relative h-full bg-gradient-to-r from-[#7a111b] via-[#b81d2a] to-[#e03846] transition-all duration-100"
+                    style={{
+                      width: `${Math.max(0, Math.min(100, (hud.boss.hp / hud.boss.maxHp) * 100))}%`,
+                    }}
+                  />
                 </div>
-              )}
+
+                <div className="flex items-center justify-between gap-3 text-[10px] sm:text-xs font-mono-num">
+                  <div className="flex items-center gap-2 flex-1">
+                    <span className="text-[#d4a548] font-bold">POSTURE</span>
+                    <div className="flex-1 h-2 bg-[#1c1610] border border-[#d4a548]/45 overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-[#b8862d] to-[#f2c45a] transition-all duration-150"
+                        style={{
+                          width: `${Math.max(
+                            0,
+                            Math.min(100, (hud.boss.posture / hud.boss.maxPosture) * 100)
+                          )}%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                  {hud.boss.type === 'dundubhi' && (
+                    <span data-testid="boss-armor-state" className="text-[#d4a548] font-bold truncate">
+                      {(hud.boss.tuskLodgedTimer || 0) > 0
+                        ? 'TUSKS LODGED!'
+                        : hud.boss.armorCracked
+                        ? 'ARMOR CRACKED'
+                        : 'BRONZE SHELL'}
+                    </span>
+                  )}
+                  {hud.boss.isSemiBoss && (
+                    <span
+                      data-testid="boss-armor-state"
+                      className={`font-bold truncate ${hud.boss.guardBroken ? 'text-[#f5ebd6]' : 'text-[#d4a548]'}`}
+                    >
+                      {hud.boss.guardBroken ? 'GUARD BROKEN!' : 'AEGIS SHIELDED'}
+                    </span>
+                  )}
+                </div>
+                {hud.consumedAbility && (
+                  <div
+                    data-testid="vrikodara-consumed-alert"
+                    className="mt-1.5 px-2.5 py-1 bg-[#2b090e]/95 border border-[#b81d2a] text-[10px] font-mono-num font-bold text-[#f5ebd6] uppercase flex items-center justify-between"
+                  >
+                    <span>CONSUMED: [{hud.consumedAbility.toUpperCase()}] SEALED</span>
+                    <span>SMASH BELLY ({(hud.consumedTimer || 0).toFixed(1)}s)</span>
+                  </div>
+                )}
               </div>
             </div>
           )}
 
-          {/* Top-Right: Locked Vertical Slice Utility Bar (Vaitarani Shrine, Chambers, Pause) */}
+          {/* Top-Right: Locked Vertical Slice Utility Bar (Vaitarani Shrine, Chambers & Keybinds, Pause) */}
           <div className="pointer-events-auto flex items-center gap-1.5 relative shrink-0">
             <button
               type="button"
@@ -11193,7 +11225,7 @@ export default function KaliyugaArena() {
                 e.currentTarget.blur();
                 setShrineOpen(true);
               }}
-              className="px-3 py-1.5 bg-[#1b140b]/92 hover:bg-[#291e10] border border-[#f2c45a]/75 text-xs text-[#ffd86b] font-display font-bold tracking-wider uppercase cursor-pointer flex items-center gap-1.5"
+              className="px-3 py-1.5 bg-[#0c0a0e]/95 hover:bg-[#1c1610] border border-[#d4a548]/80 text-xs text-[#f5ebd6] font-display font-bold tracking-wider uppercase cursor-pointer flex items-center gap-1.5"
               title="Open Weaponsmith & Homa Fire Shrine Upgrades"
             >
               <span>SHRINE &amp; PARASHU</span>
@@ -11207,10 +11239,10 @@ export default function KaliyugaArena() {
                 e.currentTarget.blur();
                 setControlsOpen((prev) => !prev);
               }}
-              className="px-3 py-1.5 bg-[#0d0c10]/92 hover:bg-[#1b1922] border border-[#c89d46]/50 text-xs text-[#e5dac5] font-mono-num font-bold cursor-pointer"
-              title="Chambers & Quick Settings"
+              className="px-3 py-1.5 bg-[#0c0a0e]/95 hover:bg-[#1b1712] border border-[#d4a548]/60 text-xs text-[#f5ebd6] font-mono-num font-bold cursor-pointer"
+              title="Chambers, Controls & Quick Settings"
             >
-              CHAMBERS ▾
+              [?] CONTROLS ▾
             </button>
 
             <button
@@ -11224,16 +11256,16 @@ export default function KaliyugaArena() {
                 setGameState('paused');
                 setOutcomeMode('paused');
               }}
-              className="px-3 py-1.5 bg-[#0d0c10]/92 hover:bg-[#1b1922] border border-[#c89d46]/55 text-xs text-[#f2c45a] font-display font-bold uppercase cursor-pointer"
+              className="px-3 py-1.5 bg-[#0c0a0e]/95 hover:bg-[#1b1712] border border-[#d4a548]/65 text-xs text-[#d4a548] font-display font-bold uppercase cursor-pointer"
             >
               ❚❚ PAUSE
             </button>
 
             {controlsOpen && (
-              <div className="absolute right-0 top-10 w-72 bg-[#0e0d12]/98 border border-[#c89d46]/70 p-3 shadow-[0_16px_48px_rgba(0,0,0,0.95)] z-50 text-xs space-y-2.5">
-                <div className="flex items-center justify-between border-b border-[#c89d46]/25 pb-1.5">
-                  <span className="font-display font-bold text-[#f2c45a] uppercase text-xs tracking-wider">
-                    Chambers &amp; Controls
+              <div className="absolute right-0 top-10 w-80 bg-[#0c0a0e]/98 border border-[#d4a548]/80 p-3 shadow-[0_16px_48px_rgba(0,0,0,0.95)] z-50 text-xs space-y-2.5">
+                <div className="flex items-center justify-between border-b border-[#d4a548]/30 pb-1.5">
+                  <span className="font-display font-bold text-[#d4a548] uppercase text-xs tracking-wider">
+                    Chambers &amp; Combat Keybinds
                   </span>
                   <button
                     type="button"
@@ -11254,22 +11286,39 @@ export default function KaliyugaArena() {
                       }}
                       className={`py-1.5 px-2 text-xs font-mono-num border cursor-pointer ${
                         hud.chamberId === chSpec.id
-                          ? 'bg-[#d4a548] text-[#090807] border-[#f5dca0] font-bold'
-                          : 'bg-[#17151d] text-[#d6cab6] border-[#c89d46]/30 hover:border-[#c89d46]'
+                          ? 'bg-[#d4a548] text-[#0c0a0e] border-[#f5ebd6] font-bold'
+                          : 'bg-[#171318] text-[#f5ebd6] border-[#d4a548]/35 hover:border-[#d4a548]'
                       }`}
                     >
                       CH {chSpec.id} {chSpec.isBossChamber ? '★' : ''}
                     </button>
                   ))}
                 </div>
-                <div className="flex items-center justify-between gap-1.5 pt-1.5 border-t border-[#c89d46]/25">
+                <div className="border-t border-[#d4a548]/25 pt-2 space-y-1 text-[10px] font-mono-num text-[#f5ebd6]/90">
+                  <div className="text-[#d4a548] font-bold uppercase tracking-wider mb-1">
+                    Keyboard &amp; Mouse Controls
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-2 gap-y-1">
+                    <div><strong className="text-[#d4a548]">WASD:</strong> Move</div>
+                    <div><strong className="text-[#d4a548]">LMB / J:</strong> Light Combo</div>
+                    <div><strong className="text-[#d4a548]">RMB / K:</strong> Heavy Unleash</div>
+                    <div><strong className="text-[#d4a548]">SPACE:</strong> Agni-Step Dash</div>
+                    <div><strong className="text-[#d4a548]">SHIFT:</strong> Vajra Parry</div>
+                    <div><strong className="text-[#d4a548]">F / L:</strong> Execute / Cast</div>
+                    <div><strong className="text-[#d4a548]">Q / E / R:</strong> Invoke Astras</div>
+                    <div><strong className="text-[#d4a548]">H:</strong> Sip Kalasha</div>
+                    <div><strong className="text-[#d4a548]">1 / 2 / 3:</strong> Switch Stance</div>
+                    <div><strong className="text-[#d4a548]">ESC:</strong> Pause Menu</div>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-1.5 pt-1.5 border-t border-[#d4a548]/25">
                   <button
                     type="button"
                     onClick={() => {
                       setStoryOpen(true);
                       setControlsOpen(false);
                     }}
-                    className="flex-1 py-1.5 px-2 border border-[#c89d46]/40 text-xs font-mono-num text-[#ffd86b] bg-[#1a140b] cursor-pointer"
+                    className="flex-1 py-1.5 px-2 border border-[#d4a548]/45 text-xs font-mono-num text-[#d4a548] bg-[#16110b] cursor-pointer"
                   >
                     BESTIARY &amp; CODEX
                   </button>
@@ -11282,19 +11331,19 @@ export default function KaliyugaArena() {
                         return next;
                       });
                     }}
-                    className="py-1.5 px-2.5 border border-[#c89d46]/40 text-xs font-mono-num text-[#e5dac5] bg-[#141218] cursor-pointer"
+                    className="py-1.5 px-2.5 border border-[#d4a548]/45 text-xs font-mono-num text-[#f5ebd6] bg-[#141116] cursor-pointer"
                   >
                     {muted ? 'MUTE' : 'AUDIO'}
                   </button>
                   <button
                     type="button"
                     onClick={toggleFullscreen}
-                    className="py-1.5 px-2.5 border border-[#c89d46]/40 text-xs font-mono-num text-[#e5dac5] bg-[#141218] cursor-pointer"
+                    className="py-1.5 px-2.5 border border-[#d4a548]/45 text-xs font-mono-num text-[#f5ebd6] bg-[#141116] cursor-pointer"
                   >
                     FULL
                   </button>
                 </div>
-                <div className="flex items-center gap-1.5 pt-2 mt-2 border-t border-[#c89d46]/25">
+                <div className="flex items-center gap-1.5 pt-2 mt-2 border-t border-[#d4a548]/25">
                   <button
                     type="button"
                     data-testid="toggle-video-bg-btn"
@@ -11302,7 +11351,7 @@ export default function KaliyugaArena() {
                       simRef.current.videoBgEnabled = !simRef.current.videoBgEnabled;
                       setControlsOpen(false);
                     }}
-                    className="flex-1 py-1.5 px-2 border border-[#c89d46]/40 text-[10px] font-mono-num text-[#f5dca0] bg-[#141218] hover:border-[#ffd86b] cursor-pointer"
+                    className="flex-1 py-1.5 px-2 border border-[#d4a548]/45 text-[10px] font-mono-num text-[#f5ebd6] bg-[#141116] hover:border-[#d4a548] cursor-pointer"
                   >
                     {(hud.videoBgEnabled ?? true) ? 'HD VIDEO BG: ON' : 'HD VIDEO BG: OFF'}
                   </button>
@@ -11314,7 +11363,7 @@ export default function KaliyugaArena() {
                         simRef.current.lowEndMode = !simRef.current.lowEndMode;
                         setControlsOpen(false);
                       }}
-                      className="flex-1 py-1.5 px-2 border border-[#c89d46]/40 text-[10px] font-mono-num text-[#3ee0a8] bg-[#141218] hover:border-[#3ee0a8] cursor-pointer"
+                      className="flex-1 py-1.5 px-2 border border-[#d4a548]/45 text-[10px] font-mono-num text-[#d4a548] bg-[#141116] hover:border-[#f5ebd6] cursor-pointer"
                     >
                       {hud.lowEndMode ? 'PERF: LOW-SPEC 60FPS' : 'PERF: ULTRA HD'}
                     </button>
@@ -11327,13 +11376,13 @@ export default function KaliyugaArena() {
 
         {/* NARAYANASTRA CEASE-ATTACK TRIAL BANNER */}
         {gameState === 'playing' && sliceStage === 'combat_arena' && hud.narayanastraTrial.active && (
-          <div className="pointer-events-none self-center mb-1 px-4 py-2 bg-[#1a1106]/95 border-2 border-[#ffd86b] shadow-[0_0_28px_rgba(255,216,107,0.45)] text-center max-w-xl">
-            <div className="text-xs font-display font-bold tracking-wider text-[#ffd86b] uppercase">
+          <div className="pointer-events-none self-center mb-1 px-4 py-2 bg-[#0c0a0e]/95 border-2 border-[#d4a548] shadow-[0_0_28px_rgba(212,165,72,0.45)] text-center max-w-xl">
+            <div className="text-xs font-display font-bold tracking-wider text-[#d4a548] uppercase">
               NARAYANASTRA INVOKED BY {hud.narayanastraTrial.invokerName.toUpperCase()} — CEASE ATTACKING TO PASS!
             </div>
             <div className="text-[11px] font-mono-num text-[#f5ebd6] mt-0.5">
               Stand still &amp; sheathe weapon:{' '}
-              <strong className="text-[#3ee0a8]">
+              <strong className="text-[#d4a548]">
                 {hud.narayanastraTrial.calmTimerSec.toFixed(2)}s / {hud.narayanastraTrial.requiredCalmSec.toFixed(2)}s
               </strong>{' '}
               · Striking escalates damage!
@@ -11341,19 +11390,19 @@ export default function KaliyugaArena() {
           </div>
         )}
 
-        {/* BOTTOM PERIMETER: CONSOLIDATED 4-RESOURCE VITALS, SAVITRI LANTERN & 3-ASTRA COMBAT HOTBAR */}
+        {/* BOTTOM-LEFT HADES-STYLE COMPACT VITALS CREST (Matching Title Screen Palette: Obsidian #0c0a0e, Antique Gold #d4a548, Blood Crimson #b81d2a, Warm Ivory #f5ebd6) */}
         {gameState === 'playing' && sliceStage === 'combat_arena' && (
           <div
             data-testid="pc-combat-hotbar"
-            className="pointer-events-auto self-center mb-1 px-2.5 py-1.5 bg-[#0c0a0e]/95 border border-[#c89d46]/65 shadow-[0_10px_28px_rgba(0,0,0,0.92)] flex flex-wrap xl:flex-nowrap items-center justify-center gap-1.5 xl:gap-2 text-[10px] sm:text-[11px] font-mono-num text-[#dfd3be] whitespace-nowrap"
+            className="pointer-events-auto self-start mb-1 px-3 py-2 bg-[#0c0a0e]/95 border-2 border-[#d4a548]/80 shadow-[0_12px_32px_rgba(0,0,0,0.95)] flex flex-col gap-1.5 text-[11px] font-mono-num text-[#f5ebd6] max-w-[460px]"
           >
-            {/* Savitri's 3-State Corner Lantern + Health + Stamina + Astra Energy + Karma */}
+            {/* Row 1: Savitri's Lantern Crest + Crimson HP Bar + Bronze-Gold Stamina + Blazing Gold Astra */}
             {(() => {
               const lantern = getLanternLightState(storyFlags);
               return (
-                <div className="flex items-center gap-1.5 pr-2 border-r border-[#c89d46]/30">
+                <div className="flex flex-wrap items-center gap-2.5">
                   <div
-                    className="flex items-center gap-1 px-1.5 py-0.5 bg-[#141118] border border-[#c89d46]/35"
+                    className="flex items-center gap-1.5 px-1.5 py-0.5 bg-[#161219] border border-[#d4a548]/50"
                     title={`Savitri's Lantern: ${lantern.label} (${lantern.savitriVoiceTone})`}
                   >
                     <span
@@ -11363,33 +11412,33 @@ export default function KaliyugaArena() {
                         boxShadow: `0 0 8px ${lantern.flameColor}`,
                       }}
                     />
-                    <span className="text-[9px] font-bold text-[#f5dca0] hidden 2xl:inline">
-                      {lantern.label.toUpperCase()}
+                    <span className="font-display font-bold text-[10px] tracking-wider text-[#d4a548]">
+                      CH {hud.chamberId}/{CHAMBERS.length}
                     </span>
                   </div>
 
-                  {/* Health Bar */}
-                  <div className="flex items-center gap-1">
-                    <span className="font-display font-bold text-[#f7efe0]">HP</span>
-                    <div className="w-16 h-2 bg-[#18221e] border border-[#2f5244] relative overflow-hidden">
+                  {/* Hades Blood-Crimson / Amber-Ruby Health Bar */}
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-display font-bold text-[#d4a548] text-[10px]">HP</span>
+                    <div className="w-24 sm:w-28 h-2.5 bg-[#1c0c10] border border-[#d4a548]/65 relative overflow-hidden">
                       <div
-                        className="h-full bg-gradient-to-r from-[#229e74] via-[#35d49c] to-[#68f5c4]"
+                        className="h-full bg-gradient-to-r from-[#8c1622] via-[#b81d2a] to-[#e03846]"
                         style={{
                           width: `${Math.max(0, Math.min(100, (hud.playerHp / hud.playerMaxHp) * 100))}%`,
                         }}
                       />
                     </div>
-                    <span className="text-[#3ee0a8] font-bold">
+                    <span className="text-[#f5ebd6] font-bold text-[11px]">
                       {hud.playerHp}/{hud.playerMaxHp}
                     </span>
                   </div>
 
-                  {/* Stamina Bar (0-100) */}
-                  <div className="flex items-center gap-1" title="Stamina (Dodge & Sprint)">
-                    <span className="text-[9px] text-[#63f2ff] font-bold">STA</span>
-                    <div className="w-12 h-2 bg-[#101e26] border border-[#28536b] relative overflow-hidden">
+                  {/* Muted Bronze-Gold Stamina Bar */}
+                  <div className="flex items-center gap-1" title="Stamina & Dash Charges [SPACE]">
+                    <span className="text-[10px] text-[#d4a548] font-bold">STA</span>
+                    <div className="w-14 h-2 bg-[#1c160e] border border-[#d4a548]/55 relative overflow-hidden">
                       <div
-                        className="h-full bg-[#38bdf8]"
+                        className="h-full bg-gradient-to-r from-[#8f6824] via-[#c89d46] to-[#ebd18a]"
                         style={{
                           width: `${Math.max(0, Math.min(100, (hud.stamina / hud.maxStamina) * 100))}%`,
                         }}
@@ -11397,216 +11446,98 @@ export default function KaliyugaArena() {
                     </div>
                   </div>
 
-                  {/* Astra Energy Meter (0-100, Combat-Generated Only) */}
+                  {/* Blazing Gold Astra Energy Crest */}
                   <div
                     className="flex items-center gap-1"
-                    title="Astra Energy (Built by Light/Heavy Hits, Parries, Perfect Dodges & Executions)"
+                    title="Astra Energy (Built in combat)"
                   >
-                    <span className="text-[9px] text-[#ffd86b] font-bold">ASTRA</span>
-                    <div className="w-12 h-2 bg-[#241a0b] border border-[#8c6422] relative overflow-hidden">
+                    <span className="text-[10px] text-[#d4a548] font-bold">ASTRA</span>
+                    <div className="w-14 h-2 bg-[#211708] border border-[#d4a548]/70 relative overflow-hidden">
                       <div
-                        className="h-full bg-gradient-to-r from-[#d97706] via-[#f59e0b] to-[#fde68a]"
+                        className="h-full bg-gradient-to-r from-[#b87314] via-[#e6a832] to-[#fff0a8]"
                         style={{
                           width: `${Math.max(0, Math.min(100, (hud.astraEnergy / hud.maxAstraEnergy) * 100))}%`,
                         }}
                       />
                     </div>
-                    <span className="text-[#ffd86b] font-bold">{hud.astraEnergy}</span>
+                    <span className="text-[#d4a548] font-bold text-[10px]">{hud.astraEnergy}</span>
                   </div>
-
-                  <span className="text-[#f2c45a] font-bold">
-                    CH {hud.chamberId}/{CHAMBERS.length}
-                  </span>
-                  <span className="text-[#b8ab96] hidden sm:inline">· {hud.foesRemaining}F</span>
                 </div>
               );
             })()}
 
-            <button
-              type="button"
-              onClick={triggerLightAttack}
-              title="4-Hit Parashu Light Combo [LMB or J] (Dash-Strike mid-dash)"
-              className="flex items-center gap-1 hover:text-white cursor-pointer"
-            >
-              <span className="px-1 py-0.5 bg-[#261412] border border-[#ff6a33]/70 text-[#ffb84d] font-bold">
-                LMB
-              </span>
-              <span className="font-semibold">STRIKE</span>
-            </button>
-            <button
-              type="button"
-              onClick={triggerStanceHeavyUnleash}
-              title="Stance Heavy Unleash / Finisher [RMB or K]"
-              className="flex items-center gap-1 hover:text-white cursor-pointer"
-            >
-              <span
-                className={`px-1 py-0.5 border font-bold ${
-                  hud.focusOrbs > 0
-                    ? 'bg-[#2b1d0a] border-[#ffd86b] text-[#ffd86b]'
-                    : 'bg-[#17151c] border-[#594e36] text-[#8f836f]'
-                }`}
+            {/* Row 2: Compact Kalasha [H], Stance [1-3], & 3 Astra Icons [Q / E / R] (Zero 13-button tutorial clutter) */}
+            <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-[#d4a548]/25 text-[10px]">
+              <button
+                type="button"
+                data-testid="pc-skill-heal"
+                onClick={triggerGourdHeal}
+                className="flex items-center gap-1 px-1.5 py-0.5 bg-[#171114] border border-[#d4a548]/55 hover:border-[#f5ebd6] cursor-pointer"
+                title="Sip Kalasha Nectar [H]"
               >
-                RMB
-              </span>
-              <span className={hud.focusOrbs > 0 ? 'font-bold text-[#ffd86b]' : 'text-[#8f836f]'}>
-                HEAVY
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={triggerCloudStepDodge}
-              title="Agni-Step Dash [SPACE] (2 Charges · 160ms Dash / 130ms I-Frames)"
-              className="flex items-center gap-1 hover:text-white cursor-pointer"
-            >
-              <span className="px-1 py-0.5 bg-[#0d1f26] border border-[#38bdf8]/70 text-[#63f2ff] font-bold">
-                SPC
-              </span>
-              <span className="font-semibold">
-                DASH {hud.dashCharges}/{hud.maxDashCharges}
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={triggerRockSolidParry}
-              title="Kalaripayattu Vajra Parry & Riposte [SHIFT]"
-              className="flex items-center gap-1 hover:text-white cursor-pointer"
-            >
-              <span
-                className={`px-1 py-0.5 border font-bold ${
-                  hud.riposteWindowTimer > 0
-                    ? 'bg-[#33240a] border-[#ffd86b] text-[#ffd86b]'
-                    : hud.parryCd <= 0
-                    ? 'bg-[#1f190e] border-[#c89d46]/70 text-[#f2c45a]'
-                    : 'bg-[#141218] border-[#453d30] text-[#7a6f5d]'
-                }`}
-              >
-                SHIFT
-              </span>
-              <span className="font-semibold">PARRY</span>
-            </button>
+                <span className="text-[#d4a548] font-bold">[H]</span>
+                <span className={hud.gourdSips > 0 ? 'font-bold text-[#f5ebd6]' : 'text-[#7a6f5d]'}>
+                  KALASHA {hud.gourdSips}/{hud.maxGourdSips}
+                </span>
+              </button>
 
-            {/* [Q] AGNEYASTRA (Fire Invocation + Upasamhara Withdrawal) */}
-            <button
-              type="button"
-              onClick={() => triggerAstraInvocation('agneyastra')}
-              className="flex items-center gap-1 hover:text-white cursor-pointer"
-              title="Agneyastra (35 Astra Energy) — Press again while crater is active for Upasamhara Withdrawal (+10 Astra Energy)"
-            >
-              <span
-                className={`px-1 py-0.5 border font-bold ${
+              <button
+                type="button"
+                data-testid="hud-cycle-stance-btn"
+                onClick={() => triggerSwitchStance()}
+                className="flex items-center gap-1 px-1.5 py-0.5 bg-[#17130e] border border-[#d4a548]/55 hover:border-[#f5ebd6] cursor-pointer"
+                title="Cycle Combat Stance [1 / 2 / 3]"
+              >
+                <span className="text-[#d4a548] font-bold">[1-3]</span>
+                <span className="font-bold text-[#f5ebd6]">{STANCE_CONFIGS[hud.stance].sanskritName}</span>
+              </button>
+
+              {/* [Q] AGNEYASTRA */}
+              <button
+                type="button"
+                onClick={() => triggerAstraInvocation('agneyastra')}
+                className={`px-1.5 py-0.5 border font-bold cursor-pointer ${
                   hud.activeUpasamharaZones.includes('agneyastra')
-                    ? 'bg-[#3b150c] border-[#ffd86b] text-[#ffd86b] animate-pulse'
+                    ? 'bg-[#3b150c] border-[#f5ebd6] text-[#f5ebd6]'
                     : hud.astraEnergy >= 35 && hud.agneyastraCd <= 0
-                    ? 'bg-[#2b120c] border-[#ff5e36] text-[#ff8a66]'
-                    : 'bg-[#141218] border-[#453d30] text-[#7a6f5d]'
+                    ? 'bg-[#261012] border-[#b81d2a] text-[#f5ebd6]'
+                    : 'bg-[#141116] border-[#d4a548]/30 text-[#7a6f5d]'
                 }`}
+                title="Agneyastra [Q] (35 Astra)"
               >
-                Q
-              </span>
-              <span className="font-semibold text-[#ff8a66]">
-                {hud.activeUpasamharaZones.includes('agneyastra') ? 'WITHDRAW' : 'AGNI'}
-              </span>
-            </button>
+                [Q] {hud.activeUpasamharaZones.includes('agneyastra') ? 'WITHDRAW' : 'AGNI'}
+              </button>
 
-            {/* [E] VAYAVYASTRA (Wind Invocation + Upasamhara Withdrawal) */}
-            <button
-              type="button"
-              onClick={() => triggerAstraInvocation('vayavyastra')}
-              className="flex items-center gap-1 hover:text-white cursor-pointer"
-              title="Vayavyastra (30 Astra Energy) — Press again while wind shield is active for Upasamhara Withdrawal (+10 Astra Energy)"
-            >
-              <span
-                className={`px-1 py-0.5 border font-bold ${
+              {/* [E] VAYAVYASTRA */}
+              <button
+                type="button"
+                onClick={() => triggerAstraInvocation('vayavyastra')}
+                className={`px-1.5 py-0.5 border font-bold cursor-pointer ${
                   hud.activeUpasamharaZones.includes('vayavyastra')
-                    ? 'bg-[#0c2636] border-[#ffd86b] text-[#ffd86b] animate-pulse'
+                    ? 'bg-[#2b2010] border-[#f5ebd6] text-[#f5ebd6]'
                     : hud.astraEnergy >= 30 && hud.vayavyastraCd <= 0
-                    ? 'bg-[#0d1f29] border-[#38bdf8] text-[#63f2ff]'
-                    : 'bg-[#141218] border-[#453d30] text-[#7a6f5d]'
+                    ? 'bg-[#1f180e] border-[#d4a548] text-[#f5ebd6]'
+                    : 'bg-[#141116] border-[#d4a548]/30 text-[#7a6f5d]'
                 }`}
+                title="Vayavyastra [E] (30 Astra)"
               >
-                E
-              </span>
-              <span className="font-semibold text-[#63f2ff]">
-                {hud.activeUpasamharaZones.includes('vayavyastra') ? 'WITHDRAW' : 'VAYU'}
-              </span>
-            </button>
+                [E] {hud.activeUpasamharaZones.includes('vayavyastra') ? 'WITHDRAW' : 'VAYU'}
+              </button>
 
-            {/* [R] VAJRASTRA (Lightning Invocation) */}
-            <button
-              type="button"
-              onClick={() => triggerAstraInvocation('vajrastra')}
-              className="flex items-center gap-1 hover:text-white cursor-pointer"
-              title="Vajrastra (45 Astra Energy) — Shatters shields & chains +60% bonus damage on Soaked enemies"
-            >
-              <span
-                className={`px-1 py-0.5 border font-bold ${
+              {/* [R] VAJRASTRA */}
+              <button
+                type="button"
+                onClick={() => triggerAstraInvocation('vajrastra')}
+                className={`px-1.5 py-0.5 border font-bold cursor-pointer ${
                   hud.astraEnergy >= 45 && hud.vajrastraCd <= 0
-                    ? 'bg-[#2b210a] border-[#ffd86b] text-[#ffd86b]'
-                    : 'bg-[#141218] border-[#453d30] text-[#7a6f5d]'
+                    ? 'bg-[#291e0c] border-[#d4a548] text-[#d4a548]'
+                    : 'bg-[#141116] border-[#d4a548]/30 text-[#7a6f5d]'
                 }`}
+                title="Vajrastra [R] (45 Astra)"
               >
-                R
-              </span>
-              <span className="font-semibold text-[#ffd86b]">VAJRA</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                if (hud.hasBrokenTarget) triggerExecuteBrokenTarget();
-                else triggerImmobilizeSpell();
-              }}
-              title="Brutal Execute (Staggered Foe) / Blood-Shard Cast [F or L]"
-              className="flex items-center gap-1 hover:text-white cursor-pointer"
-            >
-              <span
-                className={`px-1 py-0.5 border font-bold ${
-                  hud.hasBrokenTarget
-                    ? 'bg-[#381117] border-[#ff4d3b] text-[#ff8a94]'
-                    : hud.immobilizeCd <= 0
-                    ? 'bg-[#21150d] border-[#ff8a36]/70 text-[#ffaa5c]'
-                    : 'bg-[#141218] border-[#453d30] text-[#7a6f5d]'
-                }`}
-              >
-                F
-              </span>
-              <span className="font-semibold">
-                {hud.hasBrokenTarget ? 'EXEC' : 'CAST'}
-              </span>
-            </button>
-            <button
-              type="button"
-              data-testid="pc-skill-heal"
-              onClick={triggerGourdHeal}
-              className="flex items-center gap-1 hover:text-white cursor-pointer"
-            >
-              <span
-                className={`px-1 py-0.5 border font-bold ${
-                  hud.gourdSips > 0
-                    ? 'bg-[#0c1f19] border-[#3ee0a8]/70 text-[#3ee0a8]'
-                    : 'bg-[#141218] border-[#453d30] text-[#7a6f5d]'
-                }`}
-              >
-                H
-              </span>
-              <span className={hud.gourdSips > 0 ? 'font-semibold text-[#3ee0a8]' : 'text-[#7a6f5d]'}>
-                KALASHA {hud.gourdSips}/{hud.maxGourdSips}
-              </span>
-            </button>
-            <button
-              type="button"
-              data-testid="hud-cycle-stance-btn"
-              onClick={() => triggerSwitchStance()}
-              className="flex items-center gap-1 hover:text-white cursor-pointer"
-            >
-              <span className="px-1 py-0.5 bg-[#1b1610] border border-[#c89d46]/60 text-[#f2c45a] font-bold">
-                1-3
-              </span>
-              <span className="font-semibold">{STANCE_CONFIGS[hud.stance].sanskritName}</span>
-            </button>
-            <span className="px-1.5 py-0.5 bg-[#1b140d] border border-[#c89d46]/55 text-[#f5dca0] uppercase font-bold">
-              PARASHU
-            </span>
+                [R] VAJRA
+              </button>
+            </div>
           </div>
         )}
       </div>

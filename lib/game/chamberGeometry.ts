@@ -533,6 +533,28 @@ export function renderIsometricChamberPlatform(
     renderProceduralArenaAtmosphere(ctx, worldW, worldH, chamberIndex, now);
   }
 
+  // 1.5. Subtle Radial Playable-Floor Focus Falloff:
+  // Keeps the central playable arena 100% untouched (rgba(0,0,0,0)) while softly toning down outer non-playable wall braziers/corners
+  // so static corner fires never out-shine Rudra or the Boss in the center.
+  ctx.save();
+  const focusCx = worldW * 0.5;
+  const focusCy = worldH * 0.58;
+  const focusGrad = ctx.createRadialGradient(
+    focusCx,
+    focusCy,
+    worldW * 0.28,
+    focusCx,
+    focusCy,
+    worldW * 0.64
+  );
+  focusGrad.addColorStop(0, 'rgba(10, 6, 8, 0)');
+  focusGrad.addColorStop(0.55, 'rgba(10, 6, 8, 0.08)');
+  focusGrad.addColorStop(0.82, 'rgba(10, 6, 8, 0.24)');
+  focusGrad.addColorStop(1, 'rgba(8, 4, 6, 0.42)');
+  ctx.fillStyle = focusGrad;
+  ctx.fillRect(0, 0, worldW, worldH);
+  ctx.restore();
+
   // 2. Surface decals, craters, and ambient details
   renderSurfaceDetailsCallback();
 
@@ -568,26 +590,30 @@ export function renderIsometricChamberPlatform(
       const gy = g.pos.y * worldH;
       const pulse = 0.85 + Math.sin(now * 0.005 + gIdx * 1.6) * 0.15;
 
-      // 4.1. Flush Recessed Isometric Floor Portal & Vedic Yantra Threshold (Embedded flat into stone floor, never floating in air!)
+      // 4.1. Flush Recessed Isometric Floor Portal & Vedic Yantra Threshold (Feathered blend into stone floor, never a hard black disc!)
       ctx.save();
       ctx.translate(gx, gy + 4);
       ctx.scale(1, 0.52);
 
-      // Outer carved obsidian & Chola-bronze floor ring
+      // Soft feathered stone-carved threshold shadow instead of hard opaque black circle
       const outerR = isChamberCleared ? 78 : 66;
-      ctx.fillStyle = 'rgba(12, 7, 6, 0.88)';
+      const baseFeather = ctx.createRadialGradient(0, 0, outerR * 0.15, 0, 0, outerR + 14);
+      baseFeather.addColorStop(0, 'rgba(18, 11, 9, 0.42)');
+      baseFeather.addColorStop(0.68, 'rgba(18, 11, 9, 0.18)');
+      baseFeather.addColorStop(1, 'rgba(18, 11, 9, 0)');
+      ctx.fillStyle = baseFeather;
       ctx.beginPath();
-      ctx.arc(0, 0, outerR + 8, 0, Math.PI * 2);
+      ctx.arc(0, 0, outerR + 14, 0, Math.PI * 2);
       ctx.fill();
 
-      ctx.strokeStyle = isChamberCleared ? g.accent : 'rgba(198, 146, 84, 0.55)';
-      ctx.lineWidth = isChamberCleared ? 3.5 : 2.2;
+      ctx.strokeStyle = isChamberCleared ? g.accent + 'cc' : 'rgba(198, 146, 84, 0.38)';
+      ctx.lineWidth = isChamberCleared ? 2.6 : 1.6;
       ctx.beginPath();
       ctx.arc(0, 0, outerR, 0, Math.PI * 2);
       ctx.stroke();
 
-      ctx.strokeStyle = isChamberCleared ? '#fff0c8' : 'rgba(160, 88, 54, 0.42)';
-      ctx.lineWidth = 1.6;
+      ctx.strokeStyle = isChamberCleared ? '#fff0c8aa' : 'rgba(160, 88, 54, 0.28)';
+      ctx.lineWidth = 1.2;
       ctx.beginPath();
       ctx.arc(0, 0, outerR * 0.74, 0, Math.PI * 2);
       ctx.stroke();

@@ -27,9 +27,9 @@ describe('Phase 3 — Wide-Camera (0.96) Silhouette Readability & 3D Character R
     assert.equal(bossSpec.rimHex, '#ff5a1f');
     assert.ok(bossSpec.outlineThickness >= 2.2);
 
-    assert.equal(BOSS_SCALE_AUTHORITY.semi_boss, 1.35);
-    assert.equal(BOSS_SCALE_AUTHORITY.dundubhi, 1.45);
-    assert.equal(BOSS_SCALE_AUTHORITY.vrikodara, 1.55);
+    assert.equal(BOSS_SCALE_AUTHORITY.semi_boss, 1.75);
+    assert.equal(BOSS_SCALE_AUTHORITY.dundubhi, 2.15);
+    assert.equal(BOSS_SCALE_AUTHORITY.vrikodara, 2.35);
     assert.ok(SILHOUETTE_ROLE_PRESETS.rudra.rimHex === '#ffb347');
   });
 

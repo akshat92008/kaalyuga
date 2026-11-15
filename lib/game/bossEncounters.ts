@@ -558,11 +558,30 @@ export function renderBossArenaHazards(
     }
   }
 
-  // 2. Render Dundubhi's Cymatic Sonic War-Drum Resonance Zones using kogf7y...png Row 0 (Concentric Bronze Sonic Rings)
+  // 2. Render Dundubhi's Cymatic Sonic War-Drum Resonance Zones using isometricTelegraphs2x2 outer boundary + kogf7y Row 0 expanding fill ring
   for (let i = 0; i < sonicZones.length; i++) {
     const z = sonicZones[i];
     if (z.detonated || z.timer <= 0) continue;
-    const prog = 1 - Math.max(0, z.timer / Math.max(0.01, z.maxTimer));
+    const prog = Math.max(0, Math.min(1, 1 - Math.max(0, z.timer / Math.max(0.01, z.maxTimer))));
+    const outerDiameter = z.radius * 2.1;
+
+    // Ground-projected outer isometric mandala boundary showing exact blast radius
+    drawAdditiveFlipbookCell(ctx, {
+      sheetUrl: teleSheet.url,
+      cols: teleSheet.cols,
+      rows: teleSheet.rows,
+      col: ISOMETRIC_TELEGRAPH_CELLS.BOSS_CIRCULAR_SLAM_MANDALA.col,
+      row: ISOMETRIC_TELEGRAPH_CELLS.BOSS_CIRCULAR_SLAM_MANDALA.row,
+      x: z.x,
+      y: z.y,
+      width: outerDiameter,
+      rotationRad: (timeSec * 0.9 + i * 0.5) % (Math.PI * 2),
+      scaleX: 1,
+      scaleY: 0.58,
+      alpha: 0.42 + prog * 0.34,
+    });
+
+    // Expanding inner concentric bronze sonic ring showing exact fill timing [0 -> 1]
     drawAdditiveFlipbookRowProgress(ctx, {
       sheetUrl: dundubhiSheet.url,
       cols: dundubhiSheet.cols,
@@ -571,10 +590,10 @@ export function renderBossArenaHazards(
       progress: prog,
       x: z.x,
       y: z.y,
-      size: z.radius * (1.55 + prog * 0.55),
+      size: outerDiameter * (0.36 + prog * 0.68),
       scaleX: 1,
-      scaleY: 0.62,
-      alpha: 0.55 + prog * 0.33,
+      scaleY: 0.58,
+      alpha: 0.48 + prog * 0.30,
     });
   }
 
@@ -788,61 +807,6 @@ export function selectConsumeAbility(
   if (currentConsumed === 'astra') return 'parry';
   if (currentConsumed === 'parry') return 'astra';
   return attackIndex % 2 === 0 ? 'astra' : 'parry';
-}
-
-export const VRIKODARA_INHALE_HEAL_RATIO = 0.04;
-export const VRIKODARA_FURNACE_EMPOWER_SEC = 7.0;
-
-export function resolveVrikodaraInhaleImpact(params: {
-  connectedOnPlayer: boolean;
-  interruptedDuringWindup: boolean;
-  currentHp: number;
-  maxHp: number;
-  attackIndex: number;
-  currentConsumed: ConsumableAbilitySlot | null;
-}): {
-  cancelledWindup: boolean;
-  staggerSec: number;
-  healedAmount: number;
-  nextHp: number;
-  furnaceEmpoweredSec: number;
-  consumedSlot: ConsumableAbilitySlot | null;
-  calloutText: string;
-} {
-  if (params.interruptedDuringWindup) {
-    return {
-      cancelledWindup: true,
-      staggerSec: 1.4,
-      healedAmount: 0,
-      nextHp: params.currentHp,
-      furnaceEmpoweredSec: 0,
-      consumedSlot: null,
-      calloutText: 'FURNACE INHALE INTERRUPTED! (STAGGERED)',
-    };
-  }
-  if (!params.connectedOnPlayer) {
-    return {
-      cancelledWindup: false,
-      staggerSec: 0,
-      healedAmount: 0,
-      nextHp: params.currentHp,
-      furnaceEmpoweredSec: 0,
-      consumedSlot: null,
-      calloutText: '',
-    };
-  }
-  const healedAmount = Math.max(12, Math.round(params.maxHp * VRIKODARA_INHALE_HEAL_RATIO));
-  const nextHp = Math.min(params.maxHp, params.currentHp + healedAmount);
-  const consumedSlot = selectConsumeAbility(params.currentConsumed, params.attackIndex);
-  return {
-    cancelledWindup: false,
-    staggerSec: 0,
-    healedAmount,
-    nextHp,
-    furnaceEmpoweredSec: VRIKODARA_FURNACE_EMPOWER_SEC,
-    consumedSlot,
-    calloutText: `VRIKODARA CONSUMED ${consumedSlot.toUpperCase()}! +${healedAmount} HP & FURNACE EMPOWER`,
-  };
 }
 
 export const VRIKODARA_INHALE_HEAL_RATIO = 0.04;

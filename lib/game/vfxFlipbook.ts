@@ -659,13 +659,15 @@ export interface DrawAdditiveFlipbookCellParams {
 
 /**
  * Draws a single cell `(col, row)` from a `#000000` black-background flipbook sheet using
- * `ctx.globalCompositeOperation = 'lighter'` so `#000000` is 100% transparent with zero rectangular boxes.
+ * controlled `'screen'` blending + a soft dark-ink radial under-shadow (`'source-over'` at low alpha)
+ * so `#000000` remains 100% transparent while Parashu arcs and Agneyastra craters stay rich
+ * crimson-vermilion (#ff4d24) and burnt saffron-gold (#ffb833) instead of blowing out to #FFFFFF.
  */
 export function drawAdditiveFlipbookCell(
   ctx: CanvasRenderingContext2D,
   params: DrawAdditiveFlipbookCellParams
 ): boolean {
-  const alpha = params.alpha ?? 0.85;
+  const alpha = params.alpha ?? 0.78;
   if (alpha <= 0.01) return false;
 
   const url = params.sheetSpec ? params.sheetSpec.url : (params.sheetUrl ?? '');
@@ -690,10 +692,9 @@ export function drawAdditiveFlipbookCell(
   const drawH = Math.max(4, params.height ?? (cell.sh / Math.max(1, cell.sw)) * drawW);
   const ax = params.anchorX ?? 0.5;
   const ay = params.anchorY ?? 0.5;
+  const cappedAlpha = Math.max(0, Math.min(0.78, alpha));
 
   ctx.save();
-  ctx.globalCompositeOperation = 'lighter';
-  ctx.globalAlpha = Math.max(0, Math.min(0.88, alpha));
   ctx.translate(params.x, params.y);
   if (params.scaleX !== undefined || params.scaleY !== undefined) {
     ctx.scale(params.scaleX ?? 1, params.scaleY ?? 1);
@@ -701,6 +702,25 @@ export function drawAdditiveFlipbookCell(
   if (params.rotationRad) {
     ctx.rotate(params.rotationRad);
   }
+
+  // 1. Soft dark-ink under-shadow ('source-over' at low opacity) so crimson & saffron pigments pop over bright sunlit stone
+  if (drawW >= 42) {
+    const shadowR = Math.max(drawW, drawH) * 0.44;
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = Math.min(0.26, cappedAlpha * 0.30);
+    const underGrad = ctx.createRadialGradient(0, 0, shadowR * 0.08, 0, 0, shadowR);
+    underGrad.addColorStop(0, 'rgba(18, 8, 6, 0.72)');
+    underGrad.addColorStop(0.58, 'rgba(28, 10, 8, 0.36)');
+    underGrad.addColorStop(1, 'rgba(18, 8, 6, 0)');
+    ctx.fillStyle = underGrad;
+    ctx.beginPath();
+    ctx.arc(0, 0, shadowR, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // 2. Controlled 'screen' pass: #000000 is 100% transparent, preserving rich crimson (#ff4d24) & saffron-gold (#ffb833) without white blowout
+  ctx.globalCompositeOperation = 'screen';
+  ctx.globalAlpha = cappedAlpha;
   ctx.drawImage(
     sheet.canvas,
     cell.sx,
