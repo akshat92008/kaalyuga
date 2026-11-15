@@ -34,6 +34,7 @@ export interface LoadedRudraRig {
   mixer: THREE.AnimationMixer;
   actions: Partial<Record<RudraClipKey, THREE.AnimationAction>>;
   materials: THREE.MeshToonMaterial[];
+  weaponAuraMat: THREE.ShaderMaterial;
   bladeBaseNode: THREE.Object3D;
   bladeTipNode: THREE.Object3D;
   shoulderPivotNode: THREE.Object3D;
@@ -328,6 +329,120 @@ function scaleAndGroundPosedRig(
 }
 
 /**
+ * Smooths looping clips (`idle`, `run`, `block`) by tapering the final keyframes seamlessly back to frame 0
+ * so Mixamo/Meshy loops never visibly hitch at the loop boundary.
+ */
+function smoothLoopSeam(clip: THREE.AnimationClip): THREE.AnimationClip {
+  const blendTail = 3;
+  for (const track of clip.tracks) {
+    const stride = track.getValueSize();
+    const keyCount = Math.floor(track.values.length / stride);
+    if (keyCount <= blendTail + 2) continue;
+
+    if (stride === 4) {
+      // Slerp final quaternion keys toward key 0
+      const q0 = new THREE.Quaternion(
+        track.values[0],
+        track.values[1],
+        track.values[2],
+        track.values[3]
+      ).normalize();
+      const qt = new THREE.Quaternion();
+      for (let step = 1; step <= blendTail; step++) {
+        const k = keyCount - blendTail - 1 + step;
+        const alpha = step / blendTail;
+        const base = k * 4;
+        qt.set(
+          track.values[base],
+          track.values[base + 1],
+          track.values[base + 2],
+          track.values[base + 3]
+        ).normalize();
+        qt.slerp(q0, alpha * alpha);
+        track.values[base] = qt.x;
+        track.values[base + 1] = qt.y;
+        track.values[base + 2] = qt.z;
+        track.values[base + 3] = qt.w;
+      }
+    } else {
+      for (let step = 1; step <= blendTail; step++) {
+        const k = keyCount - blendTail - 1 + step;
+        const alpha = step / blendTail;
+        const t = alpha * alpha;
+        const base = k * stride;
+        for (let c = 0; c < stride; c++) {
+          track.values[base + c] =
+            track.values[base + c] * (1 - t) + track.values[c] * t;
+        }
+      }
+    }
+  }
+  return clip;
+}
+
+/**
+ * Builds an animated cel-flame / Vajra lightning sheath wrapped directly around Parashu's crescent edge.
+ */
+function createParashuAuraMaterial(): THREE.ShaderMaterial {
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      uTime: { value: 0 },
+      uIntensity: { value: 0.2 },
+      uCoreColor: { value: new THREE.Color('#fff470') },
+      uMidColor: { value: new THREE.Color('#ff4912') },
+      uOuterColor: { value: new THREE.Color('#9e0b16') },
+    },
+    vertexShader: `
+      varying vec2 vUv;
+      uniform float uTime;
+      uniform float uIntensity;
+      void main() {
+        vUv = uv;
+        vec3 pos = position;
+        float lick = sin(uv.x * 16.0 - uTime * 22.0) * 1.8 * uIntensity;
+        pos.x += lick * uv.y;
+        pos.z += cos(uv.x * 12.0 + uTime * 18.0) * 1.2 * uIntensity;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform float uTime;
+      uniform float uIntensity;
+      uniform vec3 uCoreColor;
+      uniform vec3 uMidColor;
+      uniform vec3 uOuterColor;
+      varying vec2 vUv;
+
+      float hash(vec2 p) {
+        return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+      }
+      float noise(vec2 p) {
+        vec2 i = floor(p);
+        vec2 f = fract(p);
+        vec2 u = f * f * (3.0 - 2.0 * f);
+        return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x),
+                   mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
+      }
+
+      void main() {
+        float flame = noise(vec2(vUv.x * 9.0, vUv.y * 4.0 - uTime * 11.0));
+        float radial = 1.0 - smoothstep(0.15, 0.98, vUv.y + (flame - 0.5) * 0.42);
+        float tipMask = smoothstep(0.0, 0.18, vUv.x) * (1.0 - smoothstep(0.82, 1.0, vUv.x));
+        float alpha = radial * tipMask * clamp(uIntensity, 0.0, 1.0);
+        if (alpha < 0.06) discard;
+        vec3 col = mix(uOuterColor, uMidColor, smoothstep(0.15, 0.55, 1.0 - vUv.y));
+        col = mix(col, uCoreColor * 1.15, smoothstep(0.55, 0.88, 1.0 - vUv.y));
+        gl_FragColor = vec4(col, alpha * 0.92);
+      }
+    `,
+    transparent: true,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    blending: THREE.NormalBlending,
+  });
+}
+
+/**
  * Trims a normalized Mixamo/Meshy clip to its actual combat strike sub-window so animations match fast responsiveness.
  */
 function trimClipWindow(
@@ -339,7 +454,9 @@ function trimClipWindow(
   const totalFrames = Math.max(2, Math.floor(clip.duration * 30));
   const s = Math.max(0, Math.min(totalFrames - 4, frameWindow[0]));
   const e = Math.max(s + 4, Math.min(totalFrames, frameWindow[1]));
-  return THREE.AnimationUtils.subclip(clip, key, s, e, 30);
+  const sub = THREE.AnimationUtils.subclip(clip, key, s, e, 30);
+  sub.optimize();
+  return sub;
 }
 
 export async function loadRudraChamberRig(
@@ -381,20 +498,26 @@ export async function loadRudraChamberRig(
     loadFbx('/kaalyuga/anims/rudra/dodge.fbx'),
   ]);
 
-  const rudraTex = liftTextureToAnimeVibrancy(rawRudraTex, 1.36, 1.35);
-  const parashuTex = liftTextureToAnimeVibrancy(rawParashuTex, 1.34, 1.32);
+  const rudraTex = liftTextureToAnimeVibrancy(rawRudraTex, 1.18, 1.22);
+  const parashuTex = liftTextureToAnimeVibrancy(rawParashuTex, 1.2, 1.22);
 
   const rudraMat = createDemonSlayerCelMaterial({
     map: rudraTex,
     tintHex: 0xfff8ef,
-    emissiveHex: 0x42281c,
-    emissiveIntensity: 0.4,
+    emissiveHex: 0x3b2419,
+    emissiveIntensity: 0.32,
+    rimColorHex: 0xffa94d,
+    rimStrength: 0.68,
+    rimPower: 2.3,
   });
   const parashuMat = createDemonSlayerCelMaterial({
     map: parashuTex,
     tintHex: 0xffeede,
-    emissiveHex: 0x522316,
-    emissiveIntensity: 0.42,
+    emissiveHex: 0x482014,
+    emissiveIntensity: 0.34,
+    rimColorHex: 0xff8b24,
+    rimStrength: 0.85,
+    rimPower: 2.0,
   });
 
   // Path 1 exact UV transfer onto SkinnedMesh + clean optimization
@@ -442,13 +565,13 @@ export async function loadRudraChamberRig(
     ['idle', idleFbx, true],
     ['run', runFbx, true],
     ['block', blockFbx, true],
-    ['attack1', atk1Fbx, false, [16, 68]],
-    ['attack2', atk2Fbx, false, [22, 76]],
-    ['attack3', atk3Fbx, false, [20, 54]],
-    ['heavy', heavyFbx, false, [12, 42]],
-    ['cast', castFbx, false, [18, 56]],
-    ['hurt', hurtFbx, false, [2, 26]],
-    ['dodge', dodgeFbx, false, [2, 34]],
+    ['attack1', atk1Fbx, false, [38, 70]],
+    ['attack2', atk2Fbx, false, [54, 92]],
+    ['attack3', atk3Fbx, false, [18, 48]],
+    ['heavy', heavyFbx, false, [8, 42]],
+    ['cast', castFbx, false, [14, 52]],
+    ['hurt', hurtFbx, false, [2, 14]],
+    ['dodge', dodgeFbx, false, [1, 36]],
   ];
 
   for (const [key, fbx, loop, windowFrames] of animInputs) {
@@ -456,7 +579,8 @@ export async function loadRudraChamberRig(
     if (!clip) continue;
     const clean = buildStabilizedClip(clip, riggedGroup, standingHipY, `rudra_${key}`);
     if (clean.tracks.length === 0) continue;
-    const finalClip = trimClipWindow(clean, `rudra_${key}`, windowFrames);
+    const trimmed = trimClipWindow(clean, `rudra_${key}`, windowFrames);
+    const finalClip = loop ? smoothLoopSeam(trimmed) : trimmed;
     const act = mixer.clipAction(finalClip);
     act.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, loop ? Infinity : 1);
     act.clampWhenFinished = !loop;
@@ -469,10 +593,10 @@ export async function loadRudraChamberRig(
     mixer.update(0.05);
   }
   const footBones = collectFootBones(riggedGroup);
-  const soleOffset = scaleAndGroundPosedRig(riggedGroup, 1.92, footBones);
+  const soleOffset = scaleAndGroundPosedRig(riggedGroup, 1.46, footBones);
 
   // Attach Sumi-e black ink outlines synced cleanly with Rudra's bones
-  attachSumiInkOutlines(riggedGroup, 0.006, 0x090508);
+  attachSumiInkOutlines(riggedGroup, 0.0045, 0x090508);
 
   // Mount Parashu Battle-Axe on Rudra's RightHand with exact local blade base/tip inside Parashu geometry
   const bladeBaseNode = new THREE.Object3D();
@@ -480,6 +604,8 @@ export async function loadRudraChamberRig(
   const rightHand = findBone(riggedGroup, /righthand$/i);
   const shoulderPivotNode =
     findBone(riggedGroup, /rightarm$/i) || findBone(riggedGroup, /spine2$/i) || riggedGroup;
+
+  const weaponAuraMat = createParashuAuraMaterial();
 
   if (rightHand) {
     const handWorldScale = new THREE.Vector3();
@@ -491,7 +617,7 @@ export async function loadRudraChamberRig(
     const wepSize = new THREE.Vector3();
     wepBox.getSize(wepSize);
     const maxDim = Math.max(0.001, wepSize.y); // Y is the long 190u Parashu handle
-    const desiredWorldLen = 1.28;
+    const desiredWorldLen = 0.98;
     const localWepScale = desiredWorldLen / (maxDim * handScale);
 
     const weaponSocket = new THREE.Group();
@@ -500,17 +626,31 @@ export async function loadRudraChamberRig(
     parashuGroup.rotation.set(-Math.PI * 0.5, 0, -Math.PI * 0.5);
     parashuGroup.position.set(0.18 * maxDim * localWepScale, 0, 0);
 
-    // Put bladeBase/bladeTip directly in Parashu's local coordinate space (shaft=Y, axe blade=+X, [-95..+95] raw units)
-    bladeBaseNode.position.set(0, 32, 0);
-    bladeTipNode.position.set(36, 90, 0);
+    // Anchor bladeBase/bladeTip cleanly across the full crescent axe head (y=46..92, x=6..39)
+    bladeBaseNode.position.set(6, 46, 0);
+    bladeTipNode.position.set(39, 92, 0);
     parashuGroup.add(bladeBaseNode, bladeTipNode);
 
+    // Live ignited Parashu elemental sheath enveloping the crescent axe head
+    const auraGeo = new THREE.PlaneGeometry(54, 42, 10, 4);
+    const auraMesh = new THREE.Mesh(auraGeo, weaponAuraMat);
+    auraMesh.position.set(27, 68, 0);
+    auraMesh.rotation.z = -0.15;
+    auraMesh.frustumCulled = false;
+    auraMesh.renderOrder = 17;
+    const auraMeshCross = new THREE.Mesh(auraGeo, weaponAuraMat);
+    auraMeshCross.position.set(27, 68, 0);
+    auraMeshCross.rotation.set(Math.PI * 0.36, 0, -0.15);
+    auraMeshCross.frustumCulled = false;
+    auraMeshCross.renderOrder = 17;
+    parashuGroup.add(auraMesh, auraMeshCross);
+
     weaponSocket.add(parashuGroup);
-    attachSumiInkOutlines(parashuGroup, 0.007, 0x090508);
+    attachSumiInkOutlines(parashuGroup, 0.0055, 0x090508);
     rightHand.add(weaponSocket);
   } else {
-    bladeBaseNode.position.set(0.35, 1.0, 0.25);
-    bladeTipNode.position.set(0.55, 1.35, 1.3);
+    bladeBaseNode.position.set(0.28, 0.78, 0.2);
+    bladeTipNode.position.set(0.42, 1.05, 1.0);
     root.add(bladeBaseNode, bladeTipNode);
   }
 
@@ -520,6 +660,7 @@ export async function loadRudraChamberRig(
     mixer,
     actions,
     materials: [rudraMat, parashuMat],
+    weaponAuraMat,
     bladeBaseNode,
     bladeTipNode,
     shoulderPivotNode,
@@ -559,12 +700,15 @@ export async function loadDundubhiChamberRig(
     loadFbx('/kaalyuga/anims/bellhorn/death.fbx'),
   ]);
 
-  const bossTex = liftTextureToAnimeVibrancy(rawBossTex, 1.38, 1.32);
+  const bossTex = liftTextureToAnimeVibrancy(rawBossTex, 1.18, 1.18);
   const bossMat = createDemonSlayerCelMaterial({
     map: bossTex,
     tintHex: 0xfff2e8,
-    emissiveHex: 0x451a14,
-    emissiveIntensity: 0.38,
+    emissiveHex: 0x3b1612,
+    emissiveIntensity: 0.3,
+    rimColorHex: 0xff3b1f,
+    rimStrength: 0.86,
+    rimPower: 2.1,
   });
 
   // Path 1 exact 1:1 UV transfer (839,544 === 839,544 verts) + fast preserve-skin decimation
@@ -601,11 +745,11 @@ export async function loadDundubhiChamberRig(
   const clips: Array<[DundubhiClipKey, THREE.Group, boolean, [number, number]?, boolean?]> = [
     ['idle', idleFbx, true],
     ['run', runFbx, true],
-    ['swipe', swipeFbx, false, [14, 56]],
-    ['punch', punchFbx, false, [2, 22]],
+    ['swipe', swipeFbx, false, [6, 54]],
+    ['punch', punchFbx, false, [1, 26]],
     ['slam', slamFbx, false, [6, 62]],
-    ['roar', roarFbx, false, [14, 70]],
-    ['stagger', staggerFbx, false, [6, 72]],
+    ['roar', roarFbx, false, [12, 70]],
+    ['stagger', staggerFbx, false, [4, 74]],
     ['death', deathFbx, false, [0, 88], true],
   ];
 
@@ -620,7 +764,8 @@ export async function loadDundubhiChamberRig(
       Boolean(allowCollapse)
     );
     if (clean.tracks.length === 0) continue;
-    const finalClip = trimClipWindow(clean, `bellhorn_${key}`, windowFrames);
+    const trimmed = trimClipWindow(clean, `bellhorn_${key}`, windowFrames);
+    const finalClip = loop ? smoothLoopSeam(trimmed) : trimmed;
     const act = mixer.clipAction(finalClip);
     act.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, loop ? Infinity : 1);
     act.clampWhenFinished = !loop;
@@ -633,9 +778,9 @@ export async function loadDundubhiChamberRig(
     mixer.update(0.05);
   }
   const footBones = collectFootBones(riggedGroup);
-  const soleOffset = scaleAndGroundPosedRig(riggedGroup, 2.85, footBones);
+  const soleOffset = scaleAndGroundPosedRig(riggedGroup, 2.18, footBones);
 
-  attachSumiInkOutlines(riggedGroup, 0.0065, 0x0a0406);
+  attachSumiInkOutlines(riggedGroup, 0.0045, 0x0a0406);
 
   // Attach right-arm claw/axe weapon span nodes for clean crimson swing trails
   const weaponBaseNode = new THREE.Object3D();
@@ -645,12 +790,12 @@ export async function loadDundubhiChamberRig(
     const hwScale = new THREE.Vector3();
     rightHand.getWorldScale(hwScale);
     const invS = 1 / Math.max(1e-5, hwScale.x);
-    weaponBaseNode.position.set(0.05 * invS, 0, 0);
-    weaponTipNode.position.set(0.85 * invS, 0.25 * invS, 0);
+    weaponBaseNode.position.set(0.08 * invS, 0, 0);
+    weaponTipNode.position.set(0.62 * invS, 0.16 * invS, 0.08 * invS);
     rightHand.add(weaponBaseNode, weaponTipNode);
   } else {
-    weaponBaseNode.position.set(0.7, 1.4, 0.3);
-    weaponTipNode.position.set(1.3, 1.9, 1.6);
+    weaponBaseNode.position.set(0.55, 1.08, 0.24);
+    weaponTipNode.position.set(1.0, 1.46, 1.25);
     root.add(weaponBaseNode, weaponTipNode);
   }
 

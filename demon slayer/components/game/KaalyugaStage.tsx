@@ -16,8 +16,9 @@ import {
   type LoadedRudraRig,
   type RudraClipKey,
 } from '@/lib/game/assetLoader';
-import { setCelHitFlash } from '@/lib/game/demonSlayerShader';
+import { setCelHitFlash, setCelRimStyle } from '@/lib/game/demonSlayerShader';
 import {
+  angleDiff,
   createInitialChamberState,
   stepChamberSimulation,
   type AstraElement,
@@ -25,7 +26,12 @@ import {
   type PlayerInputFrame,
 } from '@/lib/game/rules';
 import {
+  AstraCycloneVfx,
+  DashEchoPool,
+  DundubhiBloodDemonArtVfx,
+  HeavyWaveVfx,
   PooledSparkSystem,
+  RIBBON_PALETTES,
   SlashRibbonController,
 } from '@/lib/game/slashRibbonVfx';
 import { ChamberSoundEngine } from '@/lib/game/soundEngine';
@@ -40,11 +46,11 @@ const _groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 const _pointerNdc = new THREE.Vector2();
 const _raycaster = new THREE.Raycaster();
 
-// Locked perspective matching public/kaalyuga/arena/dundubhi_chamber.mp4 (16:9 static isometric stone courtyard)
+// Locked perspective matching public/kaalyuga/arena/dundubhi_chamber.mp4 (~34° pitch isometric stone courtyard)
 const VIDEO_ASPECT = 16 / 9;
 const BASE_VERTICAL_FOV = 30.0;
-const MATCHED_CAM_POS = new THREE.Vector3(15.7, 11.5, 15.7);
-const MATCHED_CAM_TARGET = new THREE.Vector3(0, 0.25, 0);
+const MATCHED_CAM_POS = new THREE.Vector3(15.0, 14.3, 15.0);
+const MATCHED_CAM_TARGET = new THREE.Vector3(0, 0.82, 0);
 
 function computeCoverMatchedFov(viewportAspect: number, impactZoomDelta = 0): number {
   const halfFovRad = THREE.MathUtils.degToRad((BASE_VERTICAL_FOV - impactZoomDelta) * 0.5);
@@ -133,6 +139,7 @@ export default function KaalyugaStage() {
     snapshot: null,
     callouts: [],
     impactFlashOpacity: 0,
+    speedLinesOpacity: 0,
   }));
 
   const syncBodyAndHudNow = useCallback((camera?: THREE.PerspectiveCamera) => {
@@ -159,6 +166,17 @@ export default function KaalyugaStage() {
       }
     }
 
+    const impactRatio =
+      s.impactFrame.duration > 0 ? s.impactFrame.timer / s.impactFrame.duration : 0;
+    const speedBurst =
+      s.phase === 'playing' &&
+      (s.rudra.action === 'cast' ||
+        s.rudra.action === 'heavy' ||
+        s.rudra.action === 'dodge' ||
+        s.boss.attackKind === 'charge')
+        ? 0.36
+        : 0;
+
     setHud({
       phase: s.phase,
       assetsReady: assetsReadyRef.current,
@@ -182,8 +200,8 @@ export default function KaalyugaStage() {
       elapsedSec: s.elapsedSec,
       snapshot: s.snapshot,
       callouts: projectedCallouts,
-      impactFlashOpacity:
-        s.impactFrame.duration > 0 ? s.impactFrame.timer / s.impactFrame.duration : 0,
+      impactFlashOpacity: impactRatio,
+      speedLinesOpacity: Math.max(impactRatio * 0.72, speedBurst),
     });
   }, []);
 
@@ -337,20 +355,47 @@ export default function KaalyugaStage() {
       simRef.current.pillars
     );
 
-    // 3D Demon Slayer blade-accurate slash trails + Q Astra halo + Pooled Sparks
+    // 3D Ufotable Demon Slayer multi-layer slash ribbons + 3-ring Cyclone + Heavy Waves + Blood Demon Art + Sparks
     const rudraRibbon = new SlashRibbonController('agni');
-    const astraHaloRibbon = new SlashRibbonController('agni');
+    const astraCyclone = new AstraCycloneVfx();
+    const heavyWaveVfx = new HeavyWaveVfx();
     const bossRibbon = new SlashRibbonController('boss');
+    const dundubhiBloodVfx = new DundubhiBloodDemonArtVfx();
+    const dashEchoes = new DashEchoPool();
     const sparkSystem = new PooledSparkSystem();
-    scene.add(rudraRibbon.mesh, astraHaloRibbon.mesh, bossRibbon.mesh, sparkSystem.mesh);
+    scene.add(
+      rudraRibbon.mesh,
+      astraCyclone.group,
+      heavyWaveVfx.group,
+      bossRibbon.mesh,
+      dundubhiBloodVfx.group,
+      dashEchoes.group,
+      sparkSystem.mesh,
+      sparkSystem.clashGroup,
+      sparkSystem.fxGroup
+    );
 
     let disposed = false;
     let rudraRig: LoadedRudraRig | null = null;
     let bossRig: LoadedDundubhiRig | null = null;
     let currentRudraClip: RudraClipKey = 'idle';
     let currentBossClip: DundubhiClipKey = 'idle';
-    let bossAttackAnimKey = '';
-    let dashSparkCooldown = 0;
+    let bossAttackMoveToken = '';
+    let dashEchoCooldown = 0;
+    let waveFiredForAction = false;
+    let bloodSicklesFiredThisAttack = false;
+
+    // Smoothed rendered actor transforms so movements, turns & foot grounding glide smoothly
+    let visRudraX = simRef.current.rudra.x;
+    let visRudraZ = simRef.current.rudra.z;
+    let visRudraYaw = simRef.current.rudra.yaw;
+    let visRudraYOffset = 0;
+    let visBossX = simRef.current.boss.x;
+    let visBossZ = simRef.current.boss.z;
+    let visBossYaw = simRef.current.boss.yaw;
+    let visBossYOffset = 0;
+    let rudraPoolPulse = 0;
+    let bossPoolPulse = 0;
 
     Promise.all([
       loadRudraChamberRig((msg) => {
@@ -406,7 +451,7 @@ export default function KaalyugaStage() {
       const code = e.code;
       const s = simRef.current;
 
-      if (s.phase === 'title') {
+      if (s.phase === 'title' || s.phase === 'victory' || s.phase === 'defeat') {
         if (code === 'Enter' || code === 'Space') {
           e.preventDefault();
           startGame();
@@ -511,35 +556,43 @@ export default function KaalyugaStage() {
     let totalRenderTime = 0;
     let drumPulse = 0;
 
-    const switchRudraAnim = (next: RudraClipKey, fadeDur = 0.09, forceRestart = false) => {
+    const switchRudraAnim = (next: RudraClipKey, fadeDur = 0.14, forceRestart = false) => {
       if (!rudraRig) return;
-      if (!forceRestart && currentRudraClip === next) return;
       const nextAct = rudraRig.actions[next] || rudraRig.actions.idle;
-      const prevAct = rudraRig.actions[currentRudraClip];
       if (!nextAct) return;
-      nextAct.enabled = true;
-      nextAct.reset();
-      nextAct.setEffectiveTimeScale(1.0);
-      nextAct.play();
-      if (prevAct && prevAct !== nextAct) {
-        prevAct.crossFadeTo(nextAct, fadeDur, true);
+      if (!forceRestart && currentRudraClip === next && nextAct.isRunning()) return;
+      for (const [k, act] of Object.entries(rudraRig.actions)) {
+        if (act && k !== next) {
+          act.fadeOut(fadeDur);
+        }
       }
+      nextAct.enabled = true;
+      if (forceRestart || !nextAct.isRunning() || currentRudraClip !== next) {
+        nextAct.reset();
+      }
+      nextAct.setEffectiveWeight(1);
+      nextAct.fadeIn(fadeDur);
+      nextAct.play();
       currentRudraClip = next;
     };
 
-    const switchBossAnim = (next: DundubhiClipKey, fadeDur = 0.12, forceRestart = false) => {
+    const switchBossAnim = (next: DundubhiClipKey, fadeDur = 0.16, forceRestart = false) => {
       if (!bossRig) return;
-      if (!forceRestart && currentBossClip === next) return;
       const nextAct = bossRig.actions[next] || bossRig.actions.idle;
-      const prevAct = bossRig.actions[currentBossClip];
       if (!nextAct) return;
-      nextAct.enabled = true;
-      nextAct.reset();
-      nextAct.setEffectiveTimeScale(1.0);
-      nextAct.play();
-      if (prevAct && prevAct !== nextAct) {
-        prevAct.crossFadeTo(nextAct, fadeDur, true);
+      if (!forceRestart && currentBossClip === next && nextAct.isRunning()) return;
+      for (const [k, act] of Object.entries(bossRig.actions)) {
+        if (act && k !== next) {
+          act.fadeOut(fadeDur);
+        }
       }
+      nextAct.enabled = true;
+      if (forceRestart || !nextAct.isRunning() || currentBossClip !== next) {
+        nextAct.reset();
+      }
+      nextAct.setEffectiveWeight(1);
+      nextAct.fadeIn(fadeDur);
+      nextAct.play();
       currentBossClip = next;
     };
 
@@ -600,33 +653,96 @@ export default function KaalyugaStage() {
       inp.elementSwitch = null;
 
       const prevRudraAction = s.rudra.action;
+      const prevBossState = s.boss.aiState;
+      const prevBossKind = s.boss.attackKind;
       stepChamberSimulation(s, rawDt, frameInput);
+
+      // Snap visual anchors cleanly on abrupt restart/title resets
+      if (s.elapsedSec < 0.06 || s.phase === 'title') {
+        visRudraX = s.rudra.x;
+        visRudraZ = s.rudra.z;
+        visRudraYaw = s.rudra.yaw;
+        visBossX = s.boss.x;
+        visBossZ = s.boss.z;
+        visBossYaw = s.boss.yaw;
+        dundubhiBloodVfx.clearAll();
+      } else {
+        visRudraX = THREE.MathUtils.damp(visRudraX, s.rudra.x, 30, rawDt);
+        visRudraZ = THREE.MathUtils.damp(visRudraZ, s.rudra.z, 30, rawDt);
+        visRudraYaw += angleDiff(s.rudra.yaw, visRudraYaw) * (1 - Math.exp(-24 * rawDt));
+        visBossX = THREE.MathUtils.damp(visBossX, s.boss.x, 24, rawDt);
+        visBossZ = THREE.MathUtils.damp(visBossZ, s.boss.z, 24, rawDt);
+        visBossYaw += angleDiff(s.boss.yaw, visBossYaw) * (1 - Math.exp(-18 * rawDt));
+      }
 
       for (const evt of s.pendingSfx) {
         sound.playEvent(evt, s.rudra.astra);
         if (evt === 'hit' || evt === 'crit') {
           sparkSystem.emitBurst(
             s.boss.x,
-            1.4,
+            1.1,
             s.boss.z,
-            evt === 'crit' ? 24 : 14,
+            evt === 'crit' ? 28 : 16,
             s.rudra.astra,
-            10.5
+            11.5
           );
+          rudraPoolPulse = Math.max(rudraPoolPulse, evt === 'crit' ? 1.0 : 0.65);
+          if (evt === 'crit') {
+            sparkSystem.triggerClashFlare(
+              (s.rudra.x + s.boss.x) * 0.5,
+              1.12,
+              (s.rudra.z + s.boss.z) * 0.5,
+              RIBBON_PALETTES[s.rudra.astra].coreColor.getHex()
+            );
+          }
         } else if (evt === 'parry') {
-          sparkSystem.emitBurst(s.rudra.x, 1.3, s.rudra.z, 26, 'parry', 11.5);
+          sparkSystem.emitBurst(s.rudra.x, 1.05, s.rudra.z, 30, 'parry', 12.5);
+          sparkSystem.triggerClashFlare(
+            (s.rudra.x + s.boss.x) * 0.5,
+            1.1,
+            (s.rudra.z + s.boss.z) * 0.5,
+            0xfff4a8
+          );
+          rudraPoolPulse = 1.0;
         } else if (evt === 'boss_slam' || evt === 'boss_roar') {
           drumPulse = 1.0;
-          sparkSystem.emitBurst(s.boss.x, 0.4, s.boss.z, 22, 'boss', 9.5);
+          bossPoolPulse = 1.0;
+          sparkSystem.emitBurst(s.boss.x, 0.45, s.boss.z, 28, 'boss', 11.2);
+          const impactRadius = evt === 'boss_roar' ? 4.4 : 2.9;
+          dundubhiBloodVfx.spawnBloodSpikeBurst(
+            s.boss.x,
+            s.boss.z,
+            impactRadius,
+            s.boss.phase === 2
+          );
+          dundubhiBloodVfx.spawnShockwaveImpact(
+            s.boss.x,
+            s.boss.z,
+            impactRadius,
+            evt === 'boss_roar' ? 'roar' : 'slam',
+            s.boss.phase === 2
+          );
         } else if (evt === 'pillar_break') {
-          sparkSystem.emitBurst(s.boss.x, 1.2, s.boss.z, 28, 'agni', 12.5);
+          bossPoolPulse = 1.0;
+          sparkSystem.emitBurst(s.boss.x, 1.25, s.boss.z, 32, 'agni', 13.0);
+          sparkSystem.triggerClashFlare(s.boss.x, 1.6, s.boss.z, 0xffaa38);
+          dundubhiBloodVfx.spawnBloodSpikeBurst(s.boss.x, s.boss.z, 2.8, s.boss.phase === 2);
+          dundubhiBloodVfx.spawnShockwaveImpact(
+            s.boss.x,
+            s.boss.z,
+            3.1,
+            'pillar_break',
+            s.boss.phase === 2
+          );
         }
       }
       drumPulse = Math.max(0, drumPulse - rawDt * 2.4);
+      rudraPoolPulse = Math.max(0, rudraPoolPulse - rawDt * 2.6);
+      bossPoolPulse = Math.max(0, bossPoolPulse - rawDt * 2.2);
 
       const dtFactor = s.hitstopTimer > 0 ? 0.05 : 1.0;
       rudraRibbon.setTheme(s.rudra.astra);
-      astraHaloRibbon.setTheme(s.rudra.astra);
+      astraCyclone.setTheme(s.rudra.astra);
 
       const rNorm = s.rudra.actionDuration > 0 ? s.rudra.actionTimer / s.rudra.actionDuration : 0;
       const rudraSwingKind =
@@ -638,10 +754,13 @@ export default function KaalyugaStage() {
           ? s.rudra.action
           : null;
 
-      // Update Rudra 3D Rig + Blade-Accurate Multi-Substep Trail + Per-Frame Foot Grounding
+      const elementRimHex =
+        s.rudra.astra === 'agni' ? 0xff9838 : s.rudra.astra === 'vajra' ? 0x38bdf8 : 0x34d399;
+
+      // Update Rudra 3D Rig + Ignited Parashu + Smooth Non-Warped Crossfades + Blade Ribbon
       if (rudraRig) {
-        rudraRig.root.position.set(s.rudra.x, 0, s.rudra.z);
-        rudraRig.root.rotation.y = s.rudra.yaw;
+        rudraRig.root.position.set(visRudraX, 0, visRudraZ);
+        rudraRig.root.rotation.y = visRudraYaw;
 
         const desiredClip: RudraClipKey =
           s.rudra.action === 'dead' ? 'hurt' : s.rudra.action;
@@ -650,25 +769,60 @@ export default function KaalyugaStage() {
           prevRudraAction !== s.rudra.action && rudraSwingKind !== null;
 
         if (desiredClip !== currentRudraClip || restartedCombo) {
-          switchRudraAnim(
-            desiredClip,
-            desiredClip === 'dodge' || rudraSwingKind !== null ? 0.07 : 0.11,
-            restartedCombo
-          );
+          const isLocomotion =
+            (desiredClip === 'idle' || desiredClip === 'run' || desiredClip === 'block') &&
+            (currentRudraClip === 'idle' || currentRudraClip === 'run' || currentRudraClip === 'block');
+          const fadeDur = isLocomotion ? 0.18 : rudraSwingKind !== null ? 0.10 : 0.14;
+          switchRudraAnim(desiredClip, fadeDur, restartedCombo);
           if (restartedCombo) {
             rudraRibbon.clear();
+            waveFiredForAction = false;
+            if (s.rudra.action === 'cast') {
+              sparkSystem.emitBurst(visRudraX, 1.15, visRudraZ, 26, s.rudra.astra, 10.5);
+              rudraPoolPulse = 1.0;
+            }
           }
+        }
+        if (s.rudra.action !== 'heavy' && s.rudra.action !== 'attack3') {
+          waveFiredForAction = false;
+        }
+        if (
+          s.phase === 'playing' &&
+          !waveFiredForAction &&
+          ((s.rudra.action === 'heavy' && rNorm >= 0.36) ||
+            (s.rudra.action === 'attack3' && rNorm >= 0.34))
+        ) {
+          waveFiredForAction = true;
+          heavyWaveVfx.triggerTripleWave(
+            visRudraX,
+            visRudraZ,
+            visRudraYaw,
+            s.rudra.astra,
+            s.rudra.action === 'heavy' ? 12.2 : 10.0
+          );
+          sparkSystem.emitBurst(
+            visRudraX + Math.sin(visRudraYaw) * 1.1,
+            1.1,
+            visRudraZ + Math.cos(visRudraYaw) * 1.1,
+            16,
+            s.rudra.astra,
+            10.0
+          );
+          rudraPoolPulse = Math.max(rudraPoolPulse, 0.85);
         }
 
         const activeAct = rudraRig.actions[currentRudraClip];
         const animDt = s.phase === 'paused' ? 0 : rawDt * dtFactor;
 
         if (activeAct && rudraSwingKind !== null) {
-          // Scale subclip playback dynamically to finish cleanly inside actionDuration
           const clipDur = Math.max(0.25, activeAct.getClip().duration);
           const timeToFit = clipDur / Math.max(0.25, s.rudra.actionDuration);
-          const curve = rNorm < 0.2 ? 0.85 : rNorm < 0.68 ? 1.28 : 0.92;
-          activeAct.setEffectiveTimeScale(timeToFit * curve);
+          // Smooth C1 bell velocity curve so swing starts coiled, whips through center, and eases out
+          const smoothCurve = 0.78 + 0.34 * Math.sin(Math.max(0, Math.min(1, rNorm)) * Math.PI);
+          activeAct.setEffectiveTimeScale(timeToFit * smoothCurve);
+        } else if (activeAct && currentRudraClip === 'dodge') {
+          const clipDur = Math.max(0.25, activeAct.getClip().duration);
+          activeAct.setEffectiveTimeScale(clipDur / Math.max(0.25, s.rudra.actionDuration));
         } else if (activeAct) {
           activeAct.setEffectiveTimeScale(1.0);
         }
@@ -676,20 +830,27 @@ export default function KaalyugaStage() {
         const isRudraBladeEmitting =
           s.phase === 'playing' &&
           rudraSwingKind !== null &&
-          rNorm >= 0.08 &&
-          rNorm <= 0.84;
+          rNorm >= 0.16 &&
+          rNorm <= 0.78;
 
         rudraRibbon.ageSamples(animDt);
 
         if (animDt > 0) {
-          const substeps = isRudraBladeEmitting ? 4 : 1;
+          const substeps = isRudraBladeEmitting ? 6 : 1;
           const subDt = animDt / substeps;
           for (let step = 0; step < substeps; step++) {
             rudraRig.mixer.update(subDt);
-            // Snap foot bones flush onto y = 0 at every substep so blade world positions match planted height!
             rudraRig.root.updateMatrixWorld(true);
             const minFootY = getMinFootWorldY(rudraRig.footBones);
-            rudraRig.modelGroup.position.y += rudraRig.soleOffset - minFootY;
+            const targetAdj = rudraRig.soleOffset - minFootY;
+            // Smooth upward foot damping while clamping downward sinking immediately
+            if (targetAdj > 0) {
+              visRudraYOffset = targetAdj;
+            } else {
+              visRudraYOffset = THREE.MathUtils.damp(visRudraYOffset, targetAdj, 18, subDt);
+            }
+            rudraRig.modelGroup.position.y += visRudraYOffset;
+            visRudraYOffset = 0;
             rudraRig.root.updateMatrixWorld(true);
 
             if (isRudraBladeEmitting) {
@@ -703,45 +864,71 @@ export default function KaalyugaStage() {
           rudraRig.root.updateMatrixWorld(true);
         }
 
-        rudraRibbon.commit(totalRenderTime, isRudraBladeEmitting, 1.14);
+        rudraRibbon.commit(totalRenderTime, isRudraBladeEmitting, 1.12);
 
-        if (s.phase === 'playing' && s.rudra.action === 'cast' && rNorm >= 0.08 && rNorm <= 0.94) {
-          astraHaloRibbon.updateParametricSwing(
-            totalRenderTime,
-            true,
-            'cast',
-            s.rudra.x,
-            s.rudra.z,
-            s.rudra.yaw,
-            rNorm,
-            s.rudra.astra === 'vayu' ? 0.35 : 0
-          );
-        } else {
-          astraHaloRibbon.clear();
-        }
+        // Multi-ring Demon Slayer cyclone for [Q] Astra Cast AND attack3 combo finisher!
+        const showCyclone =
+          s.phase === 'playing' &&
+          ((s.rudra.action === 'cast' && rNorm >= 0.08 && rNorm <= 0.92) ||
+            (s.rudra.action === 'attack3' && rNorm >= 0.25 && rNorm <= 0.78));
+        astraCyclone.update(
+          totalRenderTime,
+          showCyclone,
+          visRudraX,
+          visRudraZ,
+          visRudraYaw,
+          rNorm,
+          s.rudra.astra === 'vayu' ? 0.35 : 0
+        );
 
+        // Ignited Parashu Axe Aura & Fresnel Rim glow reactive to active breathing element
+        const pal = RIBBON_PALETTES[s.rudra.astra];
+        rudraRig.weaponAuraMat.uniforms.uTime.value = totalRenderTime;
+        rudraRig.weaponAuraMat.uniforms.uCoreColor.value.copy(pal.coreColor);
+        rudraRig.weaponAuraMat.uniforms.uMidColor.value.copy(pal.midColor);
+        rudraRig.weaponAuraMat.uniforms.uOuterColor.value.copy(pal.outerColor);
+        const auraTarget =
+          s.rudra.action === 'cast' || s.rudra.action === 'heavy'
+            ? 0.96
+            : rudraSwingKind !== null
+              ? 0.78
+              : 0.28;
+        rudraRig.weaponAuraMat.uniforms.uIntensity.value = THREE.MathUtils.damp(
+          rudraRig.weaponAuraMat.uniforms.uIntensity.value,
+          auraTarget,
+          16,
+          rawDt
+        );
+
+        setCelRimStyle(
+          rudraRig.materials,
+          elementRimHex,
+          rudraSwingKind !== null || s.rudra.action === 'dodge' ? 0.95 : 0.65
+        );
         setCelHitFlash(
           rudraRig.materials,
           s.rudra.hitFlashTimer > 0,
-          0x42281c,
-          0.4,
+          0x3b2419,
+          0.32,
           0xff4433
         );
       } else {
         rudraRibbon.clear();
-        astraHaloRibbon.clear();
+        astraCyclone.update(totalRenderTime, false, 0, 0, 0, 0, 0);
       }
 
-      // Dash ember trail
-      if (s.rudra.action === 'dodge') {
-        dashSparkCooldown -= rawDt;
-        if (dashSparkCooldown <= 0) {
-          dashSparkCooldown = 0.045;
-          sparkSystem.emitBurst(s.rudra.x, 0.9, s.rudra.z, 5, s.rudra.astra, 4.5);
+      // Dash Afterimage Echoes + Sparks
+      if (s.phase === 'playing' && s.rudra.action === 'dodge') {
+        dashEchoCooldown -= rawDt;
+        if (dashEchoCooldown <= 0) {
+          dashEchoCooldown = 0.048;
+          dashEchoes.spawn(visRudraX, visRudraZ, visRudraYaw, s.rudra.astra);
+          sparkSystem.emitBurst(visRudraX, 0.85, visRudraZ, 6, s.rudra.astra, 5.5);
         }
       }
+      dashEchoes.update(rawDt);
 
-      // Update Bellhorn Dundubhi 3D Rig + Aggressive Animation Sync + Foot Grounding
+      // Update Bellhorn Dundubhi 3D Rig + Smooth Non-Warped Crossfades + C1 Swing Curves
       const isBossMeleeAttacking =
         s.phase === 'playing' &&
         s.boss.aiState === 'attack' &&
@@ -752,14 +939,14 @@ export default function KaalyugaStage() {
         if (s.boss.aiState === 'attack' && s.boss.attackKind === 'slam' && s.boss.stateDuration > 0) {
           const leapT = Math.min(1, s.boss.stateTimer / (s.boss.stateDuration * 0.56));
           if (leapT < 1) {
-            jumpArcY = Math.sin(leapT * Math.PI) * 1.1;
+            jumpArcY = Math.sin(leapT * Math.PI) * 0.85;
           }
         }
-        bossRig.root.position.set(s.boss.x, jumpArcY, s.boss.z);
-        bossRig.root.rotation.y = s.boss.yaw;
+        bossRig.root.position.set(visBossX, jumpArcY, visBossZ);
+        bossRig.root.rotation.y = visBossYaw;
 
         let desiredBossClip: DundubhiClipKey = 'idle';
-        let nextAttackKey = '';
+        let nextAttackToken = '';
         if (s.boss.aiState === 'dead') {
           desiredBossClip = 'death';
         } else if (s.boss.aiState === 'stagger') {
@@ -768,44 +955,87 @@ export default function KaalyugaStage() {
           desiredBossClip = 'run';
         } else if (s.boss.aiState === 'windup' || s.boss.aiState === 'attack') {
           desiredBossClip = s.boss.attackKind === 'charge' ? 'run' : s.boss.attackKind;
-          nextAttackKey = s.boss.attackKind === 'charge' ? '' : s.boss.attackKind;
+          nextAttackToken =
+            s.boss.attackKind === 'charge'
+              ? ''
+              : `${s.boss.attackKind}_${s.boss.comboChainLeft}`;
         }
 
-        const isNewAttackMove =
-          nextAttackKey !== '' && bossAttackAnimKey !== nextAttackKey;
-        if (desiredBossClip !== currentBossClip || isNewAttackMove) {
-          switchBossAnim(desiredBossClip, 0.11, isNewAttackMove);
+        const enteredNewWindup =
+          nextAttackToken !== '' &&
+          (bossAttackMoveToken !== nextAttackToken ||
+            (prevBossState !== 'windup' && s.boss.aiState === 'windup') ||
+            (prevBossKind !== s.boss.attackKind && s.boss.aiState === 'windup'));
+
+        if (desiredBossClip !== currentBossClip || enteredNewWindup) {
+          const isBossLoco =
+            (desiredBossClip === 'idle' || desiredBossClip === 'run') &&
+            (currentBossClip === 'idle' || currentBossClip === 'run');
+          const fadeDur = isBossLoco ? 0.22 : 0.14;
+          switchBossAnim(desiredBossClip, fadeDur, enteredNewWindup);
+          if (enteredNewWindup) bossRibbon.clear();
         }
-        bossAttackAnimKey = nextAttackKey;
+        bossAttackMoveToken = nextAttackToken;
 
         const activeBossAct = bossRig.actions[currentBossClip];
         const bossAnimDt = s.phase === 'paused' ? 0 : rawDt * dtFactor;
         if (activeBossAct) {
-          const bossPhaseMult = s.boss.phase === 2 ? 1.18 : 1.0;
-          const speedScale =
-            s.boss.aiState === 'attack' && s.boss.attackKind === 'charge'
-              ? 1.75
-              : s.boss.aiState === 'windup'
-                ? 0.85 * bossPhaseMult
-                : 1.08 * bossPhaseMult;
-          activeBossAct.setEffectiveTimeScale(speedScale);
+          const bossPhaseMult = s.boss.phase === 2 ? 1.15 : 1.0;
+          if (s.boss.aiState === 'attack' && s.boss.attackKind === 'charge') {
+            activeBossAct.setEffectiveTimeScale(1.75);
+          } else if (
+            (s.boss.aiState === 'windup' || s.boss.aiState === 'attack') &&
+            s.boss.attackKind !== 'charge'
+          ) {
+            const clipDur = Math.max(0.3, activeBossAct.getClip().duration);
+            const windupDur =
+              (s.boss.attackKind === 'punch'
+                ? 0.34
+                : s.boss.attackKind === 'slam'
+                  ? 0.62
+                  : s.boss.attackKind === 'roar'
+                    ? 0.54
+                    : 0.48) / bossPhaseMult;
+            const attackDur =
+              s.boss.attackKind === 'slam'
+                ? 0.68
+                : s.boss.attackKind === 'punch'
+                  ? 0.34
+                  : s.boss.attackKind === 'roar'
+                    ? 0.52
+                    : 0.46;
+            const expectedTotalDur = windupDur + attackDur;
+            const elapsedInMove =
+              s.boss.aiState === 'windup' ? s.boss.stateTimer : windupDur + s.boss.stateTimer;
+            const bNorm = Math.max(0, Math.min(1, elapsedInMove / Math.max(0.3, expectedTotalDur)));
+            const bossCurve = 0.74 + 0.40 * Math.sin(bNorm * Math.PI);
+            activeBossAct.setEffectiveTimeScale((clipDur / Math.max(0.3, expectedTotalDur)) * bossCurve);
+          } else {
+            activeBossAct.setEffectiveTimeScale(1.04 * bossPhaseMult);
+          }
         }
 
         bossRibbon.ageSamples(bossAnimDt);
         if (bossAnimDt > 0) {
-          const bossSubsteps = isBossMeleeAttacking ? 3 : 1;
+          const bossSubsteps = isBossMeleeAttacking ? 4 : 1;
           const subDt = bossAnimDt / bossSubsteps;
           for (let step = 0; step < bossSubsteps; step++) {
             bossRig.mixer.update(subDt);
             bossRig.root.updateMatrixWorld(true);
             const minBossFootY = getMinFootWorldY(bossRig.footBones);
             if (s.boss.aiState === 'dead' || s.boss.aiState === 'stagger') {
-              // Allow body collapse without sinking hooves/knees below ground Y = 0
               if (minBossFootY < 0.02) {
                 bossRig.modelGroup.position.y += 0.02 - minBossFootY;
               }
             } else {
-              bossRig.modelGroup.position.y += bossRig.soleOffset + jumpArcY - minBossFootY;
+              const targetBossAdj = bossRig.soleOffset + jumpArcY - minBossFootY;
+              if (targetBossAdj > 0) {
+                visBossYOffset = targetBossAdj;
+              } else {
+                visBossYOffset = THREE.MathUtils.damp(visBossYOffset, targetBossAdj, 16, subDt);
+              }
+              bossRig.modelGroup.position.y += visBossYOffset;
+              visBossYOffset = 0;
             }
             bossRig.root.updateMatrixWorld(true);
 
@@ -819,22 +1049,94 @@ export default function KaalyugaStage() {
           bossRig.root.updateMatrixWorld(true);
         }
 
-        bossRibbon.commit(totalRenderTime, isBossMeleeAttacking, 1.12);
+        bossRibbon.commit(totalRenderTime, isBossMeleeAttacking, 1.18);
 
+        setCelRimStyle(
+          bossRig.materials,
+          s.boss.phase === 2 ? 0xff1f14 : 0xff451f,
+          s.boss.phase === 2 ? 1.12 : 0.84
+        );
         setCelHitFlash(
           bossRig.materials,
           s.boss.hitFlashTimer > 0,
-          s.boss.phase === 2 ? 0x621614 : 0x451a14,
-          s.boss.phase === 2 ? 0.58 : 0.38,
+          s.boss.phase === 2 ? 0x621614 : 0x3b1612,
+          s.boss.phase === 2 ? 0.56 : 0.3,
           0xfff6d6
         );
+
+        // Blood Demon Art: Flying Blood Sickles on swipe/punch + Aura Halo + Horn Wake Ribbons
+        if (s.boss.aiState !== 'attack') {
+          bloodSicklesFiredThisAttack = false;
+        } else if (
+          s.phase === 'playing' &&
+          !bloodSicklesFiredThisAttack &&
+          (s.boss.attackKind === 'swipe' || s.boss.attackKind === 'punch') &&
+          s.boss.stateTimer >= s.boss.stateDuration * 0.28
+        ) {
+          bloodSicklesFiredThisAttack = true;
+          dundubhiBloodVfx.spawnFlyingBloodSickles(
+            visBossX,
+            visBossZ,
+            visBossYaw,
+            s.boss.phase === 2 ? 3 : 2,
+            s.boss.phase === 2
+          );
+          sparkSystem.emitBurst(
+            visBossX + Math.sin(visBossYaw) * 1.1,
+            1.35,
+            visBossZ + Math.cos(visBossYaw) * 1.1,
+            14,
+            'boss',
+            9.5
+          );
+          bossPoolPulse = Math.max(bossPoolPulse, 0.75);
+        }
+
+        const jumpScale = Math.max(0.65, 1 - jumpArcY * 0.25);
+        arena.bossShadow.scale.setScalar(jumpScale);
       } else {
         bossRibbon.clear();
       }
 
-      // Arena contact shadows, multi-shape telegraphs & expanding shockwaves
-      arena.rudraShadow.position.set(s.rudra.x, 0.012, s.rudra.z);
-      arena.bossShadow.position.set(s.boss.x, 0.013, s.boss.z);
+      dundubhiBloodVfx.update(
+        rawDt,
+        totalRenderTime,
+        visBossX,
+        visBossZ,
+        visBossYaw,
+        s.boss.phase === 2,
+        s.boss.aiState === 'windup',
+        s.boss.aiState === 'attack' && s.boss.attackKind === 'charge',
+        s.boss.aiState === 'dead'
+      );
+      heavyWaveVfx.update(rawDt);
+
+      // Arena contact shadows, elemental light pools, multi-shape telegraphs & vertical shock-walls
+      arena.rudraShadow.position.set(visRudraX, 0.012, visRudraZ);
+      arena.bossShadow.position.set(visBossX, 0.013, visBossZ);
+
+      const rudraGlowLevel = Math.max(
+        rudraPoolPulse,
+        s.phase === 'playing' && s.rudra.action === 'cast'
+          ? 0.95
+          : s.phase === 'playing' && rudraSwingKind !== null
+            ? 0.55
+            : 0
+      );
+      const bossGlowLevel = Math.max(
+        bossPoolPulse,
+        s.phase === 'playing' && s.boss.phase === 2 ? 0.38 : 0
+      );
+      arena.updateLightPools(
+        visRudraX,
+        visRudraZ,
+        rudraGlowLevel,
+        elementRimHex,
+        visBossX,
+        visBossZ,
+        bossGlowLevel,
+        s.boss.phase === 2 ? 0xff1a3c : 0xff3b28
+      );
 
       const windupProgress =
         s.boss.aiState === 'windup' && s.boss.stateDuration > 0
@@ -843,9 +1145,9 @@ export default function KaalyugaStage() {
       arena.updateTelegraph(
         s.boss.aiState === 'windup',
         s.boss.attackKind,
-        s.boss.x,
-        s.boss.z,
-        s.boss.yaw,
+        visBossX,
+        visBossZ,
+        visBossYaw,
         s.boss.targetX,
         s.boss.targetZ,
         windupProgress,
@@ -859,23 +1161,25 @@ export default function KaalyugaStage() {
           swMesh.visible = false;
         } else {
           const p = Math.min(1, sw.age / sw.duration);
+          const rad = 0.6 + p * sw.maxRadius;
           swMesh.visible = true;
-          swMesh.position.set(sw.x, 0.04, sw.z);
-          swMesh.scale.setScalar(0.6 + p * sw.maxRadius);
+          swMesh.position.set(sw.x, 0.036, sw.z);
+          swMesh.scale.setScalar(rad);
           const mat = swMesh.material as THREE.MeshBasicMaterial;
           mat.color.setHex(sw.colorHex);
-          mat.opacity = (1 - p) * 0.9;
+          mat.opacity = (1 - p) * 0.36;
         }
       }
 
       sparkSystem.update(rawDt);
       arena.updateDecor(totalRenderTime, s.boss.phase === 2, s.pillars, drumPulse);
 
-      // Keep Three.js perspective camera 100% locked to dundubhi_chamber.mp4 ground perspective!
+      // Keep Three.js perspective camera 100% locked to dundubhi_chamber.mp4 ground perspective + anime impact zoom!
       const viewportAspect =
         (container.clientWidth || window.innerWidth) /
         Math.max(1, container.clientHeight || window.innerHeight);
-      const impactDelta = s.impactFrame.timer > 0 ? 1.8 : 0;
+      const impactDelta =
+        s.impactFrame.timer > 0 ? 2.6 : s.rudra.action === 'cast' ? 1.5 : 0;
       const targetFov = computeCoverMatchedFov(viewportAspect, impactDelta);
       if (Math.abs(camera.fov - targetFov) > 0.04) {
         camera.fov += (targetFov - camera.fov) * Math.min(1, rawDt * 24);
@@ -930,8 +1234,11 @@ export default function KaalyugaStage() {
       renderer.domElement.removeEventListener('pointermove', onPointerMove);
       renderer.domElement.removeEventListener('contextmenu', onContextMenu);
       rudraRibbon.dispose();
-      astraHaloRibbon.dispose();
+      astraCyclone.dispose();
+      heavyWaveVfx.dispose();
       bossRibbon.dispose();
+      dundubhiBloodVfx.dispose();
+      dashEchoes.dispose();
       sparkSystem.dispose();
       arena.dispose();
       sound.dispose();

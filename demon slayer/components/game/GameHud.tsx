@@ -40,6 +40,7 @@ export interface HudStateView {
     opacity: number;
   }>;
   impactFlashOpacity: number;
+  speedLinesOpacity: number;
 }
 
 interface GameHudProps {
@@ -123,15 +124,59 @@ export default function GameHud({
 
   return (
     <div className="fixed inset-0 z-20 pointer-events-none select-none">
-      {/* 2-Frame Anime Impact Flash Vignette (no CSS filters, pure border glow) */}
+      {/* 2-Frame Anime Impact Flash + Peripheral Ink-Speed Lines (no CSS filters, center stays 100% open) */}
       {hud.impactFlashOpacity > 0.02 && (
         <div
           className="fixed inset-0 pointer-events-none"
           style={{
-            opacity: hud.impactFlashOpacity * 0.48,
-            boxShadow: 'inset 0 0 110px 28px rgba(255, 224, 130, 0.92)',
+            opacity: hud.impactFlashOpacity * 0.54,
+            boxShadow: 'inset 0 0 130px 32px rgba(255, 226, 138, 0.95)',
           }}
         />
+      )}
+
+      {showGameplayHud && hud.speedLinesOpacity > 0.04 && (
+        <svg
+          viewBox="0 0 1000 600"
+          preserveAspectRatio="none"
+          className="fixed inset-0 w-full h-full pointer-events-none"
+          style={{ opacity: Math.min(0.48, hud.speedLinesOpacity) }}
+          aria-hidden="true"
+        >
+          {Array.from({ length: 28 }).map((_, idx) => {
+            const ang = (idx / 28) * Math.PI * 2 + (idx % 3) * 0.04;
+            const innerRx = idx % 2 === 0 ? 462 : 486;
+            const innerRy = idx % 2 === 0 ? 276 : 292;
+            const outerRx = 640;
+            const outerRy = 420;
+            const tipX = 500 + Math.cos(ang) * innerRx;
+            const tipY = 300 + Math.sin(ang) * innerRy;
+            const perpX = -Math.sin(ang);
+            const perpY = Math.cos(ang);
+            const halfWidth = idx % 2 === 0 ? 2.6 : 1.4;
+            const baseX = 500 + Math.cos(ang) * outerRx;
+            const baseY = 300 + Math.sin(ang) * outerRy;
+            const p2x = (baseX + perpX * halfWidth).toFixed(1);
+            const p2y = (baseY + perpY * halfWidth).toFixed(1);
+            const p3x = (baseX - perpX * halfWidth).toFixed(1);
+            const p3y = (baseY - perpY * halfWidth).toFixed(1);
+            const fill =
+              idx % 4 === 0
+                ? '#fff7d6'
+                : hud.astra === 'vajra'
+                  ? '#7dd3fc'
+                  : hud.astra === 'vayu'
+                    ? '#6ee7b7'
+                    : '#ff8c2a';
+            return (
+              <polygon
+                key={idx}
+                points={`${tipX.toFixed(1)},${tipY.toFixed(1)} ${p2x},${p2y} ${p3x},${p3y}`}
+                fill={fill}
+              />
+            );
+          })}
+        </svg>
       )}
 
       {/* Critical Low HP Peripheral Vignette */}

@@ -81,6 +81,7 @@ test('Perfect parry during Dundubhi swipe deals massive poise break and incremen
   sim.boss.yaw = Math.atan2(sim.rudra.x - sim.boss.x, sim.rudra.z - sim.boss.z);
 
   stepChamberSimulation(sim, 0.03, { ...EMPTY_INPUT, blockJustPressed: true, blockHeld: true });
+  stepChamberSimulation(sim, 0.03, { ...EMPTY_INPUT, blockHeld: true });
   assert.equal(sim.rudra.action, 'block');
   assert.equal(sim.rudra.perfectParries, 1);
   assert.equal(sim.rudra.hp, 100);
@@ -113,3 +114,23 @@ test('Defeating Dundubhi plays death collapse beat then freezes victory snapshot
   assert.ok(sim.snapshot !== null);
   assert.equal(sim.snapshot?.bossHpRemaining, 0);
 });
+
+test('Dundubhi chains punch directly into follow-up swipe when Rudra stays in melee range', () => {
+  const sim = createInitialChamberState(true);
+  sim.rudra.x = 0.8;
+  sim.rudra.z = -0.8;
+  sim.boss.x = 2.4;
+  sim.boss.z = -2.4;
+  sim.boss.aiState = 'attack';
+  sim.boss.attackKind = 'punch';
+  sim.boss.comboChainLeft = 1;
+  sim.boss.stateTimer = 0.32;
+  sim.boss.stateDuration = 0.34;
+  sim.boss.attackHitApplied = true;
+
+  stepChamberSimulation(sim, 0.04, EMPTY_INPUT);
+  assert.equal(sim.boss.aiState, 'windup');
+  assert.equal(sim.boss.attackKind, 'swipe');
+  assert.equal(sim.boss.comboChainLeft, 0);
+});
+

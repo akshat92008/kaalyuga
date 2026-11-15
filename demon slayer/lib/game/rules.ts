@@ -117,6 +117,7 @@ export interface DundubhiState {
   hitFlashTimer: number;
   targetX: number;
   targetZ: number;
+  comboChainLeft: number;
 }
 
 export interface CombatSnapshot {
@@ -162,7 +163,7 @@ export interface PlayerInputFrame {
   aimWorldZ: number | null;
 }
 
-export const ARENA_BOUND = 7.2;
+export const ARENA_BOUND = 6.5;
 
 export const ELEMENT_SPECS: Record<
   AstraElement,
@@ -364,10 +365,11 @@ export function createInitialChamberState(startPlaying = false): ChamberSimState
       hitFlashTimer: 0,
       targetX: rudraSpawnX,
       targetZ: rudraSpawnZ,
+      comboChainLeft: 0,
     },
     pillars: [
-      { id: 1, x: -3.55, z: -2.45, radius: 0.78, hp: 100, intact: true },
-      { id: 2, x: 3.55, z: 2.45, radius: 0.78, hp: 100, intact: true },
+      { id: 1, x: -3.25, z: -2.25, radius: 0.76, hp: 100, intact: true },
+      { id: 2, x: 3.25, z: 2.25, radius: 0.76, hp: 100, intact: true },
     ],
     shockwaves: [],
     callouts: [],
@@ -769,33 +771,53 @@ export function stepChamberSimulation(
   if (b.aiState === 'stagger') {
     b.vx = 0;
     b.vz = 0;
+    b.comboChainLeft = 0;
     if (b.stateTimer >= b.stateDuration) {
       b.aiState = 'idle';
       b.stateTimer = 0;
-      b.cooldownTimer = 0.45;
+      b.cooldownTimer = 0.25;
     }
   } else if (b.aiState === 'idle' || b.aiState === 'chase') {
     const dirX = bossDist > 1e-4 ? (r.x - b.x) / bossDist : 0;
     const dirZ = bossDist > 1e-4 ? (r.z - b.z) / bossDist : 1;
     const desiredYaw = Math.atan2(dirX, dirZ);
-    b.yaw = normalizeAngle(b.yaw + angleDiff(desiredYaw, b.yaw) * Math.min(1, dt * 7.5));
+    b.yaw = normalizeAngle(b.yaw + angleDiff(desiredYaw, b.yaw) * Math.min(1, dt * 8.5));
 
-    if (bossDist <= 3.35 && b.cooldownTimer <= 0) {
+    if (bossDist <= 3.55 && b.cooldownTimer <= 0) {
       b.aiState = 'windup';
       const roll = Math.random();
-      b.attackKind = roll < 0.36 ? 'punch' : roll < 0.76 ? 'swipe' : 'slam';
+      if (b.phase === 2 && bossDist <= 2.75 && roll < 0.22) {
+        b.attackKind = 'roar';
+        b.comboChainLeft = 0;
+      } else if (roll < 0.48) {
+        b.attackKind = 'punch';
+        b.comboChainLeft = 1; // Chains directly into swipe/slam follow-up
+      } else if (roll < 0.82) {
+        b.attackKind = 'swipe';
+        b.comboChainLeft = b.phase === 2 && Math.random() < 0.55 ? 1 : 0;
+      } else {
+        b.attackKind = 'slam';
+        b.comboChainLeft = 0;
+      }
       b.stateTimer = 0;
       const baseWindup =
-        b.attackKind === 'punch' ? 0.4 : b.attackKind === 'slam' ? 0.72 : 0.56;
-      b.stateDuration = baseWindup / (b.phase === 2 ? 1.14 : 1.0);
+        b.attackKind === 'punch'
+          ? 0.34
+          : b.attackKind === 'slam'
+            ? 0.62
+            : b.attackKind === 'roar'
+              ? 0.54
+              : 0.48;
+      b.stateDuration = baseWindup / (b.phase === 2 ? 1.15 : 1.0);
       b.attackHitApplied = false;
       b.targetX = r.x;
       b.targetZ = r.z;
-    } else if (bossDist > 4.6 && b.cooldownTimer <= 0) {
+    } else if (bossDist > 4.25 && b.cooldownTimer <= 0) {
       b.aiState = 'windup';
-      b.attackKind = Math.random() < 0.52 ? 'charge' : 'slam';
+      b.attackKind = Math.random() < 0.56 ? 'charge' : 'slam';
+      b.comboChainLeft = 0;
       b.stateTimer = 0;
-      b.stateDuration = (b.attackKind === 'charge' ? 0.62 : 0.74) / (b.phase === 2 ? 1.14 : 1.0);
+      b.stateDuration = (b.attackKind === 'charge' ? 0.56 : 0.64) / (b.phase === 2 ? 1.15 : 1.0);
       b.attackHitApplied = false;
       // Target beyond player during horn charge so pillars can be baited in the path
       const overshoot = b.attackKind === 'charge' ? 2.4 : 0;
@@ -808,7 +830,7 @@ export function stepChamberSimulation(
       b.targetZ = clampedTgt.z;
     } else {
       b.aiState = 'chase';
-      const spd = b.phase === 2 ? 4.85 : 3.95;
+      const spd = b.phase === 2 ? 5.25 : 4.45;
       b.vx = dirX * spd;
       b.vz = dirZ * spd;
       const nextBPos = resolvePillarCollisions(
@@ -822,7 +844,7 @@ export function stepChamberSimulation(
     }
   } else if (b.aiState === 'windup') {
     const aimToTargetYaw = yawTowards(b.x, b.z, b.targetX, b.targetZ);
-    b.yaw = normalizeAngle(b.yaw + angleDiff(aimToTargetYaw, b.yaw) * Math.min(1, dt * 10));
+    b.yaw = normalizeAngle(b.yaw + angleDiff(aimToTargetYaw, b.yaw) * Math.min(1, dt * 11));
     b.vx = 0;
     b.vz = 0;
     if (b.stateTimer >= b.stateDuration) {
@@ -832,12 +854,12 @@ export function stepChamberSimulation(
         b.attackKind === 'charge'
           ? 0.62
           : b.attackKind === 'slam'
-            ? 0.56
+            ? 0.68
             : b.attackKind === 'roar'
               ? 0.52
               : b.attackKind === 'punch'
-                ? 0.36
-                : 0.48;
+                ? 0.34
+                : 0.46;
       if (b.attackKind === 'roar') sim.pendingSfx.push('boss_roar');
     }
   } else if (b.aiState === 'attack') {
@@ -974,9 +996,20 @@ export function stepChamberSimulation(
     }
 
     if (b.aiState === 'attack' && b.stateTimer >= b.stateDuration) {
-      b.aiState = 'recover';
-      b.stateTimer = 0;
-      b.stateDuration = b.attackKind === 'slam' || b.attackKind === 'charge' ? 0.62 : 0.44;
+      if (b.comboChainLeft > 0 && bossDist <= 4.6) {
+        b.comboChainLeft -= 1;
+        b.aiState = 'windup';
+        b.attackKind = b.attackKind === 'punch' ? 'swipe' : 'slam';
+        b.stateTimer = 0;
+        b.stateDuration = (b.attackKind === 'slam' ? 0.54 : 0.38) / (b.phase === 2 ? 1.15 : 1.0);
+        b.attackHitApplied = false;
+        b.targetX = r.x;
+        b.targetZ = r.z;
+      } else {
+        b.aiState = 'recover';
+        b.stateTimer = 0;
+        b.stateDuration = b.attackKind === 'slam' || b.attackKind === 'charge' ? 0.44 : 0.28;
+      }
     }
   } else if (b.aiState === 'recover') {
     b.vx = 0;
@@ -984,7 +1017,7 @@ export function stepChamberSimulation(
     if (b.stateTimer >= b.stateDuration) {
       b.aiState = 'idle';
       b.stateTimer = 0;
-      b.cooldownTimer = b.phase === 2 ? 0.38 : 0.6;
+      b.cooldownTimer = b.phase === 2 ? 0.16 : 0.28;
     }
   }
 

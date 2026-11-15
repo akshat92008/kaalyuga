@@ -19,17 +19,17 @@ export default function TitleOverlay({
 
   return (
     <div
-      className="fixed inset-0 z-30 pointer-events-none flex flex-col justify-between p-8 md:p-14"
+      className="fixed inset-0 z-30 pointer-events-none flex flex-col justify-between p-8 md:p-12"
       style={{
         background:
-          'linear-gradient(90deg, rgba(7,5,9,0.88) 0%, rgba(10,7,12,0.58) 38%, rgba(10,7,12,0.06) 66%, rgba(7,5,9,0.18) 100%)',
+          'linear-gradient(90deg, rgba(7,5,9,0.88) 0%, rgba(10,7,12,0.52) 32%, rgba(10,7,12,0.0) 56%, rgba(7,5,9,0.14) 100%)',
       }}
     >
       {/* Top negative-space margin spacer */}
       <div />
 
       {/* Left-third mythic title lockup over calm dark vignette */}
-      <div className="max-w-lg pointer-events-auto select-none">
+      <div className="max-w-md pointer-events-auto select-none">
         {/* Custom SVG Bull-Yantra & Parashu Emblem */}
         <svg
           viewBox="0 0 280 54"

@@ -93,23 +93,78 @@ export interface CelMaterialOptions {
   tintHex?: number;
   emissiveHex?: number;
   emissiveIntensity?: number;
+  rimColorHex?: number;
+  rimStrength?: number;
+  rimPower?: number;
+}
+
+export interface CelShaderUniforms {
+  uRimColor: { value: THREE.Color };
+  uRimStrength: { value: number };
+  uRimPower: { value: number };
+  uFlashColor: { value: THREE.Color };
+  uFlashMix: { value: number };
 }
 
 /**
  * Builds a luminous Demon Slayer cel-shaded material that uses the character's
- * brightened diffuse map for crisp stepped lighting and self-lit shadow warmth.
+ * brightened diffuse map for crisp stepped lighting, self-lit shadow warmth, and
+ * a hard-stepped Ufotable Fresnel rim-light pass.
  */
 export function createDemonSlayerCelMaterial(
   opts: CelMaterialOptions
 ): THREE.MeshToonMaterial {
-  const mat = new THREE.MeshToonMaterial({
+  const matOpts: THREE.MeshToonMaterialParameters = {
     color: opts.tintHex ?? 0xffffff,
-    map: opts.map ?? undefined,
     gradientMap: getDemonSlayerToonGradient(),
     emissive: new THREE.Color(opts.emissiveHex ?? 0x2d1d17),
-    emissiveMap: opts.map ?? undefined,
-    emissiveIntensity: opts.emissiveIntensity ?? 0.34,
-  });
+    emissiveIntensity: opts.emissiveIntensity ?? 0.32,
+  };
+  if (opts.map) {
+    matOpts.map = opts.map;
+    matOpts.emissiveMap = opts.map;
+  }
+
+  const mat = new THREE.MeshToonMaterial(matOpts);
+
+  const celUniforms: CelShaderUniforms = {
+    uRimColor: { value: new THREE.Color(opts.rimColorHex ?? 0xffa94d) },
+    uRimStrength: { value: opts.rimStrength ?? 0.72 },
+    uRimPower: { value: opts.rimPower ?? 2.35 },
+    uFlashColor: { value: new THREE.Color(0xfff1c4) },
+    uFlashMix: { value: 0.0 },
+  };
+  mat.userData.celUniforms = celUniforms;
+
+  mat.onBeforeCompile = (shader) => {
+    shader.uniforms.uRimColor = celUniforms.uRimColor;
+    shader.uniforms.uRimStrength = celUniforms.uRimStrength;
+    shader.uniforms.uRimPower = celUniforms.uRimPower;
+    shader.uniforms.uFlashColor = celUniforms.uFlashColor;
+    shader.uniforms.uFlashMix = celUniforms.uFlashMix;
+
+    shader.fragmentShader =
+      `
+      uniform vec3 uRimColor;
+      uniform float uRimStrength;
+      uniform float uRimPower;
+      uniform vec3 uFlashColor;
+      uniform float uFlashMix;
+      ` +
+      shader.fragmentShader.replace(
+        '#include <dithering_fragment>',
+        `
+        vec3 celViewDir = normalize(vViewPosition);
+        float celNdotV = clamp(dot(normalize(vNormal), celViewDir), 0.0, 1.0);
+        float celRimRaw = pow(1.0 - celNdotV, uRimPower);
+        float celRimStep = smoothstep(0.32, 0.56, celRimRaw);
+        gl_FragColor.rgb += uRimColor * celRimStep * uRimStrength;
+        gl_FragColor.rgb = mix(gl_FragColor.rgb, uFlashColor, clamp(uFlashMix * (0.45 + 0.55 * celRimStep), 0.0, 0.85));
+        #include <dithering_fragment>
+        `
+      );
+  };
+  mat.customProgramCacheKey = () => 'demon-slayer-fresnel-toon-v2';
   return mat;
 }
 
@@ -120,7 +175,7 @@ export function createDemonSlayerCelMaterial(
  */
 export function attachSumiInkOutlines(
   root: THREE.Object3D,
-  outlineHeightRatio = 0.007,
+  outlineHeightRatio = 0.005,
   outlineColorHex = 0x080509
 ): THREE.Mesh[] {
   const targets: THREE.Mesh[] = [];
@@ -146,13 +201,16 @@ export function attachSumiInkOutlines(
       bb.max.x - bb.min.x,
       bb.max.z - bb.min.z
     );
-    const localExtrude = Math.min(localSpan * 0.02, localSpan * outlineHeightRatio);
+    const localExtrude = Math.min(localSpan * 0.016, localSpan * outlineHeightRatio);
 
     const outlineMat = new THREE.MeshToonMaterial({
       color: 0x000000,
       emissive: new THREE.Color(outlineColorHex),
       emissiveIntensity: 1.0,
       side: THREE.BackSide,
+      polygonOffset: true,
+      polygonOffsetFactor: 1,
+      polygonOffsetUnits: 1,
     });
 
     outlineMat.onBeforeCompile = (shader) => {
@@ -193,6 +251,20 @@ export function attachSumiInkOutlines(
   return created;
 }
 
+export function setCelRimStyle(
+  materials: THREE.MeshToonMaterial[],
+  rimColorHex: number,
+  rimStrength: number
+) {
+  for (const m of materials) {
+    const u = m.userData.celUniforms as CelShaderUniforms | undefined;
+    if (u) {
+      u.uRimColor.value.setHex(rimColorHex);
+      u.uRimStrength.value = rimStrength;
+    }
+  }
+}
+
 export function setCelHitFlash(
   materials: THREE.MeshToonMaterial[],
   isFlashing: boolean,
@@ -201,12 +273,20 @@ export function setCelHitFlash(
   flashColorHex = 0xfff3d1
 ) {
   for (const m of materials) {
+    const u = m.userData.celUniforms as CelShaderUniforms | undefined;
     if (isFlashing) {
       m.emissive.setHex(flashColorHex);
-      m.emissiveIntensity = 1.65;
+      m.emissiveIntensity = 1.05;
+      if (u) {
+        u.uFlashColor.value.setHex(flashColorHex);
+        u.uFlashMix.value = 0.72;
+      }
     } else {
       m.emissive.setHex(baseEmissiveHex);
       m.emissiveIntensity = baseEmissiveIntensity;
+      if (u) {
+        u.uFlashMix.value = 0.0;
+      }
     }
   }
 }
