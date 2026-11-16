@@ -362,9 +362,28 @@ export function renderParallaxAbyss(
 
 // Singleton 60 FPS Arena Video Pool (Only 1 active GPU-accelerated decoder at a time, zero double-blit)
 const arenaVideoPool = new Map<string, HTMLVideoElement>();
+const arenaVideoLastFrameCache = new Map<string, HTMLCanvasElement>();
 let currentPlayingVideoUrl: string | null = null;
 const arenaVideoPlayPending = new Set<string>();
 let videoGestureUnlockBound = false;
+
+function captureArenaVideoFrame(videoUrl: string, video: HTMLVideoElement): void {
+  if (typeof document === 'undefined' || video.videoWidth <= 0 || video.videoHeight <= 0) return;
+  let cached = arenaVideoLastFrameCache.get(videoUrl);
+  if (!cached) {
+    cached = document.createElement('canvas');
+    cached.width = 960;
+    cached.height = 540;
+    arenaVideoLastFrameCache.set(videoUrl, cached);
+  }
+  const cctx = cached.getContext('2d');
+  if (!cctx) return;
+  try {
+    cctx.drawImage(video, 0, 0, cached.width, cached.height);
+  } catch {
+    // Ignore transient frame copy failure
+  }
+}
 
 function bindVideoGestureUnlock(): void {
   if (videoGestureUnlockBound || typeof window === 'undefined') return;
@@ -488,10 +507,14 @@ export function renderIsometricChamberPlatform(
     activeVideo!.readyState >= 2 &&
     activeVideo!.videoWidth > 0 &&
     activeVideo!.videoHeight > 0;
+  const cachedVideoFrame = resolvedVideoUrl ? arenaVideoLastFrameCache.get(resolvedVideoUrl) : undefined;
 
-  // 1. Full Bleed 1080p HD Animated Arena Video (Direct GPU Video -> Canvas Draw, Zero Dark Color Shading!) OR Artwork Fallback
-  if (isVideoReady && activeVideo) {
+  // 1. Full Bleed 1080p HD Animated Arena Video (Direct GPU Video -> Canvas Draw, Zero Dark Color Shading!) OR Cached Last Video Frame OR Artwork Fallback
+  if (isVideoReady && activeVideo && resolvedVideoUrl) {
+    captureArenaVideoFrame(resolvedVideoUrl, activeVideo);
     ctx.drawImage(activeVideo, 0, 0, worldW, worldH);
+  } else if (cachedVideoFrame) {
+    ctx.drawImage(cachedVideoFrame, 0, 0, worldW, worldH);
   } else if (bgImg && bgImg.complete && bgImg.naturalWidth > 0) {
     ctx.drawImage(bgImg, 0, 0, worldW, worldH);
   } else {

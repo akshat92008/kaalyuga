@@ -371,8 +371,8 @@ export function getSharedStudioWebGLRenderer(size: number): THREE.WebGLRenderer 
       });
       sharedStudioWebGLRenderer.setPixelRatio(1);
       sharedStudioWebGLRenderer.outputColorSpace = THREE.SRGBColorSpace;
-      sharedStudioWebGLRenderer.toneMapping = THREE.NoToneMapping;
-      sharedStudioWebGLRenderer.toneMappingExposure = 1.0;
+      sharedStudioWebGLRenderer.toneMapping = THREE.ACESFilmicToneMapping;
+      sharedStudioWebGLRenderer.toneMappingExposure = 0.98;
       sharedStudioWebGLRenderer.shadowMap.enabled = false;
       sharedStudioWebGLRenderer.setClearColor(0x000000, 0);
       cachedIsSoftwareWebGL = null;
@@ -392,26 +392,28 @@ export function getSharedStudioWebGLRenderer(size: number): THREE.WebGLRenderer 
 }
 
 /**
- * Attaches the unified Hades Studio Key / Fill / Warm-Rim Lighting Rig to any
- * 3D character or boss scene so Rudra, Enemies, and Bosses share 100% identical
- * shading, value hierarchy, and warm rim separation.
+ * Attaches the unified Demon Slayer Anime Key / Cool-Shadow Fill / Warm-Rim Lighting Rig to any
+ * 3D character or boss scene so Rudra, Enemies, and Bosses show crisp 2-tone cel shadows and authentic colors.
  */
 export function setupSharedStudioLightingRig(
   scene: THREE.Scene,
   distanceScale = 1.0
 ): SharedStudioRigLights {
-  const ambient = new THREE.AmbientLight(0xfffaf2, 2.25);
+  const ambient = new THREE.AmbientLight(0x4b4268, 0.56);
   scene.add(ambient);
 
-  const keyLight = new THREE.DirectionalLight(0xfff4e2, 1.85);
+  const hemi = new THREE.HemisphereLight(0xffe8d2, 0x1e182e, 0.42);
+  scene.add(hemi);
+
+  const keyLight = new THREE.DirectionalLight(0xfff1dc, 1.32);
   keyLight.position.set(3.0 * distanceScale, 5.2 * distanceScale, 4.0 * distanceScale);
   scene.add(keyLight);
 
-  const fillLight = new THREE.DirectionalLight(0xd8e2f0, 0.82);
+  const fillLight = new THREE.DirectionalLight(0x7ca2de, 0.36);
   fillLight.position.set(-3.2 * distanceScale, 2.4 * distanceScale, 2.0 * distanceScale);
   scene.add(fillLight);
 
-  const rimLight = new THREE.DirectionalLight(0xffcf70, 1.15);
+  const rimLight = new THREE.DirectionalLight(0xffb85c, 0.72);
   rimLight.position.set(0.0, 3.6 * distanceScale, -3.8 * distanceScale);
   scene.add(rimLight);
 

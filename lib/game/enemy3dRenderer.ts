@@ -3,12 +3,16 @@ import type { EnemyTrait, Warden3DRigKey } from './assets';
 import {
   SHARED_STUDIO_OUTLINE_COLOR,
   SHARED_STUDIO_OUTLINE_THICKNESS,
-  applyHadesCelShadingToHierarchy,
   bake2DSpriteFrameFromCanvas,
   getSharedStudioWebGLRenderer,
   isSoftwareWebGLRenderer,
   setupSharedStudioLightingRig,
 } from './hadesSpriteBaker';
+import {
+  applyDemonSlayerCelShadingToHierarchy,
+  setCelHitFlash,
+  setCelRimStyle,
+} from './demonSlayerShader';
 import { loadFbxCached, simplifyBufferGeometry } from './meshSimplifier';
 
 export type RegularEnemy3DKind =
@@ -62,6 +66,7 @@ interface EnemyModelSlot {
   group: THREE.Group | null;
   mixer: THREE.AnimationMixer | null;
   actions: Partial<Record<Enemy3DAnimState, THREE.AnimationAction>>;
+  celMaterials?: THREE.MeshToonMaterial[];
   ready: boolean;
 }
 
@@ -796,7 +801,16 @@ export class Enemy3DRenderer {
           }
           clonedWep.position.set(0.26 * maxDim * localWepScale, 0, 0);
           weaponSocket.add(clonedWep);
-          applyHadesCelShadingToHierarchy(weaponSocket);
+          const wepStyled = applyDemonSlayerCelShadingToHierarchy(weaponSocket, {
+            rimColorHex: slot.rimColor,
+            rimStrength: slot.rimIntensity,
+            brightnessLift: 1.22,
+            saturationBoost: 1.24,
+            outlineHeightRatio: 0.005,
+            outlineColorHex: 0x080509,
+          });
+          if (!slot.celMaterials) slot.celMaterials = [];
+          slot.celMaterials.push(...wepStyled.celMaterials);
           rightHand.add(weaponSocket);
           flushCache();
         });
@@ -828,7 +842,16 @@ export class Enemy3DRenderer {
         bucklerGroup.rotation.set(0, Math.PI * 0.5, 0);
         bucklerGroup.position.set(-0.06 * maxDim * localShieldScale, 0, 0.1 * maxDim * localShieldScale);
         shieldSocket.add(bucklerGroup);
-        applyHadesCelShadingToHierarchy(shieldSocket);
+        const shieldStyled = applyDemonSlayerCelShadingToHierarchy(shieldSocket, {
+          rimColorHex: slot.rimColor,
+          rimStrength: slot.rimIntensity,
+          brightnessLift: 1.2,
+          saturationBoost: 1.2,
+          outlineHeightRatio: 0.005,
+          outlineColorHex: 0x080509,
+        });
+        if (!slot.celMaterials) slot.celMaterials = [];
+        slot.celMaterials.push(...shieldStyled.celMaterials);
         leftArmBone.add(shieldSocket);
         flushCache();
       }
@@ -907,7 +930,16 @@ export class Enemy3DRenderer {
       baseGroup.position.set(0, -0.06, 0);
 
       this.attachWeaponToRig(baseGroup, slot);
-      applyHadesCelShadingToHierarchy(baseGroup);
+      const styled = applyDemonSlayerCelShadingToHierarchy(baseGroup, {
+        rimColorHex: slot.rimColor,
+        rimStrength: Math.min(0.68, slot.rimIntensity),
+        rimPower: 2.55,
+        brightnessLift: 1.04,
+        saturationBoost: 1.32,
+        outlineHeightRatio: 0.0046,
+        outlineColorHex: 0x070409,
+      });
+      slot.celMaterials = [...(slot.celMaterials || []), ...styled.celMaterials];
 
       const wrapper = new THREE.Group();
       wrapper.add(baseGroup);
@@ -1152,6 +1184,15 @@ export class Enemy3DRenderer {
 
     slot.group.rotation.y = Math.PI * 0.5 - quantizedYaw;
 
+    if (slot.celMaterials && slot.celMaterials.length > 0) {
+      const rimHex =
+        state === 'windup' ? 0xff3b47 : isElite ? 0xff6b35 : slot.rimColor;
+      const rimStrength =
+        state === 'windup' ? 1.08 : state === 'attack' ? 0.94 : slot.rimIntensity;
+      setCelRimStyle(slot.celMaterials, rimHex, Math.min(0.84, rimStrength));
+      setCelHitFlash(slot.celMaterials, hitFlash, 0x1a1118, 0.08, 0xffe49e);
+    }
+
     if (
       this.renderer.domElement.width !== this.size ||
       this.renderer.domElement.height !== this.size
@@ -1160,6 +1201,9 @@ export class Enemy3DRenderer {
     }
     this.renderer.clear();
     this.renderer.render(this.scene, this.camera);
+    if (slot.celMaterials && slot.celMaterials.length > 0) {
+      setCelHitFlash(slot.celMaterials, false, 0x1a1118, 0.08, 0xffe49e);
+    }
 
     const outlineHex = SHARED_STUDIO_OUTLINE_COLOR;
     const silhouetteRole =

@@ -256,6 +256,10 @@ export function buildCandidateRepoPaths(decoded: string[]): string[][] {
     candidates.push(['new 3D assets and animations', 'Cutscenes & Audio', ...rest]);
   } else if (top === 'new_3d_assets') {
     candidates.push(['new 3D assets and animations', ...decoded.slice(1)]);
+  } else if (top === 'kaalyuga') {
+    const rest = decoded.slice(1);
+    candidates.push(['demon slayer', 'public', 'kaalyuga', ...rest]);
+    candidates.push(['public', 'kaalyuga', ...rest]);
   } else {
     candidates.push(['public', ...decoded]);
   }

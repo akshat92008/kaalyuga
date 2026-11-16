@@ -43,6 +43,7 @@ const nextConfig: NextConfig = {
       'images',
       'cutscenes',
       'new_3d_assets',
+      'kaalyuga',
     ];
     return {
       beforeFiles: assetDirs.map((dir) => ({

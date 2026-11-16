@@ -6,13 +6,17 @@ import {
 } from './enemy3dRenderer';
 import {
   SHARED_STUDIO_OUTLINE_COLOR,
-  SHARED_STUDIO_OUTLINE_THICKNESS,
-  applyHadesCelShadingToHierarchy,
   bake2DSpriteFrameFromCanvas,
   getSharedStudioWebGLRenderer,
   isSoftwareWebGLRenderer,
   setupSharedStudioLightingRig,
 } from './hadesSpriteBaker';
+import {
+  applyDemonSlayerCelShadingToHierarchy,
+  createParashuAuraMaterial,
+  setCelHitFlash,
+  setCelRimStyle,
+} from './demonSlayerShader';
 import { loadFbxCached, simplifyBufferGeometry } from './meshSimplifier';
 
 export type RudraAnimState =
@@ -202,6 +206,9 @@ export class Rudra3DRenderer {
   private stateElapsedSec = 0;
   private lastAnimState: RudraAnimState = 'idle';
   private frameCache: Map<string, HTMLCanvasElement> = new Map();
+  private celMaterials: THREE.MeshToonMaterial[] = [];
+  private parashuAuraMats: THREE.ShaderMaterial[] = [];
+  private activeStance = 'smash';
   private disposed = false;
   private prewarmQueue: Array<() => void> = [];
   private prewarmTimer: number | null = null;
@@ -330,6 +337,25 @@ export class Rudra3DRenderer {
               wm.frustumCulled = false;
             }
           });
+          // Add animated Demon Slayer Parashu elemental energy aura shell (skipped by Sumi-e outline pass)
+          const auraMeshes: THREE.Mesh[] = [];
+          weaponGroup.traverse((c) => {
+            if ((c as THREE.Mesh).isMesh && !c.userData.isAuraShell) {
+              const wm = c as THREE.Mesh;
+              const auraMat = createParashuAuraMaterial(0xff6a22, 1.35);
+              this.parashuAuraMats.push(auraMat);
+              const auraShell = new THREE.Mesh(wm.geometry, auraMat);
+              auraShell.position.copy(wm.position);
+              auraShell.rotation.copy(wm.rotation);
+              auraShell.scale.copy(wm.scale);
+              auraShell.frustumCulled = false;
+              auraShell.userData.isAuraShell = true;
+              auraMeshes.push(auraShell);
+              if (wm.parent) {
+                wm.parent.add(auraShell);
+              }
+            }
+          });
           const handScaleVec = new THREE.Vector3();
           rightHand.getWorldScale(handScaleVec);
           const handScale = Math.max(1e-5, handScaleVec.x);
@@ -349,7 +375,16 @@ export class Rudra3DRenderer {
           rightHand.add(weaponSocket);
         }
 
-        applyHadesCelShadingToHierarchy(baseGroup);
+        const styled = applyDemonSlayerCelShadingToHierarchy(baseGroup, {
+          rimColorHex: 0xff9f40,
+          rimStrength: 0.62,
+          rimPower: 2.55,
+          brightnessLift: 1.02,
+          saturationBoost: 1.32,
+          outlineHeightRatio: 0.0044,
+          outlineColorHex: 0x070409,
+        });
+        this.celMaterials = styled.celMaterials;
 
         this.wrapper.add(baseGroup);
         this.model = baseGroup;
@@ -444,10 +479,12 @@ export class Rudra3DRenderer {
         fn?.();
       }
       if (this.prewarmQueue.length > 0) {
-        this.prewarmTimer = window.setTimeout(flushChunk, 16);
+        const delayMs = isSoftwareWebGLRenderer() ? 64 : 16;
+        this.prewarmTimer = window.setTimeout(flushChunk, delayMs);
       }
     };
-    this.prewarmTimer = window.setTimeout(flushChunk, 16);
+    const initDelayMs = isSoftwareWebGLRenderer() ? 64 : 16;
+    this.prewarmTimer = window.setTimeout(flushChunk, initDelayMs);
   }
 
   /**
@@ -512,12 +549,14 @@ export class Rudra3DRenderer {
       this.actions
     );
 
+    const stance = input.stance || 'smash';
+    this.activeStance = stance;
     const facingAngle =
       input.isAttacking || input.isHeavyAttack
         ? input.slashAngle
         : Math.atan2(input.facingY || 0, input.facingX || 1);
 
-    const baked = this.renderFrame(state, animClock, facingAngle, input.isHurt);
+    const baked = this.renderFrame(state, animClock, facingAngle, input.isHurt, stance);
     if (baked) {
       this.canvas = baked;
       return true;
@@ -529,9 +568,21 @@ export class Rudra3DRenderer {
     state: RudraAnimState,
     animTimeSec: number,
     facingAngleRad: number,
-    hitFlash = false
+    hitFlash = false,
+    stanceTag?: string
   ): HTMLCanvasElement | null {
     if (!this.isReady || !this.model || !this.mixer) return null;
+
+    const stance = stanceTag ?? this.activeStance;
+    const elemTag = stance === 'pillar' ? 'vayu' : stance === 'thrust' ? 'vajra' : 'agni';
+    const elemHex =
+      elemTag === 'vayu' ? 0x34d399 : elemTag === 'vajra' ? 0x38d9ff : 0xff7a22;
+    const rimRgba =
+      elemTag === 'vayu'
+        ? 'rgba(52, 211, 153, 0.85)'
+        : elemTag === 'vajra'
+          ? 'rgba(56, 217, 255, 0.88)'
+          : 'rgba(255, 146, 62, 0.85)';
 
     const normalizedYaw = ((facingAngleRad % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
     const yawIndex = Math.round((normalizedYaw / (Math.PI * 2)) * 12) % 12;
@@ -561,13 +612,21 @@ export class Rudra3DRenderer {
     const quantizedTime = (stepIndex / steps) * clipDur;
 
     const flashTag = hitFlash ? 'flash' : 'norm';
-    const cacheKey = `rudra:${state}:y${yawIndex}:f${stepIndex}:${flashTag}`;
+    const cacheKey = `rudra:${state}:${elemTag}:y${yawIndex}:f${stepIndex}:${flashTag}`;
 
     const cached = this.frameCache.get(cacheKey);
     if (cached) return cached;
 
     const renderer = getSharedStudioWebGLRenderer(this.size);
     if (!renderer) return null;
+
+    setCelRimStyle(this.celMaterials, elemHex, isAttack ? 0.82 : 0.58);
+    setCelHitFlash(this.celMaterials, hitFlash, 0x1a1118, 0.08, 0xffe49e);
+    for (const auraMat of this.parashuAuraMats) {
+      auraMat.uniforms.uTime.value = this.elapsedSec + stepIndex * 0.08;
+      auraMat.uniforms.uColor.value.setHex(elemHex);
+      auraMat.uniforms.uIntensity.value = isAttack ? 1.18 : 0.86;
+    }
 
     if (action) {
       this.mixer.stopAllAction();
@@ -580,10 +639,11 @@ export class Rudra3DRenderer {
     this.wrapper.rotation.x = 0;
 
     renderer.render(this.scene, this.camera);
+    setCelHitFlash(this.celMaterials, false, 0x1a1118, 0.08, 0xffe49e);
 
     const baked = bake2DSpriteFrameFromCanvas(renderer.domElement, cacheKey, {
       role: 'rudra',
-      rimColor: 'rgba(255, 179, 71, 0.78)',
+      rimColor: rimRgba,
       outlineColor: SHARED_STUDIO_OUTLINE_COLOR,
       outlineThickness: 2.2,
       hitFlash,

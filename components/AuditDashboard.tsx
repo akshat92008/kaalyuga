@@ -165,7 +165,7 @@ export default function AuditDashboard() {
   return (
     <div className="min-h-screen bg-[#0B0F17] text-slate-100 flex flex-col">
       {/* Top Bar Contract: Zone 1 Brand — Zone 2 Nav Links — Zone 3 Primary Action */}
-      <header className="sticky top-0 z-30 flex items-center justify-between gap-8 px-6 py-3.5 bg-[#0B0F17]/95 backdrop-blur border-b border-slate-800">
+      <header className="sticky top-0 z-30 flex items-center justify-between gap-8 px-6 py-3.5 bg-[#0B0F17]/95 border-b border-slate-800">
         <a
           href="#top"
           className="text-base font-bold tracking-tight text-slate-100 whitespace-nowrap shrink-0"
