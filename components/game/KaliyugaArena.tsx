@@ -1221,36 +1221,20 @@ export default function KaliyugaArena() {
     []
   );
 
-  // Helper to spawn pooled motion afterimages
+  // 2D sprite afterimages are superseded by live 3D DashEchoPool in UnifiedWorld3DStage (prevents 2D checkerboard sprite cutouts)
   const spawnAfterimage = useCallback(
     (
-      assetUrl: string,
-      frameIndex: number,
-      x: number,
-      y: number,
-      targetHeight: number,
-      facing: 1 | -1,
-      elevationY: number,
-      tint: 'gold' | 'jade' = 'gold',
-      duration: number = 0.24
+      _assetUrl: string,
+      _frameIndex: number,
+      _x: number,
+      _y: number,
+      _targetHeight: number,
+      _facing: 1 | -1,
+      _elevationY: number,
+      _tint: 'gold' | 'jade' = 'gold',
+      _duration: number = 0.24
     ) => {
-      const pool = simRef.current.afterimages;
-      for (let i = 0; i < pool.length; i++) {
-        if (!pool[i].active) {
-          pool[i].active = true;
-          pool[i].assetUrl = assetUrl;
-          pool[i].frameIndex = frameIndex;
-          pool[i].x = x;
-          pool[i].y = y;
-          pool[i].targetHeight = targetHeight;
-          pool[i].facing = facing;
-          pool[i].elevationY = elevationY;
-          pool[i].tint = tint;
-          pool[i].maxLife = duration;
-          pool[i].life = duration;
-          return;
-        }
-      }
+      // Handled in 3D via unifiedWorld3dRef.current.spawnDashEcho
     },
     []
   );
@@ -10667,10 +10651,10 @@ export default function KaliyugaArena() {
         style={{ opacity: 0 }}
       >
         <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full">
-          {Array.from({ length: 36 }, (_, idx) => {
-            const angle = (idx / 36) * Math.PI * 2 + (idx % 2 === 0 ? 0.018 : -0.012);
-            const spread = idx % 3 === 0 ? 0.032 : 0.018;
-            const innerR = idx % 4 === 0 ? 29 : idx % 2 === 0 ? 35 : 41;
+          {Array.from({ length: 84 }, (_, idx) => {
+            const angle = (idx / 84) * Math.PI * 2 + (idx % 2 === 0 ? 0.008 : -0.006);
+            const spread = idx % 3 === 0 ? 0.0042 : 0.0026;
+            const innerR = idx % 4 === 0 ? 41 : idx % 2 === 0 ? 44 : 47;
             const outerR = 76;
             const x1 = 50 + Math.cos(angle) * innerR;
             const y1 = 50 + Math.sin(angle) * innerR;
@@ -10682,8 +10666,8 @@ export default function KaliyugaArena() {
               <polygon
                 key={idx}
                 points={`${x1.toFixed(2)},${y1.toFixed(2)} ${x2.toFixed(2)},${y2.toFixed(2)} ${x3.toFixed(2)},${y3.toFixed(2)}`}
-                fill={idx % 3 === 0 ? '#08040a' : '#f5ebd6'}
-                opacity={idx % 3 === 0 ? 0.72 : 0.78}
+                fill={idx % 3 === 0 ? '#060208' : '#fff8e7'}
+                opacity={idx % 3 === 0 ? 0.55 : 0.65}
               />
             );
           })}

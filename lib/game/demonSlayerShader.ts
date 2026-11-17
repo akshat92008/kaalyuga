@@ -3,12 +3,12 @@ import * as THREE from 'three';
 let sharedToonGradient: THREE.DataTexture | null = null;
 
 /**
- * 3-step Demon Slayer cel-shading ramp:
- * Deep rich shadow plane (30%), true-color midtone (64%), crisp daylight plane (92%) — zero pure-white blowout.
+ * 4-step Demon Slayer / Hinokami Chronicles cel-shading ramp:
+ * Warm anime shadow floor (58%), rich midtone (82%), crisp lit plane (96%), and specular highlight step (100%).
  */
 export function getDemonSlayerToonGradient(): THREE.DataTexture {
   if (sharedToonGradient) return sharedToonGradient;
-  const stops = new Uint8Array([76, 164, 234]);
+  const stops = new Uint8Array([152, 214, 248]);
   const tex = new THREE.DataTexture(stops, 3, 1, THREE.RedFormat);
   tex.minFilter = THREE.NearestFilter;
   tex.magFilter = THREE.NearestFilter;
@@ -20,13 +20,13 @@ export function getDemonSlayerToonGradient(): THREE.DataTexture {
 
 /**
  * Grades Meshy PBR textures into vivid Demon Slayer anime color blocks while
- * protecting bright ash/bone areas from blowing out to flat #ffffff white and
- * keeping dark crevice ink lines deep so muscle definition and armor filigree pop.
+ * lifting dark AI-baked ambient occlusion shadows into vibrant hand-painted pigments
+ * and preserving crisp dark crevice ink lines.
  */
 export function liftTextureToAnimeVibrancy(
   tex: THREE.Texture | null,
-  brightnessLift = 1.04,
-  saturationBoost = 1.32
+  brightnessLift = 1.18,
+  saturationBoost = 1.45
 ): THREE.Texture | null {
   if (!tex || typeof document === 'undefined') return tex;
   const img = tex.image as HTMLImageElement | HTMLCanvasElement | ImageBitmap | undefined;
@@ -34,54 +34,18 @@ export function liftTextureToAnimeVibrancy(
     return tex;
   }
   try {
-    const w = Math.min(512, img.width);
-    const h = Math.min(512, img.height);
+    const w = Math.min(256, img.width);
+    const h = Math.min(256, img.height);
     const canvas = document.createElement('canvas');
     canvas.width = w;
     canvas.height = h;
     const ctx = canvas.getContext('2d');
     if (!ctx) return tex;
+    const bPct = Math.round(Math.min(1.35, Math.max(0.95, brightnessLift)) * 100);
+    const sPct = Math.round(Math.min(1.65, Math.max(1.0, saturationBoost)) * 100);
+    ctx.filter = `brightness(${bPct}%) saturate(${sPct}%) contrast(112%)`;
     ctx.drawImage(img as CanvasImageSource, 0, 0, w, h);
-    const imgData = ctx.getImageData(0, 0, w, h);
-    const d = imgData.data;
-    const safeLift = Math.min(1.08, Math.max(0.88, brightnessLift));
-    for (let i = 0; i < d.length; i += 4) {
-      if (d[i + 3] === 0) continue;
-      let r = d[i] / 255;
-      let g = d[i + 1] / 255;
-      let b = d[i + 2] / 255;
-      const luma = 0.299 * r + 0.587 * g + 0.114 * b;
-      // Preserve deep Sumi-e black crevice ink lines
-      if (luma < 0.08) {
-        r *= 0.62;
-        g *= 0.60;
-        b *= 0.66;
-      } else if (luma > 0.68) {
-        // Highlight-safe shoulder compression so pale ash/bone textures keep anime shading instead of chalk #ffffff
-        const compressed = 0.68 + (luma - 0.68) * 0.58;
-        const ratio = compressed / Math.max(0.001, luma);
-        r *= ratio;
-        g *= ratio;
-        b *= ratio;
-        const nl = 0.299 * r + 0.587 * g + 0.114 * b;
-        r = nl + (r - nl) * (saturationBoost * 1.08);
-        g = nl + (g - nl) * (saturationBoost * 1.08);
-        b = nl + (b - nl) * (saturationBoost * 1.08);
-      } else {
-        // Rich midtone anime pigment saturation without washing out shadows
-        r = Math.pow(r, 0.92) * safeLift;
-        g = Math.pow(g, 0.92) * safeLift;
-        b = Math.pow(b, 0.92) * safeLift;
-        const nl = 0.299 * r + 0.587 * g + 0.114 * b;
-        r = nl + (r - nl) * saturationBoost;
-        g = nl + (g - nl) * saturationBoost;
-        b = nl + (b - nl) * saturationBoost;
-      }
-      d[i] = Math.max(0, Math.min(242, Math.round(r * 255)));
-      d[i + 1] = Math.max(0, Math.min(240, Math.round(g * 255)));
-      d[i + 2] = Math.max(0, Math.min(238, Math.round(b * 255)));
-    }
-    ctx.putImageData(imgData, 0, 0);
+    ctx.filter = 'none';
     const out = new THREE.CanvasTexture(canvas);
     out.colorSpace = THREE.SRGBColorSpace;
     out.flipY = tex.flipY;
@@ -119,9 +83,10 @@ export interface CelShaderUniforms {
 }
 
 /**
- * Builds a calibrated Demon Slayer cel-shaded material with crisp stepped lighting,
- * cool/warm shadow preservation (zero white-out), hard Fresnel anime rim light,
- * and dynamic Blood Demon Art / Breathing Form bounce lighting.
+ * Builds a Guilty Gear Strive / Demon Slayer: Hinokami Chronicles cel-painted material:
+ * - GPU-side Anime Albedo Posterization & Shadow Lift (works 100% even when textures stream async!)
+ * - Non-black Half-Lambert 3-band anime cel lighting (shadows never crush to pitch black)
+ * - Internal Fresnel Sumi-e contour ink linework + razor-sharp stepped elemental rim light
  */
 export function createDemonSlayerCelMaterial(
   opts: CelMaterialOptions
@@ -129,8 +94,8 @@ export function createDemonSlayerCelMaterial(
   const matOpts: THREE.MeshToonMaterialParameters = {
     color: opts.tintHex ?? 0xffffff,
     gradientMap: getDemonSlayerToonGradient(),
-    emissive: new THREE.Color(opts.emissiveHex ?? 0x1a1118),
-    emissiveIntensity: opts.emissiveIntensity ?? 0.08,
+    emissive: new THREE.Color(opts.emissiveHex ?? 0x0d0907),
+    emissiveIntensity: opts.emissiveIntensity ?? 0.06,
     transparent: opts.transparent ?? false,
     opacity: opts.opacity ?? 1.0,
   };
@@ -140,13 +105,13 @@ export function createDemonSlayerCelMaterial(
   }
   if (opts.normalMap) {
     matOpts.normalMap = opts.normalMap;
-    matOpts.normalScale = opts.normalScale ?? new THREE.Vector2(0.32, 0.32);
+    matOpts.normalScale = opts.normalScale ?? new THREE.Vector2(0.28, 0.28);
   }
   const mat = new THREE.MeshToonMaterial(matOpts);
   const celUniforms: CelShaderUniforms = {
     uRimColor: { value: new THREE.Color(opts.rimColorHex ?? 0xff9d3b) },
-    uRimStrength: { value: opts.rimStrength ?? 0.56 },
-    uRimPower: { value: opts.rimPower ?? 2.65 },
+    uRimStrength: { value: opts.rimStrength ?? 0.72 },
+    uRimPower: { value: opts.rimPower ?? 2.35 },
     uFlashColor: { value: new THREE.Color(0xffe49e) },
     uFlashMix: { value: 0.0 },
     uBounceColor: { value: new THREE.Color(0xff384c) },
@@ -161,6 +126,29 @@ export function createDemonSlayerCelMaterial(
     shader.uniforms.uFlashMix = celUniforms.uFlashMix;
     shader.uniforms.uBounceColor = celUniforms.uBounceColor;
     shader.uniforms.uBounceStrength = celUniforms.uBounceStrength;
+
+    // 1. GPU Anime Albedo Contrast & Chroma Boost right after #include <map_fragment>
+    // Operates in perceptual sRGB space so dark armor/hair/ink stay deep while midtone pigments pop!
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <map_fragment>',
+      `
+      #include <map_fragment>
+      {
+        vec3 rawLinear = max(diffuseColor.rgb, vec3(0.015, 0.012, 0.012));
+        vec3 srgbAlb = pow(rawLinear, vec3(1.0 / 2.2));
+        vec3 liftedSrgb = pow(srgbAlb, vec3(0.84)) * 1.14;
+        float albLuma = dot(liftedSrgb, vec3(0.299, 0.587, 0.114));
+        vec3 satSrgb = mix(vec3(albLuma), liftedSrgb, 1.48);
+        float posterLuma = floor(albLuma * 6.0 + 0.5) / 6.0;
+        float targetLuma = mix(albLuma, posterLuma, 0.28);
+        satSrgb *= targetLuma / max(0.001, albLuma);
+        satSrgb = clamp(satSrgb, vec3(0.04, 0.035, 0.03), vec3(0.96, 0.94, 0.90));
+        diffuseColor.rgb = pow(satSrgb, vec3(2.2));
+      }
+      `
+    );
+
+    // 2. Ufotable / Hinokami Chronicles 3-Step Anime Cel Ramp + Crisp Terminator + Fresnel Rim + Contour Ink
     shader.fragmentShader =
       `
       uniform vec3 uRimColor;
@@ -177,18 +165,43 @@ export function createDemonSlayerCelMaterial(
         vec3 celViewDir = normalize(vViewPosition);
         vec3 celN = normalize(vNormal);
         float celNdotV = clamp(dot(celN, celViewDir), 0.0, 1.0);
+
+        // Convert linear diffuseColor.rgb into sRGB to match post-colorspace gl_FragColor.rgb
+        vec3 baseSrgb = pow(clamp(diffuseColor.rgb, vec3(0.001), vec3(1.0)), vec3(1.0 / 2.2));
+
+        // Overhead-front anime key-light direction in view space for crisp 3-band cel shading
+        vec3 animeKeyDir = normalize(vec3(-0.42, 0.68, 0.60));
+        float halfLambert = dot(celN, animeKeyDir) * 0.5 + 0.5;
+        float celBand1 = smoothstep(0.42, 0.45, halfLambert);
+        float celBand2 = smoothstep(0.72, 0.75, halfLambert);
+
+        // True-hue anime shadow plane (46%) -> vibrant midtone (102%) -> sunlit highlight plane (120%)
+        vec3 shadowTint = baseSrgb * vec3(0.46, 0.44, 0.42);
+        vec3 midTint = baseSrgb * 1.02;
+        vec3 highTint = min(vec3(0.96, 0.94, 0.90), baseSrgb * 1.20 + vec3(0.035, 0.025, 0.015));
+        vec3 animeCelLit = mix(shadowTint, midTint, celBand1);
+        animeCelLit = mix(animeCelLit, highTint, celBand2);
+
+        gl_FragColor.rgb = mix(gl_FragColor.rgb, animeCelLit, 0.82);
+
+        // Stepped Fresnel anime rim light + strict grazing lower-body bounce rim (never washes midtones!)
         float celRimRaw = pow(1.0 - celNdotV, uRimPower);
-        float celRimStep = smoothstep(0.40, 0.62, celRimRaw);
-        float lowerBounce = smoothstep(0.25, -0.55, celN.y);
+        float celRimStep = smoothstep(0.42, 0.58, celRimRaw);
+        float lowerBounce = smoothstep(0.15, -0.55, celN.y);
         gl_FragColor.rgb += uRimColor * celRimStep * uRimStrength * 0.78;
-        gl_FragColor.rgb += uBounceColor * (0.35 + 0.65 * lowerBounce) * celRimStep * uBounceStrength;
-        gl_FragColor.rgb = mix(gl_FragColor.rgb, uFlashColor, clamp(uFlashMix * (0.28 + 0.72 * celRimStep), 0.0, 0.48));
-        gl_FragColor.rgb = min(gl_FragColor.rgb, vec3(0.96, 0.95, 0.94));
+        gl_FragColor.rgb += uBounceColor * lowerBounce * celRimStep * uBounceStrength * 0.42;
+
+        // Crisp dark Sumi-e grazing contour ink edge at silhouette grazing angles
+        float silhouetteInk = 1.0 - smoothstep(0.12, 0.22, celNdotV);
+        gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(0.02, 0.015, 0.015), silhouetteInk * 0.76);
+
+        gl_FragColor.rgb = mix(gl_FragColor.rgb, uFlashColor, clamp(uFlashMix * (0.32 + 0.68 * celRimStep), 0.0, 0.54));
+        gl_FragColor.rgb = min(gl_FragColor.rgb, vec3(0.96, 0.95, 0.92));
         #include <dithering_fragment>
         `
       );
   };
-  mat.customProgramCacheKey = () => 'demon-slayer-fresnel-toon-v3';
+  mat.customProgramCacheKey = () => 'demon-slayer-fresnel-toon-v7';
   return mat;
 }
 
@@ -199,8 +212,8 @@ export function createDemonSlayerCelMaterial(
  */
 export function attachSumiInkOutlines(
   root: THREE.Object3D,
-  outlineHeightRatio = 0.0044,
-  outlineColorHex = 0x070409
+  outlineHeightRatio = 0.0072,
+  outlineColorHex = 0x060208
 ): THREE.Mesh[] {
   const targets: THREE.Mesh[] = [];
   root.traverse((obj) => {
@@ -211,10 +224,12 @@ export function attachSumiInkOutlines(
   const created: THREE.Mesh[] = [];
   for (const mesh of targets) {
     if (!mesh.parent || !mesh.geometry) continue;
-    // Skip duplicate ink outlines if already attached to this mesh
     if (mesh.userData.hasSumiOutline) continue;
     mesh.userData.hasSumiOutline = true;
 
+    if (mesh.geometry.attributes.color) {
+      mesh.geometry.deleteAttribute('color');
+    }
     if (!mesh.geometry.attributes.normal) {
       mesh.geometry.computeVertexNormals();
     }
@@ -228,7 +243,7 @@ export function attachSumiInkOutlines(
       bb.max.x - bb.min.x,
       bb.max.z - bb.min.z
     );
-    const localExtrude = Math.min(localSpan * 0.014, localSpan * outlineHeightRatio);
+    const localExtrude = Math.min(localSpan * 0.018, localSpan * outlineHeightRatio);
     const outlineMat = new THREE.MeshBasicMaterial({
       color: outlineColorHex,
       side: THREE.BackSide,
@@ -236,16 +251,21 @@ export function attachSumiInkOutlines(
       polygonOffsetFactor: 1,
       polygonOffsetUnits: 1,
     });
+    const uExtrude = { value: localExtrude };
+    outlineMat.userData.uExtrude = uExtrude;
     outlineMat.onBeforeCompile = (shader) => {
-      shader.vertexShader = shader.vertexShader.replace(
-        '#include <begin_vertex>',
-        `
-        #include <begin_vertex>
-        transformed += normalize(normal) * ${localExtrude.toFixed(6)};
-        `
-      );
+      shader.uniforms.uExtrude = uExtrude;
+      shader.vertexShader =
+        `uniform float uExtrude;\n` +
+        shader.vertexShader.replace(
+          '#include <begin_vertex>',
+          `
+          #include <begin_vertex>
+          transformed += normalize(normal) * uExtrude;
+          `
+        );
     };
-    outlineMat.customProgramCacheKey = () => `sumi-outline-v3-${localExtrude.toFixed(5)}`;
+    outlineMat.customProgramCacheKey = () => 'sumi-outline-v6-shared';
     if ((mesh as THREE.SkinnedMesh).isSkinnedMesh) {
       const skinnedSrc = mesh as THREE.SkinnedMesh;
       const outlineSkinned = new THREE.SkinnedMesh(skinnedSrc.geometry, outlineMat);
@@ -294,7 +314,7 @@ export interface DemonSlayerStyledResult {
 /**
  * Converts every non-outline Mesh/SkinnedMesh material inside `root` into a vibrant
  * Demon Slayer `MeshToonMaterial` with highlight-safe anime textures, stepped Fresnel rim-lighting,
- * and optional inverted-hull Sumi-e black ink outlines.
+ * stripped dark vertex colors, smooth normals, and inverted-hull Sumi-e black ink outlines.
  */
 export function applyDemonSlayerCelShadingToHierarchy(
   root: THREE.Object3D,
@@ -307,12 +327,16 @@ export function applyDemonSlayerCelShadingToHierarchy(
   const getLiftedTex = (srcTex: THREE.Texture | null | undefined): THREE.Texture | null => {
     if (!srcTex) return null;
     if (liftedTexCache.has(srcTex)) return liftedTexCache.get(srcTex)!;
+    const img = srcTex.image as { width?: number; height?: number } | undefined;
+    const isLoaded = Boolean(img && typeof img.width === 'number' && img.width > 0);
     const lifted = liftTextureToAnimeVibrancy(
       srcTex,
-      options.brightnessLift ?? 1.04,
-      options.saturationBoost ?? 1.32
+      options.brightnessLift ?? 1.18,
+      options.saturationBoost ?? 1.45
     );
-    liftedTexCache.set(srcTex, lifted);
+    if (isLoaded) {
+      liftedTexCache.set(srcTex, lifted);
+    }
     return lifted;
   };
 
@@ -320,6 +344,15 @@ export function applyDemonSlayerCelShadingToHierarchy(
     if (!(child as THREE.Mesh).isMesh) return;
     if (child.userData.isInkOutline || child.userData.isAuraShell) return;
     const mesh = child as THREE.Mesh;
+    // Strip dark Meshy FBX vertex colors & ensure normals exist
+    if (mesh.geometry) {
+      if (mesh.geometry.attributes.color) {
+        mesh.geometry.deleteAttribute('color');
+      }
+      if (!mesh.geometry.attributes.normal) {
+        mesh.geometry.computeVertexNormals();
+      }
+    }
     const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
     const nextMats = mats.map((m) => {
       if (!m) return m;
@@ -342,11 +375,11 @@ export function applyDemonSlayerCelShadingToHierarchy(
         normalMap: srcNormal ?? null,
         normalScale: std.normalScale,
         tintHex: srcColorHex,
-        emissiveHex: options.emissiveHex ?? 0x1a1118,
-        emissiveIntensity: options.emissiveIntensity ?? 0.08,
+        emissiveHex: options.emissiveHex ?? 0x0d0907,
+        emissiveIntensity: options.emissiveIntensity ?? 0.06,
         rimColorHex: options.rimColorHex ?? 0xff9d3b,
-        rimStrength: options.rimStrength ?? 0.56,
-        rimPower: options.rimPower ?? 2.65,
+        rimStrength: options.rimStrength ?? 0.72,
+        rimPower: options.rimPower ?? 2.35,
       });
       upgradedMapCache.set(m, toonMat);
       celMaterials.push(toonMat);
@@ -359,8 +392,8 @@ export function applyDemonSlayerCelShadingToHierarchy(
     options.attachOutlines !== false
       ? attachSumiInkOutlines(
           root,
-          options.outlineHeightRatio ?? 0.0044,
-          options.outlineColorHex ?? 0x070409
+          options.outlineHeightRatio ?? 0.0072,
+          options.outlineColorHex ?? 0x060208
         )
       : [];
 
@@ -376,7 +409,7 @@ export function setCelRimStyle(
     const u = m.userData.celUniforms as CelShaderUniforms | undefined;
     if (u) {
       u.uRimColor.value.setHex(rimColorHex);
-      u.uRimStrength.value = Math.min(0.85, rimStrength);
+      u.uRimStrength.value = Math.min(0.95, rimStrength);
     }
   }
 }
@@ -390,7 +423,7 @@ export function setCelBounceTint(
     const u = m.userData.celUniforms as CelShaderUniforms | undefined;
     if (u) {
       u.uBounceColor.value.setHex(bounceColorHex);
-      u.uBounceStrength.value = Math.max(0, Math.min(0.85, bounceStrength));
+      u.uBounceStrength.value = Math.max(0, Math.min(0.92, bounceStrength));
     }
   }
 }
@@ -398,18 +431,18 @@ export function setCelBounceTint(
 export function setCelHitFlash(
   materials: THREE.MeshToonMaterial[],
   isFlashing: boolean,
-  baseEmissiveHex = 0x1a1118,
-  baseEmissiveIntensity = 0.08,
+  baseEmissiveHex = 0x0d0907,
+  baseEmissiveIntensity = 0.05,
   flashColorHex = 0xffe49e
 ) {
   for (const m of materials) {
     const u = m.userData.celUniforms as CelShaderUniforms | undefined;
     if (isFlashing) {
       m.emissive.setHex(flashColorHex);
-      m.emissiveIntensity = 0.28;
+      m.emissiveIntensity = 0.34;
       if (u) {
         u.uFlashColor.value.setHex(flashColorHex);
-        u.uFlashMix.value = 0.44;
+        u.uFlashMix.value = 0.48;
       }
     } else {
       m.emissive.setHex(baseEmissiveHex);
@@ -432,7 +465,7 @@ export function createParashuAuraMaterial(
     uniforms: {
       uTime: { value: 0 },
       uColor: { value: new THREE.Color(colorHex) },
-      uIntensity: { value: 0.92 },
+      uIntensity: { value: 0.96 },
       uSpeed: { value: phaseSpeed },
     },
     vertexShader: `
@@ -444,7 +477,7 @@ export function createParashuAuraMaterial(
       void main() {
         vUv = uv;
         vNormal = normalize(normalMatrix * normal);
-        vec3 p = position + normalize(normal) * (0.015 + 0.006 * sin(uTime * 6.0 * uSpeed + position.y * 8.0));
+        vec3 p = position + normalize(normal) * (0.018 + 0.008 * sin(uTime * 6.0 * uSpeed + position.y * 8.0));
         vec4 mv = modelViewMatrix * vec4(p, 1.0);
         vViewPos = -mv.xyz;
         gl_Position = projectionMatrix * mv;
@@ -468,12 +501,12 @@ export function createParashuAuraMaterial(
       void main() {
         vec3 n = normalize(vNormal);
         vec3 v = normalize(vViewPos);
-        float rim = pow(1.0 - clamp(dot(n, v), 0.0, 1.0), 1.8);
+        float rim = pow(1.0 - clamp(dot(n, v), 0.0, 1.0), 1.65);
         float flame = noise(vec2(vUv.x * 6.0, vUv.y * 10.0 - uTime * 3.8 * uSpeed));
-        float band = smoothstep(0.32, 0.72, flame * 0.65 + rim * 0.75);
-        float alpha = band * rim * uIntensity * 0.72;
+        float band = smoothstep(0.28, 0.68, flame * 0.65 + rim * 0.78);
+        float alpha = band * rim * uIntensity * 0.82;
         if (alpha < 0.04) discard;
-        vec3 col = mix(uColor, vec3(1.0, 0.96, 0.86), rim * 0.48);
+        vec3 col = mix(uColor, vec3(1.0, 0.97, 0.88), rim * 0.55);
         gl_FragColor = vec4(col, alpha);
       }
     `,

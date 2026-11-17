@@ -31,9 +31,56 @@ export function computePillarOcclusionOpacity(
   return 1.0;
 }
 
+let sharedCholaStoneTexture: THREE.CanvasTexture | null = null;
+
+function getCholaTempleStoneTexture(): THREE.CanvasTexture | null {
+  if (sharedCholaStoneTexture) return sharedCholaStoneTexture;
+  if (typeof document === 'undefined') return null;
+  const c = document.createElement('canvas');
+  c.width = 256;
+  c.height = 256;
+  const ctx = c.getContext('2d');
+  if (!ctx) return null;
+
+  // Hand-painted Anime Chola Basalt-Sandstone base matching the dark temple floor
+  ctx.fillStyle = '#4a3d33';
+  ctx.fillRect(0, 0, 256, 256);
+
+  // Vertical carved temple column fluting bands + Sumi-e ink grooves
+  for (let x = 0; x < 256; x += 32) {
+    ctx.fillStyle = '#635244';
+    ctx.fillRect(x + 4, 0, 12, 256);
+    ctx.fillStyle = '#332922';
+    ctx.fillRect(x + 18, 0, 10, 256);
+    ctx.fillStyle = '#0d0705';
+    ctx.fillRect(x, 0, 4, 256);
+  }
+
+  // Horizontal carved Chola temple friezes & sindoor-crimson sacred bands
+  const bandYs = [36, 118, 196];
+  for (const by of bandYs) {
+    ctx.fillStyle = '#0d0705';
+    ctx.fillRect(0, by - 4, 256, 24);
+    ctx.fillStyle = '#7f1d1d';
+    ctx.fillRect(0, by, 256, 16);
+    ctx.fillStyle = '#b45309';
+    for (let x = 8; x < 256; x += 32) {
+      ctx.fillRect(x, by + 4, 16, 8);
+    }
+  }
+
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.needsUpdate = true;
+  sharedCholaStoneTexture = tex;
+  return tex;
+}
+
 /**
- * Multi-part 3D Cel-Shaded Chola Stone Pillar (`Kurukshetra_Pillar`) replacing flat 2D stickers:
- * - Stage 0: Intact octagonal sandstone shaft, stepped plinth, Chola bronze collar rings & ornate capital
+ * Multi-part 3D Cel-Shaded Chola Temple Stone Pillar (`Kurukshetra_Pillar`) replacing flat 2D stickers:
+ * - Stage 0: Carved stepped square *Padma-bhadra* plinth, fluted Chola temple shaft, ornate bronze & sindoor-crimson collars, and corbeled capital brackets
  * - Stage 1: Cracked leaning top + glowing molten rune fissure veins + fallen chip chunks
  * - Stage 2: Shattered beveled stump + scattered 3D cel-shaded rubble blocks
  */
@@ -48,111 +95,127 @@ export class Pillar3DMeshInstance {
   private readonly outlineMeshes: THREE.Mesh[] = [];
 
   constructor() {
+    const stoneTex = getCholaTempleStoneTexture();
     const stoneMat = createDemonSlayerCelMaterial({
-      map: null,
-      tintHex: 0x7b6a58,
-      emissiveHex: 0x1a1310,
+      map: stoneTex,
+      tintHex: 0x8a7560,
+      emissiveHex: 0x160d0a,
       emissiveIntensity: 0.10,
-      rimColorHex: 0xd4a548,
-      rimStrength: 0.42,
+      rimColorHex: 0xd99b38,
+      rimStrength: 0.48,
       transparent: true,
       opacity: 1.0,
     });
     const darkStoneMat = createDemonSlayerCelMaterial({
-      map: null,
-      tintHex: 0x57483b,
-      emissiveHex: 0x140e0c,
+      map: stoneTex,
+      tintHex: 0x5c4b3c,
+      emissiveHex: 0x120a08,
       emissiveIntensity: 0.08,
-      rimColorHex: 0xb88635,
-      rimStrength: 0.36,
+      rimColorHex: 0xb47b28,
+      rimStrength: 0.42,
       transparent: true,
       opacity: 1.0,
     });
     const bronzeMat = createDemonSlayerCelMaterial({
       map: null,
-      tintHex: 0xc98b34,
-      emissiveHex: 0x2b1506,
-      emissiveIntensity: 0.16,
-      rimColorHex: 0xffe49e,
-      rimStrength: 0.65,
+      tintHex: 0xb47b28,
+      emissiveHex: 0x261204,
+      emissiveIntensity: 0.14,
+      rimColorHex: 0xfde047,
+      rimStrength: 0.58,
       transparent: true,
       opacity: 1.0,
     });
     const runeMat = new THREE.MeshBasicMaterial({
-      color: 0xff8c2a,
+      color: 0xea580c,
       transparent: true,
-      opacity: 0.65,
+      opacity: 0.78,
     });
 
     this.stoneMaterials.push(stoneMat, darkStoneMat);
     this.bronzeMaterials.push(bronzeMat);
     this.runeMaterials.push(runeMat);
 
-    // 1. Base Plinth (shared across all stages)
+    // 1. Stepped Square *Padma-bhadra* Temple Plinth Base (shared across all stages)
     const plinthBottom = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.68, 0.76, 0.24, 8),
+      new THREE.BoxGeometry(1.42, 0.24, 1.42),
       darkStoneMat
     );
     plinthBottom.position.y = 0.12;
-    const plinthTop = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.56, 0.64, 0.18, 8),
+    const plinthMid = new THREE.Mesh(
+      new THREE.BoxGeometry(1.16, 0.20, 1.16),
       stoneMat
     );
-    plinthTop.position.y = 0.32;
-    this.group.add(plinthBottom, plinthTop);
+    plinthMid.position.y = 0.34;
+    const plinthCollar = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.58, 0.66, 0.14, 8),
+      bronzeMat
+    );
+    plinthCollar.position.y = 0.50;
+    this.group.add(plinthBottom, plinthMid, plinthCollar);
 
-    // 2. Intact / Cracked Lower Shaft
+    // 2. Intact / Cracked Lower Fluted Chola Shaft
     const lowerShaft = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.42, 0.48, 0.92, 8),
+      new THREE.CylinderGeometry(0.46, 0.52, 1.05, 12),
       stoneMat
     );
-    lowerShaft.position.y = 0.85;
-    const midCollar = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.51, 0.51, 0.14, 8),
-      bronzeMat
-    );
-    midCollar.position.y = 1.28;
-    const runeBand = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.46, 0.46, 0.09, 8),
-      runeMat
-    );
-    runeBand.position.y = 1.38;
-    this.intactGroup.add(lowerShaft, midCollar, runeBand);
-
-    // 3. Upper Shaft + Capital (tilts slightly on Stage 1 crack)
-    const upperShaft = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.40, 0.42, 0.86, 8),
-      stoneMat
-    );
-    upperShaft.position.y = 0.46;
-    const neckCollar = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.48, 0.43, 0.14, 8),
-      bronzeMat
-    );
-    neckCollar.position.y = 0.94;
-    const capital = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.62, 0.48, 0.22, 8),
+    lowerShaft.position.y = 1.06;
+    const midBlock = new THREE.Mesh(
+      new THREE.BoxGeometry(0.98, 0.22, 0.98),
       darkStoneMat
     );
-    capital.position.y = 1.12;
-    this.crackedTopGroup.position.y = 1.40;
-    this.crackedTopGroup.add(upperShaft, neckCollar, capital);
+    midBlock.position.y = 1.54;
+    const midCollar = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.56, 0.56, 0.14, 12),
+      bronzeMat
+    );
+    midCollar.position.y = 1.72;
+    const runeBand = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.52, 0.52, 0.10, 12),
+      runeMat
+    );
+    runeBand.position.y = 1.84;
+    this.intactGroup.add(lowerShaft, midBlock, midCollar, runeBand);
+
+    // 3. Upper Shaft + Corbeled Chola Temple Capital (tilts visibly on Stage 1 crack)
+    const upperShaft = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.42, 0.46, 0.92, 12),
+      stoneMat
+    );
+    upperShaft.position.y = 0.48;
+    const neckCollar = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.54, 0.46, 0.16, 12),
+      bronzeMat
+    );
+    neckCollar.position.y = 1.00;
+    const capitalAbacus = new THREE.Mesh(
+      new THREE.BoxGeometry(1.28, 0.24, 1.28),
+      darkStoneMat
+    );
+    capitalAbacus.position.y = 1.20;
+    const capitalCrossBracket = new THREE.Mesh(
+      new THREE.BoxGeometry(1.48, 0.16, 0.54),
+      stoneMat
+    );
+    capitalCrossBracket.position.y = 1.38;
+    this.crackedTopGroup.position.y = 1.88;
+    this.crackedTopGroup.add(upperShaft, neckCollar, capitalAbacus, capitalCrossBracket);
     this.intactGroup.add(this.crackedTopGroup);
     this.group.add(this.intactGroup);
 
     // 4. Stage 2 Shattered Stump + 3D Rubble Chunks
     const stumpCore = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.32, 0.46, 0.42, 7),
+      new THREE.CylinderGeometry(0.36, 0.50, 0.48, 7),
       darkStoneMat
     );
-    stumpCore.position.y = 0.54;
-    stumpCore.rotation.z = 0.08;
+    stumpCore.position.y = 0.72;
+    stumpCore.rotation.z = 0.10;
     this.stumpGroup.add(stumpCore);
     const rubbleCoords = [
-      [-0.54, 0.12, 0.34, 0.24],
-      [0.52, 0.11, 0.28, 0.21],
-      [-0.22, 0.10, -0.48, 0.19],
-      [0.36, 0.12, -0.36, 0.22],
+      [-0.62, 0.14, 0.38, 0.28],
+      [0.58, 0.13, 0.32, 0.24],
+      [-0.26, 0.12, -0.54, 0.22],
+      [0.42, 0.14, -0.42, 0.26],
     ];
     const rubbleGeo = new THREE.DodecahedronGeometry(1, 0);
     for (const [rx, ry, rz, rs] of rubbleCoords) {
@@ -165,7 +228,7 @@ export class Pillar3DMeshInstance {
     this.stumpGroup.visible = false;
     this.group.add(this.stumpGroup);
 
-    this.outlineMeshes.push(...attachSumiInkOutlines(this.group, 0.0085, 0x070409));
+    this.outlineMeshes.push(...attachSumiInkOutlines(this.group, 0.011, 0x060208));
     for (const om of this.outlineMeshes) {
       const m = om.material as THREE.MeshBasicMaterial;
       m.transparent = true;
@@ -183,11 +246,11 @@ export class Pillar3DMeshInstance {
       this.intactGroup.visible = true;
       this.stumpGroup.visible = false;
       if (stage === 1) {
-        this.crackedTopGroup.rotation.set(0.06, 0.04, -0.09);
-        this.crackedTopGroup.position.set(0.04, 1.36, 0);
+        this.crackedTopGroup.rotation.set(0.08, 0.05, -0.11);
+        this.crackedTopGroup.position.set(0.05, 1.82, 0);
       } else {
         this.crackedTopGroup.rotation.set(0, 0, 0);
-        this.crackedTopGroup.position.set(0, 1.40, 0);
+        this.crackedTopGroup.position.set(0, 1.88, 0);
       }
     }
 
@@ -198,21 +261,21 @@ export class Pillar3DMeshInstance {
 
     for (const sm of this.stoneMaterials) {
       sm.opacity = occOpacity;
-      sm.emissive.setHex(input.hitFlash ? 0xffe082 : stage === 1 ? 0x421808 : 0x1a1310);
-      sm.emissiveIntensity = input.hitFlash ? 0.36 : stage === 1 ? 0.24 : 0.10;
+      sm.emissive.setHex(input.hitFlash ? 0xffe082 : stage === 1 ? 0x421808 : 0x261812);
+      sm.emissiveIntensity = input.hitFlash ? 0.38 : stage === 1 ? 0.26 : 0.16;
     }
     for (const bm of this.bronzeMaterials) {
       bm.opacity = occOpacity;
-      bm.emissive.setHex(input.hitFlash ? 0xffe49e : 0x2b1506);
-      bm.emissiveIntensity = input.hitFlash ? 0.38 : 0.16;
+      bm.emissive.setHex(input.hitFlash ? 0xffe49e : 0x422006);
+      bm.emissiveIntensity = input.hitFlash ? 0.42 : 0.24;
     }
     for (const om of this.outlineMeshes) {
       (om.material as THREE.MeshBasicMaterial).opacity = occOpacity;
     }
     for (const rm of this.runeMaterials) {
-      const pulse = 0.55 + Math.sin(elapsedSec * (stage === 1 || input.bossEnraged ? 9.0 : 3.2)) * 0.25;
-      rm.color.setHex(input.bossEnraged || stage === 1 ? 0xff422a : 0xffaa3b);
-      rm.opacity = Math.min(occOpacity, stage === 1 ? 0.95 : pulse);
+      const pulse = 0.65 + Math.sin(elapsedSec * (stage === 1 || input.bossEnraged ? 9.0 : 3.2)) * 0.25;
+      rm.color.setHex(input.bossEnraged || stage === 1 ? 0xff3b22 : 0xffaa3b);
+      rm.opacity = Math.min(occOpacity, stage === 1 ? 0.96 : pulse);
     }
   }
 

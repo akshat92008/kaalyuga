@@ -276,52 +276,52 @@ export function createSlashRibbonMaterial(
 
         // Layer 1: Bold Sumi-e calligraphy ink backing stroke framing the outer edges
         if (uPassMode > 0.5 && uPassMode < 1.5) {
-          float inkEdge = 0.04 + (curveShape - 0.45) * (uJagged * 1.48 + 0.16) + (1.0 - u) * 0.24;
-          float inkAlpha = smoothstep(inkEdge, inkEdge + 0.055, v) * (1.0 - smoothstep(0.978, 1.0, v)) * uMask * uOpacity * 0.96;
+          float inkEdge = 0.02 + (curveShape - 0.45) * (uJagged * 1.65 + 0.18) + (1.0 - u) * 0.20;
+          float inkAlpha = smoothstep(inkEdge, inkEdge + 0.045, v) * (1.0 - smoothstep(0.985, 1.0, v)) * uMask * uOpacity * 0.98;
           if (inkAlpha < 0.08 || uOpacity < 0.02) discard;
-          gl_FragColor = vec4(uInkColor, clamp(inkAlpha, 0.0, 0.96));
+          gl_FragColor = vec4(uInkColor, clamp(inkAlpha, 0.0, 0.98));
           return;
         }
 
-        // Layer 2: Soft additive anime bloom halo wrapping the bright core
+        // Layer 2: Intense additive anime bloom halo wrapping the bright core
         if (uPassMode > 1.5) {
-          float glowBand = smoothstep(0.24, 0.82, v) * (1.0 - smoothstep(0.96, 1.0, v));
-          float glowAlpha = glowBand * (0.78 + 0.22 * curveShape) * uMask * uOpacity * 0.46;
+          float glowBand = smoothstep(0.18, 0.84, v) * (1.0 - smoothstep(0.97, 1.0, v));
+          float glowAlpha = glowBand * (0.82 + 0.24 * curveShape) * uMask * uOpacity * 0.58;
           if (glowAlpha < 0.03 || uOpacity < 0.02) discard;
-          vec3 glowCol = mix(uOuterColor, uMidColor, v) * 1.28;
+          vec3 glowCol = mix(uOuterColor, uMidColor, v) * 1.42;
           gl_FragColor = vec4(glowCol, glowAlpha);
           return;
         }
 
-        // Layer 0: Crisp Cel-Stepped Anime Slash Core with HDR white-hot edge (>1.1 triggers selective UnrealBloomPass)
-        float erodeEdge = 0.15 + (curveShape - 0.48) * (uJagged * 1.44) + (1.0 - u) * 0.22;
-        float alpha = smoothstep(erodeEdge, erodeEdge + 0.055, v) * (1.0 - smoothstep(0.965, 1.0, v)) * uMask * uOpacity;
+        // Layer 0: Crisp Cel-Stepped Anime Slash Core with white-hot edge & Sumi-e ink teeth
+        float erodeEdge = 0.11 + (curveShape - 0.48) * (uJagged * 1.62) + (1.0 - u) * 0.18;
+        float alpha = smoothstep(erodeEdge, erodeEdge + 0.045, v) * (1.0 - smoothstep(0.972, 1.0, v)) * uMask * uOpacity;
         if (alpha < 0.06 || uOpacity < 0.02) discard;
 
-        float bandMid = smoothstep(0.36, 0.43, v + (curveShape - 0.5) * 0.22);
-        float bandCore = smoothstep(0.75, 0.82, v + (curveShape - 0.5) * 0.09) * (1.0 - smoothstep(0.945, 0.99, v));
+        float bandMid = smoothstep(0.32, 0.39, v + (curveShape - 0.5) * 0.25);
+        float bandCore = smoothstep(0.70, 0.78, v + (curveShape - 0.5) * 0.11) * (1.0 - smoothstep(0.945, 0.99, v));
         float inkRim = clamp(
-          smoothstep(0.932, 0.968, v) * 0.94 +
-          (1.0 - smoothstep(erodeEdge + 0.01, erodeEdge + 0.085, v)) * 0.95,
+          smoothstep(0.925, 0.962, v) * 0.96 +
+          (1.0 - smoothstep(erodeEdge + 0.008, erodeEdge + 0.095, v)) * 0.96,
           0.0,
           1.0
         );
 
         vec3 bodyCol = mix(uOuterColor, uMidColor, bandMid);
         if (uElementKind > 0.5 && uElementKind < 1.5) {
-          bodyCol = mix(bodyCol, uCoreColor * 1.52, internalPattern * 0.92);
+          bodyCol = mix(bodyCol, uCoreColor * 1.65, internalPattern * 0.95);
         } else if (uElementKind > 1.5 && uElementKind < 2.5) {
-          bodyCol = mix(bodyCol, uCoreColor * 1.28, internalPattern * 0.62);
+          bodyCol = mix(bodyCol, uCoreColor * 1.38, internalPattern * 0.72);
         } else if (uElementKind > 2.5) {
-          // Pure-black interior ink voids inside crimson Blood Demon Art
-          bodyCol = mix(bodyCol, uInkColor, internalPattern * 0.92);
+          // Pure-black interior ink voids inside crimson Blood Demon Art (Nezuko / Gyutaro style)
+          bodyCol = mix(bodyCol, uInkColor, internalPattern * 0.95);
         } else {
-          bodyCol = mix(bodyCol, mix(uMidColor, uCoreColor, 0.55), internalPattern * 0.42);
+          bodyCol = mix(bodyCol, mix(uMidColor, uCoreColor, 0.65), internalPattern * 0.58);
         }
 
-        vec3 col = mix(bodyCol, uInkColor, inkRim * 0.94);
-        col = mix(col, uCoreColor * 1.46, bandCore * (0.82 + 0.18 * u));
-        gl_FragColor = vec4(col, clamp(alpha * 0.98, 0.0, 0.98));
+        vec3 col = mix(bodyCol, uInkColor, inkRim * 0.95);
+        col = mix(col, uCoreColor * 1.58, bandCore * (0.85 + 0.15 * u));
+        gl_FragColor = vec4(col, clamp(alpha * 0.99, 0.0, 0.99));
       }
     `,
     transparent: true,
@@ -347,59 +347,59 @@ export interface ParametricSwingSpec {
 
 const SWING_SPECS: Record<SwingKind, ParametricSwingSpec> = {
   attack1: {
-    startOffset: -1.15,
-    endOffset: 1.25,
-    trailSpan: 1.65,
-    innerRadius: 0.68,
-    outerRadius: 1.32,
-    centerY: 1.15,
-    tiltPitch: 0.2,
-    tiltRoll: -0.32,
-    waveAmp: 0.03,
+    startOffset: -1.35,
+    endOffset: 1.45,
+    trailSpan: 2.05,
+    innerRadius: 0.64,
+    outerRadius: 1.88,
+    centerY: 1.28,
+    tiltPitch: 0.22,
+    tiltRoll: -0.34,
+    waveAmp: 0.04,
   },
   attack2: {
-    startOffset: 1.22,
-    endOffset: -1.18,
-    trailSpan: 1.65,
-    innerRadius: 0.68,
-    outerRadius: 1.34,
-    centerY: 1.22,
-    tiltPitch: -0.18,
-    tiltRoll: 0.34,
-    waveAmp: 0.03,
+    startOffset: 1.42,
+    endOffset: -1.38,
+    trailSpan: 2.05,
+    innerRadius: 0.64,
+    outerRadius: 1.92,
+    centerY: 1.34,
+    tiltPitch: -0.20,
+    tiltRoll: 0.36,
+    waveAmp: 0.04,
   },
   attack3: {
-    startOffset: -1.65,
-    endOffset: 1.75,
-    trailSpan: 2.3,
-    innerRadius: 0.72,
-    outerRadius: 1.56,
-    centerY: 1.12,
-    tiltPitch: 0.14,
-    tiltRoll: -0.24,
-    waveAmp: 0.04,
+    startOffset: -1.85,
+    endOffset: 1.95,
+    trailSpan: 2.65,
+    innerRadius: 0.68,
+    outerRadius: 2.24,
+    centerY: 1.26,
+    tiltPitch: 0.16,
+    tiltRoll: -0.26,
+    waveAmp: 0.05,
   },
   heavy: {
-    startOffset: -1.45,
-    endOffset: 1.45,
-    trailSpan: 2.0,
-    innerRadius: 0.74,
-    outerRadius: 1.64,
-    centerY: 1.24,
-    tiltPitch: 0.62,
-    tiltRoll: 0.15,
-    waveAmp: 0.04,
+    startOffset: -1.65,
+    endOffset: 1.65,
+    trailSpan: 2.45,
+    innerRadius: 0.70,
+    outerRadius: 2.38,
+    centerY: 1.38,
+    tiltPitch: 0.58,
+    tiltRoll: 0.16,
+    waveAmp: 0.05,
   },
   cast: {
-    startOffset: -Math.PI * 0.35,
-    endOffset: Math.PI * 1.95,
-    trailSpan: Math.PI * 1.56,
+    startOffset: -Math.PI * 0.45,
+    endOffset: Math.PI * 2.15,
+    trailSpan: Math.PI * 1.75,
     innerRadius: 0.72,
-    outerRadius: 1.52,
-    centerY: 1.02,
-    tiltPitch: 0.12,
-    tiltRoll: 0.08,
-    waveAmp: 0.05,
+    outerRadius: 2.28,
+    centerY: 1.18,
+    tiltPitch: 0.14,
+    tiltRoll: 0.10,
+    waveAmp: 0.06,
   },
 };
 

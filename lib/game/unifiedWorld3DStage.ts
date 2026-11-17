@@ -66,13 +66,13 @@ import {
 // with the 2.5D arena camera (zero 192px/224px sprite-baker cutouts).
 // ============================================================================
 
-const RUDRA_WORLD_HEIGHT_M = 2.05;
-const ENEMY_WORLD_BASE_HEIGHT_M = 1.95;
-const SAVITRI_WORLD_HEIGHT_M = 2.02;
+const RUDRA_WORLD_HEIGHT_M = 2.82;
+const ENEMY_WORLD_BASE_HEIGHT_M = 2.62;
+const SAVITRI_WORLD_HEIGHT_M = 2.72;
 const BOSS_WORLD_HEIGHT_M: Record<'dundubhi' | 'vrikodara' | 'semi_boss', number> = {
-  semi_boss: 2.95,
-  dundubhi: 3.65,
-  vrikodara: 3.85,
+  semi_boss: 3.72,
+  dundubhi: 4.48,
+  vrikodara: 4.78,
 };
 
 const RUDRA_RIGGED_FBX_URL =
@@ -554,28 +554,15 @@ export class UnifiedWorld3DStage {
     this.rudraWrapper.add(this.rudraProxy.group);
     this.scene.add(this.rudraWrapper);
 
-    // Dash Decoy (Emerald Jade Proxy Silhouette)
-    const decoySil = buildSculptedProxy3D('rudra', 0x34d399, RUDRA_WORLD_HEIGHT_M, 0.72);
-    decoySil.group.traverse((o) => {
-      if ((o as THREE.Mesh).isMesh && !o.userData.isInkOutline) {
-        (o as THREE.Mesh).material = createSilhouetteCloneMaterial(0x34d399, 0.72);
-      }
-    });
-    this.decoyWrapper.add(decoySil.group);
+    // Dash Decoy & 4 Pooled Golden Astral Clones (populated with real 3D Rudra meshes once loaded — zero cylinder snowmen!)
     this.decoyWrapper.visible = false;
     this.scene.add(this.decoyWrapper);
 
-    // 4 Pooled Golden Astral Clones
     for (let i = 0; i < 4; i++) {
-      const cProxy = buildSculptedProxy3D('rudra', 0xffd86b, RUDRA_WORLD_HEIGHT_M * 0.96, 0.86);
-      cProxy.group.traverse((o) => {
-        if ((o as THREE.Mesh).isMesh && !o.userData.isInkOutline) {
-          (o as THREE.Mesh).material = createSilhouetteCloneMaterial(0xf59e0b, 0.82);
-        }
-      });
-      cProxy.group.visible = false;
-      this.scene.add(cProxy.group);
-      this.cloneWrappers.push({ group: cProxy.group, inUse: false });
+      const cGroup = new THREE.Group();
+      cGroup.visible = false;
+      this.scene.add(cGroup);
+      this.cloneWrappers.push({ group: cGroup, inUse: false });
     }
 
     // Savitri Hub NPC Wrapper + Proxy
@@ -615,6 +602,7 @@ export class UnifiedWorld3DStage {
     if (typeof window !== 'undefined') {
       this.initLiveRenderer();
       this.loadRudraRig();
+      this.ensureEnemySlotLoaded('grunt_ghoul');
     }
   }
 
@@ -630,14 +618,16 @@ export class UnifiedWorld3DStage {
       r.outputColorSpace = THREE.SRGBColorSpace;
       r.toneMapping = THREE.ACESFilmicToneMapping;
       r.toneMappingExposure = 0.98;
-      this.isSoftwareGl = isSoftwareWebGLRenderer();
+      this.isSoftwareGl =
+        isSoftwareWebGLRenderer() ||
+        (typeof navigator !== 'undefined' && Boolean(navigator.webdriver));
       if (!this.isSoftwareGl) {
         try {
           const gl = r.getContext();
           const dbg = gl.getExtension('WEBGL_debug_renderer_info');
           if (dbg) {
             const name = String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || '');
-            if (/swiftshader|llvmpipe|softpipe|software/i.test(name)) {
+            if (/swiftshader|subzero|llvmpipe|softpipe|software/i.test(name)) {
               this.isSoftwareGl = true;
             }
           }
@@ -787,12 +777,12 @@ export class UnifiedWorld3DStage {
 
       const styled = applyDemonSlayerCelShadingToHierarchy(baseGroup, {
         rimColorHex: 0xff9f40,
-        rimStrength: 0.62,
-        rimPower: 2.55,
-        brightnessLift: 1.02,
-        saturationBoost: 1.32,
-        outlineHeightRatio: 0.0044,
-        outlineColorHex: 0x070409,
+        rimStrength: 0.78,
+        rimPower: 2.35,
+        brightnessLift: 1.18,
+        saturationBoost: 1.48,
+        outlineHeightRatio: 0.0072,
+        outlineColorHex: 0x060208,
       });
       this.rudraCelMaterials = styled.celMaterials;
 
@@ -1907,7 +1897,7 @@ export class UnifiedWorld3DStage {
 
     if (!this.rudraReady || !this.rudraMixer || !this.rudraModel) {
       setCelRimStyle(this.rudraProxy.celMaterials, elemHex, isSwinging ? 0.84 : 0.58);
-      setCelHitFlash(this.rudraProxy.celMaterials, r.isHurt, 0x1a1118, 0.08, 0xffe49e);
+      setCelHitFlash(this.rudraProxy.celMaterials, r.isHurt, 0x0d0907, 0.05, 0xffe49e);
       return;
     }
 
@@ -1942,7 +1932,7 @@ export class UnifiedWorld3DStage {
     }
 
     setCelRimStyle(this.rudraCelMaterials, elemHex, isAttack ? 0.82 : 0.58);
-    setCelHitFlash(this.rudraCelMaterials, r.isHurt, 0x1a1118, 0.08, 0xffe49e);
+    setCelHitFlash(this.rudraCelMaterials, r.isHurt, 0x0d0907, 0.05, 0xffe49e);
     for (const am of this.rudraAuraMats) {
       am.uniforms.uTime.value = this.elapsedSec;
       am.uniforms.uColor.value.setHex(elemHex);
@@ -1951,13 +1941,32 @@ export class UnifiedWorld3DStage {
   }
 
   private getOrCreateEnemyInstance(e: UnifiedEnemyFrameInput): PooledEnemyInstance | null {
-    const slotKey = selectSlotKeyFromInput(e.kind as RegularEnemy3DKind, e.id, e.wardenRigKey, e.trait);
-    this.ensureEnemySlotLoaded(slotKey);
-    const slot = this.enemySlots.get(slotKey);
-    if (!slot || !slot.ready || !slot.templateGroup) return null;
+    const desiredSlotKey = selectSlotKeyFromInput(
+      e.kind as RegularEnemy3DKind,
+      e.id,
+      e.wardenRigKey,
+      e.trait
+    );
+    this.ensureEnemySlotLoaded(desiredSlotKey);
+    let activeSlotKey = desiredSlotKey;
+    let slot = this.enemySlots.get(desiredSlotKey);
+    if (!slot || !slot.ready || !slot.templateGroup) {
+      // Use any already-loaded 3D enemy rig (such as prewarmed grunt_ghoul) as a live 3D stand-in
+      // while this variant's FBX finishes streaming, then seamlessly upgrade once desiredSlotKey is ready!
+      let foundReady = false;
+      for (const [key, candidate] of this.enemySlots.entries()) {
+        if (candidate.ready && candidate.templateGroup) {
+          slot = candidate;
+          activeSlotKey = key;
+          foundReady = true;
+          break;
+        }
+      }
+      if (!foundReady || !slot || !slot.templateGroup) return null;
+    }
 
     const existing = this.enemyInstances.get(e.id);
-    if (existing && existing.slotKey === slotKey) return existing;
+    if (existing && existing.slotKey === activeSlotKey) return existing;
 
     if (existing) {
       this.scene.remove(existing.wrapper);
@@ -1993,7 +2002,7 @@ export class UnifiedWorld3DStage {
     const inst: PooledEnemyInstance = {
       wrapper,
       model: cloned.root,
-      slotKey,
+      slotKey: activeSlotKey,
       mixer,
       actions,
       activeState: 'idle',
@@ -2043,7 +2052,7 @@ export class UnifiedWorld3DStage {
       const sy = (e.scaleY ?? 1) * (e.growthScale ?? 1);
       proxy.scale.set(sx, sy, sx);
       const pMats = (proxy.userData.celMaterials || []) as THREE.MeshToonMaterial[];
-      setCelHitFlash(pMats, e.isHitFlash, 0x1a1118, 0.08, 0xffe49e);
+      setCelHitFlash(pMats, e.isHitFlash, 0x0d0907, 0.05, 0xffe49e);
       setCelBounceTint(pMats, profile.primaryHex, profile.bounceStrength);
       return;
     }
@@ -2095,7 +2104,7 @@ export class UnifiedWorld3DStage {
     const rimHex = e.aiState === 'windup' ? profile.primaryHex : e.trait === 'vajra_shield' ? 0x6366f1 : profile.rimHex;
     setCelRimStyle(inst.celMaterials, rimHex, e.aiState === 'windup' || e.aiState === 'attack' ? 0.78 : 0.56);
     setCelBounceTint(inst.celMaterials, profile.primaryHex, profile.bounceStrength);
-    setCelHitFlash(inst.celMaterials, e.isHitFlash, 0x1a1118, 0.08, 0xffe49e);
+    setCelHitFlash(inst.celMaterials, e.isHitFlash, 0x0d0907, 0.05, 0xffe49e);
   }
 
   private syncBossEnemy(e: UnifiedEnemyFrameInput, dt: number) {
@@ -2276,7 +2285,7 @@ export class UnifiedWorld3DStage {
       e.isParrying || isWindupOrAtk ? 0.84 : 0.68
     );
     setCelBounceTint(rig.celMaterials, profile.primaryHex, profile.bounceStrength);
-    setCelHitFlash(rig.celMaterials, e.isHitFlash, 0x1a1118, e.phase >= 2 ? 0.14 : 0.08, 0xffe49e);
+    setCelHitFlash(rig.celMaterials, e.isHitFlash, 0x0d0907, e.phase >= 2 ? 0.09 : 0.05, 0xffe49e);
     for (const am of rig.weaponAuraMaterials) {
       am.uniforms.uTime.value = this.elapsedSec;
       am.uniforms.uColor.value.setHex(profile.primaryHex);
@@ -2322,19 +2331,21 @@ export class UnifiedWorld3DStage {
     // 2. Sync Rudra
     this.syncRudra(frame, stepDt);
 
-    // 3. Sync Clones & Decoy
+    // 3. Sync Clones & Decoy (only visible once real 3D Rudra mesh is loaded — zero primitive cylinder snowmen)
     for (const c of this.cloneWrappers) c.group.visible = false;
     const clones = frame.clones ?? [];
-    for (let i = 0; i < Math.min(clones.length, this.cloneWrappers.length); i++) {
-      const c = clones[i];
-      const cw = arenaToThreeWorld(c.x, c.y);
-      const slot = this.cloneWrappers[i].group;
-      slot.visible = true;
-      slot.position.set(cw.x, 0, cw.z);
-      slot.rotation.y = arenaAngleToThreeYaw(c.facing >= 0 ? 0 : Math.PI);
+    if (this.rudraReady) {
+      for (let i = 0; i < Math.min(clones.length, this.cloneWrappers.length); i++) {
+        const c = clones[i];
+        const cw = arenaToThreeWorld(c.x, c.y);
+        const slot = this.cloneWrappers[i].group;
+        slot.visible = true;
+        slot.position.set(cw.x, 0, cw.z);
+        slot.rotation.y = arenaAngleToThreeYaw(c.facing >= 0 ? 0 : Math.PI);
+      }
     }
 
-    if (frame.decoy && frame.decoy.active) {
+    if (this.rudraReady && frame.decoy && frame.decoy.active) {
       const dw = arenaToThreeWorld(frame.decoy.x, frame.decoy.y);
       this.decoyWrapper.visible = true;
       this.decoyWrapper.position.set(dw.x, 0, dw.z);

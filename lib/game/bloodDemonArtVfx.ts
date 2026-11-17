@@ -125,8 +125,9 @@ export function resolveBloodDemonArtProfile(params: {
 }
 
 /**
- * Procedural GLSL Boss Domain Mandala (Akaza / Asura Yantra inspired):
- * Zero external textures -> never produces untextured colored squares!
+ * Procedural GLSL Boss Domain Mandala (Akaza Compass Needle / 12-Point Vedic Asura Yantra Lattice):
+ * Razor-thin white-hot core + neon crimson/amber sacred geometric snowflake filigree,
+ * 12 radial compass needles, outer hexagonal snowflake gates, and deep Sumi-e void-ink contrast.
  */
 function createBossMandalaShaderMaterial(): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
@@ -154,51 +155,60 @@ function createBossMandalaShaderMaterial(): THREE.ShaderMaterial {
       uniform float uSpokes;
       varying vec2 vUv;
 
-      float sdSegment(vec2 p, vec2 a, vec2 b) {
-        vec2 pa = p - a, ba = b - a;
-        float h = clamp(dot(pa, ba) / max(1e-5, dot(ba, ba)), 0.0, 1.0);
-        return length(pa - ba * h);
-      }
-
       void main() {
         float r = length(vUv);
         if (r > 0.99 || uOpacity < 0.01) discard;
-        float ang = atan(vUv.y, vUv.x);
+        float ang = atan(vUv.y, vUv.x) + uTime * 0.18;
 
-        // Rotating 6-point & 12-point Yantra sacred polygons
-        float rot1 = ang + uTime * 0.42;
-        float rot2 = ang - uTime * 0.65;
-        float triA = abs(cos(rot1 * 3.0) * 0.22 + 0.56 - r);
-        float triB = abs(cos(rot2 * 3.0) * 0.22 + 0.56 - r);
-        float hexRing = 1.0 - smoothstep(0.012, 0.038, min(triA, triB));
+        // 12-fold Akaza Compass Needle / Sacred Snowflake symmetry
+        float sector = 6.2831853 / 12.0;
+        float localAng = mod(ang + sector * 0.5, sector) - sector * 0.5;
+        float symX = r * cos(localAng);
+        float symY = abs(r * sin(localAng));
 
-        // Concentric crisp outer/inner rings + Sumi-e ink borders
-        float outerRing = 1.0 - smoothstep(0.018, 0.055, abs(r - 0.88));
-        float midRing = 1.0 - smoothstep(0.014, 0.042, abs(r - 0.62));
-        float innerRing = 1.0 - smoothstep(0.012, 0.036, abs(r - 0.34));
+        // 1. Primary radial compass needle beams with branched snowflake barbs
+        float mainSpoke = (1.0 - smoothstep(0.006, 0.017, symY)) * step(0.18, symX) * step(symX, 0.95);
+        float barb1 = (1.0 - smoothstep(0.005, 0.015, abs(symY - (symX - 0.38) * 0.58))) * step(0.38, symX) * step(symX, 0.68);
+        float barb2 = (1.0 - smoothstep(0.005, 0.015, abs(symY - (0.82 - symX) * 0.52))) * step(0.54, symX) * step(symX, 0.84);
+        float hexGate = (1.0 - smoothstep(0.006, 0.016, abs(symX - 0.80))) * step(symY, 0.14);
 
-        // Radial spokes + lotus petals
-        float spokePhase = abs(fract((ang + uTime * 0.3) * uSpokes / 6.2831853) - 0.5);
-        float spokes = (1.0 - smoothstep(0.025, 0.075, spokePhase)) * step(0.32, r) * step(r, 0.90);
+        // 2. Interlocking 12-point star polygon chords & razor-thin inner/outer compass rings
+        float starR1 = 0.54 / max(0.35, cos(mod(ang * 3.0, 1.0471975) - 0.5235987));
+        float starPoly1 = 1.0 - smoothstep(0.006, 0.018, abs(r - starR1 * 0.62));
+        float starR2 = 0.54 / max(0.35, cos(mod((ang + 0.5235987) * 3.0, 1.0471975) - 0.5235987));
+        float starPoly2 = 1.0 - smoothstep(0.006, 0.018, abs(r - starR2 * 0.62));
 
-        float petalWave = abs(r - (0.74 + 0.09 * sin(ang * 8.0 - uTime * 2.2)));
-        float petals = 1.0 - smoothstep(0.012, 0.042, petalWave);
+        float innerHub = 1.0 - smoothstep(0.006, 0.016, abs(r - 0.20));
+        float midCompass = 1.0 - smoothstep(0.005, 0.014, abs(r - 0.46));
+        float outerCompass = 1.0 - smoothstep(0.006, 0.016, abs(r - 0.88));
 
-        float lineMask = clamp(outerRing + midRing * 0.9 + innerRing * 0.95 + hexRing * 0.92 + spokes * 0.72 + petals * 0.68, 0.0, 1.0);
-        float inkRim = clamp(
-          (1.0 - smoothstep(0.04, 0.09, abs(r - 0.88))) * (1.0 - outerRing) +
-          (1.0 - smoothstep(0.03, 0.08, min(triA, triB))) * (1.0 - hexRing),
+        // 3. Fine Vedic degree ticks along the compass rim
+        float tickPhase = abs(fract(ang * 36.0 / 6.2831853) - 0.5);
+        float ticks = (1.0 - smoothstep(0.06, 0.16, tickPhase)) * step(0.83, r) * step(r, 0.88);
+
+        float filigree = clamp(
+          mainSpoke + barb1 * 0.92 + barb2 * 0.92 + hexGate * 0.95 +
+          max(starPoly1, starPoly2) * 0.88 + innerHub + midCompass * 0.85 + outerCompass * 0.90 + ticks * 0.75,
           0.0,
           1.0
         );
 
-        float coreGlow = exp(-r * 2.6) * 0.32;
-        float alpha = clamp((lineMask * 0.95 + inkRim * 0.78 + coreGlow) * uOpacity, 0.0, 0.96);
-        if (alpha < 0.03) discard;
+        // Dark Sumi-e void-ink recessed framing around the glowing lattice bars (never a solid red disk!)
+        float inkOutline = clamp(
+          (1.0 - smoothstep(0.016, 0.042, symY)) * step(0.18, symX) * step(symX, 0.95) +
+          (1.0 - smoothstep(0.016, 0.042, abs(r - 0.88))),
+          0.0,
+          1.0
+        ) * (1.0 - filigree);
 
-        vec3 col = mix(uVoidInk, uPrimary * 1.25, lineMask);
-        col = mix(col, uSecondary * 1.35, clamp(innerRing + outerRing * 0.65, 0.0, 1.0));
-        col += vec3(1.0, 0.92, 0.94) * (innerRing * 0.48 + hexRing * 0.25);
+        float pulse = 0.84 + 0.16 * sin(r * 18.0 - uTime * 5.5);
+        float alpha = clamp((filigree * 0.96 + inkOutline * 0.72) * pulse * uOpacity, 0.0, 0.96);
+        if (alpha < 0.04) discard;
+
+        vec3 glowCol = mix(uPrimary * 1.35, uSecondary * 1.45, clamp(symY * 3.5 + (1.0 - r) * 0.45, 0.0, 1.0));
+        // White-hot anime core inside the razor filigree lines
+        vec3 whiteHot = vec3(1.0, 0.96, 0.95) * smoothstep(0.55, 0.95, filigree) * 0.72;
+        vec3 col = mix(uVoidInk, glowCol + whiteHot, filigree);
         gl_FragColor = vec4(col, alpha);
       }
     `,
@@ -229,12 +239,12 @@ function createVerticalBeamMaterial(): THREE.ShaderMaterial {
       uniform vec3 uColor;
       varying vec2 vUv;
       void main() {
-        float edgeX = sin(vUv.x * 3.1415926);
-        float fadeY = (1.0 - smoothstep(0.15, 1.0, vUv.y)) * smoothstep(0.0, 0.08, vUv.y);
-        float shimmer = 0.78 + 0.22 * sin(vUv.y * 14.0 - uTime * 7.5 + vUv.x * 6.0);
-        float alpha = edgeX * edgeX * fadeY * shimmer * uOpacity * 0.54;
+        float edgeX = pow(sin(vUv.x * 3.1415926), 1.6);
+        float fadeY = (1.0 - smoothstep(0.12, 1.0, vUv.y)) * smoothstep(0.0, 0.06, vUv.y);
+        float shimmer = 0.82 + 0.18 * sin(vUv.y * 16.0 - uTime * 8.5 + vUv.x * 6.0);
+        float alpha = edgeX * fadeY * shimmer * uOpacity * 0.62;
         if (alpha < 0.02) discard;
-        vec3 col = mix(uColor, vec3(1.0, 0.9, 0.92), fadeY * 0.42) * 1.25;
+        vec3 col = mix(uColor, vec3(1.0, 0.94, 0.95), edgeX * fadeY * 0.58) * 1.35;
         gl_FragColor = vec4(col, alpha);
       }
     `,
@@ -247,8 +257,8 @@ function createVerticalBeamMaterial(): THREE.ShaderMaterial {
 
 /**
  * Tier 2 Boss Blood Demon Art Domain Renderer (Akaza/Nezuko/Gyutaro visual tier):
- * Rotating geometric floor yantra mandala + 10 rising vertical additive light columns +
- * crisscrossing dark-ink-cored crimson blood ribbons.
+ * Rotating 12-point sacred geometric floor compass lattice + rising vertical light columns at vertices +
+ * crisscrossing dark-ink-cored crimson blood ribbons strictly during active windups & attacks.
  */
 export class BossBloodMandalaRenderer {
   public readonly group = new THREE.Group();
@@ -260,16 +270,16 @@ export class BossBloodMandalaRenderer {
 
   constructor() {
     this.mandalaMat = createBossMandalaShaderMaterial();
-    const planeGeo = new THREE.PlaneGeometry(2.0, 2.0);
+    const planeGeo = new THREE.PlaneGeometry(2.2, 2.2);
     planeGeo.rotateX(-Math.PI * 0.5);
     this.mandalaMesh = new THREE.Mesh(planeGeo, this.mandalaMat);
     this.mandalaMesh.position.y = 0.036;
     this.mandalaMesh.renderOrder = 12;
     this.group.add(this.mandalaMesh);
 
-    const beamGeo = new THREE.PlaneGeometry(0.42, 3.8);
-    beamGeo.translate(0, 1.9, 0);
-    for (let i = 0; i < 10; i++) {
+    const beamGeo = new THREE.PlaneGeometry(0.32, 3.4);
+    beamGeo.translate(0, 1.7, 0);
+    for (let i = 0; i < 12; i++) {
       const bmMat = createVerticalBeamMaterial();
       const bm = new THREE.Mesh(beamGeo, bmMat);
       bm.renderOrder = 16;
@@ -320,8 +330,8 @@ export class BossBloodMandalaRenderer {
     this.mandalaMat.uniforms.uSecondary.value.setHex(p.secondaryHex);
     this.mandalaMat.uniforms.uVoidInk.value.setHex(p.voidInkHex);
 
-    // Vertical light columns arrayed along the mandala perimeter
-    const beamRadius = p.mandalaRadiusWorld * 0.84;
+    // Vertical light columns arrayed along the 12 compass vertices
+    const beamRadius = p.mandalaRadiusWorld * 0.82;
     for (let i = 0; i < this.beams.length; i++) {
       const bm = this.beams[i];
       if (i >= p.beamCount) {
@@ -329,50 +339,42 @@ export class BossBloodMandalaRenderer {
         continue;
       }
       bm.visible = true;
-      const ang = (i / p.beamCount) * Math.PI * 2 + params.elapsedSec * 0.42;
+      const ang = (i / p.beamCount) * Math.PI * 2 - params.elapsedSec * 0.18;
       const bx = params.x + Math.cos(ang) * beamRadius;
       const bz = params.z + Math.sin(ang) * beamRadius;
       bm.position.set(bx, 0.02, bz);
       if (params.cameraPos) {
         bm.lookAt(params.cameraPos.x, bm.position.y, params.cameraPos.z);
       }
-      const heightPulse = 0.78 + 0.34 * Math.sin(params.elapsedSec * 4.5 + i * 1.1);
-      bm.scale.set(1.0 + (p.mandalaRadiusWorld - 2.4) * 0.25, heightPulse, 1.0);
+      const heightPulse = 0.72 + 0.38 * Math.sin(params.elapsedSec * 5.0 + i * 1.1);
+      bm.scale.set(0.85, heightPulse, 1.0);
       this.beamMats[i].uniforms.uTime.value = params.elapsedSec + i * 0.35;
       this.beamMats[i].uniforms.uOpacity.value =
-        p.mandalaAlpha * (params.isAttackOrWindup ? 0.92 : 0.48);
+        p.mandalaAlpha * (params.isAttackOrWindup ? 0.88 : 0.36);
       this.beamMats[i].uniforms.uColor.value.setHex(i % 2 === 0 ? p.primaryHex : p.secondaryHex);
     }
 
-    // Crisscrossed Nezuko/Gyutaro pure-black ink-void blood ribbons during windup/attack
-    const ribActive = params.isAttackOrWindup || p.mandalaAlpha > 0.78;
+    // Single clean ground-skimming crimson-and-black ink shock-crescent ONLY at the peak of an active boss attack swing
+    const ribActive = params.isAttackOrWindup && params.attackProgress01 > 0.25 && params.attackProgress01 < 0.88;
     for (let i = 0; i < this.vortexRibbons.length; i++) {
       const ctrl = this.vortexRibbons[i];
-      if (!ribActive || i >= p.ribbonCount) {
+      if (!ribActive || i > 0) {
         ctrl.clear();
         continue;
       }
       ctrl.setTheme('boss');
-      const spin = params.yaw + i * 1.57 + params.elapsedSec * (i % 2 === 0 ? 3.2 : -2.8);
-      const prog = params.isAttackOrWindup
-        ? Math.max(0.15, Math.min(0.95, params.attackProgress01))
-        : (params.elapsedSec * 0.9 + i * 0.27) % 0.92;
       ctrl.updateParametricSwing(
-        params.elapsedSec + i * 0.19,
+        params.elapsedSec,
         true,
-        i % 2 === 0 ? 'attack3' : 'heavy',
+        'attack3',
         params.x,
         params.z,
-        spin,
-        prog,
-        p.ribbonReachWorld - 1.3
+        params.yaw,
+        params.attackProgress01,
+        p.ribbonReachWorld - 1.25
       );
-      ctrl.mesh.rotation.set(
-        (i % 2 === 0 ? 0.28 : -0.34) * Math.cos(spin),
-        0,
-        (i % 2 === 0 ? -0.26 : 0.32) * Math.sin(spin)
-      );
-      ctrl.mesh.position.y = 0.28 + i * 0.14;
+      ctrl.mesh.rotation.set(0, 0, 0);
+      ctrl.mesh.position.y = 0.24;
     }
   }
 
@@ -416,16 +418,16 @@ function createGruntCurseRingMaterial(): THREE.ShaderMaterial {
       void main() {
         float r = length(vUv);
         if (r > 0.99 || uOpacity < 0.02) discard;
-        float ang = atan(vUv.y, vUv.x);
-        float outerRing = 1.0 - smoothstep(0.025, 0.08, abs(r - 0.84));
-        float innerRing = 1.0 - smoothstep(0.02, 0.07, abs(r - 0.52));
-        float diamond = abs(cos((ang + uTime * 1.1) * 2.0) * 0.22 + 0.56 - r);
-        float sigil = 1.0 - smoothstep(0.02, 0.065, diamond);
-        float mask = clamp(outerRing + innerRing * 0.75 + sigil * 0.85, 0.0, 1.0);
+        float ang = atan(vUv.y, vUv.x) + uTime * 0.85;
+        float hexSym = abs(cos(ang * 3.0)) * 0.24 + 0.58;
+        float starLine = 1.0 - smoothstep(0.010, 0.032, abs(r - hexSym));
+        float outerRing = 1.0 - smoothstep(0.010, 0.030, abs(r - 0.86));
+        float spoke = (1.0 - smoothstep(0.015, 0.048, abs(fract(ang * 6.0 / 6.2831853) - 0.5))) * step(0.32, r) * step(r, 0.86);
+        float mask = clamp(outerRing + starLine * 0.95 + spoke * 0.80, 0.0, 1.0);
         if (mask < 0.06) discard;
-        vec3 col = mix(uInk, uPrimary * 1.15, mask);
-        col = mix(col, uSecondary * 1.25, sigil * 0.55);
-        gl_FragColor = vec4(col, mask * uOpacity);
+        vec3 col = mix(uInk, uPrimary * 1.35, mask);
+        col = mix(col, uSecondary * 1.45, starLine * 0.65);
+        gl_FragColor = vec4(col, mask * uOpacity * 0.92);
       }
     `,
     transparent: true,

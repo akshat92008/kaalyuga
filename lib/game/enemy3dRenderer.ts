@@ -594,7 +594,9 @@ export function bindTexturedGeometryToSkeleton(
       if ((child as THREE.Mesh).isMesh) {
         const m = child as THREE.Mesh;
         m.frustumCulled = false;
+        if (m.geometry.attributes.color) m.geometry.deleteAttribute('color');
         m.geometry = simplifyBufferGeometry(m.geometry, simpGrid, simpMin);
+        if (!m.geometry.attributes.normal) m.geometry.computeVertexNormals();
         m.material = material;
       }
     });
@@ -604,6 +606,7 @@ export function bindTexturedGeometryToSkeleton(
   const rMesh = riggedSkinned as THREE.SkinnedMesh;
   rMesh.frustumCulled = false;
   const rGeo = rMesh.geometry;
+  if (rGeo.attributes.color) rGeo.deleteAttribute('color');
   const rPos = rGeo.attributes.position;
 
   if (texturedRoot && riggedRoot !== texturedRoot && rPos) {
@@ -615,6 +618,7 @@ export function bindTexturedGeometryToSkeleton(
     });
     if (texMesh) {
       const tGeo = (texMesh as THREE.Mesh).geometry;
+      if (tGeo.attributes.color) tGeo.deleteAttribute('color');
       const tPos = tGeo.attributes.position;
       const tUv = tGeo.attributes.uv;
       if (tPos && tUv) {
@@ -622,12 +626,15 @@ export function bindTexturedGeometryToSkeleton(
           // PATH 1: Exact 1:1 vertex count match — direct UV attribute copy onto native SkinnedMesh!
           rGeo.setAttribute('uv', tUv);
           rMesh.geometry = simplifyBufferGeometry(rGeo, simpGrid, simpMin);
+          if (!rMesh.geometry.attributes.normal) rMesh.geometry.computeVertexNormals();
           rMesh.material = material;
           return;
         } else if (rGeo.attributes.skinIndex && rGeo.attributes.skinWeight) {
-          // PATH 2: Bind the simplified *_texture.fbx mesh (keeping 100% of its native UV islands)
+          // PATH 2: Bind the simplified *_texture.fbx mesh (keeping 100% of its native UV islands & smooth normals)
           const simpTexGeo = simplifyBufferGeometry(tGeo, simpGrid, simpMin);
-          rMesh.geometry = transferSkinWeightsViaSpatialGrid(rGeo, simpTexGeo);
+          const boundGeo = transferSkinWeightsViaSpatialGrid(rGeo, simpTexGeo);
+          if (!boundGeo.attributes.normal) boundGeo.computeVertexNormals();
+          rMesh.geometry = boundGeo;
           rMesh.material = material;
           return;
         }
@@ -637,6 +644,7 @@ export function bindTexturedGeometryToSkeleton(
 
   // PATH 3: Native SkinnedMesh with its own embedded UVs (Dundubhi & Vrikodara)
   rMesh.geometry = simplifyBufferGeometry(rGeo, simpGrid, simpMin);
+  if (!rMesh.geometry.attributes.normal) rMesh.geometry.computeVertexNormals();
   rMesh.material = material;
 }
 
