@@ -8,10 +8,10 @@ const PUBLIC_VIDEOS_DIR = [process.cwd(), 'public', 'videos'].join('/');
 
 export async function GET(
   req: NextRequest,
-  context: { params: Promise<{ slug: string[] }> }
+  { params }: { params: Promise<{ slug: string[] }> }
 ) {
   try {
-    const { slug } = await context.params;
+    const { slug } = await params;
     const relPath = slug.map((s) => path.basename(s)).join('/');
     if (!relPath) {
       return new NextResponse('Not Found', { status: 404 });

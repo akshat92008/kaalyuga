@@ -25,10 +25,10 @@ function getMimeType(filename: string): string {
 
 export async function GET(
   _req: NextRequest,
-  context: { params: Promise<{ slug: string[] }> }
+  { params }: { params: Promise<{ slug: string[] }> }
 ) {
   try {
-    const { slug } = await context.params;
+    const { slug } = await params;
     const cleanSegments = slug.map((s) => path.basename(s)).filter(Boolean);
     if (cleanSegments.length === 0) {
       return new NextResponse('Not Found', { status: 404 });
