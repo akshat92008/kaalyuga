@@ -555,7 +555,7 @@ function buildMaskedAdditiveCanvas(
         const sb = data[sIdx + 2];
         const sMax = Math.max(sr, sg, sb);
         const sMin = Math.min(sr, sg, sb);
-        if (sMax > 28 && sMax <= 140 && sMax - sMin <= 20) {
+        if (sMax > 28 && sMax <= 226 && sMax - sMin <= 22) {
           brightNeutralCornerCount++;
         }
       }
@@ -577,7 +577,7 @@ function buildMaskedAdditiveCanvas(
         const b = data[idx4 + 2];
         const maxC = Math.max(r, g, b);
         const minC = Math.min(r, g, b);
-        return maxC <= 138 && maxC - minC <= 22;
+        return maxC <= 226 && maxC - minC <= 24;
       };
 
       const trySeed = (px: number, py: number) => {
@@ -623,7 +623,7 @@ function buildMaskedAdditiveCanvas(
         if (cy + 1 < h) trySeed(cx, cy + 1);
       }
 
-      // Clear enclosed checkerboard pockets (e.g. inside closed shockwave rings) without touching dark rock outlines (<40) or colored VFX
+      // Clear enclosed checkerboard pockets (e.g. inside closed shockwave rings) without touching dark rock outlines (<34) or colored VFX
       for (let p = 0; p < totalPx; p++) {
         if (visited[p]) continue;
         const idx4 = p * 4;
@@ -632,7 +632,7 @@ function buildMaskedAdditiveCanvas(
         const b = data[idx4 + 2];
         const maxC = Math.max(r, g, b);
         const minC = Math.min(r, g, b);
-        if (maxC >= 40 && maxC <= 114 && maxC - minC <= 14) {
+        if (maxC >= 34 && maxC <= 224 && maxC - minC <= 16) {
           data[idx4] = 0;
           data[idx4 + 1] = 0;
           data[idx4 + 2] = 0;
@@ -860,7 +860,7 @@ export function drawAdditiveFlipbookCell(
   const drawH = Math.max(4, params.height ?? (cell.sh / Math.max(1, cell.sw)) * drawW);
   const ax = params.anchorX ?? 0.5;
   const ay = params.anchorY ?? 0.5;
-  const cappedAlpha = Math.max(0, Math.min(0.78, alpha));
+  const cappedAlpha = Math.max(0, Math.min(0.88, alpha));
 
   ctx.save();
   ctx.translate(params.x, params.y);
@@ -871,14 +871,14 @@ export function drawAdditiveFlipbookCell(
     ctx.rotate(params.rotationRad);
   }
 
-  // 1. Soft dark-ink under-shadow ('source-over' at low opacity) so crimson & saffron pigments pop over bright sunlit stone
-  if (drawW >= 42) {
+  // 1. Crisp Sumi-e dark-ink contrast backing so anime slashes & shockwaves pop against sunlit stone
+  if (drawW >= 36) {
     const shadowR = Math.max(drawW, drawH) * 0.44;
     ctx.globalCompositeOperation = 'source-over';
-    ctx.globalAlpha = Math.min(0.26, cappedAlpha * 0.30);
+    ctx.globalAlpha = Math.min(0.34, cappedAlpha * 0.36);
     const underGrad = ctx.createRadialGradient(0, 0, shadowR * 0.08, 0, 0, shadowR);
-    underGrad.addColorStop(0, 'rgba(18, 8, 6, 0.72)');
-    underGrad.addColorStop(0.58, 'rgba(28, 10, 8, 0.36)');
+    underGrad.addColorStop(0, 'rgba(18, 8, 6, 0.78)');
+    underGrad.addColorStop(0.58, 'rgba(28, 10, 8, 0.42)');
     underGrad.addColorStop(1, 'rgba(18, 8, 6, 0)');
     ctx.fillStyle = underGrad;
     ctx.beginPath();
@@ -886,7 +886,7 @@ export function drawAdditiveFlipbookCell(
     ctx.fill();
   }
 
-  // 2. Controlled 'screen' pass: #000000 is 100% transparent, preserving rich crimson (#ff4d24) & saffron-gold (#ffb833) without white blowout
+  // 2. Primary 'screen' pass: #000000 is 100% transparent, preserving rich anime pigments
   ctx.globalCompositeOperation = 'screen';
   ctx.globalAlpha = cappedAlpha;
   ctx.drawImage(
@@ -900,6 +900,23 @@ export function drawAdditiveFlipbookCell(
     drawW,
     drawH
   );
+
+  // 3. Secondary 'lighter' anime core punch so slashes & hit bursts have crisp Ufotable luminance
+  if (cappedAlpha > 0.22 && drawW >= 28) {
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = Math.min(0.42, cappedAlpha * 0.38);
+    ctx.drawImage(
+      sheet.canvas,
+      cell.sx,
+      cell.sy,
+      cell.sw,
+      cell.sh,
+      -drawW * ax * 0.94,
+      -drawH * ay * 0.94,
+      drawW * 0.94,
+      drawH * 0.94
+    );
+  }
   ctx.restore();
   return true;
 }
@@ -992,9 +1009,9 @@ export function resolveParticleFlipbookSpec(
         colOffset: 1,
         singleCol: false,
         alignToVelocity: true,
-        baseScale: 2.1,
-        maxAlpha: 0.44,
-        maxSizePx: 16,
+        baseScale: 2.35,
+        maxAlpha: 0.72,
+        maxSizePx: 18,
       };
     case 'bronze_spark':
       return {
@@ -1003,9 +1020,9 @@ export function resolveParticleFlipbookSpec(
         colOffset: 3,
         singleCol: true,
         alignToVelocity: true,
-        baseScale: 1.9,
-        maxAlpha: 0.48,
-        maxSizePx: 14,
+        baseScale: 2.15,
+        maxAlpha: 0.78,
+        maxSizePx: 17,
       };
     case 'magic_spell':
       return {
@@ -1014,9 +1031,9 @@ export function resolveParticleFlipbookSpec(
         colOffset: 3,
         singleCol: true,
         alignToVelocity: false,
-        baseScale: 1.8,
-        maxAlpha: 0.42,
-        maxSizePx: 13,
+        baseScale: 2.0,
+        maxAlpha: 0.68,
+        maxSizePx: 16,
       };
     case 'ember_dust':
     default:
@@ -1026,9 +1043,9 @@ export function resolveParticleFlipbookSpec(
         colOffset: 3,
         singleCol: true,
         alignToVelocity: true,
-        baseScale: 1.6,
-        maxAlpha: 0.36,
-        maxSizePx: 11,
+        baseScale: 1.85,
+        maxAlpha: 0.62,
+        maxSizePx: 14,
       };
   }
 }

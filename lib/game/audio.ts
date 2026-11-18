@@ -53,12 +53,21 @@ class SoundEngine {
     }
   }
 
-  public playSwing(weight: 'light' | 'heavy' = 'light') {
+  public playSwing(weight: 'light' | 'heavy' = 'light', stance?: 'smash' | 'pillar' | 'thrust') {
     this.playWavSfx(
-      SoundEngine.SFX_FILES.combatPunch,
-      weight === 'heavy' ? 0.34 : 0.22,
-      weight === 'heavy' ? 0.86 : 1.04
+      weight === 'heavy'
+        ? SoundEngine.SFX_FILES.axeHeavySwing
+        : SoundEngine.SFX_FILES.slashFast,
+      weight === 'heavy' ? 0.42 : 0.32,
+      weight === 'heavy' ? 0.94 : 1.05
     );
+    if (stance === 'pillar') {
+      this.playWavSfx(SoundEngine.SFX_FILES.windBreathing, weight === 'heavy' ? 0.28 : 0.16, 1.06);
+    } else if (stance === 'thrust') {
+      this.playWavSfx(SoundEngine.SFX_FILES.waterElemental, weight === 'heavy' ? 0.26 : 0.15, 1.04);
+    } else if (weight === 'heavy' && stance === 'smash') {
+      this.playWavSfx(SoundEngine.SFX_FILES.fireSunBreathing, 0.26, 1.0);
+    }
     const ctx = this.getContext();
     if (!ctx) return;
     const now = ctx.currentTime;
@@ -90,12 +99,36 @@ class SoundEngine {
     noise.start(now);
   }
 
+  public playBreathingStyle(
+    style: 'hinokami' | 'sun' | 'water' | 'wind' | 'thunder' | 'bronze' | 'crimson'
+  ) {
+    if (style === 'thunder') {
+      this.playWavSfx(SoundEngine.SFX_FILES.lightningStrike, 0.36, 1.04);
+    } else if (style === 'wind') {
+      this.playWavSfx(SoundEngine.SFX_FILES.windBreathing, 0.34, 1.02);
+    } else if (style === 'water') {
+      this.playWavSfx(SoundEngine.SFX_FILES.waterElemental, 0.34, 1.02);
+    } else if (style === 'bronze') {
+      this.playWavSfx(SoundEngine.SFX_FILES.bronzeArmorHit, 0.36, 0.96);
+    } else {
+      this.playWavSfx(SoundEngine.SFX_FILES.fireSunBreathing, 0.34, style === 'sun' ? 1.04 : 0.98);
+    }
+  }
+
   public playHit(type: 'light' | 'heavy' | 'crit' | 'execute' = 'light') {
-    this.playWavSfx(
-      SoundEngine.SFX_FILES.bloodImpact,
-      type === 'execute' ? 0.48 : type === 'heavy' || type === 'crit' ? 0.36 : 0.24,
-      type === 'execute' ? 0.85 : type === 'heavy' ? 0.92 : 1.02
-    );
+    if (type === 'execute') {
+      this.playWavSfx(SoundEngine.SFX_FILES.weaponClash, 0.48, 0.96);
+      this.playWavSfx(SoundEngine.SFX_FILES.supernaturalBurst, 0.38, 0.94);
+    } else if (type === 'heavy') {
+      this.playWavSfx(SoundEngine.SFX_FILES.weaponSmash, 0.44, 0.96);
+      this.playWavSfx(SoundEngine.SFX_FILES.kaalyugaHit, 0.32, 0.92);
+    } else if (type === 'crit') {
+      this.playWavSfx(SoundEngine.SFX_FILES.heavyIronHit, 0.40, 1.04);
+      this.playWavSfx(SoundEngine.SFX_FILES.kaalyugaHit, 0.30, 1.06);
+    } else {
+      this.playWavSfx(SoundEngine.SFX_FILES.kaalyugaHit, 0.32, 1.02);
+      this.playWavSfx(SoundEngine.SFX_FILES.bloodImpact, 0.22, 1.05);
+    }
     const ctx = this.getContext();
     if (!ctx) return;
     const now = ctx.currentTime;
@@ -151,9 +184,18 @@ class SoundEngine {
 
   public playSpell(spell: 'immobilize' | 'parry' | 'clones' | 'gourd' | 'dodge' | 'transform') {
     if (spell === 'dodge') {
-      this.playWavSfx(SoundEngine.SFX_FILES.dodgeJump, 0.26, 1.06);
+      this.playWavSfx(SoundEngine.SFX_FILES.dashFast, 0.32, 1.06);
+    } else if (spell === 'parry') {
+      this.playWavSfx(SoundEngine.SFX_FILES.parryPerfect, 0.44, 1.0);
+    } else if (spell === 'immobilize') {
+      this.playWavSfx(SoundEngine.SFX_FILES.sacredBell, 0.36, 1.02);
+    } else if (spell === 'gourd') {
+      this.playWavSfx(SoundEngine.SFX_FILES.boonChime, 0.38, 1.0);
+    } else if (spell === 'clones') {
+      this.playWavSfx(SoundEngine.SFX_FILES.waterElemental, 0.34, 1.08);
     } else if (spell === 'transform') {
-      this.playWavSfx(SoundEngine.SFX_FILES.ominousDrums, 0.38, 0.94);
+      this.playWavSfx(SoundEngine.SFX_FILES.supernaturalBurst, 0.44, 0.96);
+      this.playWavSfx(SoundEngine.SFX_FILES.ominousDrums, 0.32, 0.94);
     }
     const ctx = this.getContext();
     if (!ctx) return;
@@ -217,7 +259,6 @@ class SoundEngine {
         osc.stop(now + 0.46);
       });
     } else if (spell === 'dodge') {
-      this.playWavSfx(SoundEngine.SFX_FILES.dodgeJump, 0.30, 1.12);
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = 'sine';
@@ -247,7 +288,7 @@ class SoundEngine {
   }
 
   public playTelegraph() {
-    this.playWavSfx(SoundEngine.SFX_FILES.ominousDrums, 0.24, 1.1);
+    this.playWavSfx(SoundEngine.SFX_FILES.monsterRoar, 0.24, 1.05);
     const ctx = this.getContext();
     if (!ctx) return;
     const now = ctx.currentTime;
@@ -268,7 +309,7 @@ class SoundEngine {
    * Distinct Vrikodara Telegraph 1: Abdominal Furnace Vacuum Pull (inward sub-bass turbine inhale)
    */
   public playVrikodaraVacuumTelegraph() {
-    this.playWavSfx(SoundEngine.SFX_FILES.ominousDrums, 0.28, 0.82);
+    this.playWavSfx(SoundEngine.SFX_FILES.vrikodaraVacuum, 0.38, 0.96);
     const ctx = this.getContext();
     if (!ctx) return;
     const now = ctx.currentTime;
@@ -302,7 +343,7 @@ class SoundEngine {
    * Distinct Vrikodara Telegraph 2: Molten Slag Arc (bubbling volcanic brass rumble)
    */
   public playVrikodaraSlagTelegraph() {
-    this.playWavSfx(SoundEngine.SFX_FILES.ominousDrums, 0.28, 0.95);
+    this.playWavSfx(SoundEngine.SFX_FILES.bossRoarDeep, 0.34, 0.96);
     const ctx = this.getContext();
     if (!ctx) return;
     const now = ctx.currentTime;
@@ -336,7 +377,7 @@ class SoundEngine {
    * Distinct Vrikodara Telegraph 3: Phase 2 Eclipse Twin-Trident Sweep (metallic twin-resonance chime)
    */
   public playVrikodaraEclipseSweepTelegraph() {
-    this.playWavSfx(SoundEngine.SFX_FILES.ominousDrums, 0.30, 1.18);
+    this.playWavSfx(SoundEngine.SFX_FILES.axeEnormousSwing, 0.34, 0.98);
     const ctx = this.getContext();
     if (!ctx) return;
     const now = ctx.currentTime;
@@ -366,7 +407,7 @@ class SoundEngine {
     } else if (type === 'defeat') {
       this.playWavSfx(SoundEngine.SFX_FILES.playerDefeat, 0.46, 0.96);
     } else {
-      this.playWavSfx(SoundEngine.SFX_FILES.ominousDrums, 0.36, 1.0);
+      this.playWavSfx(SoundEngine.SFX_FILES.sacredBell, 0.42, 0.98);
     }
     const ctx = this.getContext();
     if (!ctx) return;
@@ -399,6 +440,9 @@ class SoundEngine {
     judgmentAtRuinedGate: '/assets/aistudio/Judgment_at_the_Ruined_Gate.mp3',
     mahadevaRising: '/assets/aistudio/Ma_de_va_Rising.mp3',
     titansFinalStride: '/assets/aistudio/The_Titan_s_Final_Stride.mp3',
+    dundubhiBossTheme: '/audio/repo/dundubhi_boss_theme.mp3',
+    vrikodaraBossTheme: '/audio/repo/vrikodara_boss_theme.mp3',
+    vaitaraniRealm: '/audio/repo/vaitarani_realm.mp3',
   } as const;
 
   public static readonly SFX_FILES = {
@@ -408,6 +452,29 @@ class SoundEngine {
     levelCompleted: '/audio/sfx/mixkit-game-level-completed-2059.wav',
     playerDefeat: '/audio/sfx/mixkit-player-losing-or-failing-2042.wav',
     dodgeJump: '/audio/sfx/mixkit-player-jumping-in-a-video-game-2043.wav',
+    kaalyugaHit: '/kaalyuga/audio/hit.wav',
+    kaalyugaDrum: '/kaalyuga/audio/drum.wav',
+    slashFast: '/audio/repo/slash_fast.wav',
+    axeHeavySwing: '/audio/repo/axe_heavy_swing.wav',
+    axeEnormousSwing: '/audio/repo/axe_enormous_swing.wav',
+    weaponSmash: '/audio/repo/weapon_smash.wav',
+    heavyIronHit: '/audio/repo/heavy_iron_hit.wav',
+    weaponClash: '/audio/repo/weapon_clash.wav',
+    bronzeArmorHit: '/audio/repo/bronze_armor_hit.wav',
+    parryPerfect: '/audio/repo/parry_perfect.wav',
+    defensiveBlock: '/audio/repo/defensive_block.wav',
+    lightningStrike: '/audio/repo/lightning_strike.wav',
+    windBreathing: '/audio/repo/wind_breathing.wav',
+    fireSunBreathing: '/audio/repo/fire_sun_breathing.wav',
+    waterElemental: '/audio/repo/water_elemental.wav',
+    supernaturalBurst: '/audio/repo/supernatural_burst.wav',
+    dashFast: '/audio/repo/dash_fast.wav',
+    warDrum: '/audio/repo/war_drum.wav',
+    sacredBell: '/audio/repo/sacred_bell.wav',
+    boonChime: '/audio/repo/boon_chime.wav',
+    vrikodaraVacuum: '/audio/repo/vrikodara_vacuum.wav',
+    monsterRoar: '/audio/repo/monster_roar.wav',
+    bossRoarDeep: '/audio/repo/boss_roar_deep.wav',
   } as const;
 
   private sfxPool: Map<string, HTMLAudioElement[]> = new Map();
@@ -543,7 +610,7 @@ class SoundEngine {
       return { url: SoundEngine.BGM_TRACKS.beforeIronGate, baseVol: 0.40, duck: 1.0 };
     }
     if (mode === 'shrine') {
-      return { url: SoundEngine.BGM_TRACKS.beforeIronGate, baseVol: 0.34, duck: 0.85 };
+      return { url: SoundEngine.BGM_TRACKS.vaitaraniRealm, baseVol: 0.36, duck: 0.90 };
     }
     if (mode === 'defeat') {
       return { url: SoundEngine.BGM_TRACKS.whereBronzeGodsWeep, baseVol: 0.36, duck: 1.0 };
@@ -554,7 +621,13 @@ class SoundEngine {
 
     // Active combat / paused / look inside a chamber — hooked dynamic BGM progression
     const duck = mode === 'paused' ? 0.34 : mode === 'look' ? 0.12 : 1.0;
-    if (isBoss || chamberId === 2 || chamberId === 5) {
+    if (chamberId === 2) {
+      return { url: SoundEngine.BGM_TRACKS.dundubhiBossTheme, baseVol: 0.44, duck };
+    }
+    if (chamberId === 5) {
+      return { url: SoundEngine.BGM_TRACKS.vrikodaraBossTheme, baseVol: 0.44, duck };
+    }
+    if (isBoss) {
       return { url: SoundEngine.BGM_TRACKS.titansFinalStride, baseVol: 0.46, duck };
     }
     if (chamberId === 1) {
@@ -782,6 +855,8 @@ class SoundEngine {
    * and the last thing the Council used to call the families."
    */
   public playDundubhiWarDrum() {
+    this.playWavSfx(SoundEngine.SFX_FILES.warDrum, 0.44, 0.96);
+    this.playWavSfx(SoundEngine.SFX_FILES.kaalyugaDrum, 0.30, 1.0);
     const ctx = this.getContext();
     if (!ctx) return;
     const now = ctx.currentTime;
@@ -835,9 +910,6 @@ class SoundEngine {
     listenerY: number,
     viewportW: number = 1440
   ) {
-    const ctx = this.getContext();
-    if (!ctx) return;
-
     const spatial = computeSpatialAudioPanAndGain({
       sourceX,
       sourceY,
@@ -845,6 +917,18 @@ class SoundEngine {
       listenerY,
       viewportW,
     });
+    if (material === 'bronze_armor') {
+      this.playWavSfx(SoundEngine.SFX_FILES.bronzeArmorHit, 0.34 * spatial.gainMultiplier, 0.98);
+    } else if (material === 'golden_parry') {
+      this.playWavSfx(SoundEngine.SFX_FILES.parryPerfect, 0.36 * spatial.gainMultiplier, 1.04);
+    } else if (material === 'astral_spell') {
+      this.playWavSfx(SoundEngine.SFX_FILES.waterElemental, 0.28 * spatial.gainMultiplier, 1.02);
+    } else if (material === 'obsidian_stone') {
+      this.playWavSfx(SoundEngine.SFX_FILES.defensiveBlock, 0.30 * spatial.gainMultiplier, 0.94);
+    }
+    const ctx = this.getContext();
+    if (!ctx) return;
+
     const spec = computeMaterialFoleySpec(material);
     const now = ctx.currentTime;
     const pitchJitter = 0.94 + Math.random() * 0.12;

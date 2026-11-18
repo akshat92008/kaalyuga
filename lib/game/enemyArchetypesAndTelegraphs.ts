@@ -14,6 +14,10 @@ export type EnemyType =
   | 'ironmaw_gladiator'
   | 'bloodmaw_brute'
   | 'semi_boss_bloodforge'
+  | 'preta_bowman'
+  | 'ash_cyclone_warden'
+  | 'molten_titan_warden'
+  | 'eternal_wheel_warden'
   | 'dundubhi'
   | 'wolf_guai'
   | 'fire_monk'
@@ -81,6 +85,78 @@ export function computeAct1ArchetypeAttackSpec(params: {
       opensInWindupAndRecovery: true,
       backstabBonusMultiplier: 1.25,
       telegraphLabel: 'POUNCE LUNGE · 380ms',
+    };
+  }
+
+  if (params.enemyType === 'preta_bowman') {
+    return {
+      windupSec: 0.52,
+      recoverySec: 0.56,
+      attackKind: 'projectile',
+      telegraphShape: 'red_lunge_line',
+      attackAngle,
+      pounceRangePx: Math.min(340, Math.max(220, dist)),
+      yantraRadiusPx: 74,
+      slamArcRad: 0.5,
+      slamRangePx: 260,
+      frontShieldActiveInChase: false,
+      opensInWindupAndRecovery: true,
+      backstabBonusMultiplier: 1.35,
+      telegraphLabel: 'PRETA-SHARA ARROW SALVO · 520ms',
+    };
+  }
+
+  if (params.enemyType === 'ash_cyclone_warden') {
+    return {
+      windupSec: 0.46,
+      recoverySec: 0.62,
+      attackKind: 'aoe',
+      telegraphShape: 'vedic_yantra_fill',
+      attackAngle,
+      pounceRangePx: 0,
+      yantraRadiusPx: 142,
+      slamArcRad: Math.PI * 2,
+      slamRangePx: 142,
+      frontShieldActiveInChase: false,
+      opensInWindupAndRecovery: true,
+      backstabBonusMultiplier: 1.35,
+      telegraphLabel: 'ASHEN CYCLONE VORTEX · DASH OUT',
+    };
+  }
+
+  if (params.enemyType === 'molten_titan_warden') {
+    return {
+      windupSec: 0.64,
+      recoverySec: 0.95,
+      attackKind: 'aoe',
+      telegraphShape: 'overhead_slam_sector',
+      attackAngle,
+      pounceRangePx: 0,
+      yantraRadiusPx: 156,
+      slamArcRad: 1.4,
+      slamRangePx: 156,
+      frontShieldActiveInChase: false,
+      opensInWindupAndRecovery: true,
+      backstabBonusMultiplier: 1.5,
+      telegraphLabel: 'MAGMA GEYSER SLAM · PILLAR VAULT',
+    };
+  }
+
+  if (params.enemyType === 'eternal_wheel_warden') {
+    return {
+      windupSec: 0.58,
+      recoverySec: 0.54,
+      attackKind: 'projectile',
+      telegraphShape: 'vedic_yantra_fill',
+      attackAngle,
+      pounceRangePx: 0,
+      yantraRadiusPx: 98,
+      slamArcRad: Math.PI * 2,
+      slamRangePx: 110,
+      frontShieldActiveInChase: false,
+      opensInWindupAndRecovery: true,
+      backstabBonusMultiplier: 1.35,
+      telegraphLabel: 'DHARMA CHAKRAM FAN · PARRY [SHIFT]',
     };
   }
 

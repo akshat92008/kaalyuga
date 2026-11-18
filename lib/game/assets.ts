@@ -24,7 +24,11 @@ export type Warden3DRigKey =
   | 'ashen_oracle'
   | 'ironmaw_gladiator'
   | 'bloodmaw_brute'
-  | 'semi_boss_bloodforge';
+  | 'semi_boss_bloodforge'
+  | 'preta_bowman'
+  | 'ash_cyclone_warden'
+  | 'molten_titan_warden'
+  | 'eternal_wheel_warden';
 
 export type KaliyugaEnemySpawnType =
   | 'charnel_ghoul'
@@ -32,6 +36,10 @@ export type KaliyugaEnemySpawnType =
   | 'ironmaw_gladiator'
   | 'bloodmaw_brute'
   | 'semi_boss_bloodforge'
+  | 'preta_bowman'
+  | 'ash_cyclone_warden'
+  | 'molten_titan_warden'
+  | 'eternal_wheel_warden'
   | 'dundubhi'
   | 'vrikodara';
 
@@ -61,6 +69,7 @@ export interface ChamberSpec {
   unlockedBackgroundUrl?: string;
   phase2BackgroundUrl?: string;
   videoUrl?: string;
+  unlockedVideoUrl?: string;
   phase2VideoUrl?: string;
   floorTint: string;
   isBossChamber: boolean;
@@ -97,6 +106,13 @@ export const GAME_ASSETS = {
     furnacesSlagEclipse: '/videos/Furnaces_spewing_flames_and_slag_baeefd93_1080p.mp4',
     axeSlashEnergy: '/videos/Axe_slash_energy_attack_animation_236a5328_1080p.mp4',
   },
+  cutsceneVideos: {
+    burningFortress: '/videos/Rudra_looking_at_burning_fortress_43f2ce2a.mp4',
+    rudraAmidstFire: '/videos/Rudra_standing_amidst_fire_and_ab5340a1.mp4',
+    cosmicManifest: '/videos/Rudra_looking_up_cosmic_manifest_efb48503.mp4',
+    cameraSpace: '/videos/Camera_tilts_upward_into_space_f5f45c0e.mp4',
+    cloudsStarry: '/videos/Clouds_parting_revealing_starry_sky_33ab1a1f.mp4',
+  },
   titleVideo720p: '/videos/Warrior_standing_on_battlefield_e09ae2f5.mp4',
   titleBackdrop: '/assets/aistudio/Blood_Eclipsed_Warrior_of_the_Ruins.png',
   deathBackdrop: '/assets/aistudio/Crimson_Underworld_River_of_the_Drowned_Warrior.png',
@@ -110,6 +126,11 @@ export const GAME_ASSETS = {
     judgmentAtRuinedGate: '/assets/aistudio/Judgment_at_the_Ruined_Gate.mp3',
     mahadevaRising: '/assets/aistudio/Ma_de_va_Rising.mp3',
     titansFinalStride: '/assets/aistudio/The_Titan_s_Final_Stride.mp3',
+    dundubhiBossTheme: '/audio/repo/dundubhi_boss_theme.mp3',
+    vrikodaraBossTheme: '/audio/repo/vrikodara_boss_theme.mp3',
+    vaitaraniRealm: '/audio/repo/vaitarani_realm.mp3',
+    theBleedingCrown: '/audio/repo/the_bleeding_crown.mp3',
+    kaalyugaBgm: '/kaalyuga/audio/bgm.mp3',
   },
 
   // Real WAV Combat & Event Sound Effects from Repository
@@ -121,6 +142,31 @@ export const GAME_ASSETS = {
     playerDefeat: '/audio/sfx/mixkit-player-losing-or-failing-2042.wav',
     dodgeJump: '/audio/sfx/mixkit-player-jumping-in-a-video-game-2043.wav',
     stageLevelMusic: '/audio/sfx/mixkit-game-level-music-689.wav',
+    kaalyugaHit: '/kaalyuga/audio/hit.wav',
+    kaalyugaDrum: '/kaalyuga/audio/drum.wav',
+    slashFast: '/audio/repo/slash_fast.wav',
+    axeHeavySwing: '/audio/repo/axe_heavy_swing.wav',
+    axeEnormousSwing: '/audio/repo/axe_enormous_swing.wav',
+    weaponSmash: '/audio/repo/weapon_smash.wav',
+    heavyIronHit: '/audio/repo/heavy_iron_hit.wav',
+    weaponClash: '/audio/repo/weapon_clash.wav',
+    bronzeArmorHit: '/audio/repo/bronze_armor_hit.wav',
+    parryPerfect: '/audio/repo/parry_perfect.wav',
+    defensiveBlock: '/audio/repo/defensive_block.wav',
+    lightningStrike: '/audio/repo/lightning_strike.wav',
+    windBreathing: '/audio/repo/wind_breathing.wav',
+    fireSunBreathing: '/audio/repo/fire_sun_breathing.wav',
+    waterElemental: '/audio/repo/water_elemental.wav',
+    supernaturalBurst: '/audio/repo/supernatural_burst.wav',
+    dashFast: '/audio/repo/dash_fast.wav',
+    warDrum: '/audio/repo/war_drum.wav',
+    sacredBell: '/audio/repo/sacred_bell.wav',
+    boonChime: '/audio/repo/boon_chime.wav',
+    vrikodaraVacuum: '/audio/repo/vrikodara_vacuum.wav',
+    monsterRoar: '/audio/repo/monster_roar.wav',
+    bossRoarDeep: '/audio/repo/boss_roar_deep.wav',
+    footstepWarrior: '/audio/repo/footstep_warrior.wav',
+    footstepBoss: '/audio/repo/footstep_boss.wav',
   },
 
   // Bespoke Uploaded AAA Combat Slash Arc & Blazing Agneyastra Fire-Arrow Sprites
@@ -630,12 +676,12 @@ export const CHAMBERS: ChamberSpec[] = [
     id: 1,
     chapterTitle: 'Act I · The Boiling Crossing',
     name: 'Vaitarani Ferry Ghat',
-    sanskritSubtitle: 'वैतरणी घाट · CHAMBER I OF V',
+    sanskritSubtitle: 'वैतरणी घाट · CHAMBER I OF VIII',
     strikethroughLie: '“The fallen heroes crossed into heaven upon golden lotus barges...”',
     sanjayaQuote:
       '“Lies! The Vaitarani boils with marrow and broken crowns. Sharabha hounds feast on the unburied.”',
-    backgroundUrl: GAME_ASSETS.chambers.vaitaraniGhat,
-    videoUrl: GAME_ASSETS.arenaVideos.waterCourtyard,
+    backgroundUrl: GAME_ASSETS.chambers.chariotBonefieldAlt,
+    videoUrl: GAME_ASSETS.arenaVideos.mythicEnvA,
     floorTint: 'transparent',
     isBossChamber: false,
     envEffect: 'blood_river',
@@ -673,13 +719,15 @@ export const CHAMBERS: ChamberSpec[] = [
     id: 2,
     chapterTitle: 'Act I · The Boiling Crossing',
     name: 'Sealed Gate of Raktabija',
-    sanskritSubtitle: 'रक्तबीज द्वार · CHAMBER II OF V',
+    sanskritSubtitle: 'रक्तबीज द्वार · CHAMBER II OF VIII',
     strikethroughLie: '“Sacred soma was poured into the temple cisterns at dawn...”',
     sanjayaQuote:
       '“Golden chains seal the northern archway to the Charnel Pyres! Break Raktabija’s Molten Aegis to shatter the gate seal!”',
     backgroundUrl: GAME_ASSETS.chambers.asuraLavaLocked,
     unlockedBackgroundUrl: GAME_ASSETS.chambers.asuraLavaUnlocked,
     videoUrl: GAME_ASSETS.arenaVideos.templeEnvironment,
+    unlockedVideoUrl: GAME_ASSETS.arenaVideos.mythicEnvB,
+    phase2VideoUrl: GAME_ASSETS.arenaVideos.mythicEnvB,
     floorTint: 'transparent',
     isBossChamber: false,
     envEffect: 'blood_river',
@@ -718,7 +766,7 @@ export const CHAMBERS: ChamberSpec[] = [
     id: 3,
     chapterTitle: 'Act I · The Boiling Crossing',
     name: 'Kurukshetra Chariot Pyre',
-    sanskritSubtitle: 'रथश्मशान · CHAMBER III OF V',
+    sanskritSubtitle: 'रथश्मशान · CHAMBER III OF VIII',
     strikethroughLie: '“Eighteen aksauhinis stood in gleaming golden formation...”',
     sanjayaQuote:
       '“The axles are fused with molten brass and bone. Shatter the Ironmaw Legion before Dundubhi’s war-drum sounds!”',
@@ -761,7 +809,7 @@ export const CHAMBERS: ChamberSpec[] = [
     id: 4,
     chapterTitle: 'Act I Sovereign · The Bronze Behemoth',
     name: 'Mandapa of the War-Drum',
-    sanskritSubtitle: 'दुन्दुभि मण्डप · CHAMBER IV OF V',
+    sanskritSubtitle: 'दुन्दुभि मण्डप · CHAMBER IV OF VIII',
     strikethroughLie: '“The temple bull bowed before the royal standard of Hastinapura...”',
     sanjayaQuote:
       '“Dundubhi’s Chola-bronze hide deflects raw steel! Bait his horn-charge into the outer Kurukshetra Pillars to crack his armor!”',
@@ -786,13 +834,141 @@ export const CHAMBERS: ChamberSpec[] = [
   },
 
   // ==========================================================================
-  // CHAMBER V: ACT I FINAL BOSS — VRIKODARA (PHASE 1 -> PHASE 2 BLOOD ECLIPSE)
+  // CHAMBER V: CAUSEWAY OF SHATTERED CHARIOTS (PRETA BOWMEN & ASH CYCLONE WARDEN)
   // ==========================================================================
   {
     id: 5,
+    chapterTitle: 'Act II · Beyond the War-Drum',
+    name: 'Causeway of Shattered Chariots',
+    sanskritSubtitle: 'भग्न-रथ सेतु · CHAMBER V OF VIII',
+    strikethroughLie: '“The royal archers laid down their bows when sunset fell...”',
+    sanjayaQuote:
+      '“Skullclad Preta-Bowmen rain burning arrows from the chariot wheels, while the Ashen Cyclone Warden sweeps the bridge in golden-crimson spirals!”',
+    backgroundUrl: GAME_ASSETS.chambers.chariotBonefield,
+    videoUrl: GAME_ASSETS.arenaVideos.battlefieldEnv,
+    floorTint: 'transparent',
+    isBossChamber: false,
+    envEffect: 'blood_river',
+    braziers: [
+      { x: 0.20, y: 0.22, color: '#ff7a18', radius: 195 },
+      { x: 0.80, y: 0.22, color: '#ff7a18', radius: 195 },
+      { x: 0.16, y: 0.54, color: '#ff4218', radius: 190 },
+      { x: 0.84, y: 0.54, color: '#ff4218', radius: 190 },
+      { x: 0.22, y: 0.82, color: '#ff4218', radius: 195 },
+      { x: 0.78, y: 0.82, color: '#ff4218', radius: 195 },
+    ],
+    props: [],
+    spawns: [
+      { type: 'preta_bowman', x: 0.74, y: 0.34, wave: 1, wardenRigKey: 'preta_bowman' },
+      { type: 'preta_bowman', x: 0.76, y: 0.68, wave: 1, delay: 0.25, wardenRigKey: 'preta_bowman' },
+      { type: 'charnel_ghoul', x: 0.52, y: 0.50, wave: 1, delay: 0.35 },
+      {
+        type: 'ash_cyclone_warden',
+        x: 0.64,
+        y: 0.50,
+        wave: 2,
+        trait: 'agni_aura',
+        wardenRigKey: 'ash_cyclone_warden',
+        wardenTitle: 'BHASMA-VAYU · ASH CYCLONE WARDEN',
+      },
+      { type: 'preta_bowman', x: 0.78, y: 0.42, wave: 2, delay: 0.3, wardenRigKey: 'preta_bowman' },
+      { type: 'ironmaw_gladiator', x: 0.44, y: 0.62, wave: 2, delay: 0.45, trait: 'vajra_shield' },
+    ],
+  },
+
+  // ==========================================================================
+  // CHAMBER VI: SOUL-FIRE COLONNADE (ETERNAL WHEEL WARDEN & THREAD ORACLES)
+  // ==========================================================================
+  {
+    id: 6,
+    chapterTitle: 'Act II · Beyond the War-Drum',
+    name: 'Soul-Fire Colonnade',
+    sanskritSubtitle: 'प्रेताग्नि स्तम्भ · CHAMBER VI OF VIII',
+    strikethroughLie: '“The temple lamps burned with pure clarified ghee...”',
+    sanjayaQuote:
+      '“Azure and crimson ghost-fire spirals through the colonnade! Beware the Sovereign of the Eternal Wheel and his flying Blood-Chakrams!”',
+    backgroundUrl: GAME_ASSETS.chambers.soulFireSanctum,
+    videoUrl: GAME_ASSETS.arenaVideos.fogClearingSanctum,
+    floorTint: 'transparent',
+    isBossChamber: false,
+    envEffect: 'sacred_mist',
+    braziers: [
+      { x: 0.18, y: 0.20, color: '#38e8ff', radius: 200 },
+      { x: 0.82, y: 0.20, color: '#38e8ff', radius: 200 },
+      { x: 0.16, y: 0.54, color: '#ff2a5a', radius: 195 },
+      { x: 0.84, y: 0.54, color: '#ff2a5a', radius: 195 },
+      { x: 0.22, y: 0.82, color: '#ff4824', radius: 195 },
+      { x: 0.78, y: 0.82, color: '#ff4824', radius: 195 },
+    ],
+    props: [],
+    spawns: [
+      { type: 'ashen_oracle', x: 0.70, y: 0.36, wave: 1 },
+      { type: 'preta_bowman', x: 0.76, y: 0.64, wave: 1, delay: 0.25, wardenRigKey: 'preta_bowman' },
+      { type: 'charnel_ghoul', x: 0.48, y: 0.50, wave: 1, delay: 0.4, trait: 'rakshasa_frenzy' },
+      {
+        type: 'eternal_wheel_warden',
+        x: 0.66,
+        y: 0.50,
+        wave: 2,
+        wardenRigKey: 'eternal_wheel_warden',
+        wardenTitle: 'KALA-CHAKRA · ETERNAL WHEEL WARDEN',
+      },
+      { type: 'ash_cyclone_warden', x: 0.54, y: 0.36, wave: 2, delay: 0.35, wardenRigKey: 'ash_cyclone_warden' },
+      { type: 'ashen_oracle', x: 0.74, y: 0.68, wave: 2, delay: 0.5 },
+    ],
+  },
+
+  // ==========================================================================
+  // CHAMBER VII: CISTERNS OF THE ASURA FORGE (MOLTEN TITAN WARDEN GAUNTLET)
+  // ==========================================================================
+  {
+    id: 7,
+    chapterTitle: 'Act II · Threshold of the Maw',
+    name: 'Cisterns of the Asura Forge',
+    sanskritSubtitle: 'असुर-अग्नि कुण्ड · CHAMBER VII OF VIII',
+    strikethroughLie: '“The smiths of hastinapura forged plowshares before the eclipse...”',
+    sanjayaQuote:
+      '“Magma erupts beneath your sandals! Slay the Emberforged Titan and his Cyclone Guard to unseal Vrikodara’s inner sanctum!”',
+    backgroundUrl: GAME_ASSETS.chambers.warDrumColonnade,
+    videoUrl: GAME_ASSETS.arenaVideos.lavaArena,
+    floorTint: 'transparent',
+    isBossChamber: false,
+    envEffect: 'lava_fissures',
+    braziers: [
+      { x: 0.18, y: 0.22, color: '#ff6a18', radius: 205 },
+      { x: 0.82, y: 0.22, color: '#ff6a18', radius: 205 },
+      { x: 0.15, y: 0.54, color: '#ff3818', radius: 200 },
+      { x: 0.85, y: 0.54, color: '#ff3818', radius: 200 },
+      { x: 0.22, y: 0.82, color: '#ff5218', radius: 205 },
+      { x: 0.78, y: 0.82, color: '#ff5218', radius: 205 },
+    ],
+    props: [],
+    spawns: [
+      { type: 'ash_cyclone_warden', x: 0.56, y: 0.40, wave: 1, wardenRigKey: 'ash_cyclone_warden' },
+      { type: 'preta_bowman', x: 0.76, y: 0.34, wave: 1, delay: 0.25, wardenRigKey: 'preta_bowman' },
+      { type: 'eternal_wheel_warden', x: 0.74, y: 0.66, wave: 1, delay: 0.45, wardenRigKey: 'eternal_wheel_warden' },
+      {
+        type: 'molten_titan_warden',
+        x: 0.64,
+        y: 0.52,
+        wave: 2,
+        trait: 'agni_aura',
+        wardenRigKey: 'molten_titan_warden',
+        wardenTitle: 'JATHARAGNI · EMBERFORGED TITAN',
+      },
+      { type: 'eternal_wheel_warden', x: 0.76, y: 0.38, wave: 2, delay: 0.3, wardenRigKey: 'eternal_wheel_warden' },
+      { type: 'preta_bowman', x: 0.44, y: 0.68, wave: 2, delay: 0.5, wardenRigKey: 'preta_bowman' },
+    ],
+  },
+
+  // ==========================================================================
+  // CHAMBER VIII: ACT I FINAL BOSS — VRIKODARA (PHASE 1 -> PHASE 2 BLOOD ECLIPSE)
+  // ==========================================================================
+  {
+    id: 8,
     chapterTitle: 'Act I Finale · The Bleeding Crown',
     name: 'Sanctum of the Infernal Maw',
-    sanskritSubtitle: 'वृकोदर गर्भगृह · CHAMBER V OF V',
+    sanskritSubtitle: 'वृकोदर गर्भगृह · CHAMBER VIII OF VIII',
     strikethroughLie: '“And the righteous Pandava general laid down his mace in peace...”',
     sanjayaQuote:
       '“Behold Vrikodara! Ten thousand chariots burn inside his abdominal furnace—and when the blood-eclipse rises, his twin Tridents tear the cosmos!”',

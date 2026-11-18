@@ -152,6 +152,36 @@ export const CLEAN_ASCII_REPO_MAP: Record<string, string[]> = {
     'Concept Art & Visuals',
     'Gemini_Generated_Image_ho5a8gho5a8gho5a.png',
   ],
+  'slash_fast.wav': ['audio and sound effects', 'A_fast,_razor-sharp__#1-1794769601378.wav'],
+  'axe_heavy_swing.wav': ['audio and sound effects', 'A_heavy_two-handed_a_#1-1794769519577.wav'],
+  'axe_enormous_swing.wav': ['audio and sound effects', 'An_enormous_two-hand_#2-1794769945235.wav'],
+  'heavy_iron_swing.wav': ['audio and sound effects', 'A_heavy_ancient_iron_#3-1794769797370.wav'],
+  'weapon_smash.wav': ['audio and sound effects', 'A_gigantic_weapon_sm_#1-1794770098676.wav'],
+  'heavy_iron_hit.wav': ['audio and sound effects', 'A_heavy_iron_weapon__#2-1794769895245.wav'],
+  'weapon_clash.wav': ['audio and sound effects', 'Two_massive_ancient__#1-1794770691364.wav'],
+  'bronze_armor_hit.wav': ['audio and sound effects', 'A_gigantic_bronze-ar_#1-1794770272664.wav'],
+  'ancient_iron_block.wav': ['audio and sound effects', 'An_ancient_heavy_iro_#1-1794770655710.wav'],
+  'parry_perfect.wav': ['audio and sound effects', 'A_perfectly_timed_an_#1-1794769994287.wav'],
+  'defensive_block.wav': ['audio and sound effects', 'A_powerful_defensive_#1-1794770068379.wav'],
+  'lightning_strike.wav': ['audio and sound effects', 'A_divine_lightning_s_#3-1794770183613.wav'],
+  'wind_breathing.wav': ['audio and sound effects', 'A_supernatural_wind__#2-1794770216163.wav'],
+  'fire_sun_breathing.wav': ['audio and sound effects', 'A_supernatural_ancie_#3-1794770149018.wav'],
+  'water_elemental.wav': ['audio and sound effects', 'A_divine_elemental_p_#2-1794770772532.wav'],
+  'supernatural_burst.wav': ['audio and sound effects', 'A_massive_supernatur_#2-1794770019827.wav'],
+  'dash_fast.wav': ['audio and sound effects', 'An_extremely_fast_wa_#1-1794769971531.wav'],
+  'war_drum.wav': ['audio and sound effects', 'A_massive_warrior_dr_#3-1794770397260.wav'],
+  'sacred_bell.wav': ['audio and sound effects', 'An_ancient_sacred_In_#1-1794770471381.wav'],
+  'boon_chime.wav': ['audio and sound effects', 'A_short_premium_fant_#2-1794770842624.wav'],
+  'vrikodara_vacuum.wav': ['audio and sound effects', 'An_enormous_starving_#2-1794770329589.wav'],
+  'monster_roar.wav': ['audio and sound effects', 'A_monstrous_mytholog_#1-1794770434182.wav'],
+  'boss_roar_deep.wav': ['audio and sound effects', 'A_terrifying_ancient_#3-1794770620938.wav'],
+  'footstep_warrior.wav': ['audio and sound effects', 'Heavy_warrior_footst_#1-1794769687731.wav'],
+  'footstep_rapid.wav': ['audio and sound effects', 'Rapid_heavy_warrior__#1-1794769738799.wav'],
+  'footstep_boss.wav': ['audio and sound effects', 'Heavy_footsteps_of_a_#1-1794770367594.wav'],
+  'dundubhi_boss_theme.mp3': ['audio and sound effects', 'Dundubhi — The Living War Drum.mp3'],
+  'vrikodara_boss_theme.mp3': ['audio and sound effects', 'Vrikodara — The Insatiable.mp3'],
+  'vaitarani_realm.mp3': ['audio and sound effects', 'Vaitarani — The Forgotten Realm.mp3'],
+  'the_bleeding_crown.mp3': ['audio and sound effects', 'The Bleeding Crown.mp3'],
 };
 
 // Bounded 256 MB in-memory LRU buffer cache + single /tmp/kaliyuga_static_cache disk store
@@ -252,14 +282,12 @@ export function buildCandidateRepoPaths(decoded: string[]): string[][] {
   } else if (top === 'audio') {
     const rest = decoded.slice(1);
     candidates.push(['public', 'audio', ...rest]);
+    candidates.push(['public', 'kaalyuga', 'audio', lastSeg]);
+    candidates.push(['audio and sound effects', lastSeg]);
     candidates.push(['soundtracks', ...rest]);
     candidates.push(['new 3D assets and animations', 'Cutscenes & Audio', ...rest]);
   } else if (top === 'new_3d_assets') {
     candidates.push(['new 3D assets and animations', ...decoded.slice(1)]);
-  } else if (top === 'kaalyuga') {
-    const rest = decoded.slice(1);
-    candidates.push(['demon slayer', 'public', 'kaalyuga', ...rest]);
-    candidates.push(['public', 'kaalyuga', ...rest]);
   } else {
     candidates.push(['public', ...decoded]);
   }

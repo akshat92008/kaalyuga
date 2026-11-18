@@ -5,6 +5,41 @@ import path from 'path';
 
 const CACHE_BASE = ['', 'tmp', 'kaalyuga_cache'].join('/');
 const PUBLIC_AUDIO_DIR = [process.cwd(), 'public', 'audio'].join('/');
+const PUBLIC_KAALYUGA_AUDIO_DIR = [process.cwd(), 'public', 'kaalyuga', 'audio'].join('/');
+
+// Clean ASCII route mapping -> exact files in upstream `audio and sound effects/` folder
+const REPO_AUDIO_MAP: Record<string, string> = {
+  'slash_fast.wav': 'A_fast,_razor-sharp__#1-1794769601378.wav',
+  'axe_heavy_swing.wav': 'A_heavy_two-handed_a_#1-1794769519577.wav',
+  'axe_enormous_swing.wav': 'An_enormous_two-hand_#2-1794769945235.wav',
+  'heavy_iron_swing.wav': 'A_heavy_ancient_iron_#3-1794769797370.wav',
+  'weapon_smash.wav': 'A_gigantic_weapon_sm_#1-1794770098676.wav',
+  'heavy_iron_hit.wav': 'A_heavy_iron_weapon__#2-1794769895245.wav',
+  'weapon_clash.wav': 'Two_massive_ancient__#1-1794770691364.wav',
+  'bronze_armor_hit.wav': 'A_gigantic_bronze-ar_#1-1794770272664.wav',
+  'ancient_iron_block.wav': 'An_ancient_heavy_iro_#1-1794770655710.wav',
+  'parry_perfect.wav': 'A_perfectly_timed_an_#1-1794769994287.wav',
+  'defensive_block.wav': 'A_powerful_defensive_#1-1794770068379.wav',
+  'lightning_strike.wav': 'A_divine_lightning_s_#3-1794770183613.wav',
+  'wind_breathing.wav': 'A_supernatural_wind__#2-1794770216163.wav',
+  'fire_sun_breathing.wav': 'A_supernatural_ancie_#3-1794770149018.wav',
+  'water_elemental.wav': 'A_divine_elemental_p_#2-1794770772532.wav',
+  'supernatural_burst.wav': 'A_massive_supernatur_#2-1794770019827.wav',
+  'dash_fast.wav': 'An_extremely_fast_wa_#1-1794769971531.wav',
+  'war_drum.wav': 'A_massive_warrior_dr_#3-1794770397260.wav',
+  'sacred_bell.wav': 'An_ancient_sacred_In_#1-1794770471381.wav',
+  'boon_chime.wav': 'A_short_premium_fant_#2-1794770842624.wav',
+  'vrikodara_vacuum.wav': 'An_enormous_starving_#2-1794770329589.wav',
+  'monster_roar.wav': 'A_monstrous_mytholog_#1-1794770434182.wav',
+  'boss_roar_deep.wav': 'A_terrifying_ancient_#3-1794770620938.wav',
+  'footstep_warrior.wav': 'Heavy_warrior_footst_#1-1794769687731.wav',
+  'footstep_rapid.wav': 'Rapid_heavy_warrior__#1-1794769738799.wav',
+  'footstep_boss.wav': 'Heavy_footsteps_of_a_#1-1794770367594.wav',
+  'dundubhi_boss_theme.mp3': 'Dundubhi — The Living War Drum.mp3',
+  'vrikodara_boss_theme.mp3': 'Vrikodara — The Insatiable.mp3',
+  'vaitarani_realm.mp3': 'Vaitarani — The Forgotten Realm.mp3',
+  'the_bleeding_crown.mp3': 'The Bleeding Crown.mp3',
+};
 
 function getAudioMimeType(filename: string): string {
   const ext = path.extname(filename).toLowerCase();
@@ -25,7 +60,8 @@ export async function GET(
       return new NextResponse('Not Found', { status: 404 });
     }
     const baseName = path.basename(relPath);
-    const mimeType = getAudioMimeType(relPath);
+    const repoMappedFile = slug[0] === 'repo' ? REPO_AUDIO_MAP[baseName] : undefined;
+    const mimeType = getAudioMimeType(repoMappedFile || relPath);
 
     const baseHeaders: Record<string, string> = {
       'Content-Type': mimeType,
@@ -63,6 +99,7 @@ export async function GET(
 
     const candidates = [
       [PUBLIC_AUDIO_DIR, relPath].join('/'),
+      [PUBLIC_KAALYUGA_AUDIO_DIR, baseName].join('/'),
       [CACHE_BASE, 'audio', relPath].join('/'),
       [CACHE_BASE, 'sfx', baseName].join('/'),
       [CACHE_BASE, 'soundtracks', baseName].join('/'),
@@ -76,12 +113,19 @@ export async function GET(
 
     const encodedRel = encodeURIComponent(relPath).replace(/%2F/g, '/');
     const encodedBase = encodeURIComponent(baseName);
-    const remoteUrls = [
+    const remoteUrls: string[] = [];
+    if (repoMappedFile) {
+      remoteUrls.push(
+        `https://raw.githubusercontent.com/akshat92008/kaalyuga/main/${encodeURIComponent('audio and sound effects')}/${encodeURIComponent(repoMappedFile)}`
+      );
+    }
+    remoteUrls.push(
       `https://raw.githubusercontent.com/akshat92008/kaalyuga/main/public/audio/${encodedRel}`,
       `https://raw.githubusercontent.com/akshat92008/kaalyuga/main/${encodedRel}`,
+      `https://raw.githubusercontent.com/akshat92008/kaalyuga/main/${encodeURIComponent('audio and sound effects')}/${encodedBase}`,
       `https://raw.githubusercontent.com/akshat92008/kaalyuga/main/sfx/${encodedBase}`,
-      `https://raw.githubusercontent.com/akshat92008/kaalyuga/main/soundtracks/${encodedBase}`,
-    ];
+      `https://raw.githubusercontent.com/akshat92008/kaalyuga/main/soundtracks/${encodedBase}`
+    );
 
     let res: Response | null = null;
     for (const url of remoteUrls) {

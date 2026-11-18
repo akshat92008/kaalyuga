@@ -1,5 +1,6 @@
 export type StaffStance = 'smash' | 'pillar' | 'thrust';
 export type WeaponId = 'parashu' | 'khanda_dual' | 'trishula_great';
+export type AstraElement = 'agni' | 'vajra' | 'vayu';
 export type UpgradeId =
   | 'prana_marrow'
   | 'amrita_kalasha'

@@ -21,18 +21,21 @@ import {
 } from './enemy3dRenderer';
 import {
   SHARED_STUDIO_OUTLINE_COLOR,
+  SHARED_STUDIO_OUTLINE_THICKNESS,
+  applyHadesCelShadingToHierarchy,
   bake2DSpriteFrameFromCanvas,
   computeSpriteSheetFrameKey,
   getSharedStudioWebGLRenderer,
+  isSoftwareWebGLRenderer,
   setupSharedStudioLightingRig,
 } from './hadesSpriteBaker';
+import { GAME_ASSETS } from './assets';
 import {
-  applyDemonSlayerCelShadingToHierarchy,
-  createParashuAuraMaterial,
+  createDemonSlayerCelMaterial,
+  liftTextureToAnimeVibrancy,
   setCelHitFlash,
   setCelRimStyle,
 } from './demonSlayerShader';
-import { GAME_ASSETS } from './assets';
 
 export type Boss3DKind = 'dundubhi' | 'vrikodara' | 'semi_boss' | 'savitri_hub';
 
@@ -77,7 +80,7 @@ export function resolveBossPbrMaterialConfig(opts: BossPbrMaterialMaps) {
   const hasMetalnessMap = Boolean(opts.metalnessMap);
   const nScale = opts.normalScale ?? 0.35;
   return {
-    color: opts.colorHex ?? 0xffffff,
+    color: opts.colorHex ?? (opts.map ? 0xffffff : 0x4a2024),
     map: opts.map || undefined,
     normalMap: opts.normalMap || undefined,
     normalScale: new THREE.Vector2(nScale, nScale),
@@ -91,8 +94,26 @@ export function resolveBossPbrMaterialConfig(opts: BossPbrMaterialMaps) {
   };
 }
 
-export function createBossPbrMaterial(opts: BossPbrMaterialMaps): THREE.MeshStandardMaterial {
-  return new THREE.MeshStandardMaterial(resolveBossPbrMaterialConfig(opts));
+export function createBossPbrMaterial(
+  opts: BossPbrMaterialMaps & { rimColorHex?: number; rimStrength?: number }
+): THREE.MeshToonMaterial {
+  const liftedMap = liftTextureToAnimeVibrancy(opts.map || null, 1.18, 1.12);
+  if (liftedMap) liftedMap.userData.animeLifted = true;
+  const mat = createDemonSlayerCelMaterial({
+    map: liftedMap,
+    tintHex: opts.colorHex ?? (liftedMap ? 0xffffff : 0xd94838),
+    emissiveHex: opts.emissiveHex ?? 0x262220,
+    emissiveIntensity: opts.emissiveIntensity ?? 0.24,
+    rimColorHex: opts.rimColorHex ?? 0xffe4b8,
+    rimStrength: opts.rimStrength ?? 0.34,
+    rimPower: 3.0,
+  });
+  if (opts.normalMap) {
+    mat.normalMap = opts.normalMap;
+    const nScale = opts.normalScale ?? 0.35;
+    mat.normalScale = new THREE.Vector2(nScale, nScale);
+  }
+  return mat;
 }
 
 export function buildBossPrewarmParamsList(kind: Boss3DKind): Boss3DUpdateParams[] {
@@ -153,10 +174,8 @@ interface LoadedBossRig {
   mixer: THREE.AnimationMixer;
   actions: Partial<Record<BossClipKey, THREE.AnimationAction>>;
   activeKey: BossClipKey | null;
-  materials: THREE.MeshStandardMaterial[];
-  weaponMaterials: THREE.MeshStandardMaterial[];
-  celMaterials: THREE.MeshToonMaterial[];
-  weaponAuraMaterials: THREE.ShaderMaterial[];
+  materials: Array<THREE.MeshToonMaterial | THREE.MeshStandardMaterial>;
+  weaponMaterials: Array<THREE.MeshToonMaterial | THREE.MeshStandardMaterial>;
   rightWeaponSocket: THREE.Group | null;
   rightPhase2WeaponSocket?: THREE.Group | null;
   leftWeaponSocket: THREE.Group | null;
@@ -283,8 +302,8 @@ export class Boss3DRenderer {
 
     this.scene = new THREE.Scene();
 
-    // True 2.5D Hades Dimetric (2:1) Isometric Orthographic Camera (~27° elevation, matching Rudra3DRenderer)
-    const frustumHalf = 124;
+    // Tightened 2.5D Demon Slayer Dimetric Orthographic Camera so bosses and Savitri fill ~76% of the canvas
+    const frustumHalf = 152;
     this.camera = new THREE.OrthographicCamera(
       -frustumHalf,
       frustumHalf,
@@ -293,7 +312,7 @@ export class Boss3DRenderer {
       1,
       1200
     );
-    this.camera.position.set(0, 154, 300);
+    this.camera.position.set(0, 168, 386);
     this.camera.lookAt(0, 82, 0);
 
     // Unified Hades Studio Lighting Rig (distanceScale=60 for centimeter boss frustum)
@@ -404,8 +423,10 @@ export class Boss3DRenderer {
         fallbackRoughness: 0.78,
         fallbackMetalness: 0.18,
         normalScale: 0.35,
-        emissiveHex: 0x3b280a,
-        emissiveIntensity: 0.25,
+        emissiveHex: 0x262220,
+        emissiveIntensity: 0.24,
+        rimColorHex: 0xffe4b8,
+        rimStrength: 0.28,
       });
 
       let hasBones = false;
@@ -421,13 +442,12 @@ export class Boss3DRenderer {
         }
       });
 
-      const savitriStyled = applyDemonSlayerCelShadingToHierarchy(lotusGroup, {
-        rimColorHex: 0xffc864,
-        rimStrength: 0.74,
-        brightnessLift: 1.2,
-        saturationBoost: 1.24,
-        outlineHeightRatio: 0.0046,
-        outlineColorHex: 0x080509,
+      applyHadesCelShadingToHierarchy(lotusGroup, {
+        rimColor: 0xffe4b8,
+        rimIntensity: 0.28,
+        emissiveTint: 0x262220,
+        emissiveStrength: 0.24,
+        outlineRatio: 0.0052,
       });
 
       const rawBox = new THREE.Box3().setFromObject(lotusGroup);
@@ -459,8 +479,6 @@ export class Boss3DRenderer {
         activeKey: null,
         materials: [savitriMat],
         weaponMaterials: [],
-        celMaterials: savitriStyled.celMaterials,
-        weaponAuraMaterials: [],
         rightWeaponSocket: null,
         leftWeaponSocket: null,
         weaponTipNode: new THREE.Object3D(),
@@ -529,7 +547,7 @@ export class Boss3DRenderer {
 
       if (this.disposed) return;
 
-      const dundubhiMaterials: THREE.MeshStandardMaterial[] = [];
+      const dundubhiMaterials: Array<THREE.MeshToonMaterial | THREE.MeshStandardMaterial> = [];
       const dunCharMat = createBossPbrMaterial({
         map: dunBase,
         normalMap: dunNorm,
@@ -538,18 +556,20 @@ export class Boss3DRenderer {
         fallbackRoughness: 0.86,
         fallbackMetalness: 0.12,
         normalScale: 0.35,
+        emissiveHex: 0x262220,
+        emissiveIntensity: 0.24,
+        rimColorHex: 0xfdba74,
+        rimStrength: 0.34,
       });
       dundubhiMaterials.push(dunCharMat);
 
       bindTexturedGeometryToSkeleton(dundubhiGroup, dundubhiTexGroup, dunCharMat);
-      const dunStyled = applyDemonSlayerCelShadingToHierarchy(dundubhiGroup, {
-        rimColorHex: 0xff5a1f,
-        rimStrength: 0.68,
-        rimPower: 2.55,
-        brightnessLift: 1.04,
-        saturationBoost: 1.32,
-        outlineHeightRatio: 0.0044,
-        outlineColorHex: 0x070409,
+      applyHadesCelShadingToHierarchy(dundubhiGroup, {
+        rimColor: 0xfdba74,
+        rimIntensity: 0.34,
+        emissiveTint: 0x262220,
+        emissiveStrength: 0.24,
+        outlineRatio: 0.0054,
       });
 
       const dunStandingHipY = extractStandingHipY(dundubhiGroup);
@@ -634,8 +654,6 @@ export class Boss3DRenderer {
         activeKey: null,
         materials: dundubhiMaterials,
         weaponMaterials: [],
-        celMaterials: dunStyled.celMaterials,
-        weaponAuraMaterials: [],
         rightWeaponSocket: dunRightSocket,
         leftWeaponSocket: null,
         weaponTipNode: dunTipNode,
@@ -645,11 +663,14 @@ export class Boss3DRenderer {
 
       this.transitionToClip(this.rigs.dundubhi, 'idle', 0.05, 1.0, 0, true);
       this.rigs.dundubhi.mixer.update(0.016);
+      dundubhiRoot.updateMatrixWorld(true);
+      const dunIdleBox = new THREE.Box3().setFromObject(dundubhiGroup);
+      if (Number.isFinite(dunIdleBox.min.y)) {
+        dundubhiGroup.position.y -= Math.max(-85, Math.min(85, dunIdleBox.min.y));
+      }
       this.loadProgress = 100;
       this.isReady = true;
-      if (!IS_SOFTWARE_WEBGL) {
-        this.prewarmBossAtlas('dundubhi');
-      }
+      this.prewarmBossAtlas('dundubhi');
     } catch (err) {
       console.warn('Boss3DRenderer Dundubhi load warning:', err);
       this.loadProgress = 100;
@@ -730,19 +751,20 @@ export class Boss3DRenderer {
         fallbackRoughness: 0.84,
         fallbackMetalness: 0.14,
         normalScale: 0.35,
+        emissiveHex: 0x262220,
+        emissiveIntensity: 0.24,
+        rimColorHex: 0xfecdd3,
+        rimStrength: 0.32,
       });
 
       bindTexturedGeometryToSkeleton(semiGroup, semiTexGroup, semiCharMat);
-      const semiStyled = applyDemonSlayerCelShadingToHierarchy(semiGroup, {
-        rimColorHex: 0xff5a1f,
-        rimStrength: 0.86,
-        brightnessLift: 1.22,
-        saturationBoost: 1.28,
-        outlineHeightRatio: 0.0046,
-        outlineColorHex: 0x080509,
+      applyHadesCelShadingToHierarchy(semiGroup, {
+        rimColor: 0xfecdd3,
+        rimIntensity: 0.32,
+        emissiveTint: 0x262220,
+        emissiveStrength: 0.24,
+        outlineRatio: 0.0054,
       });
-      const semiCelMaterials = [...semiStyled.celMaterials];
-      const semiWeaponAuras: THREE.ShaderMaterial[] = [];
 
       const semiStandingHipY = extractStandingHipY(semiGroup);
       const semiRawBox = new THREE.Box3().setFromObject(semiGroup);
@@ -784,7 +806,7 @@ export class Boss3DRenderer {
       const semiBaseNode = new THREE.Object3D();
       let semiRightSocket: THREE.Group | null = null;
       let semiLeftSocket: THREE.Group | null = null;
-      const wepMaterials: THREE.MeshStandardMaterial[] = [];
+      const wepMaterials: Array<THREE.MeshToonMaterial | THREE.MeshStandardMaterial> = [];
 
       // Socket Emberfang Sword onto RightHand with full PBR maps (baseColor, normal, roughness, metallic)
       if (semiBones.rightHand && swordFbx) {
@@ -800,8 +822,10 @@ export class Boss3DRenderer {
           fallbackRoughness: 0.72,
           fallbackMetalness: 0.24,
           normalScale: 0.45,
-          emissiveHex: 0x3a0c10,
+          emissiveHex: 0x221e1c,
           emissiveIntensity: 0.12,
+          rimColorHex: 0xfde68a,
+          rimStrength: 0.34,
         });
         wepMaterials.push(swordMat);
 
@@ -830,28 +854,14 @@ export class Boss3DRenderer {
         semiRightSocket.add(semiTipNode);
         semiRightSocket.add(semiBaseNode);
         semiRightSocket.add(rightWepGroup);
-        rightWepGroup.traverse((c) => {
-          if ((c as THREE.Mesh).isMesh && !c.userData.isAuraShell) {
-            const wm = c as THREE.Mesh;
-            const auraMat = createParashuAuraMaterial(0xff3d24, 1.45);
-            semiWeaponAuras.push(auraMat);
-            const auraShell = new THREE.Mesh(wm.geometry, auraMat);
-            auraShell.position.copy(wm.position);
-            auraShell.rotation.copy(wm.rotation);
-            auraShell.scale.copy(wm.scale);
-            auraShell.frustumCulled = false;
-            auraShell.userData.isAuraShell = true;
-            if (wm.parent) wm.parent.add(auraShell);
-          }
-        });
 
-        const swStyled = applyDemonSlayerCelShadingToHierarchy(semiRightSocket, {
-          rimColorHex: 0xff5a1f,
-          rimStrength: 0.9,
-          outlineHeightRatio: 0.0046,
-          outlineColorHex: 0x080509,
+        applyHadesCelShadingToHierarchy(semiRightSocket, {
+          rimColor: 0xfde68a,
+          rimIntensity: 0.34,
+          emissiveTint: 0x221e1c,
+          emissiveStrength: 0.12,
+          outlineRatio: 0.0062,
         });
-        semiCelMaterials.push(...swStyled.celMaterials);
         semiBones.rightHand.add(semiRightSocket);
       }
 
@@ -875,8 +885,10 @@ export class Boss3DRenderer {
           fallbackRoughness: 0.72,
           fallbackMetalness: 0.28,
           normalScale: 0.45,
-          emissiveHex: 0x3a0c10,
+          emissiveHex: 0x221e1c,
           emissiveIntensity: 0.10,
+          rimColorHex: 0xfdba74,
+          rimStrength: 0.30,
         });
         wepMaterials.push(shieldMat);
 
@@ -901,13 +913,13 @@ export class Boss3DRenderer {
         shieldGroup.position.set(-0.08 * maxDim * localShieldScale, 0, 0.14 * maxDim * localShieldScale);
         semiLeftSocket.add(shieldGroup);
         semiLeftSocket.visible = true;
-        const shStyled = applyDemonSlayerCelShadingToHierarchy(semiLeftSocket, {
-          rimColorHex: 0xff5a1f,
-          rimStrength: 0.85,
-          outlineHeightRatio: 0.0046,
-          outlineColorHex: 0x080509,
+        applyHadesCelShadingToHierarchy(semiLeftSocket, {
+          rimColor: 0xfdba74,
+          rimIntensity: 0.30,
+          emissiveTint: 0x221e1c,
+          emissiveStrength: 0.10,
+          outlineRatio: 0.0062,
         });
-        semiCelMaterials.push(...shStyled.celMaterials);
         leftArmBone.add(semiLeftSocket);
       }
 
@@ -961,8 +973,6 @@ export class Boss3DRenderer {
         activeKey: null,
         materials: [semiCharMat],
         weaponMaterials: wepMaterials,
-        celMaterials: semiCelMaterials,
-        weaponAuraMaterials: semiWeaponAuras,
         rightWeaponSocket: semiRightSocket,
         leftWeaponSocket: semiLeftSocket,
         weaponTipNode: semiTipNode,
@@ -972,10 +982,13 @@ export class Boss3DRenderer {
 
       this.transitionToClip(this.rigs.semi_boss, 'idle', 0.05, 1.0, 0, true);
       this.rigs.semi_boss.mixer.update(0.016);
-      this.isReady = true;
-      if (!IS_SOFTWARE_WEBGL) {
-        this.prewarmBossAtlas('semi_boss');
+      semiRoot.updateMatrixWorld(true);
+      const semiIdleBox = new THREE.Box3().setFromObject(semiGroup);
+      if (Number.isFinite(semiIdleBox.min.y)) {
+        semiGroup.position.y -= Math.max(-85, Math.min(85, semiIdleBox.min.y));
       }
+      this.isReady = true;
+      this.prewarmBossAtlas('semi_boss');
     } catch (err) {
       console.warn('Boss3DRenderer Semi-Boss load warning:', err);
     }
@@ -1059,7 +1072,7 @@ export class Boss3DRenderer {
       vrikodaraGroup.position.set(0, -vrikRawBox.min.y * vrikScale, 0);
       vrikodaraRoot.add(vrikodaraGroup);
 
-      const vrikMaterials: THREE.MeshStandardMaterial[] = [];
+      const vrikMaterials: Array<THREE.MeshToonMaterial | THREE.MeshStandardMaterial> = [];
       const vrikMaceMat = createBossPbrMaterial({
         map: maceTex || wepBaseTex,
         normalMap: maceNorm,
@@ -1068,8 +1081,10 @@ export class Boss3DRenderer {
         fallbackRoughness: 0.78,
         fallbackMetalness: 0.18,
         normalScale: 0.45,
-        emissiveHex: 0x38080c,
-        emissiveIntensity: 0.16,
+        emissiveHex: 0x241c1a,
+        emissiveIntensity: 0.14,
+        rimColorHex: 0xfdba74,
+        rimStrength: 0.34,
       });
       const vrikWepMat = createBossPbrMaterial({
         map: wepBaseTex,
@@ -1079,8 +1094,10 @@ export class Boss3DRenderer {
         fallbackRoughness: 0.92,
         fallbackMetalness: 0.0,
         normalScale: 0.45,
-        emissiveHex: 0x38080c,
+        emissiveHex: 0x241c1a,
         emissiveIntensity: 0.14,
+        rimColorHex: 0xfecaca,
+        rimStrength: 0.34,
       });
 
       const vrikCharMat = createBossPbrMaterial({
@@ -1091,21 +1108,21 @@ export class Boss3DRenderer {
         fallbackRoughness: 0.88,
         fallbackMetalness: 0.08,
         normalScale: 0.35,
+        emissiveHex: 0x262220,
+        emissiveIntensity: 0.24,
+        rimColorHex: 0xfdba74,
+        rimStrength: 0.36,
       });
       vrikMaterials.push(vrikCharMat);
 
       bindTexturedGeometryToSkeleton(vrikodaraGroup, vrikodaraTexGroup, vrikCharMat);
-      const vrikStyled = applyDemonSlayerCelShadingToHierarchy(vrikodaraGroup, {
-        rimColorHex: 0xff3b28,
-        rimStrength: 0.9,
-        rimPower: 2.25,
-        brightnessLift: 1.24,
-        saturationBoost: 1.3,
-        outlineHeightRatio: 0.0046,
-        outlineColorHex: 0x080509,
+      applyHadesCelShadingToHierarchy(vrikodaraGroup, {
+        rimColor: 0xfdba74,
+        rimIntensity: 0.36,
+        emissiveTint: 0x262220,
+        emissiveStrength: 0.24,
+        outlineRatio: 0.0054,
       });
-      const vrikCelMaterials = [...vrikStyled.celMaterials];
-      const vrikWeaponAuras: THREE.ShaderMaterial[] = [];
       vrikodaraGroup.updateMatrixWorld(true);
 
       const findVrikBone = (names: string[]): THREE.Object3D | null => {
@@ -1172,28 +1189,14 @@ export class Boss3DRenderer {
           vrikRightMaceSocket.add(vrikTipNode);
           vrikRightMaceSocket.add(vrikBaseNode);
           vrikRightMaceSocket.add(maceGroup);
-          maceGroup.traverse((c) => {
-            if ((c as THREE.Mesh).isMesh && !c.userData.isAuraShell) {
-              const wm = c as THREE.Mesh;
-              const auraMat = createParashuAuraMaterial(0xff3d24, 1.45);
-              vrikWeaponAuras.push(auraMat);
-              const auraShell = new THREE.Mesh(wm.geometry, auraMat);
-              auraShell.position.copy(wm.position);
-              auraShell.rotation.copy(wm.rotation);
-              auraShell.scale.copy(wm.scale);
-              auraShell.frustumCulled = false;
-              auraShell.userData.isAuraShell = true;
-              if (wm.parent) wm.parent.add(auraShell);
-            }
-          });
 
-          const maceStyled = applyDemonSlayerCelShadingToHierarchy(vrikRightMaceSocket, {
-            rimColorHex: 0xff4526,
-            rimStrength: 0.9,
-            outlineHeightRatio: 0.0046,
-            outlineColorHex: 0x080509,
+          applyHadesCelShadingToHierarchy(vrikRightMaceSocket, {
+            rimColor: 0xfdba74,
+            rimIntensity: 0.34,
+            emissiveTint: 0x241c1a,
+            emissiveStrength: 0.14,
+            outlineRatio: 0.0064,
           });
-          vrikCelMaterials.push(...maceStyled.celMaterials);
           vrikBones.rightHand.add(vrikRightMaceSocket);
         }
 
@@ -1219,29 +1222,15 @@ export class Boss3DRenderer {
           rightTridentGroup.rotation.set(-Math.PI * 0.5, 0, -Math.PI * 0.5);
           rightTridentGroup.position.set(0.26 * maxDim * localWepScale, 0, 0);
           vrikRightTridentSocket.add(rightTridentGroup);
-          rightTridentGroup.traverse((c) => {
-            if ((c as THREE.Mesh).isMesh && !c.userData.isAuraShell) {
-              const wm = c as THREE.Mesh;
-              const auraMat = createParashuAuraMaterial(0xff1e38, 1.65);
-              vrikWeaponAuras.push(auraMat);
-              const auraShell = new THREE.Mesh(wm.geometry, auraMat);
-              auraShell.position.copy(wm.position);
-              auraShell.rotation.copy(wm.rotation);
-              auraShell.scale.copy(wm.scale);
-              auraShell.frustumCulled = false;
-              auraShell.userData.isAuraShell = true;
-              if (wm.parent) wm.parent.add(auraShell);
-            }
-          });
           vrikRightTridentSocket.visible = false;
 
-          const rTriStyled = applyDemonSlayerCelShadingToHierarchy(vrikRightTridentSocket, {
-            rimColorHex: 0xff2238,
-            rimStrength: 0.96,
-            outlineHeightRatio: 0.0046,
-            outlineColorHex: 0x080509,
+          applyHadesCelShadingToHierarchy(vrikRightTridentSocket, {
+            rimColor: 0xfecaca,
+            rimIntensity: 0.34,
+            emissiveTint: 0x241c1a,
+            emissiveStrength: 0.12,
+            outlineRatio: 0.0064,
           });
-          vrikCelMaterials.push(...rTriStyled.celMaterials);
           vrikBones.rightHand.add(vrikRightTridentSocket);
         }
       }
@@ -1274,28 +1263,14 @@ export class Boss3DRenderer {
         leftWepGroup.position.set(-0.26 * maxDim * localWepScale, 0, 0);
 
         vrikLeftSocket.add(leftWepGroup);
-        leftWepGroup.traverse((c) => {
-          if ((c as THREE.Mesh).isMesh && !c.userData.isAuraShell) {
-            const wm = c as THREE.Mesh;
-            const auraMat = createParashuAuraMaterial(0xff1e38, 1.65);
-            vrikWeaponAuras.push(auraMat);
-            const auraShell = new THREE.Mesh(wm.geometry, auraMat);
-            auraShell.position.copy(wm.position);
-            auraShell.rotation.copy(wm.rotation);
-            auraShell.scale.copy(wm.scale);
-            auraShell.frustumCulled = false;
-            auraShell.userData.isAuraShell = true;
-            if (wm.parent) wm.parent.add(auraShell);
-          }
-        });
         vrikLeftSocket.visible = false;
-        const lTriStyled = applyDemonSlayerCelShadingToHierarchy(vrikLeftSocket, {
-          rimColorHex: 0xff2238,
-          rimStrength: 0.96,
-          outlineHeightRatio: 0.0046,
-          outlineColorHex: 0x080509,
+        applyHadesCelShadingToHierarchy(vrikLeftSocket, {
+          rimColor: 0xfecaca,
+          rimIntensity: 0.34,
+          emissiveTint: 0x241c1a,
+          emissiveStrength: 0.12,
+          outlineRatio: 0.0064,
         });
-        vrikCelMaterials.push(...lTriStyled.celMaterials);
         vrikLeftHand.add(vrikLeftSocket);
       }
 
@@ -1348,8 +1323,6 @@ export class Boss3DRenderer {
         activeKey: null,
         materials: vrikMaterials,
         weaponMaterials: [vrikMaceMat, vrikWepMat],
-        celMaterials: vrikCelMaterials,
-        weaponAuraMaterials: vrikWeaponAuras,
         rightWeaponSocket: vrikRightMaceSocket,
         rightPhase2WeaponSocket: vrikRightTridentSocket,
         leftWeaponSocket: vrikLeftSocket,
@@ -1360,11 +1333,14 @@ export class Boss3DRenderer {
 
       this.transitionToClip(this.rigs.vrikodara, 'idle', 0.05, 1.0, 0, true);
       this.rigs.vrikodara.mixer.update(0.016);
+      vrikodaraRoot.updateMatrixWorld(true);
+      const vrikIdleBox = new THREE.Box3().setFromObject(vrikodaraGroup);
+      if (Number.isFinite(vrikIdleBox.min.y)) {
+        vrikodaraGroup.position.y -= Math.max(-85, Math.min(85, vrikIdleBox.min.y));
+      }
       this.loadProgress = 100;
       this.isReady = true;
-      if (!IS_SOFTWARE_WEBGL) {
-        this.prewarmBossAtlas('vrikodara');
-      }
+      this.prewarmBossAtlas('vrikodara');
     } catch (err) {
       console.warn('Boss3DRenderer Vrikodara load warning:', err);
       this.loadProgress = 100;
@@ -1603,6 +1579,7 @@ export class Boss3DRenderer {
       this.attackSwingTimer > 0;
     const activeAction = rig.actions[rig.activeKey || desiredClip];
     const clipDuration = Math.max(0.25, activeAction?.getClip().duration || 1.0);
+    const isSoft = IS_SOFTWARE_WEBGL || isSoftwareWebGLRenderer();
     const { frameKey: baseKey, quantizedYaw } = computeSpriteSheetFrameKey({
       id: params.kind,
       animName: rig.activeKey || desiredClip,
@@ -1613,14 +1590,14 @@ export class Boss3DRenderer {
       isHurt: Boolean(params.isHitFlash),
       isParrying: Boolean(params.isParrying),
       phase: params.phase,
-      yawDirections: 12,
-      stepsPerClip: 10,
+      yawDirections: isSoft ? 4 : 12,
+      stepsPerClip: isSoft ? 4 : 10,
     });
     const actionSubStep =
       params.aiState === 'windup'
-        ? `w${Math.round(params.windupProgress * 4)}`
+        ? `w${Math.round(params.windupProgress * (isSoft ? 2 : 4))}`
         : params.aiState === 'attack'
-          ? `a${Math.round((1 - this.attackSwingTimer / Math.max(0.05, this.attackSwingDuration)) * 6)}`
+          ? `a${Math.round((1 - this.attackSwingTimer / Math.max(0.05, this.attackSwingDuration)) * (isSoft ? 2 : 6))}`
           : 'loc';
     const flashSuffix = params.isHitFlash ? 'flash' : 'norm';
     const frameKey = `${baseKey}:${actionSubStep}:${flashSuffix}`;
@@ -1644,8 +1621,8 @@ export class Boss3DRenderer {
         isHurt: false,
         isParrying: Boolean(params.isParrying),
         phase: params.phase,
-        yawDirections: 12,
-        stepsPerClip: 10,
+        yawDirections: isSoft ? 4 : 12,
+        stepsPerClip: isSoft ? 4 : 10,
       });
       const normKey = `${normBaseKey}:${actionSubStep}:norm`;
       const baseCached = this.frameCache.get(normKey) || this.frameCache.get(`${baseKey}:${actionSubStep}:norm`);
@@ -1718,35 +1695,42 @@ export class Boss3DRenderer {
       dt * 12
     );
 
-    // High-intensity molten amber/crimson rim (#ff5a1f) for Bosses / Semi-Boss
+    // Clean 2D anime phase-tuned edge highlight + crisp hit flash
+    const phaseRimHex =
+      params.isParrying
+        ? 0xffe082
+        : params.phase === 3
+          ? 0xffb4a2
+          : params.phase === 2
+            ? 0xffcba4
+            : 0xffe4b8;
+    const phaseRimStrength =
+      params.isParrying ? 0.48 : params.aiState === 'attack' || params.aiState === 'windup' ? 0.38 : 0.28;
+
     if (params.isParrying) {
       this.rimLight.color.setHex(0xffe082);
-      this.rimLight.intensity = 2.1;
+      this.rimLight.intensity = 1.25;
     } else if (params.aiState === 'attack' || params.aiState === 'windup') {
-      this.rimLight.color.setHex(0xff5a1f);
-      this.rimLight.intensity = 2.0;
+      this.rimLight.color.setHex(phaseRimHex);
+      this.rimLight.intensity = 1.15;
     } else {
-      this.rimLight.color.setHex(0xff5a1f);
-      this.rimLight.intensity = 1.65;
+      this.rimLight.color.setHex(phaseRimHex);
+      this.rimLight.intensity = 1.05;
     }
 
-    for (const mat of rig.materials) {
-      if (params.isHitFlash) {
-        mat.emissive.setHex(0xff9d2e);
-        mat.emissiveIntensity = 0.34;
-      } else if (params.isParrying) {
-        mat.emissive.setHex(0xffd86b);
-        mat.emissiveIntensity = 0.24;
-      } else {
-        mat.emissive.setHex(0x000000);
-        mat.emissiveIntensity = 0.0;
-      }
-    }
+    setCelRimStyle(rig.materials, phaseRimHex, phaseRimStrength);
+    setCelHitFlash(
+      rig.materials,
+      params.isHitFlash,
+      params.isParrying ? 0x362a16 : 0x262220,
+      params.isParrying ? 0.28 : 0.24,
+      0xffd86b
+    );
 
     for (const wMat of rig.weaponMaterials) {
-      wMat.emissive.setHex(0x3a0c10);
+      wMat.emissive.setHex(params.phase >= 2 ? 0x3a2018 : 0x262220);
       wMat.emissiveIntensity =
-        params.aiState === 'attack' ? 0.28 : params.aiState === 'windup' ? 0.14 : 0.06;
+        params.aiState === 'attack' ? 0.34 : params.aiState === 'windup' ? 0.28 : 0.22;
     }
 
     this.scene.updateMatrixWorld(true);
@@ -1755,40 +1739,8 @@ export class Boss3DRenderer {
       params.aiState === 'attack' ||
       this.attackSwingTimer > 0.04;
     const trailColor =
-      params.phase === 3 ? 0xff2a18 : params.attackKind === 'shockwave' ? 0xff7722 : 0xd92638;
+      params.phase === 3 ? 0xff4d2e : params.attackKind === 'shockwave' ? 0xff9f2e : 0xe64d3c;
     this.updateWeaponTrail(rig, dt, trailActive, trailColor);
-
-    if (rig.celMaterials.length > 0) {
-      const isPhase2OrHigher = params.phase >= 2;
-      const bossRimHex = params.isParrying
-        ? 0xffe082
-        : isPhase2OrHigher
-          ? 0xff2238
-          : params.aiState === 'windup'
-            ? 0xff3b1f
-            : 0xff5a1f;
-      const bossRimStrength = params.isParrying
-        ? 1.15
-        : isPhase2OrHigher
-          ? 1.12
-          : params.aiState === 'windup' || params.aiState === 'attack'
-            ? 1.02
-            : 0.88;
-      setCelRimStyle(rig.celMaterials, bossRimHex, Math.min(0.84, bossRimStrength));
-      setCelHitFlash(
-        rig.celMaterials,
-        params.isHitFlash,
-        0x1a1118,
-        isPhase2OrHigher ? 0.14 : 0.08,
-        0xffe49e
-      );
-    }
-    for (const auraMat of rig.weaponAuraMaterials) {
-      auraMat.uniforms.uTime.value = this.elapsedTime;
-      auraMat.uniforms.uColor.value.setHex(params.phase >= 2 ? 0xff1e38 : 0xff4d24);
-      auraMat.uniforms.uIntensity.value =
-        params.aiState === 'attack' || params.aiState === 'windup' ? 1.25 : 0.85;
-    }
 
     if (
       this.renderer.domElement.width !== this.size ||
@@ -1798,19 +1750,22 @@ export class Boss3DRenderer {
     }
     this.renderer.clear();
     this.renderer.render(this.scene, this.camera);
-    if (rig.celMaterials.length > 0) {
-      setCelHitFlash(
-        rig.celMaterials,
-        false,
-        0x1a1118,
-        params.phase >= 2 ? 0.14 : 0.08,
-        0xffe49e
-      );
-    }
+    const bossRimHex =
+      params.kind === 'dundubhi'
+        ? params.phase >= 2
+          ? 0xfdba74
+          : 0xffe4b8
+        : params.kind === 'semi_boss'
+          ? 0xfecdd3
+          : phaseRimHex;
+    const bR = (bossRimHex >> 16) & 255;
+    const bG = (bossRimHex >> 8) & 255;
+    const bB = bossRimHex & 255;
     const baked = bake2DSpriteFrameFromCanvas(this.renderer.domElement, frameKey, {
       role: 'boss',
+      rimColor: `rgba(${bR}, ${bG}, ${bB}, 0.28)`,
       outlineColor: SHARED_STUDIO_OUTLINE_COLOR,
-      outlineThickness: 2.5,
+      outlineThickness: 1.95,
       hitFlash: params.isHitFlash,
       cacheFrame: false,
     });
@@ -1907,6 +1862,7 @@ export class Boss3DRenderer {
     const rig = this.rigs[kind];
     if (!rig || !this.renderer || this.prewarmedKinds.has(kind)) return;
     this.prewarmedKinds.add(kind);
+    if (IS_SOFTWARE_WEBGL || isSoftwareWebGLRenderer()) return;
     const list = [...buildBossPrewarmParamsList(kind)];
     if (typeof window === 'undefined') {
       for (const params of list) {

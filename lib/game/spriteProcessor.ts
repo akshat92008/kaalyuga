@@ -1243,9 +1243,9 @@ export function loadAndProcessSprite(
                   if (a > 64) {
                     colOpaqueCount[x]++;
                   }
-                  fData[idx] = 255;
-                  fData[idx + 1] = 242;
-                  fData[idx + 2] = 205;
+                  fData[idx] = Math.min(255, Math.round(data[idx] * 0.64 + 255 * 0.36));
+                  fData[idx + 1] = Math.min(255, Math.round(data[idx + 1] * 0.64 + 165 * 0.36));
+                  fData[idx + 2] = Math.min(255, Math.round(data[idx + 2] * 0.64 + 72 * 0.36));
                   fData[idx + 3] = a;
                 }
               }

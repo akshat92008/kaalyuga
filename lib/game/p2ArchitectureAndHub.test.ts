@@ -69,13 +69,17 @@ test('P2 Domain Hygiene: WeaponId, UpgradeId, and STANCE_CONFIGS use pure Vedic/
   assert.equal(normalizeWeaponId('dragon_glaive'), 'trishula_great');
 });
 
-test('P2 Act I Scope Alignment: CHAMBERS has 5 cohesive chambers ending with Dundubhi (4) and Vrikodara (5)', () => {
-  assert.equal(CHAMBERS.length, 5);
+test('P2 Act I-II Scope Alignment: CHAMBERS has 8 cohesive chambers with Dundubhi (4), new Wardens (5-7), and Vrikodara (8)', () => {
+  assert.equal(CHAMBERS.length, 8);
   assert.equal(CHAMBERS[1].spawns.some((s) => s.type === 'semi_boss_bloodforge'), true);
   assert.equal(CHAMBERS[3].id, 4);
   assert.equal(CHAMBERS[3].spawns[0].type, 'dundubhi');
-  assert.equal(CHAMBERS[4].id, 5);
-  assert.equal(CHAMBERS[4].spawns[0].type, 'vrikodara');
+  assert.equal(CHAMBERS[4].spawns.some((s) => s.type === 'preta_bowman'), true);
+  assert.equal(CHAMBERS[4].spawns.some((s) => s.type === 'ash_cyclone_warden'), true);
+  assert.equal(CHAMBERS[5].spawns.some((s) => s.type === 'eternal_wheel_warden'), true);
+  assert.equal(CHAMBERS[6].spawns.some((s) => s.type === 'molten_titan_warden'), true);
+  assert.equal(CHAMBERS[7].id, 8);
+  assert.equal(CHAMBERS[7].spawns[0].type, 'vrikodara');
   assert.ok(GAME_ASSETS.models3d.lotusEmpress.textureFbx.includes('Lotus_Empress'));
 });
 

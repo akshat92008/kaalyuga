@@ -1,6 +1,6 @@
 {
-  "name": "Kaliyuga: The Bleeding Crown",
-  "description": "A mythic 2.5D isometric action roguelite set across the ash-choked battlefields of Mount Meru.",
+  "name": "Kaalyuga: The Bleeding Crown",
+  "description": "Isometric 3D mythological combat chamber featuring Rudra vs Dundubhi with cel-shaded Sumi-e ink shaders and Demon Slayer-inspired elemental slash VFX.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

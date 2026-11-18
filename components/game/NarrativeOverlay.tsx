@@ -158,13 +158,30 @@ export function NarrativeOverlay({
         </div>
 
         <div className="max-w-5xl w-full mx-auto my-auto grid grid-cols-1 lg:grid-cols-12 gap-8 items-center py-6">
-          {/* Painted Scroll Artwork Frame */}
+          {/* Animated Cutscene Video / Scroll Plate (cycles through all 5 cutsceneVideos) */}
           <div className="lg:col-span-6 relative border-2 border-[#c89d46]/60 bg-[#120e10] shadow-[0_20px_70px_rgba(0,0,0,0.95)] overflow-hidden">
-            <img
-              src={scroll.artAssetUrl}
-              alt={scroll.title}
-              className="w-full h-72 md:h-96 object-cover sepia-[0.28] contrast-125 brightness-90"
-            />
+            {(() => {
+              const scrollVideos = [
+                GAME_ASSETS.cutsceneVideos.cloudsStarry,
+                GAME_ASSETS.cutsceneVideos.cosmicManifest,
+                GAME_ASSETS.cutsceneVideos.burningFortress,
+                GAME_ASSETS.cutsceneVideos.cameraSpace,
+                GAME_ASSETS.cutsceneVideos.rudraAmidstFire,
+              ];
+              const vUrl = scrollVideos[scrollIndex % scrollVideos.length];
+              return (
+                <video
+                  key={vUrl}
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                  poster={scroll.artAssetUrl}
+                  src={vUrl}
+                  className="w-full h-72 md:h-96 object-cover contrast-115 brightness-90"
+                />
+              );
+            })()}
             <div
               className="absolute inset-0 pointer-events-none"
               style={{
@@ -279,6 +296,12 @@ export function NarrativeOverlay({
   // STAGE 2: THE 4-SCENE PLAYABLE OPENING (Section 8)
   // ==========================================================================
   if (stage === 'opening_hill') {
+    const openingSceneVideos: Record<1 | 2 | 3 | 4, string> = {
+      1: GAME_ASSETS.cutsceneVideos.rudraAmidstFire,
+      2: GAME_ASSETS.cutsceneVideos.burningFortress,
+      3: GAME_ASSETS.cutsceneVideos.cosmicManifest,
+      4: GAME_ASSETS.cutsceneVideos.cloudsStarry,
+    };
     return (
       <div
         className={`fixed inset-0 z-50 flex flex-col justify-between p-6 md:p-12 overflow-y-auto transition-colors duration-700 ${
@@ -287,7 +310,16 @@ export function NarrativeOverlay({
             : 'bg-[#060508] text-[#f5ebd6]'
         }`}
       >
-        <div className="max-w-4xl w-full mx-auto border-b border-[#c89d46]/30 pb-3 flex flex-wrap items-center justify-between gap-2">
+        <video
+          key={openingSceneVideos[openingSceneStep]}
+          autoPlay
+          loop
+          muted
+          playsInline
+          src={openingSceneVideos[openingSceneStep]}
+          className="fixed inset-0 w-full h-full object-cover opacity-30 pointer-events-none"
+        />
+        <div className="relative z-10 max-w-4xl w-full mx-auto border-b border-[#c89d46]/30 pb-3 flex flex-wrap items-center justify-between gap-2">
           <span className="font-mono-num text-xs tracking-[0.24em] text-[#d4a548] uppercase">
             SECTION 8 · 4-SCENE PLAYABLE OPENING · SCENE {openingSceneStep} OF 4
           </span>
@@ -623,7 +655,7 @@ export function NarrativeOverlay({
                 </div>
                 <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 text-[11px] text-[#dfd3be]">
                   <div>
-                    CHAMBERS: <strong>{lastRunSummary.chambersCleared}/5</strong>
+                    CHAMBERS: <strong>{lastRunSummary.chambersCleared}/8</strong>
                   </div>
                   <div>
                     DAMAGE: <strong className="text-[#f2c45a]">{lastRunSummary.damageDealt}</strong>
@@ -841,10 +873,14 @@ export function NarrativeOverlay({
 
           <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-center">
             <div className="md:col-span-5 relative border border-[#f5b952]/60 bg-[#08060a] overflow-hidden">
-              <img
-                src={GAME_ASSETS.scrolls.scroll2ChildAndMani}
-                alt="Painted Scroll — The Child and the Mani"
-                className="w-full h-56 object-cover sepia-[0.2] contrast-115"
+              <video
+                autoPlay
+                loop
+                muted
+                playsInline
+                poster={GAME_ASSETS.scrolls.scroll2ChildAndMani}
+                src={GAME_ASSETS.arenaVideos.ashHubRiver}
+                className="w-full h-56 object-cover contrast-115"
               />
               <div
                 className="absolute inset-0 pointer-events-none"
@@ -918,9 +954,13 @@ export function NarrativeOverlay({
 
           <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-center">
             <div className="md:col-span-5 relative border border-[#5ce6ff]/60 bg-[#07080d] overflow-hidden">
-              <img
-                src={GAME_ASSETS.scrolls.scroll5FallOfFather}
-                alt="Painted Scroll — The Preserver and the Fall of the Father"
+              <video
+                autoPlay
+                loop
+                muted
+                playsInline
+                poster={GAME_ASSETS.scrolls.scroll5FallOfFather}
+                src={GAME_ASSETS.cutsceneVideos.cosmicManifest}
                 className="w-full h-56 object-cover"
               />
               <div
@@ -998,6 +1038,16 @@ export function NarrativeOverlay({
                 Dundubhi, The Bronze Buffalo Demon
               </h3>
             </div>
+          </div>
+          <div className="relative h-28 border border-[#d4a548]/50 overflow-hidden bg-black">
+            <video
+              autoPlay
+              loop
+              muted
+              playsInline
+              src={GAME_ASSETS.arenaVideos.dundubhiMandapa}
+              className="w-full h-full object-cover opacity-85"
+            />
           </div>
           <div className="space-y-3">
             {DUNDUBHI_DIALOGUE.preFight.map((line, i) => (
@@ -1113,6 +1163,16 @@ export function NarrativeOverlay({
               </h3>
             </div>
           </div>
+          <div className="relative h-28 border border-[#ff7b54]/50 overflow-hidden bg-black">
+            <video
+              autoPlay
+              loop
+              muted
+              playsInline
+              src={GAME_ASSETS.arenaVideos.furnacesSlagEclipse}
+              className="w-full h-full object-cover opacity-85"
+            />
+          </div>
           <div className="space-y-3">
             {VRIKODARA_DIALOGUE.preFight.map((line, i) => (
               <div
@@ -1185,11 +1245,15 @@ export function NarrativeOverlay({
             </div>
           </div>
 
-          {/* Shard #1 Cutscene Painting: Healer's Tent & Clay Lamp */}
+          {/* Shard #1 Cutscene Video / Painting: Healer's Tent & Burning Pyre */}
           <div className="relative border border-[#c89d46]/50 bg-[#09070b] overflow-hidden">
-            <img
-              src={SHARD_1_MEMORY_SCRIPT.artAssetUrl}
-              alt="Shard #1 Memory — The Healer's Tent in the Shishira Camp"
+            <video
+              autoPlay
+              loop
+              muted
+              playsInline
+              poster={SHARD_1_MEMORY_SCRIPT.artAssetUrl}
+              src={GAME_ASSETS.cutsceneVideos.rudraAmidstFire}
               className="w-full h-56 md:h-64 object-cover"
             />
             <div
@@ -1288,7 +1352,15 @@ export function NarrativeOverlay({
     const selectedChoiceObj = FERRY_1_SCRIPT.choices.find((c) => c.id === ferryChoiceId);
     return (
       <div className="fixed inset-0 z-50 bg-[#050508] flex flex-col justify-between p-6 md:p-12 overflow-y-auto">
-        <div className="max-w-4xl w-full mx-auto border-b border-[#c89d46]/30 pb-3 flex items-center justify-between">
+        <video
+          autoPlay
+          loop
+          muted
+          playsInline
+          src={GAME_ASSETS.arenaVideos.ashHubRiver}
+          className="fixed inset-0 w-full h-full object-cover opacity-25 pointer-events-none"
+        />
+        <div className="relative z-10 max-w-4xl w-full mx-auto border-b border-[#c89d46]/30 pb-3 flex items-center justify-between">
           <span className="font-mono-num text-xs tracking-[0.24em] text-[#f5b952] uppercase">
             {FERRY_1_SCRIPT.title} · {FERRY_1_SCRIPT.subtitle}
           </span>
@@ -1400,7 +1472,19 @@ export function NarrativeOverlay({
     const sparrowBandaged = storyFlags.looks.length >= 3;
     return (
       <div className="fixed inset-0 z-50 bg-[#060508] flex flex-col justify-between p-6 md:p-12 overflow-y-auto">
-        <div className="max-w-4xl w-full mx-auto border-b border-[#c89d46]/30 pb-3 flex items-center justify-between">
+        <video
+          autoPlay
+          loop
+          muted
+          playsInline
+          src={
+            stage === 'ending_sovereign'
+              ? GAME_ASSETS.cutsceneVideos.burningFortress
+              : GAME_ASSETS.cutsceneVideos.cloudsStarry
+          }
+          className="fixed inset-0 w-full h-full object-cover opacity-25 pointer-events-none"
+        />
+        <div className="relative z-10 max-w-4xl w-full mx-auto border-b border-[#c89d46]/30 pb-3 flex items-center justify-between">
           <span className="font-mono-num text-xs tracking-[0.24em] text-[#f5c451] uppercase">
             SECTION 16–18 · THE SOUL FURNACE · THE CHOICE WITH NO TIMER
           </span>

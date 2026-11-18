@@ -255,9 +255,9 @@ test('smart enemy pacing, predictive aim lead, and 3-stage Agni-Step dash curve 
   assert.ok(thrustHeavy.forwardLungePx > smashHeavy.forwardLungePx);
 });
 
-test('all 5 Act I chambers have HD animated arena videos and VFX flipbook sheets registered', async () => {
+test('all 8 chambers have HD animated arena videos and VFX flipbook sheets registered', async () => {
   const { CHAMBERS, GAME_ASSETS } = await import('./assets');
-  assert.equal(CHAMBERS.length, 5);
+  assert.equal(CHAMBERS.length, 8);
   for (const chamber of CHAMBERS) {
     assert.ok(chamber.videoUrl && chamber.videoUrl.startsWith('/videos/') && chamber.videoUrl.endsWith('.mp4'));
     assert.ok(!chamber.videoUrl.includes('…'), `Chamber ${chamber.id} videoUrl must not contain ellipsis`);
@@ -269,9 +269,14 @@ test('all 5 Act I chambers have HD animated arena videos and VFX flipbook sheets
   assert.equal(GAME_ASSETS.hub.vaitaraniAshHubBg, '/arenas/Gemini_Generated_Image_ol56bvol56bvol56.png');
   assert.equal(GAME_ASSETS.hub.vaitaraniAshHubVideo, '/videos/Ash_drifting_across_river_landscape_2b693e5d.mp4');
 
-  // Chamber 1: Ash Shore / Skirmish
-  assert.equal(CHAMBERS[0].backgroundUrl, GAME_ASSETS.chambers.vaitaraniGhat);
-  assert.equal(CHAMBERS[0].videoUrl, GAME_ASSETS.arenaVideos.waterCourtyard);
+  // Chamber 1: Ash Shore / Skirmish (Atmospheric Chariot Bonefield, no peach courtyard)
+  assert.equal(CHAMBERS[0].backgroundUrl, GAME_ASSETS.chambers.chariotBonefieldAlt);
+  assert.equal(CHAMBERS[0].videoUrl, GAME_ASSETS.arenaVideos.mythicEnvA);
+  assert.notEqual(CHAMBERS[0].videoUrl, GAME_ASSETS.arenaVideos.waterCourtyard);
+  assert.equal(Object.keys(GAME_ASSETS.cutsceneVideos).length, 5);
+  for (const [k, url] of Object.entries(GAME_ASSETS.cutsceneVideos)) {
+    assert.ok(url.startsWith('/videos/') && url.endsWith('.mp4'), `cutsceneVideos.${k} must be an .mp4 path`);
+  }
 
   // Chamber 2: Sealed Gate of Raktabija (Locked -> Unlocked + 2x1 Vedic Chained Gate overlay d647kw)
   assert.equal(CHAMBERS[1].backgroundUrl, GAME_ASSETS.chambers.asuraLavaLocked);
@@ -287,12 +292,17 @@ test('all 5 Act I chambers have HD animated arena videos and VFX flipbook sheets
   assert.equal(CHAMBERS[3].videoUrl, '/videos/Flames_flickering_around_stone_f_09be2052.mp4');
   assert.equal(CHAMBERS[3].spawns[0].type, 'dundubhi');
 
-  // Chamber 5: Vrikodara — Sanctum of the Infernal Maw (Phase 1 -> Phase 2 Blood Eclipse)
-  assert.equal(CHAMBERS[4].backgroundUrl, GAME_ASSETS.chambers.bossSanctumPhase1);
-  assert.equal(CHAMBERS[4].videoUrl, '/videos/Animate_mythological_game_enviro_f7acefd6_1080p.mp4');
-  assert.equal(CHAMBERS[4].phase2BackgroundUrl, '/arenas/Gemini_Generated_Image_3ay6rk3ay6rk3ay6.png');
-  assert.equal(CHAMBERS[4].phase2VideoUrl, '/videos/Furnaces_spewing_flames_and_slag_baeefd93_1080p.mp4');
-  assert.equal(CHAMBERS[4].spawns[0].type, 'vrikodara');
+  // Chambers 5-7: New enemy/warden gauntlet
+  assert.equal(CHAMBERS[4].backgroundUrl, GAME_ASSETS.chambers.chariotBonefield);
+  assert.equal(CHAMBERS[5].backgroundUrl, GAME_ASSETS.chambers.soulFireSanctum);
+  assert.equal(CHAMBERS[6].backgroundUrl, GAME_ASSETS.chambers.warDrumColonnade);
+
+  // Chamber 8: Vrikodara — Sanctum of the Infernal Maw (Phase 1 -> Phase 2 Blood Eclipse)
+  assert.equal(CHAMBERS[7].backgroundUrl, GAME_ASSETS.chambers.bossSanctumPhase1);
+  assert.equal(CHAMBERS[7].videoUrl, '/videos/Animate_mythological_game_enviro_f7acefd6_1080p.mp4');
+  assert.equal(CHAMBERS[7].phase2BackgroundUrl, '/arenas/Gemini_Generated_Image_3ay6rk3ay6rk3ay6.png');
+  assert.equal(CHAMBERS[7].phase2VideoUrl, '/videos/Furnaces_spewing_flames_and_slag_baeefd93_1080p.mp4');
+  assert.equal(CHAMBERS[7].spawns[0].type, 'vrikodara');
 
   // Ensure zero Unicode ellipsis across all arenaVideos
   for (const [k, url] of Object.entries(GAME_ASSETS.arenaVideos)) {

@@ -6,16 +6,16 @@ import {
 } from './enemy3dRenderer';
 import {
   SHARED_STUDIO_OUTLINE_COLOR,
+  applyHadesCelShadingToHierarchy,
   bake2DSpriteFrameFromCanvas,
   getSharedStudioWebGLRenderer,
   isSoftwareWebGLRenderer,
   setupSharedStudioLightingRig,
 } from './hadesSpriteBaker';
 import {
-  applyDemonSlayerCelShadingToHierarchy,
-  createParashuAuraMaterial,
-  setCelHitFlash,
-  setCelRimStyle,
+  createDemonSlayerCelMaterial,
+  createParashuFlameSheathGroup,
+  liftTextureToAnimeVibrancy,
 } from './demonSlayerShader';
 import { loadFbxCached, simplifyBufferGeometry } from './meshSimplifier';
 
@@ -206,9 +206,6 @@ export class Rudra3DRenderer {
   private stateElapsedSec = 0;
   private lastAnimState: RudraAnimState = 'idle';
   private frameCache: Map<string, HTMLCanvasElement> = new Map();
-  private celMaterials: THREE.MeshToonMaterial[] = [];
-  private parashuAuraMats: THREE.ShaderMaterial[] = [];
-  private activeStance = 'smash';
   private disposed = false;
   private prewarmQueue: Array<() => void> = [];
   private prewarmTimer: number | null = null;
@@ -219,13 +216,15 @@ export class Rudra3DRenderer {
     this.wrapper = new THREE.Group();
     this.scene.add(this.wrapper);
 
-    // Same verified camera framing as Enemy3DRenderer: feet at y=0 project to pixel y=197 (anchorY=0.77)
-    this.camera = new THREE.PerspectiveCamera(34, 1, 0.1, 100);
-    this.camera.position.set(0, 2.1, 4.4);
-    this.camera.lookAt(0, 0.82, 0);
+    // Full-body Demon Slayer camera framing with generous headroom for overhead Parashu swings
+    this.camera = new THREE.PerspectiveCamera(33, 1, 0.1, 100);
+    this.camera.position.set(0, 2.02, 4.30);
+    this.camera.lookAt(0, 0.80, 0);
 
-    // Unified Studio Key / Fill / Warm-Rim Lighting Rig shared with Enemy3DRenderer & Boss3DRenderer
-    setupSharedStudioLightingRig(this.scene, 1.0);
+    // Unified Demon Slayer Studio Key / Fill / Rim Rig with clean sunlit ivory anime rim
+    const studioLights = setupSharedStudioLightingRig(this.scene, 1.0);
+    studioLights.rimLight.color.setHex(0xffe8c2);
+    studioLights.rimLight.intensity = 1.05;
 
     if (typeof document !== 'undefined') {
       this.canvas = document.createElement('canvas');
@@ -291,11 +290,17 @@ export class Rudra3DRenderer {
 
         this.standingHipY = extractStandingHipY(baseGroup);
 
-        const mat = new THREE.MeshStandardMaterial({
-          color: 0xffffff,
-          map: diffuseMap || null,
-          roughness: 0.84,
-          metalness: 0.08,
+        const liftedDiffuse = liftTextureToAnimeVibrancy(diffuseMap, 1.18, 1.12);
+        if (liftedDiffuse) liftedDiffuse.userData.animeLifted = true;
+
+        const mat = createDemonSlayerCelMaterial({
+          map: liftedDiffuse,
+          tintHex: liftedDiffuse ? 0xffffff : 0xd94838,
+          emissiveHex: 0x262220,
+          emissiveIntensity: 0.24,
+          rimColorHex: 0xffe4b8,
+          rimStrength: 0.28,
+          rimPower: 3.1,
         });
 
         if (riggedGroup) {
@@ -310,24 +315,29 @@ export class Rudra3DRenderer {
           });
         }
 
-        // Normalize height to 1.56m BEFORE attaching weapon so weapon bounds do not shrink character
+        // Normalize height to 1.48m BEFORE attaching weapon so weapon bounds do not shrink character
         const rawBox = new THREE.Box3().setFromObject(baseGroup);
         const rawHeight = Math.max(0.001, rawBox.max.y - rawBox.min.y);
-        const scale = 1.56 / rawHeight;
+        const scale = 1.48 / rawHeight;
         baseGroup.scale.setScalar(scale);
         baseGroup.position.set(0, -0.06, 0);
 
-        // Attach 3D Parashu Battle-Axe to Rudra's right hand bone with exact world-scale normalization
+        // Attach 3D Parashu Battle-Axe + Ignited Hinokami Flame Sheath to Rudra's right hand bone
         baseGroup.updateMatrixWorld(true);
         const rightHand =
           baseGroup.getObjectByName('mixamorigRightHand') ||
           baseGroup.getObjectByName('RightHand');
         if (rightHand && weaponGroup) {
-          const wepMat = new THREE.MeshStandardMaterial({
-            color: 0xffffff,
-            map: weaponDiffuseMap || null,
-            roughness: 0.82,
-            metalness: 0.12,
+          const liftedWepMap = liftTextureToAnimeVibrancy(weaponDiffuseMap, 1.16, 1.12);
+          if (liftedWepMap) liftedWepMap.userData.animeLifted = true;
+          const wepMat = createDemonSlayerCelMaterial({
+            map: liftedWepMap,
+            tintHex: liftedWepMap ? 0xffffff : 0xc97b3e,
+            emissiveHex: 0x28201c,
+            emissiveIntensity: 0.22,
+            rimColorHex: 0xffe0a8,
+            rimStrength: 0.32,
+            rimPower: 3.0,
           });
           weaponGroup.traverse((c) => {
             if ((c as THREE.Mesh).isMesh) {
@@ -335,25 +345,6 @@ export class Rudra3DRenderer {
               wm.geometry = simplifyBufferGeometry(wm.geometry, 56, 32000);
               wm.material = wepMat;
               wm.frustumCulled = false;
-            }
-          });
-          // Add animated Demon Slayer Parashu elemental energy aura shell (skipped by Sumi-e outline pass)
-          const auraMeshes: THREE.Mesh[] = [];
-          weaponGroup.traverse((c) => {
-            if ((c as THREE.Mesh).isMesh && !c.userData.isAuraShell) {
-              const wm = c as THREE.Mesh;
-              const auraMat = createParashuAuraMaterial(0xff6a22, 1.35);
-              this.parashuAuraMats.push(auraMat);
-              const auraShell = new THREE.Mesh(wm.geometry, auraMat);
-              auraShell.position.copy(wm.position);
-              auraShell.rotation.copy(wm.rotation);
-              auraShell.scale.copy(wm.scale);
-              auraShell.frustumCulled = false;
-              auraShell.userData.isAuraShell = true;
-              auraMeshes.push(auraShell);
-              if (wm.parent) {
-                wm.parent.add(auraShell);
-              }
             }
           });
           const handScaleVec = new THREE.Vector3();
@@ -372,19 +363,20 @@ export class Rudra3DRenderer {
           weaponGroup.rotation.set(-Math.PI * 0.5, 0, -Math.PI * 0.5);
           weaponGroup.position.set(0.26 * maxDim * localWepScale, 0, 0);
           weaponSocket.add(weaponGroup);
+
+          // Subtle golden-amber blade edge accent around the Parashu axe head
+          const flameSheath = createParashuFlameSheathGroup(maxDim * localWepScale);
+          weaponSocket.add(flameSheath);
           rightHand.add(weaponSocket);
         }
 
-        const styled = applyDemonSlayerCelShadingToHierarchy(baseGroup, {
-          rimColorHex: 0xff9f40,
-          rimStrength: 0.62,
-          rimPower: 2.55,
-          brightnessLift: 1.02,
-          saturationBoost: 1.32,
-          outlineHeightRatio: 0.0044,
-          outlineColorHex: 0x070409,
+        applyHadesCelShadingToHierarchy(baseGroup, {
+          rimColor: 0xffe4b8,
+          rimIntensity: 0.28,
+          emissiveTint: 0x262220,
+          emissiveStrength: 0.24,
+          outlineRatio: 0.0048,
         });
-        this.celMaterials = styled.celMaterials;
 
         this.wrapper.add(baseGroup);
         this.model = baseGroup;
@@ -417,39 +409,47 @@ export class Rudra3DRenderer {
         this.loadProgress = 1.0;
         this.prewarmCoreAtlas();
 
-        (Object.keys(RUDRA_ANIM_URLS) as RudraAnimState[]).forEach((state) => {
-          if (state === 'idle' || state === 'run') return;
-          const url = RUDRA_ANIM_URLS[state];
-          loadFbx(url).then((animGroup) => {
-            if (!animGroup || !animGroup.animations || animGroup.animations.length === 0 || !this.mixer) {
-              return;
-            }
-            const rawClip = animGroup.animations[0];
-            const cleanClip = buildStabilizedInPlaceClip(rawClip, baseGroup, this.standingHipY);
-            if (cleanClip.tracks.length === 0) return;
-
-            const action = this.mixer.clipAction(cleanClip);
-            this.actions[state] = action;
-            const prefix = `rudra:${state}:`;
-            for (const k of Array.from(this.frameCache.keys())) {
-              if (k.startsWith(prefix)) this.frameCache.delete(k);
-            }
-            // Pre-bake key strike frames lazily when attack1/heavy/hurt finish loading
-            if (state === 'attack1' || state === 'heavy' || state === 'hurt') {
-              const warmAngles = isSoftwareWebGLRenderer()
-                ? [0, Math.PI]
-                : [0, Math.PI * 0.5, Math.PI, Math.PI * 1.5];
-              const warmSteps = state === 'hurt' ? [0.15] : [0.2, 0.5];
-              const tasks: Array<() => void> = [];
-              for (const ang of warmAngles) {
-                for (const prog of warmSteps) {
-                  tasks.push(() => {
-                    this.renderFrame(state, prog, ang, false);
-                  });
-                }
+        const secondaryStates = (Object.keys(RUDRA_ANIM_URLS) as RudraAnimState[]).filter(
+          (state) => state !== 'idle' && state !== 'run' && state !== 'dash'
+        );
+        if (this.actions.run) {
+          this.actions.dash = this.actions.run;
+        }
+        const isSoft = isSoftwareWebGLRenderer();
+        secondaryStates.forEach((state, idx) => {
+          const delayMs = isSoft
+            ? state === 'attack1'
+              ? 400
+              : 14000 + idx * 2000
+            : 250 + idx * 350;
+          const schedule =
+            typeof window !== 'undefined'
+              ? (fn: () => void) => window.setTimeout(fn, delayMs)
+              : (fn: () => void) => fn();
+          schedule(() => {
+            if (this.disposed) return;
+            const url = RUDRA_ANIM_URLS[state];
+            loadFbx(url).then((animGroup) => {
+              if (
+                this.disposed ||
+                !animGroup ||
+                !animGroup.animations ||
+                animGroup.animations.length === 0 ||
+                !this.mixer
+              ) {
+                return;
               }
-              this.enqueuePrewarmTasks(tasks);
-            }
+              const rawClip = animGroup.animations[0];
+              const cleanClip = buildStabilizedInPlaceClip(rawClip, baseGroup, this.standingHipY);
+              if (cleanClip.tracks.length === 0) return;
+
+              const action = this.mixer.clipAction(cleanClip);
+              this.actions[state] = action;
+              const prefix = `rudra:${state}:`;
+              for (const k of Array.from(this.frameCache.keys())) {
+                if (k.startsWith(prefix)) this.frameCache.delete(k);
+              }
+            });
           });
         });
       }
@@ -458,6 +458,7 @@ export class Rudra3DRenderer {
 
   private enqueuePrewarmTasks(tasks: Array<() => void>): void {
     if (this.disposed || tasks.length === 0) return;
+    if (isSoftwareWebGLRenderer()) return;
     this.prewarmQueue.push(...tasks);
     if (this.prewarmTimer !== null) return;
     if (typeof window === 'undefined') {
@@ -479,12 +480,10 @@ export class Rudra3DRenderer {
         fn?.();
       }
       if (this.prewarmQueue.length > 0) {
-        const delayMs = isSoftwareWebGLRenderer() ? 64 : 16;
-        this.prewarmTimer = window.setTimeout(flushChunk, delayMs);
+        this.prewarmTimer = window.setTimeout(flushChunk, 16);
       }
     };
-    const initDelayMs = isSoftwareWebGLRenderer() ? 64 : 16;
-    this.prewarmTimer = window.setTimeout(flushChunk, initDelayMs);
+    this.prewarmTimer = window.setTimeout(flushChunk, 16);
   }
 
   /**
@@ -493,9 +492,8 @@ export class Rudra3DRenderer {
    */
   public prewarmCoreAtlas(): void {
     if (!this.isReady || !this.model || !this.mixer || this.disposed) return;
-    const warmAngles = isSoftwareWebGLRenderer()
-      ? [0, Math.PI]
-      : [0, Math.PI * 0.5, Math.PI, Math.PI * 1.5];
+    if (isSoftwareWebGLRenderer()) return;
+    const warmAngles = [0, Math.PI * 0.5, Math.PI, Math.PI * 1.5];
     const tasks: Array<() => void> = [];
     for (const ang of warmAngles) {
       tasks.push(() => {
@@ -504,14 +502,12 @@ export class Rudra3DRenderer {
       tasks.push(() => {
         this.renderFrame('run', 0.0, ang, false);
       });
-      if (!isSoftwareWebGLRenderer()) {
-        tasks.push(() => {
-          this.renderFrame('idle', 0.35, ang, false);
-        });
-        tasks.push(() => {
-          this.renderFrame('run', 0.35, ang, false);
-        });
-      }
+      tasks.push(() => {
+        this.renderFrame('idle', 0.35, ang, false);
+      });
+      tasks.push(() => {
+        this.renderFrame('run', 0.35, ang, false);
+      });
       if (this.actions.attack1) {
         tasks.push(() => {
           this.renderFrame('attack1', 0.25, ang, false);
@@ -520,7 +516,7 @@ export class Rudra3DRenderer {
           this.renderFrame('attack1', 0.55, ang, false);
         });
       }
-      if (this.actions.heavy && !isSoftwareWebGLRenderer()) {
+      if (this.actions.heavy) {
         tasks.push(() => {
           this.renderFrame('heavy', 0.35, ang, false);
         });
@@ -549,14 +545,12 @@ export class Rudra3DRenderer {
       this.actions
     );
 
-    const stance = input.stance || 'smash';
-    this.activeStance = stance;
     const facingAngle =
       input.isAttacking || input.isHeavyAttack
         ? input.slashAngle
         : Math.atan2(input.facingY || 0, input.facingX || 1);
 
-    const baked = this.renderFrame(state, animClock, facingAngle, input.isHurt, stance);
+    const baked = this.renderFrame(state, animClock, facingAngle, input.isHurt);
     if (baked) {
       this.canvas = baked;
       return true;
@@ -568,25 +562,15 @@ export class Rudra3DRenderer {
     state: RudraAnimState,
     animTimeSec: number,
     facingAngleRad: number,
-    hitFlash = false,
-    stanceTag?: string
+    hitFlash = false
   ): HTMLCanvasElement | null {
     if (!this.isReady || !this.model || !this.mixer) return null;
 
-    const stance = stanceTag ?? this.activeStance;
-    const elemTag = stance === 'pillar' ? 'vayu' : stance === 'thrust' ? 'vajra' : 'agni';
-    const elemHex =
-      elemTag === 'vayu' ? 0x34d399 : elemTag === 'vajra' ? 0x38d9ff : 0xff7a22;
-    const rimRgba =
-      elemTag === 'vayu'
-        ? 'rgba(52, 211, 153, 0.85)'
-        : elemTag === 'vajra'
-          ? 'rgba(56, 217, 255, 0.88)'
-          : 'rgba(255, 146, 62, 0.85)';
-
+    const isSoft = isSoftwareWebGLRenderer();
+    const yawBuckets = isSoft ? 4 : 12;
     const normalizedYaw = ((facingAngleRad % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
-    const yawIndex = Math.round((normalizedYaw / (Math.PI * 2)) * 12) % 12;
-    const quantizedYaw = (yawIndex / 12) * Math.PI * 2;
+    const yawIndex = Math.round((normalizedYaw / (Math.PI * 2)) * yawBuckets) % yawBuckets;
+    const quantizedYaw = (yawIndex / yawBuckets) * Math.PI * 2;
 
     const isAttack =
       state === 'attack1' ||
@@ -602,7 +586,7 @@ export class Rudra3DRenderer {
       this.actions.idle;
 
     const clipDur = action ? Math.max(0.4, action.getClip().duration) : 1.0;
-    const steps = isAttack ? 12 : 10;
+    const steps = isSoft ? 4 : isAttack ? 12 : 10;
 
     // For action states (attacks, cast, dash, block, hurt), animTimeSec is normalized progress [0..1];
     // for locomotion (idle, run), it's continuous elapsed seconds.
@@ -612,21 +596,13 @@ export class Rudra3DRenderer {
     const quantizedTime = (stepIndex / steps) * clipDur;
 
     const flashTag = hitFlash ? 'flash' : 'norm';
-    const cacheKey = `rudra:${state}:${elemTag}:y${yawIndex}:f${stepIndex}:${flashTag}`;
+    const cacheKey = `rudra:${state}:y${yawIndex}:f${stepIndex}:${flashTag}`;
 
     const cached = this.frameCache.get(cacheKey);
     if (cached) return cached;
 
     const renderer = getSharedStudioWebGLRenderer(this.size);
     if (!renderer) return null;
-
-    setCelRimStyle(this.celMaterials, elemHex, isAttack ? 0.82 : 0.58);
-    setCelHitFlash(this.celMaterials, hitFlash, 0x1a1118, 0.08, 0xffe49e);
-    for (const auraMat of this.parashuAuraMats) {
-      auraMat.uniforms.uTime.value = this.elapsedSec + stepIndex * 0.08;
-      auraMat.uniforms.uColor.value.setHex(elemHex);
-      auraMat.uniforms.uIntensity.value = isAttack ? 1.18 : 0.86;
-    }
 
     if (action) {
       this.mixer.stopAllAction();
@@ -639,13 +615,12 @@ export class Rudra3DRenderer {
     this.wrapper.rotation.x = 0;
 
     renderer.render(this.scene, this.camera);
-    setCelHitFlash(this.celMaterials, false, 0x1a1118, 0.08, 0xffe49e);
 
     const baked = bake2DSpriteFrameFromCanvas(renderer.domElement, cacheKey, {
       role: 'rudra',
-      rimColor: rimRgba,
+      rimColor: 'rgba(255, 242, 214, 0.30)',
       outlineColor: SHARED_STUDIO_OUTLINE_COLOR,
-      outlineThickness: 2.2,
+      outlineThickness: 1.85,
       hitFlash,
       cacheFrame: false,
     });

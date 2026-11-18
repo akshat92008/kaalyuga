@@ -1,5 +1,6 @@
 // Hades-Style Isometric Chamber Collision Boundaries, Asset-Driven Exit Gates, Reward Orbs, Floor Traps & Foreground Parallax
 import { GAME_ASSETS } from './assets';
+import { computeArenaFloorGradeSpec } from './hadesSpriteBaker';
 import { getProcessedSpriteSync } from './spriteProcessor';
 
 export interface NormPoint {
@@ -362,28 +363,9 @@ export function renderParallaxAbyss(
 
 // Singleton 60 FPS Arena Video Pool (Only 1 active GPU-accelerated decoder at a time, zero double-blit)
 const arenaVideoPool = new Map<string, HTMLVideoElement>();
-const arenaVideoLastFrameCache = new Map<string, HTMLCanvasElement>();
 let currentPlayingVideoUrl: string | null = null;
 const arenaVideoPlayPending = new Set<string>();
 let videoGestureUnlockBound = false;
-
-function captureArenaVideoFrame(videoUrl: string, video: HTMLVideoElement): void {
-  if (typeof document === 'undefined' || video.videoWidth <= 0 || video.videoHeight <= 0) return;
-  let cached = arenaVideoLastFrameCache.get(videoUrl);
-  if (!cached) {
-    cached = document.createElement('canvas');
-    cached.width = 960;
-    cached.height = 540;
-    arenaVideoLastFrameCache.set(videoUrl, cached);
-  }
-  const cctx = cached.getContext('2d');
-  if (!cctx) return;
-  try {
-    cctx.drawImage(video, 0, 0, cached.width, cached.height);
-  } catch {
-    // Ignore transient frame copy failure
-  }
-}
 
 function bindVideoGestureUnlock(): void {
   if (videoGestureUnlockBound || typeof window === 'undefined') return;
@@ -391,7 +373,7 @@ function bindVideoGestureUnlock(): void {
   const resumeActiveVideo = () => {
     if (!currentPlayingVideoUrl) return;
     const active = arenaVideoPool.get(currentPlayingVideoUrl);
-    if (active && active.paused && active.readyState >= 2) {
+    if (active && active.paused) {
       active.play().catch(() => {});
     }
   };
@@ -406,7 +388,6 @@ export function prewarmArenaVideo(videoUrl: string | undefined): void {
   bindVideoGestureUnlock();
   if (arenaVideoPool.has(videoUrl)) return;
   const video = document.createElement('video');
-  video.crossOrigin = 'anonymous';
   video.muted = true;
   video.defaultMuted = true;
   video.loop = true;
@@ -432,7 +413,6 @@ export function getOrStartArenaVideo(videoUrl: string | undefined, paused: boole
   let video = arenaVideoPool.get(videoUrl);
   if (!video) {
     video = document.createElement('video');
-    video.crossOrigin = 'anonymous';
     video.muted = true;
     video.defaultMuted = true;
     video.loop = true;
@@ -469,7 +449,7 @@ export function getOrStartArenaVideo(videoUrl: string | undefined, paused: boole
         video.pause();
       } catch {}
     }
-  } else if (video.paused && video.readyState >= 2 && !arenaVideoPlayPending.has(videoUrl)) {
+  } else if (video.paused && !arenaVideoPlayPending.has(videoUrl)) {
     arenaVideoPlayPending.add(videoUrl);
     video
       .play()
@@ -506,34 +486,35 @@ export function renderIsometricChamberPlatform(
     Boolean(activeVideo) &&
     activeVideo!.readyState >= 2 &&
     activeVideo!.videoWidth > 0 &&
-    activeVideo!.videoHeight > 0;
-  const cachedVideoFrame = resolvedVideoUrl ? arenaVideoLastFrameCache.get(resolvedVideoUrl) : undefined;
+    activeVideo!.videoHeight > 0 &&
+    activeVideo!.currentTime > 0.01;
+  const isBgImgReady = Boolean(bgImg && bgImg.complete && bgImg.naturalWidth > 0);
 
-  // 1. Full Bleed 1080p HD Animated Arena Video (Direct GPU Video -> Canvas Draw, Zero Dark Color Shading!) OR Cached Last Video Frame OR Artwork Fallback
-  if (isVideoReady && activeVideo && resolvedVideoUrl) {
-    captureArenaVideoFrame(resolvedVideoUrl, activeVideo);
-    ctx.drawImage(activeVideo, 0, 0, worldW, worldH);
-  } else if (cachedVideoFrame) {
-    ctx.drawImage(cachedVideoFrame, 0, 0, worldW, worldH);
-  } else if (bgImg && bgImg.complete && bgImg.naturalWidth > 0) {
+  // 1. Always paint a warm Vedic sandstone sanctuary base + static artwork underneath so there is NEVER a black frame while video decodes
+  const floorGrad = ctx.createRadialGradient(
+    worldW * 0.5,
+    worldH * 0.52,
+    worldW * 0.08,
+    worldW * 0.5,
+    worldH * 0.52,
+    worldW * 0.68
+  );
+  floorGrad.addColorStop(0, '#6e4834');
+  floorGrad.addColorStop(0.55, '#4b3022');
+  floorGrad.addColorStop(1, '#281812');
+  ctx.fillStyle = floorGrad;
+  ctx.fillRect(0, 0, worldW, worldH);
+
+  if (isBgImgReady && bgImg) {
     ctx.drawImage(bgImg, 0, 0, worldW, worldH);
-  } else {
-    // Instant Painted-Style Vedic Stone Sanctuary Floor Fallback while high-res media finishes streaming
-    const floorGrad = ctx.createRadialGradient(
-      worldW * 0.5,
-      worldH * 0.52,
-      worldW * 0.06,
-      worldW * 0.5,
-      worldH * 0.52,
-      worldW * 0.65
-    );
-    floorGrad.addColorStop(0, '#3a241b');
-    floorGrad.addColorStop(0.55, '#241612');
-    floorGrad.addColorStop(1, '#120a09');
-    ctx.fillStyle = floorGrad;
-    ctx.fillRect(0, 0, worldW, worldH);
+  }
 
-    // Walkable Sanctuary Platform Stone Polygon
+  if (isVideoReady && activeVideo) {
+    ctx.drawImage(activeVideo, 0, 0, worldW, worldH);
+  }
+
+  if (!isBgImgReady && !isVideoReady) {
+    // Walkable Sanctuary Platform Stone Polygon while high-res media finishes streaming
     ctx.save();
     ctx.beginPath();
     geom.outerPolygon.forEach((pt, idx) => {
@@ -543,40 +524,54 @@ export function renderIsometricChamberPlatform(
       else ctx.lineTo(px, py);
     });
     ctx.closePath();
-    ctx.fillStyle = 'rgba(58, 38, 28, 0.72)';
+    ctx.fillStyle = 'rgba(92, 62, 46, 0.82)';
     ctx.fill();
-    ctx.strokeStyle = 'rgba(212, 165, 72, 0.45)';
+    ctx.strokeStyle = 'rgba(232, 184, 88, 0.55)';
     ctx.lineWidth = 3;
     ctx.stroke();
     ctx.restore();
   }
 
-  // Only run procedural water/ember atmosphere if MP4 isn't active yet so the live MP4 plays at 60 FPS with zero extra fill-rate
-  if (!isVideoReady) {
-    renderProceduralArenaAtmosphere(ctx, worldW, worldH, chamberIndex, now);
-  }
+  // 1.5. Ufotable 2D Anime Atmospheric Contrast:
+  // Warm golden sunlit lift over the central fighting courtyard + subtle cool-indigo twilight edge tint
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  const liftGrad = ctx.createRadialGradient(
+    worldW * 0.5,
+    worldH * 0.52,
+    worldW * 0.06,
+    worldW * 0.5,
+    worldH * 0.52,
+    worldW * 0.62
+  );
+  liftGrad.addColorStop(0, 'rgba(255, 224, 178, 0.20)');
+  liftGrad.addColorStop(0.55, 'rgba(226, 168, 108, 0.11)');
+  liftGrad.addColorStop(1, 'rgba(120, 82, 58, 0.02)');
+  ctx.fillStyle = liftGrad;
+  ctx.fillRect(0, 0, worldW, worldH);
+  ctx.restore();
 
-  // 1.5. Subtle Radial Playable-Floor Focus Falloff:
-  // Keeps the central playable arena 100% untouched (rgba(0,0,0,0)) while softly toning down outer non-playable wall braziers/corners
-  // so static corner fires never out-shine Rudra or the Boss in the center.
+  // Subtle cool indigo-slate twilight framing around outer columns for anime depth contrast
   ctx.save();
   const focusCx = worldW * 0.5;
-  const focusCy = worldH * 0.58;
+  const focusCy = worldH * 0.54;
   const focusGrad = ctx.createRadialGradient(
     focusCx,
     focusCy,
-    worldW * 0.28,
+    worldW * 0.36,
     focusCx,
     focusCy,
-    worldW * 0.64
+    worldW * 0.72
   );
-  focusGrad.addColorStop(0, 'rgba(10, 6, 8, 0)');
-  focusGrad.addColorStop(0.55, 'rgba(10, 6, 8, 0.08)');
-  focusGrad.addColorStop(0.82, 'rgba(10, 6, 8, 0.24)');
-  focusGrad.addColorStop(1, 'rgba(8, 4, 6, 0.42)');
+  focusGrad.addColorStop(0, 'rgba(24, 34, 62, 0)');
+  focusGrad.addColorStop(0.74, 'rgba(24, 34, 62, 0.08)');
+  focusGrad.addColorStop(1, 'rgba(18, 24, 46, 0.22)');
   ctx.fillStyle = focusGrad;
   ctx.fillRect(0, 0, worldW, worldH);
   ctx.restore();
+
+  // 1.6. Always layer 2D Anime Demon Slayer atmospheric effects (sunbeams, wind streaks, brazier blooms, wisteria petals & Hinokami sparks)
+  renderProceduralArenaAtmosphere(ctx, worldW, worldH, chamberIndex, now);
 
   // 2. Surface decals, craters, and ambient details
   renderSurfaceDetailsCallback();
@@ -588,7 +583,7 @@ export function renderIsometricChamberPlatform(
   const gateOverlaysAsset = getProcessedSpriteSync(GAME_ASSETS.gateOverlays2x2);
   const rewardOrbsAsset = getProcessedSpriteSync(GAME_ASSETS.rewardOrbs2x2);
 
-  if (chamberIndex < 4) {
+  if (chamberIndex < 7) {
     const gates = [
       {
         pos: geom.leftGate,
@@ -905,15 +900,46 @@ export function updateAndRenderPressureTraps(
   }
 }
 
-// Smooth Chamber Transition Wipe (no hanging corner foreground overlays)
+// Foreground Drifting 2D Anime Wisteria Petals + Chamber Transition Wipe
 export function renderForegroundParallaxAndWipe(
   ctx: CanvasRenderingContext2D,
   cw: number,
   ch: number,
-  _camX: number,
-  _camY: number,
+  camX: number,
+  camY: number,
   wipeProgress: number
 ) {
+  // Subtle perimeter 2D anime drifting petals & sunlit dust motes (kept near viewport edges so combat center stays 100% clear)
+  const t = performance.now() * 0.001;
+  ctx.save();
+  for (let i = 0; i < 6; i++) {
+    const laneSide = i % 2 === 0 ? 0.06 + (i * 0.03) : 0.94 - (i * 0.025);
+    const px =
+      ((laneSide * cw - camX * 0.12 + t * (16 + i * 3) + Math.sin(t * 1.1 + i * 2.1) * 18) % cw + cw) %
+      cw;
+    const py =
+      (((i * 0.17 + 0.08) * ch - camY * 0.08 + t * (14 + i * 2.5)) % ch + ch) % ch;
+    const rot = t * 1.4 + i * 1.3;
+    const alpha = 0.32 + 0.14 * Math.sin(t * 2.1 + i);
+
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.rotate(rot);
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = i % 3 === 0 ? '#ffd6a5' : '#e9d5ff';
+    ctx.strokeStyle = '#120806';
+    ctx.lineWidth = 0.85;
+    ctx.beginPath();
+    ctx.moveTo(0, -4.5);
+    ctx.quadraticCurveTo(3.8, -1.0, 0, 4.5);
+    ctx.quadraticCurveTo(-3.8, -1.0, 0, -4.5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
+  ctx.restore();
+
   // Smooth Hades Diamond Iris Chamber Transition Wipe
   if (wipeProgress > 0 && wipeProgress < 1) {
     const alpha = Math.sin((1 - wipeProgress) * Math.PI);
@@ -925,9 +951,9 @@ export function renderForegroundParallaxAndWipe(
 }
 
 /**
- * Stage B (Step 9) — Lightweight Procedural Arena Atmosphere (60 FPS, near-zero decode overhead):
- * Layers subtle Vaitarani water/magma shimmer, warm brazier flicker light pools, and drifting
- * ash & rising ember particles over the color-graded arena plate.
+ * 2D Anime / Demon Slayer (Ufotable) Procedural Arena Atmosphere:
+ * Renders diagonal volumetric temple light shafts (komorebi), warm cel brazier blooms,
+ * swept 2D anime wind-gust ribbons, ink-rimmed Wisteria petals, and diamond Hinokami embers.
  */
 export function renderProceduralArenaAtmosphere(
   ctx: CanvasRenderingContext2D,
@@ -939,47 +965,78 @@ export function renderProceduralArenaAtmosphere(
   const t = nowMs * 0.001;
   ctx.save();
 
-  // 1. Vaitarani Water / Blood-River Shimmer along the perimeter moat
+  // 1. Diagonal Ufotable Volumetric Sunbeams / Twilight Mist Shafts (Komorebi)
   ctx.save();
   ctx.globalCompositeOperation = 'screen';
-  const shimmerColor =
-    chamberIndex >= 4
-      ? 'rgba(255, 92, 38, 0.09)'
-      : chamberIndex === 1
-      ? 'rgba(220, 48, 56, 0.08)'
-      : 'rgba(196, 134, 72, 0.075)';
-  ctx.strokeStyle = shimmerColor;
-  ctx.lineWidth = 2.0;
-  for (let i = 0; i < 6; i++) {
-    const bandY = worldH * (0.28 + i * 0.11) + Math.sin(t * 1.3 + i * 1.4) * 6;
-    const bandX = worldW * (i % 2 === 0 ? 0.12 : 0.82) + Math.cos(t * 0.9 + i) * 14;
+  const beamColorTop =
+    chamberIndex >= 5
+      ? 'rgba(255, 198, 132, 0.13)'
+      : chamberIndex % 2 === 1
+      ? 'rgba(218, 232, 255, 0.12)'
+      : 'rgba(255, 236, 188, 0.13)';
+  const beamColorMid =
+    chamberIndex >= 5
+      ? 'rgba(255, 152, 74, 0.055)'
+      : chamberIndex % 2 === 1
+      ? 'rgba(186, 206, 255, 0.045)'
+      : 'rgba(255, 212, 146, 0.055)';
+
+  for (let s = 0; s < 4; s++) {
+    const sway = Math.sin(t * 0.45 + s * 1.7) * 22;
+    const xTop = worldW * (0.14 + s * 0.23) + sway;
+    const topW = 68 + (s % 2) * 24;
+    const xBot = xTop + worldW * 0.22;
+    const botW = topW * 2.05;
+
+    const beamGrad = ctx.createLinearGradient(xTop, 0, xBot, worldH * 0.86);
+    beamGrad.addColorStop(0, beamColorTop);
+    beamGrad.addColorStop(0.55, beamColorMid);
+    beamGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+    ctx.fillStyle = beamGrad;
     ctx.beginPath();
-    ctx.ellipse(bandX, bandY, 64 + (i % 3) * 18, 12, 0, 0, Math.PI * 2);
+    ctx.moveTo(xTop, 0);
+    ctx.lineTo(xTop + topW, 0);
+    ctx.lineTo(xBot + botW, worldH * 0.88);
+    ctx.lineTo(xBot, worldH * 0.88);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
+
+  // 2. Crisp Moat Water / Lava Reflection Shimmer
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  ctx.strokeStyle =
+    chamberIndex >= 4
+      ? 'rgba(255, 156, 76, 0.10)'
+      : chamberIndex % 2 === 1
+      ? 'rgba(196, 222, 255, 0.09)'
+      : 'rgba(246, 204, 134, 0.09)';
+  ctx.lineWidth = 1.6;
+  for (let i = 0; i < 6; i++) {
+    const bandY = worldH * (0.26 + i * 0.11) + Math.sin(t * 1.2 + i * 1.4) * 5;
+    const bandX = worldW * (i % 2 === 0 ? 0.11 : 0.83) + Math.cos(t * 0.85 + i) * 12;
+    ctx.beginPath();
+    ctx.ellipse(bandX, bandY, 58 + (i % 3) * 16, 10, 0, 0, Math.PI * 2);
     ctx.stroke();
   }
   ctx.restore();
 
-  // 2. Warm Brazier Flicker Light Pools on the walkable stone floor
+  // 3. Layered 2D Anime Brazier Flame Blooms on Sanctuary Courtyard
   ctx.save();
   ctx.globalCompositeOperation = 'screen';
-  const brazierAnchors = [
-    { x: 0.24, y: 0.42 },
-    { x: 0.76, y: 0.42 },
-    { x: 0.20, y: 0.72 },
-    { x: 0.80, y: 0.72 },
-  ];
-  for (let b = 0; b < brazierAnchors.length; b++) {
-    const anchor = brazierAnchors[b];
+  for (let b = 0; b < 4; b++) {
+    const bx = worldW * (b % 2 === 0 ? 0.23 : 0.77);
+    const by = worldH * (b < 2 ? 0.41 : 0.72);
     const flicker =
-      0.82 +
-      Math.sin(t * 6.4 + b * 2.1) * 0.11 +
-      Math.cos(t * 13.7 + b * 1.3) * 0.07;
-    const bx = anchor.x * worldW;
-    const by = anchor.y * worldH;
-    const radius = 135 * flicker;
+      0.86 +
+      Math.sin(t * 6.0 + b * 2.1) * 0.09 +
+      Math.cos(t * 12.8 + b * 1.3) * 0.05;
+    const radius = 148 * flicker;
     const poolGrad = ctx.createRadialGradient(bx, by, 6, bx, by, radius);
-    poolGrad.addColorStop(0, `rgba(255, 156, 64, ${(0.12 * flicker).toFixed(3)})`);
-    poolGrad.addColorStop(0.55, `rgba(214, 78, 34, ${(0.055 * flicker).toFixed(3)})`);
+    poolGrad.addColorStop(0, `rgba(255, 214, 128, ${(0.14 * flicker).toFixed(3)})`);
+    poolGrad.addColorStop(0.45, `rgba(255, 148, 56, ${(0.075 * flicker).toFixed(3)})`);
     poolGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
     ctx.fillStyle = poolGrad;
     ctx.beginPath();
@@ -988,26 +1045,77 @@ export function renderProceduralArenaAtmosphere(
   }
   ctx.restore();
 
-  // 3. Drifting Volcanic Ash & Rising Ember Particles (deterministic, zero allocation)
+  // 4. Swept 2D Anime Wind-Gust Ribbons Gliding Across Courtyard
+  ctx.save();
+  for (let w = 0; w < 5; w++) {
+    const speed = 135 + w * 28;
+    const spanW = 140 + (w % 3) * 45;
+    const baseProgress = ((t * speed + w * 310 + chamberIndex * 97) % (worldW + 320)) - 160;
+    const wy = worldH * (0.24 + w * 0.14) + Math.sin(t * 1.8 + w * 1.5) * 14;
+    const arcLift = Math.cos(t * 1.6 + w) * 14;
+    const streakAlpha = 0.09 + 0.06 * Math.sin(t * 2.4 + w);
+
+    ctx.strokeStyle = `rgba(255, 246, 224, ${streakAlpha.toFixed(3)})`;
+    ctx.lineWidth = 1.6;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(baseProgress, wy);
+    ctx.quadraticCurveTo(
+      baseProgress + spanW * 0.5,
+      wy - 16 + arcLift,
+      baseProgress + spanW,
+      wy - 4
+    );
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // 5. Ink-Rimmed Wisteria / Sanctuary Petals & Tapered Diamond Embers (Zero Allocations)
   ctx.save();
   for (let m = 0; m < 18; m++) {
     const seedX = (m * 173 + chamberIndex * 41) % 1000;
     const seedY = (m * 293 + chamberIndex * 67) % 1000;
-    const isEmber = m % 3 === 0;
+    const isPetal = m % 2 === 0;
     const px =
-      ((seedX * 0.001 * worldW + t * (isEmber ? 18 : 11) + Math.sin(t * 1.4 + m) * 16) %
+      ((seedX * 0.001 * worldW + t * (isPetal ? 22 : 16) + Math.sin(t * 1.4 + m) * 20) %
         worldW +
         worldW) %
       worldW;
     const py =
-      ((seedY * 0.001 * worldH - t * (isEmber ? 24 : 9)) % worldH + worldH) % worldH;
-    const alpha = 0.28 + 0.22 * Math.sin(t * 3.2 + m * 1.7);
-    ctx.fillStyle = isEmber
-      ? `rgba(255, 168, 76, ${alpha.toFixed(2)})`
-      : `rgba(186, 172, 164, ${(alpha * 0.65).toFixed(2)})`;
-    ctx.beginPath();
-    ctx.arc(px, py, isEmber ? 1.8 : 1.4, 0, Math.PI * 2);
-    ctx.fill();
+      ((seedY * 0.001 * worldH + (isPetal ? t * 14 : -t * 26)) % worldH + worldH) % worldH;
+    const alpha = 0.42 + 0.24 * Math.sin(t * 3.0 + m * 1.7);
+
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.globalAlpha = alpha;
+    if (isPetal) {
+      ctx.rotate(t * 1.7 + m * 1.1);
+      ctx.fillStyle =
+        chamberIndex >= 5 ? '#fed7aa' : m % 4 === 0 ? '#ffd6a5' : '#e9d5ff';
+      ctx.strokeStyle = '#120806';
+      ctx.lineWidth = 0.9;
+      ctx.beginPath();
+      ctx.moveTo(0, -4.6);
+      ctx.quadraticCurveTo(3.8, -0.8, 0, 4.6);
+      ctx.quadraticCurveTo(-3.8, -0.8, 0, -4.6);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    } else {
+      ctx.rotate(Math.sin(t * 2.2 + m) * 0.35);
+      ctx.fillStyle = m % 3 === 0 ? '#fff3b0' : '#fb923c';
+      ctx.strokeStyle = '#120806';
+      ctx.lineWidth = 0.75;
+      ctx.beginPath();
+      ctx.moveTo(0, -4.2);
+      ctx.lineTo(2.4, 0);
+      ctx.lineTo(0, 4.2);
+      ctx.lineTo(-2.4, 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+    ctx.restore();
   }
   ctx.restore();
 

@@ -42,13 +42,18 @@ import {
   loadAndProcessSprite,
   getProcessedSpriteSync,
   ProcessedSpriteAsset,
+  getMultiRowFrameBounds,
   isMultiRowSpriteUrl,
   SpriteFrameBounds,
 } from '@/lib/game/spriteProcessor';
-import type { RegularEnemy3DKind } from '@/lib/game/enemy3dRenderer';
-import { BASE_CAMERA_ZOOM } from '@/lib/game/hadesSpriteBaker';
-import { stanceToAstraElement } from '@/lib/game/demonSlayerVfxStage';
-import { UnifiedWorld3DStage } from '@/lib/game/unifiedWorld3DStage';
+import { Rudra3DRenderer } from '@/lib/game/rudra3dRenderer';
+import { Boss3DRenderer } from '@/lib/game/boss3dRenderer';
+import { Enemy3DRenderer, RegularEnemy3DKind } from '@/lib/game/enemy3dRenderer';
+import {
+  BASE_CAMERA_ZOOM,
+  BOSS_SCALE_AUTHORITY,
+  isSoftwareWebGLRenderer,
+} from '@/lib/game/hadesSpriteBaker';
 import { TitleScreen } from './TitleScreen';
 import KeepersShrineModal from './KeepersShrineModal';
 import StoryCodexModal from './StoryCodexModal';
@@ -162,6 +167,20 @@ import {
   renderEnemyAndBossGroundTelegraph,
 } from '@/lib/game/enemyArchetypesAndTelegraphs';
 import {
+  BloodDemonArtPool,
+  createBloodDemonArtPool,
+  renderBloodDemonArtScreenFlash,
+  renderBloodDemonArtWorldPass,
+  spawnCycloneVortex,
+  spawnExplodingBloodSeed,
+  spawnHinokamiSlashArc,
+  spawnSunHaloRing,
+  spawnTengenClashSparks,
+  stepBloodDemonArtPool,
+  triggerEnemyBloodDemonArtAttack,
+  triggerImpactInversionFlash,
+} from '@/lib/game/bloodDemonArts';
+import {
   DUNDUBHI_FLIPBOOK_ROWS,
   FlipbookSheetSpec,
   ISOMETRIC_TELEGRAPH_CELLS,
@@ -173,6 +192,7 @@ import {
   drawAdditiveFlipbookRowProgress,
   preloadPhase2VfxSheets,
   renderLightningArcFlipbooks,
+  resolveParashuSlashFlipbookPlan,
 } from '@/lib/game/vfxFlipbook';
 import {
   HudSnapshot,
@@ -272,6 +292,10 @@ interface EnemyEntity {
     | 'ironmaw_gladiator'
     | 'bloodmaw_brute'
     | 'semi_boss_bloodforge'
+    | 'preta_bowman'
+    | 'ash_cyclone_warden'
+    | 'molten_titan_warden'
+    | 'eternal_wheel_warden'
     | 'dundubhi'
     | 'vrikodara';
   trait?: EnemyTrait;
@@ -454,9 +478,10 @@ type EnemyRenderMode = 'hybrid_2d_3d' | 'all_3d';
 
 export default function KaliyugaArena() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const unifiedWorld3dRef = useRef<UnifiedWorld3DStage | null>(null);
-  const impactFlashRef = useRef<HTMLDivElement | null>(null);
-  const speedLinesRef = useRef<HTMLDivElement | null>(null);
+  const rudra3dRef = useRef<Rudra3DRenderer | null>(null);
+  const boss3dRef = useRef<Boss3DRenderer | null>(null);
+  const enemy3dRef = useRef<Enemy3DRenderer | null>(null);
+  const bloodDemonArtsRef = useRef<BloodDemonArtPool>(createBloodDemonArtPool());
   const enemyVariantCounterRef = useRef<number>(0);
   const gamepadPrevButtonsRef = useRef<boolean[]>([]);
   const [preloadProgress, setPreloadProgress] = useState<number>(18);
@@ -566,6 +591,11 @@ export default function KaliyugaArena() {
   }, []);
 
   const [gameState, setGameState] = useState<'title' | 'playing' | 'paused' | 'gameover'>('title');
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.body.dataset.state = gameState;
+    }
+  }, [gameState]);
   const [outcomeMode, setOutcomeMode] = useState<'none' | 'paused' | 'victory' | 'defeat'>('none');
   const [sliceStage, setSliceStage] = useState<SliceStageId>('combat_arena');
   const sliceStageRef = useRef<SliceStageId>('combat_arena');
@@ -745,8 +775,6 @@ export default function KaliyugaArena() {
     enemyRenderMode: 'all_3d' as EnemyRenderMode,
     screenFlashAlpha: 0,
     screenFlashColor: '#ffffff',
-    animeImpactFlashTimer: 0,
-    lastCastElement: 'agni' as 'agni' | 'vajra' | 'vayu',
     gateWipeTimer: 0,
     chasmVaultCalloutCd: 0,
     traps: [] as ChamberTrapRuntime[],
@@ -1032,8 +1060,14 @@ export default function KaliyugaArena() {
 
   const ensure3DRenderersBooted = useCallback(() => {
     if (typeof window === 'undefined') return;
-    if (!unifiedWorld3dRef.current) {
-      unifiedWorld3dRef.current = new UnifiedWorld3DStage();
+    if (!rudra3dRef.current) {
+      rudra3dRef.current = new Rudra3DRenderer(256);
+    }
+    if (!boss3dRef.current) {
+      boss3dRef.current = new Boss3DRenderer(256);
+    }
+    if (!enemy3dRef.current) {
+      enemy3dRef.current = new Enemy3DRenderer(256);
     }
   }, []);
 
@@ -1055,7 +1089,7 @@ export default function KaliyugaArena() {
     let ticks = 0;
     const preloadTimer = window.setInterval(() => {
       ticks += 1;
-      const r3d = unifiedWorld3dRef.current?.getRudraLoadState();
+      const r3d = rudra3dRef.current;
       const rProg =
         r3d && (r3d.isReady || r3d.loadProgress >= 1)
           ? 100
@@ -1107,8 +1141,12 @@ export default function KaliyugaArena() {
     return () => {
       window.clearInterval(preloadTimer);
       if (storageSyncTimer !== null) window.clearTimeout(storageSyncTimer);
-      unifiedWorld3dRef.current?.dispose();
-      unifiedWorld3dRef.current = null;
+      rudra3dRef.current?.dispose();
+      enemy3dRef.current?.dispose();
+      boss3dRef.current?.dispose();
+      rudra3dRef.current = null;
+      boss3dRef.current = null;
+      enemy3dRef.current = null;
     };
   }, [ensure3DRenderersBooted]);
 
@@ -1221,20 +1259,36 @@ export default function KaliyugaArena() {
     []
   );
 
-  // 2D sprite afterimages are superseded by live 3D DashEchoPool in UnifiedWorld3DStage (prevents 2D checkerboard sprite cutouts)
+  // Helper to spawn pooled motion afterimages
   const spawnAfterimage = useCallback(
     (
-      _assetUrl: string,
-      _frameIndex: number,
-      _x: number,
-      _y: number,
-      _targetHeight: number,
-      _facing: 1 | -1,
-      _elevationY: number,
-      _tint: 'gold' | 'jade' = 'gold',
-      _duration: number = 0.24
+      assetUrl: string,
+      frameIndex: number,
+      x: number,
+      y: number,
+      targetHeight: number,
+      facing: 1 | -1,
+      elevationY: number,
+      tint: 'gold' | 'jade' = 'gold',
+      duration: number = 0.24
     ) => {
-      // Handled in 3D via unifiedWorld3dRef.current.spawnDashEcho
+      const pool = simRef.current.afterimages;
+      for (let i = 0; i < pool.length; i++) {
+        if (!pool[i].active) {
+          pool[i].active = true;
+          pool[i].assetUrl = assetUrl;
+          pool[i].frameIndex = frameIndex;
+          pool[i].x = x;
+          pool[i].y = y;
+          pool[i].targetHeight = targetHeight;
+          pool[i].facing = facing;
+          pool[i].elevationY = elevationY;
+          pool[i].tint = tint;
+          pool[i].maxLife = duration;
+          pool[i].life = duration;
+          return;
+        }
+      }
     },
     []
   );
@@ -1350,12 +1404,12 @@ export default function KaliyugaArena() {
       for (let i = 0; i < pool.length; i++) {
         if (
           pool[i].active &&
-          pool[i].life > 0.16 &&
-          Math.abs(pool[i].x - spawnX) < 54 &&
-          Math.abs(pool[i].y - adjustedY) < 26
+          pool[i].life > 0.14 &&
+          Math.abs(pool[i].x - spawnX) < 110 &&
+          Math.abs(pool[i].y - adjustedY) < 28
         ) {
-          spawnX += (fanSlot >= 0 ? 1 : -1) * 24;
-          adjustedY = Math.min(adjustedY, pool[i].y - 24);
+          spawnX += (fanSlot >= 0 ? 1 : -1) * 18;
+          adjustedY = Math.min(adjustedY, pool[i].y - 28);
         }
       }
 
@@ -1574,6 +1628,34 @@ export default function KaliyugaArena() {
           sheet: GAME_ASSETS.enemySheets.nagaWarriorSheet,
         },
       ];
+      const bowmanVariants = [
+        {
+          name: 'Preta Hellfire Bowman',
+          sanskrit: 'PRETA-SHARA · CRIMSON ARROW VOLLEY',
+          sheet: GAME_ASSETS.enemySheets.pretaBowmanSheet4x1,
+        },
+      ];
+      const cycloneWardenVariants = [
+        {
+          name: 'Ashen Cyclone Warden',
+          sanskrit: 'BHASMA-VAYU · ASHEN CYCLONE WARLORD',
+          sheet: GAME_ASSETS.enemySheets.hornedWarriorSheet3,
+        },
+      ];
+      const moltenTitanVariants = [
+        {
+          name: 'Emberforged Magma Titan',
+          sanskrit: 'JATHARAGNI · VOLCANIC COLOSSUS',
+          sheet: GAME_ASSETS.enemySheets.moltenGolemSheet,
+        },
+      ];
+      const eternalWheelVariants = [
+        {
+          name: 'Eternal Wheel Sovereign',
+          sanskrit: 'KALA-CHAKRA · DHARMA BLADE WARDEN',
+          sheet: GAME_ASSETS.enemySheets.hoodedMageSheet,
+        },
+      ];
 
       const varIdx = enemyVariantCounterRef.current++;
       const pickedVariant =
@@ -1585,6 +1667,14 @@ export default function KaliyugaArena() {
           ? gladiatorVariants[varIdx % gladiatorVariants.length]
           : type === 'semi_boss_bloodforge'
           ? semiBossVariants[varIdx % semiBossVariants.length]
+          : type === 'preta_bowman'
+          ? bowmanVariants[0]
+          : type === 'ash_cyclone_warden'
+          ? cycloneWardenVariants[0]
+          : type === 'molten_titan_warden'
+          ? moltenTitanVariants[0]
+          : type === 'eternal_wheel_warden'
+          ? eternalWheelVariants[0]
           : bruteVariants[varIdx % bruteVariants.length];
 
       const configs: Record<
@@ -1592,7 +1682,11 @@ export default function KaliyugaArena() {
         | 'ashen_oracle'
         | 'ironmaw_gladiator'
         | 'bloodmaw_brute'
-        | 'semi_boss_bloodforge',
+        | 'semi_boss_bloodforge'
+        | 'preta_bowman'
+        | 'ash_cyclone_warden'
+        | 'molten_titan_warden'
+        | 'eternal_wheel_warden',
         { name: string; sanskrit: string; hp: number; posture: number; radius: number; sheet: string }
       > = {
         charnel_ghoul: {
@@ -1635,6 +1729,38 @@ export default function KaliyugaArena() {
           radius: 104,
           sheet: pickedVariant.sheet,
         },
+        preta_bowman: {
+          name: pickedVariant.name,
+          sanskrit: pickedVariant.sanskrit,
+          hp: 520,
+          posture: 420,
+          radius: 80,
+          sheet: pickedVariant.sheet,
+        },
+        ash_cyclone_warden: {
+          name: pickedVariant.name,
+          sanskrit: pickedVariant.sanskrit,
+          hp: 880,
+          posture: 720,
+          radius: 112,
+          sheet: pickedVariant.sheet,
+        },
+        molten_titan_warden: {
+          name: pickedVariant.name,
+          sanskrit: pickedVariant.sanskrit,
+          hp: 1180,
+          posture: 960,
+          radius: 124,
+          sheet: pickedVariant.sheet,
+        },
+        eternal_wheel_warden: {
+          name: pickedVariant.name,
+          sanskrit: pickedVariant.sanskrit,
+          hp: 790,
+          posture: 640,
+          radius: 96,
+          sheet: pickedVariant.sheet,
+        },
       };
 
       const cfg = configs[type];
@@ -1644,7 +1770,12 @@ export default function KaliyugaArena() {
           gridLayout: 'multirow',
         });
       }
-      const isWarden3D = type === 'semi_boss_bloodforge' || Boolean(wardenTitle);
+      const isWarden3D =
+        type === 'semi_boss_bloodforge' ||
+        type === 'ash_cyclone_warden' ||
+        type === 'molten_titan_warden' ||
+        type === 'eternal_wheel_warden' ||
+        Boolean(wardenTitle);
       const traitPrefix =
         trait === 'vajra_shield'
           ? '[SHIELDED] '
@@ -1854,32 +1985,35 @@ export default function KaliyugaArena() {
       const clampedIdx = Math.max(0, Math.min(CHAMBERS.length - 1, index));
       const spec = CHAMBERS[clampedIdx];
       const isTitleMode = sim.state === 'title';
-      // Start chamber background image & MP4 arena video FIRST so they never queue behind 3D FBX downloads
-      if (typeof window !== 'undefined' && !isTitleMode) {
+      // Start chamber background image FIRST (even during title screen) so Chamber 1 bg is already decoded when gameplay starts
+      if (typeof window !== 'undefined') {
         if (spec.backgroundUrl && !bgImagesRef.current.has(spec.backgroundUrl)) {
           const img = new Image();
           img.src = spec.backgroundUrl;
           bgImagesRef.current.set(spec.backgroundUrl, img);
         }
-        if (spec.videoUrl && sim.videoBgEnabled) {
-          getOrStartArenaVideo(spec.videoUrl, false);
-        }
-        if (spec.phase2VideoUrl && sim.videoBgEnabled) {
-          prewarmArenaVideo(spec.phase2VideoUrl);
+        if (!isTitleMode) {
+          if (spec.videoUrl && sim.videoBgEnabled) {
+            getOrStartArenaVideo(spec.videoUrl, false);
+          }
+          if (spec.phase2VideoUrl && sim.videoBgEnabled) {
+            prewarmArenaVideo(spec.phase2VideoUrl);
+          }
         }
       }
       const hasSemiBossInChamber = spec.spawns.some((s) => s.type === 'semi_boss_bloodforge');
-      if (!isTitleMode && (clampedIdx === 3 || clampedIdx === 4 || hasSemiBossInChamber)) {
-        if (!unifiedWorld3dRef.current) {
-          unifiedWorld3dRef.current = new UnifiedWorld3DStage();
+      if (!isTitleMode && (clampedIdx === 3 || clampedIdx === CHAMBERS.length - 1 || hasSemiBossInChamber)) {
+        if (!boss3dRef.current) {
+          boss3dRef.current = new Boss3DRenderer(256);
         }
         const bossKind =
           clampedIdx === 3
             ? 'dundubhi'
-            : clampedIdx === 4
+            : clampedIdx === CHAMBERS.length - 1
             ? 'vrikodara'
             : 'semi_boss';
-        unifiedWorld3dRef.current.prewarmChamber([], bossKind);
+        boss3dRef.current.ensureBossLoaded(bossKind);
+        boss3dRef.current.prewarmBossAtlas(bossKind);
       }
       const cw = typeof window !== 'undefined' ? window.innerWidth || sim.viewportW || 1440 : sim.viewportW || 1440;
       const ch = typeof window !== 'undefined' ? window.innerHeight || sim.viewportH || 900 : sim.viewportH || 900;
@@ -1907,7 +2041,6 @@ export default function KaliyugaArena() {
       sim.slowMoTimer = 0;
       sim.gateWipeTimer = 0.32;
       sim.chasmVaultCalloutCd = 0;
-      unifiedWorld3dRef.current?.clearAll();
 
       // Preload current & next chamber backgrounds and multi-row fallback sheets so nothing renders invisible while 3D streams
       [clampedIdx, Math.min(CHAMBERS.length - 1, clampedIdx + 1)].forEach((idxToLoad) => {
@@ -1939,7 +2072,7 @@ export default function KaliyugaArena() {
             mode: 'character',
             gridLayout: '2x2',
           });
-        } else if (chToLoad.id === 5) {
+        } else if (chToLoad.id === 8) {
           loadAndProcessSprite(GAME_ASSETS.bossSheets.vrikodaraPhase1Sheet2x2, {
             mode: 'character',
             gridLayout: '2x2',
@@ -1964,10 +2097,11 @@ export default function KaliyugaArena() {
       if (!resetFullRun && sim.state === 'playing') {
         if (clampedIdx === 3) {
           setSliceStage('dundubhi_intro');
-        } else if (clampedIdx === 4) {
+        } else if (clampedIdx === 7) {
           setSliceStage('vrikodara_intro');
         }
       }
+      bloodDemonArtsRef.current = createBloodDemonArtPool();
       sim.traps = createChamberTrapsRuntime(clampedIdx, worldW, worldH);
       sim.craters = [];
       sim.battleScars = [];
@@ -2204,18 +2338,20 @@ export default function KaliyugaArena() {
 
       // Stage B (Step 10): Pre-bake core sprite atlases lazily during active gameplay (never during Title Screen)
       if (!isTitleMode) {
-        if (!unifiedWorld3dRef.current) {
-          unifiedWorld3dRef.current = new UnifiedWorld3DStage();
+        rudra3dRef.current?.prewarmCoreAtlas();
+        if (clampedIdx === 3 || clampedIdx === CHAMBERS.length - 1 || hasSemiBossInChamber) {
+          if (!boss3dRef.current) {
+            boss3dRef.current = new Boss3DRenderer(256);
+          }
+          const bossKind =
+            clampedIdx === 3
+              ? 'dundubhi'
+              : clampedIdx === CHAMBERS.length - 1
+                ? 'vrikodara'
+                : 'semi_boss';
+          boss3dRef.current.prewarmBossAtlas(bossKind);
         }
-        const bossKind =
-          clampedIdx === 3
-            ? 'dundubhi'
-            : clampedIdx === 4
-              ? 'vrikodara'
-              : hasSemiBossInChamber
-                ? 'semi_boss'
-                : null;
-        unifiedWorld3dRef.current.prewarmChamber(
+        enemy3dRef.current?.prewarmChamberSlots(
           sim.enemies
             .filter((e) => !e.isBoss)
             .map((e) => ({
@@ -2223,8 +2359,7 @@ export default function KaliyugaArena() {
               kind: e.type as RegularEnemy3DKind,
               wardenRigKey: e.wardenRigKey,
               trait: e.trait,
-            })),
-          bossKind
+            }))
         );
       }
 
@@ -2290,10 +2425,10 @@ export default function KaliyugaArena() {
       gridLayout: '1xN',
       frameCount: 4,
     });
-    if (!unifiedWorld3dRef.current) {
-      unifiedWorld3dRef.current = new UnifiedWorld3DStage();
+    if (!boss3dRef.current) {
+      boss3dRef.current = new Boss3DRenderer(256);
     }
-    unifiedWorld3dRef.current.prewarmSavitriHub();
+    boss3dRef.current.ensureBossLoaded('savitri_hub');
     soundEngine.startMusic();
   }, [ensure3DRenderersBooted, loadChamber]);
 
@@ -2319,6 +2454,10 @@ export default function KaliyugaArena() {
       sim.input.justPressed.clear();
       if (document.activeElement instanceof HTMLElement) {
         document.activeElement.blur();
+      }
+      const targetSpec = CHAMBERS[Math.max(0, Math.min(CHAMBERS.length - 1, chamberIndex))];
+      if (typeof window !== 'undefined' && targetSpec?.videoUrl && sim.videoBgEnabled) {
+        getOrStartArenaVideo(targetSpec.videoUrl, false);
       }
       loadChamber(chamberIndex, true);
       soundEngine.startMusic();
@@ -2430,21 +2569,21 @@ export default function KaliyugaArena() {
       const autostart = params.get('autostart') === '1' || params.get('autostart') === 'true';
       const hubParam = params.get('hub') === '1' || params.get('hub') === 'true';
       if (hubParam) {
-        requestAnimationFrame(() => enterVaitaraniHub());
+        window.setTimeout(() => enterVaitaraniHub(), 0);
       } else if (Number.isFinite(chParam) && chParam >= 1) {
         const mappedIdx = chParam >= CHAMBERS.length ? CHAMBERS.length - 1 : chParam - 1;
         document.body.dataset.state = 'playing';
-        requestAnimationFrame(() => startGameAtChamber(mappedIdx));
+        window.setTimeout(() => startGameAtChamber(mappedIdx), 0);
       } else if (autostart) {
         document.body.dataset.state = 'playing';
-        requestAnimationFrame(() => startGameAtChamber(0));
+        window.setTimeout(() => startGameAtChamber(0), 0);
       } else {
         document.body.dataset.state = 'title';
-        requestAnimationFrame(() => {
+        window.setTimeout(() => {
           loadChamber(0, true);
           soundEngine.startMusic();
           soundEngine.syncBgmState('title', 1, false);
-        });
+        }, 0);
       }
     }
 
@@ -2491,13 +2630,15 @@ export default function KaliyugaArena() {
       if (initialChamber.phase2BackgroundUrl) {
         loadBgWithRetry(initialChamber.phase2BackgroundUrl);
       }
-      if (isDirectGameplay) {
-        if (initialChamber.videoUrl) {
+      if (initialChamber.videoUrl) {
+        if (isDirectGameplay) {
           getOrStartArenaVideo(initialChamber.videoUrl, false);
+        } else {
+          prewarmArenaVideo(initialChamber.videoUrl);
         }
-        if (initialChamber.phase2VideoUrl) {
-          prewarmArenaVideo(initialChamber.phase2VideoUrl);
-        }
+      }
+      if (initialChamber.phase2VideoUrl) {
+        prewarmArenaVideo(initialChamber.phase2VideoUrl);
       }
     }
     loadBgWithRetry(GAME_ASSETS.titleBackdrop);
@@ -2985,9 +3126,6 @@ export default function KaliyugaArena() {
       sim.cameraShakeTrauma = Math.min(1, sim.cameraShakeTrauma + 0.48);
       sim.screenFlashAlpha = 0.18;
       sim.screenFlashColor = meta.color;
-      sim.lastCastElement =
-        astraId === 'vajrastra' ? 'vajra' : astraId === 'vayavyastra' ? 'vayu' : 'agni';
-      sim.animeImpactFlashTimer = 0.042;
       soundEngine.playSpell('immobilize');
 
       // Aim vector toward nearest enemy or cursor
@@ -3036,8 +3174,6 @@ export default function KaliyugaArena() {
 
       // If Thrust stance, also launch a piercing elemental Astra wave projectile
       if (p.stance === 'thrust') {
-        unifiedWorld3dRef.current?.triggerHeavyWave(p.x, p.y, aimAngle, sim.lastCastElement, 13.0);
-        unifiedWorld3dRef.current?.triggerGroundImpact(p.x, p.y, sim.lastCastElement, 140, 8);
         const proj = sim.projectiles.find((pr) => !pr.active);
         if (proj) {
           proj.active = true;
@@ -3056,6 +3192,53 @@ export default function KaliyugaArena() {
 
       spawnShockwave(p.x, p.y, spec.radius, meta.color, 0.42);
       spawnParticles(p.x, p.y - 26, 30, meta.color, 230, 4.8, 70);
+      soundEngine.playBreathingStyle(
+        astraId === 'agneyastra' ? 'sun' : astraId === 'vayavyastra' ? 'wind' : 'thunder'
+      );
+      spawnSunHaloRing(bloodDemonArtsRef.current, {
+        x: p.x,
+        y: p.y - 16,
+        radius: spec.radius * 0.85,
+        palette: astraId === 'agneyastra' ? 'sun' : astraId === 'vayavyastra' ? 'wind' : 'thunder',
+      });
+      if (astraId === 'vayavyastra') {
+        spawnCycloneVortex(bloodDemonArtsRef.current, {
+          x: p.x,
+          y: p.y - 14,
+          outerRadius: spec.radius * 0.92,
+          armCount: 6,
+          palette: 'wind',
+        });
+        spawnHinokamiSlashArc(bloodDemonArtsRef.current, {
+          x: p.x,
+          y: p.y - 22,
+          angle: aimAngle,
+          arcSpan: 3.1,
+          radius: spec.radius * 0.76,
+          thickness: 26,
+          palette: 'wind',
+        });
+      } else {
+        spawnHinokamiSlashArc(bloodDemonArtsRef.current, {
+          x: p.x,
+          y: p.y - 24,
+          angle: aimAngle,
+          arcSpan: 2.9,
+          radius: spec.radius * 0.72,
+          thickness: 28,
+          palette: astraId === 'agneyastra' ? 'sun' : 'thunder',
+        });
+        spawnHinokamiSlashArc(bloodDemonArtsRef.current, {
+          x: p.x,
+          y: p.y - 24,
+          angle: aimAngle + 0.22,
+          arcSpan: 2.35,
+          radius: spec.radius * 0.58,
+          thickness: 20,
+          palette: astraId === 'agneyastra' ? 'hinokami' : 'water',
+          direction: -1,
+        });
+      }
 
       const corridorEndX = p.x + Math.cos(aimAngle) * spec.range;
       const corridorEndY = p.y + Math.sin(aimAngle) * spec.range;
@@ -3088,7 +3271,7 @@ export default function KaliyugaArena() {
         }
 
         // Environmental & Status Synergy: +50% Vajrastra damage on Soaked targets or in Vaitarani river chambers (Ch 1, 2, 5)
-        const isWaterChamber = sim.chamberIndex === 0 || sim.chamberIndex === 1 || sim.chamberIndex === 4;
+        const isWaterChamber = CHAMBERS[sim.chamberIndex]?.envEffect === 'blood_river';
         const isSoaked = (e.soakedTimer || 0) > 0 || isWaterChamber;
         const isMarked = (e.markedTimer || 0) > 0;
         const synergyMult =
@@ -3591,8 +3774,8 @@ export default function KaliyugaArena() {
       sim.cameraShakeTrauma = Math.min(1, sim.cameraShakeTrauma + 0.62);
       sim.screenFlashAlpha = 0.24;
       sim.screenFlashColor = '#ffd86b';
-      sim.animeImpactFlashTimer = 0.045;
-      unifiedWorld3dRef.current?.triggerParryClash(p.x + p.facing * 20, p.y, 0xffe484);
+      spawnTengenClashSparks(bloodDemonArtsRef.current, p.x + p.facing * 20, p.y - 24, 18, 390);
+      triggerImpactInversionFlash(bloodDemonArtsRef.current, p.x, p.y - 22, 0.045, '#fff3d1');
       soundEngine.playSpatialMaterialFoley('golden_parry', p.x, p.y, p.x, p.y, sim.viewportW);
       spawnShockwave(p.x, p.y, 175, '#ffd86b', 0.42);
       spawnFlipbookVfx(
@@ -4080,6 +4263,35 @@ export default function KaliyugaArena() {
 
     soundEngine.playHit('execute');
     spawnShockwave(brokenEnemy.x, brokenEnemy.y, 245, '#ff4d3b', 0.46);
+    spawnSunHaloRing(bloodDemonArtsRef.current, {
+      x: brokenEnemy.x,
+      y: brokenEnemy.y - 22,
+      radius: 142,
+      palette: 'sun',
+    });
+    spawnHinokamiSlashArc(bloodDemonArtsRef.current, {
+      x: brokenEnemy.x,
+      y: brokenEnemy.y - 24,
+      angle: p.slashAngle,
+      arcSpan: 3.1,
+      radius: 132,
+      thickness: 30,
+      palette: 'sun',
+      direction: 1,
+    });
+    // Counter-rotating Ukiyo-e Water Dragon ribbon for the dual Fire + Water Hinokami Execution!
+    spawnHinokamiSlashArc(bloodDemonArtsRef.current, {
+      x: brokenEnemy.x,
+      y: brokenEnemy.y - 24,
+      angle: p.slashAngle + 0.35,
+      arcSpan: 2.65,
+      radius: 112,
+      thickness: 24,
+      palette: 'water',
+      direction: -1,
+    });
+    spawnTengenClashSparks(bloodDemonArtsRef.current, brokenEnemy.x, brokenEnemy.y - 24, 24, 450);
+    triggerImpactInversionFlash(bloodDemonArtsRef.current, brokenEnemy.x, brokenEnemy.y - 24, 0.05, '#ff4d3b');
     const execSlashRow =
       finisherSpec.variant === 'spin_360_cleave'
         ? PARASHU_FLIPBOOK_ROWS.SPIN_360_WHIRLWIND_RING
@@ -4254,9 +4466,16 @@ export default function KaliyugaArena() {
         spawnParticles(wx, wy - 12, 16, '#ff6a2b', 210, 4.8, 140);
       }
     } else if (heavySpec.styleId === 'sudarshana_vortex') {
-      // God of War Pillar Style: 360° Blazing Hurricane Vortex that pulls nearby foes inward!
-      spawnShockwave(p.x, p.y, heavySpec.cleaveRadiusPx, '#ff7a2b', 0.42);
-      spawnShockwave(p.x, p.y, heavySpec.cleaveRadiusPx * 0.72, '#ffd86b', 0.32);
+      // God of War Pillar Style: 360° Sanemi Wind Breathing Hurricane Vortex that pulls nearby foes inward!
+      spawnShockwave(p.x, p.y, heavySpec.cleaveRadiusPx, '#10b981', 0.42);
+      spawnShockwave(p.x, p.y, heavySpec.cleaveRadiusPx * 0.72, '#6ee7b7', 0.32);
+      spawnCycloneVortex(bloodDemonArtsRef.current, {
+        x: p.x,
+        y: p.y - 16,
+        outerRadius: heavySpec.cleaveRadiusPx * 0.92,
+        armCount: 6,
+        palette: 'wind',
+      });
       sim.enemies.forEach((e) => {
         if (e.aiState === 'ko') return;
         const vDist = Math.hypot(e.x - p.x, e.y - p.y);
@@ -4267,10 +4486,51 @@ export default function KaliyugaArena() {
         }
       });
     } else {
-      // God of War Thrust Style: Impaling Spartan Lunge + Piercing Agni Blood-Wave Projectile!
-      spawnShockwave(impactX, impactY, 132 + orbsUsed * 18, '#ff4d3b', 0.36);
+      // God of War Thrust Style: Impaling Water Dragon & Thunder Lunge!
+      spawnShockwave(impactX, impactY, 132 + orbsUsed * 18, '#38bdf8', 0.36);
       spawnShockwave(p.x, p.y, 78, '#ffd86b', 0.26);
     }
+    const primaryHeavyPalette =
+      p.stance === 'pillar'
+        ? 'wind'
+        : p.stance === 'thrust'
+        ? 'water'
+        : 'sun';
+    const secondaryHeavyPalette =
+      p.stance === 'pillar'
+        ? 'wind'
+        : p.stance === 'thrust'
+        ? 'thunder'
+        : orbsUsed >= 2
+        ? 'water'
+        : 'hinokami';
+    spawnHinokamiSlashArc(bloodDemonArtsRef.current, {
+      x: impactX,
+      y: impactY - 22,
+      angle: p.slashAngle,
+      arcSpan: p.stance === 'pillar' ? 3.15 : 2.85,
+      radius: 126 + orbsUsed * 12,
+      thickness: 28,
+      palette: primaryHeavyPalette,
+      direction: 1,
+    });
+    spawnHinokamiSlashArc(bloodDemonArtsRef.current, {
+      x: impactX,
+      y: impactY - 24,
+      angle: p.slashAngle + 0.18,
+      arcSpan: 2.25,
+      radius: 98 + orbsUsed * 10,
+      thickness: 20,
+      palette: secondaryHeavyPalette,
+      direction: -1,
+    });
+    spawnSunHaloRing(bloodDemonArtsRef.current, {
+      x: impactX,
+      y: impactY - 16,
+      radius: 96 + orbsUsed * 14,
+      palette: primaryHeavyPalette,
+    });
+    spawnTengenClashSparks(bloodDemonArtsRef.current, impactX, impactY - 22, 16 + orbsUsed * 4, 380);
     sim.battleScars = spawnBattleScar(sim.battleScars, {
       id: ++sim.nextScarId,
       kind: 'scorch_crater',
@@ -4304,25 +4564,6 @@ export default function KaliyugaArena() {
     sim.screenFlashAlpha = Math.max(sim.screenFlashAlpha, 0.14 + orbsUsed * 0.03);
     sim.screenFlashColor =
       p.stance === 'pillar' ? '#ffb833' : orbsUsed >= 2 ? '#ff4d24' : '#b81d2a';
-    sim.animeImpactFlashTimer = 0.042;
-    const heavyElem = stanceToAstraElement(p.stance);
-    unifiedWorld3dRef.current?.triggerRudraSwing(
-      p.x,
-      p.y,
-      p.slashAngle,
-      p.stance,
-      'heavy',
-      0.38,
-      heavyElem === 'vayu' ? 0.5 : 0.3
-    );
-    unifiedWorld3dRef.current?.triggerHeavyWave(impactX, impactY, p.slashAngle, heavyElem, 11.5);
-    unifiedWorld3dRef.current?.triggerGroundImpact(impactX, impactY, heavyElem, 155, 10);
-    unifiedWorld3dRef.current?.triggerSumiInkSplash(
-      impactX,
-      impactY,
-      heavyElem === 'vajra' ? 0x38bdf8 : heavyElem === 'vayu' ? 0x34d399 : 0xff7b2e,
-      1.85
-    );
 
     spawnFloatingText(
       p.x,
@@ -4411,7 +4652,8 @@ export default function KaliyugaArena() {
       });
     }
 
-    soundEngine.playSwing('heavy');
+    soundEngine.playSwing('heavy', p.stance);
+    soundEngine.playBreathingStyle(primaryHeavyPalette);
     let hitAny = false;
 
     const corridorEndX = originX + Math.cos(p.slashAngle) * heavySpec.corridorLengthPx;
@@ -4558,14 +4800,6 @@ export default function KaliyugaArena() {
         sim.cameraKickY += heavyHitRes.cameraKickY;
         e.scaleX = 1.14;
         e.scaleY = 0.86;
-        const heavyHitColorHex =
-          stanceToAstraElement(p.stance) === 'vajra'
-            ? 0x5eead4
-            : stanceToAstraElement(p.stance) === 'vayu'
-            ? 0x6ee7b7
-            : 0xff7b2e;
-        unifiedWorld3dRef.current?.triggerHitSparks(e.x, e.y, heavyHitColorHex, 16);
-        unifiedWorld3dRef.current?.triggerSumiInkSplash(e.x, e.y, heavyHitColorHex, 1.75);
 
         if (boonMods.scorchDps > 0) {
           e.scorchTimer = 3.0;
@@ -4584,6 +4818,18 @@ export default function KaliyugaArena() {
           );
         }
 
+        spawnTengenClashSparks(bloodDemonArtsRef.current, e.x, e.y - 24, 14, 340);
+        if (orbsUsed >= 2) {
+          spawnExplodingBloodSeed(bloodDemonArtsRef.current, {
+            x: e.x,
+            y: e.y - 8,
+            radius: 64,
+            damage: 28,
+            ownerSide: 'player',
+            delaySec: 0.55,
+            palette: 'hinokami',
+          });
+        }
         spawnFlipbookVfx(
           PHASE2_VFX_SHEETS.parryAndHitSparks4x2.url,
           e.x,
@@ -4833,27 +5079,72 @@ export default function KaliyugaArena() {
     );
 
     soundEngine.playSwing(
-      activeFinisherSpec || p.comboStep === 4 || isDashStrike || isRiposteStrike ? 'heavy' : 'light'
+      activeFinisherSpec || p.comboStep === 4 || isDashStrike || isRiposteStrike ? 'heavy' : 'light',
+      p.stance
     );
-    const lightSwingKind =
-      activeFinisherSpec?.variant === 'spin_360_cleave'
-        ? 'cast'
-        : p.comboStep === 4
-        ? 'heavy'
-        : p.comboStep === 3
-        ? 'attack3'
-        : p.comboStep === 2
-        ? 'attack2'
-        : 'attack1';
-    unifiedWorld3dRef.current?.triggerRudraSwing(
-      p.x,
-      p.y,
-      p.slashAngle,
-      p.stance,
-      lightSwingKind,
-      Math.max(0.18, p.actionDuration),
-      stanceToAstraElement(p.stance) === 'vayu' ? 0.45 : 0
-    );
+    const lightSlashPalette =
+      p.stance === 'pillar'
+        ? 'wind'
+        : p.stance === 'thrust'
+        ? isDashStrike || isRiposteStrike
+          ? 'thunder'
+          : 'water'
+        : isRiposteStrike
+        ? 'thunder'
+        : activeFinisherSpec || p.comboStep === 4
+        ? 'sun'
+        : 'hinokami';
+
+    spawnHinokamiSlashArc(bloodDemonArtsRef.current, {
+      x: p.x + p.facing * 14,
+      y: p.y - 22,
+      angle: p.slashAngle,
+      arcSpan: p.comboStep === 4 || activeFinisherSpec ? 2.75 : p.comboStep === 3 ? 2.45 : 2.2,
+      radius: p.comboStep === 4 || activeFinisherSpec ? 112 : p.comboStep === 3 ? 96 : 88,
+      thickness: p.comboStep === 4 || activeFinisherSpec ? 26 : 20,
+      palette: lightSlashPalette,
+      direction: p.comboStep % 2 === 0 ? -1 : 1,
+    });
+
+    // Dual-element or finisher companion Breathing arc on Combo Step 3/4, Dash-Strike, or Riposte!
+    if (p.comboStep >= 3 || activeFinisherSpec || isDashStrike || isRiposteStrike) {
+      const companionPalette =
+        p.stance === 'smash'
+          ? p.comboStep === 4
+            ? 'water'
+            : 'sun'
+          : p.stance === 'pillar'
+          ? 'wind'
+          : 'thunder';
+      spawnHinokamiSlashArc(bloodDemonArtsRef.current, {
+        x: p.x + p.facing * 16,
+        y: p.y - 24,
+        angle: p.slashAngle + (p.comboStep % 2 === 0 ? -0.22 : 0.22),
+        arcSpan: 2.1,
+        radius: p.comboStep === 4 ? 96 : 78,
+        thickness: 16,
+        palette: companionPalette,
+        direction: p.comboStep % 2 === 0 ? 1 : -1,
+      });
+      if (p.comboStep === 4 || activeFinisherSpec) {
+        if (p.stance === 'pillar') {
+          spawnCycloneVortex(bloodDemonArtsRef.current, {
+            x: p.x + p.facing * 18,
+            y: p.y - 18,
+            outerRadius: 108,
+            armCount: 5,
+            palette: 'wind',
+          });
+        } else {
+          spawnSunHaloRing(bloodDemonArtsRef.current, {
+            x: p.x + p.facing * 18,
+            y: p.y - 18,
+            radius: 92,
+            palette: lightSlashPalette,
+          });
+        }
+      }
+    }
 
     let hitAny = false;
     sim.enemies.forEach((e) => {
@@ -4918,7 +5209,7 @@ export default function KaliyugaArena() {
           p.vy += Math.sin(recoilAngle) * 150;
           sim.hitstopTimer = Math.max(sim.hitstopTimer, 0.042);
           sim.cameraShakeTrauma = Math.min(MAX_CLAMPED_CAMERA_TRAUMA, sim.cameraShakeTrauma + 0.25);
-          unifiedWorld3dRef.current?.triggerParryClash((p.x + e.x) * 0.5, (p.y + e.y) * 0.5, 0xffe484);
+          spawnTengenClashSparks(bloodDemonArtsRef.current, (p.x + e.x) * 0.5, (p.y + e.y) * 0.5 - 22, 16, 360);
           spawnShockwave((p.x + e.x) * 0.5, (p.y + e.y) * 0.5, 86, '#ffd86b', 0.28);
           spawnFlipbookVfx(
             PHASE2_VFX_SHEETS.parryAndHitSparks4x2.url,
@@ -5043,27 +5334,6 @@ export default function KaliyugaArena() {
         sim.cameraShakeTrauma = hitRes.clampedCameraTrauma;
         e.scaleX = activeFinisherSpec ? 1.12 : 1.04;
         e.scaleY = activeFinisherSpec ? 0.88 : 0.96;
-        const lightHitColorHex = activeFinisherSpec
-          ? 0xffd86b
-          : stanceToAstraElement(p.stance) === 'vajra'
-          ? 0x5eead4
-          : stanceToAstraElement(p.stance) === 'vayu'
-          ? 0x6ee7b7
-          : 0xff7b2e;
-        unifiedWorld3dRef.current?.triggerHitSparks(
-          e.x,
-          e.y,
-          lightHitColorHex,
-          isCrit ? 16 : 10
-        );
-        if (isCrit || Boolean(activeFinisherSpec)) {
-          unifiedWorld3dRef.current?.triggerSumiInkSplash(
-            e.x,
-            e.y,
-            lightHitColorHex,
-            activeFinisherSpec ? 1.85 : 1.45
-          );
-        }
 
         // Nezha Boon: Samadhi Scorch DoT
         if (boonMods.scorchDps > 0) {
@@ -5121,6 +5391,7 @@ export default function KaliyugaArena() {
         if (p.focusOrbs >= 4) p.focusProgress = 1.0;
 
         // Directional crimson/Prana hit-splatter flipbook (cvl1pe Row 1) oriented along impact vector
+        spawnTengenClashSparks(bloodDemonArtsRef.current, e.x, e.y - 20, p.comboStep === 4 || isCrit ? 12 : 7, 300);
         spawnFlipbookVfx(
           PHASE2_VFX_SHEETS.parryAndHitSparks4x2.url,
           e.x,
@@ -5308,12 +5579,6 @@ export default function KaliyugaArena() {
     sim.decoy.y = p.y;
     sim.decoy.timer = 1.25;
     spawnAfterimage(GAME_ASSETS.rudra.run, 0, p.x, p.y, 68, p.facing, 0, 'gold', 0.28);
-    unifiedWorld3dRef.current?.spawnDashEcho(
-      p.x,
-      p.y,
-      Math.atan2(p.lastMoveDirY || 0, p.lastMoveDirX || p.facing),
-      p.stance
-    );
     if (boonMods.dashFireNovaDamage > 0) {
       spawnShockwave(p.x, p.y, 122, '#ff6a2b', 0.30);
     }
@@ -5405,6 +5670,22 @@ export default function KaliyugaArena() {
     // High-snap initial burst driven by 3-stage Agni-Step curve
     p.vx = moveX * 690;
     p.vy = moveY * 545;
+
+    // Zenitsu Thunder-Step / Water & Wind Breathing Dash Ribbon + Tengen sparks!
+    const dashAngle = Math.atan2(moveY, moveX);
+    const dashPalette = p.stance === 'pillar' ? 'wind' : p.stance === 'thrust' ? 'water' : 'thunder';
+    soundEngine.playBreathingStyle(dashPalette);
+    spawnHinokamiSlashArc(bloodDemonArtsRef.current, {
+      x: p.x + moveX * 28,
+      y: p.y - 20 + moveY * 18,
+      angle: dashAngle,
+      arcSpan: 1.95,
+      radius: 78,
+      thickness: 18,
+      palette: dashPalette,
+      direction: p.facing,
+    });
+    spawnTengenClashSparks(bloodDemonArtsRef.current, p.x, p.y - 18, 8, 260);
 
     // Pre-spawn 3 staggered silhouette echoes along the dash vector for immediate visual feedback
     const dashPoses = [GAME_ASSETS.rudra.run, GAME_ASSETS.rudra.slash1, GAME_ASSETS.rudra.slam];
@@ -5766,7 +6047,7 @@ export default function KaliyugaArena() {
 
     if (!asset || asset.frames.length === 0) {
       if (targetHeight >= 36) {
-        const h = targetHeight;
+        const h = Math.round(targetHeight * 0.68);
         const w = h * 0.54;
         ctx.save();
         ctx.translate(worldX, worldY - elevationY);
@@ -5800,18 +6081,38 @@ export default function KaliyugaArena() {
           ctx.lineTo(w * 0.22, -h * 0.18);
           ctx.stroke();
         } else {
-          // Soft dark Sumi-e ash shadow silhouette while sprite/3D asset streams (zero bright wireframe strokes)
-          ctx.fillStyle = hitFlash ? 'rgba(92, 54, 42, 0.72)' : 'rgba(16, 12, 18, 0.72)';
-          ctx.strokeStyle = '#080509';
-          ctx.lineWidth = 2.0;
+          // Sculpted Vedic Warrior Silhouette (head, pauldrons, torso, stance, raised blade) while sprite streams
+          ctx.fillStyle = hitFlash
+            ? '#783f18'
+            : rimTint === 'jade'
+            ? '#221814'
+            : '#2c1914';
+          ctx.strokeStyle = '#120806';
+          ctx.lineWidth = 2.4;
           ctx.beginPath();
-          ctx.ellipse(0, -h * 0.44, w * 0.34, h * 0.44, 0, 0, Math.PI * 2);
+          ctx.moveTo(-w * 0.28, 0);
+          ctx.lineTo(-w * 0.14, -h * 0.36);
+          ctx.lineTo(-w * 0.36, -h * 0.58);
+          ctx.lineTo(-w * 0.34, -h * 0.72);
+          ctx.lineTo(-w * 0.12, -h * 0.76);
+          ctx.lineTo(-w * 0.11, -h * 0.90);
+          ctx.lineTo(0, -h * 0.97);
+          ctx.lineTo(w * 0.12, -h * 0.90);
+          ctx.lineTo(w * 0.12, -h * 0.76);
+          ctx.lineTo(w * 0.38, -h * 0.70);
+          ctx.lineTo(w * 0.56, -h * 0.88);
+          ctx.lineTo(w * 0.44, -h * 0.58);
+          ctx.lineTo(w * 0.24, -h * 0.42);
+          ctx.lineTo(w * 0.28, 0);
+          ctx.lineTo(w * 0.08, 0);
+          ctx.lineTo(0, -h * 0.30);
+          ctx.lineTo(-w * 0.08, 0);
+          ctx.closePath();
           ctx.fill();
           ctx.stroke();
-          ctx.fillStyle = rimTint === 'jade' ? '#38bdf8' : '#ef4444';
-          ctx.beginPath();
-          ctx.arc(w * 0.1, -h * 0.68, 2.2, 0, Math.PI * 2);
-          ctx.fill();
+          ctx.strokeStyle = hitFlash ? '#ffb347' : rimTint === 'jade' ? '#d4a548' : '#ffb347';
+          ctx.lineWidth = 1.6;
+          ctx.stroke();
         }
         ctx.restore();
       }
@@ -5909,8 +6210,19 @@ export default function KaliyugaArena() {
     window.addEventListener('resize', resizeCanvas);
 
     let rafId = 0;
+    let softTimerId: number | null = null;
     let lastTime = performance.now();
     let hudSyncAccum = 0;
+
+    const afterDraw = (cb: FrameRequestCallback) => {
+      if (isSoftwareWebGLRenderer()) {
+        softTimerId = window.setTimeout(() => {
+          rafId = window.requestAnimationFrame(cb);
+        }, 16);
+      } else {
+        rafId = window.requestAnimationFrame(cb);
+      }
+    };
 
     const tick = (now: number) => {
       const rawDt = (now - lastTime) / 1000;
@@ -5930,7 +6242,7 @@ export default function KaliyugaArena() {
       ctx.imageSmoothingQuality = 'medium';
 
       if (sim.state === 'title') {
-        rafId = window.requestAnimationFrame(tick);
+        afterDraw(tick);
         return;
       }
 
@@ -5960,22 +6272,6 @@ export default function KaliyugaArena() {
       if (Math.abs(sim.cameraKickY) < 0.05) sim.cameraKickY = 0;
       if (sim.screenFlashAlpha > 0) {
         sim.screenFlashAlpha = Math.max(0, sim.screenFlashAlpha - dt * 2.4);
-      }
-      if (sim.animeImpactFlashTimer > 0) {
-        sim.animeImpactFlashTimer = Math.max(0, sim.animeImpactFlashTimer - rawDt);
-      }
-      if (impactFlashRef.current) {
-        impactFlashRef.current.style.opacity = sim.animeImpactFlashTimer > 0 ? '0.68' : '0';
-      }
-      if (speedLinesRef.current) {
-        const showSpeedLines =
-          sim.state === 'playing' &&
-          (sim.player.action === 'dodge' ||
-            sim.player.action === 'astra' ||
-            sim.player.action === 'heavy_unleash' ||
-            sim.player.action === 'execute' ||
-            sim.enemies.some((en) => en.aiState === 'attack' && en.attackKind === 'corridor'));
-        speedLinesRef.current.style.opacity = showSpeedLines ? '0.62' : '0';
       }
       if (sim.gateWipeTimer > 0) {
         sim.gateWipeTimer = Math.max(0, sim.gateWipeTimer - dt);
@@ -6080,7 +6376,8 @@ export default function KaliyugaArena() {
           if (sim.summoningRifts[i].timer <= 0) {
             const rift = sim.summoningRifts[i];
             if (rift.type === 'semi_boss_bloodforge') {
-              unifiedWorld3dRef.current?.prewarmChamber([], 'semi_boss');
+              if (!boss3dRef.current) boss3dRef.current = new Boss3DRenderer(224);
+              boss3dRef.current.ensureBossLoaded('semi_boss');
             }
             sim.enemies.push(
               createEnemyFromSpec(
@@ -7035,12 +7332,6 @@ export default function KaliyugaArena() {
             soundEngine.playHit('heavy');
 
             // Trigger dramatic Hades Final-Blow Slow-Motion if Boss or last foe in chamber!
-            unifiedWorld3dRef.current?.triggerSumiInkSplash(
-              e.x,
-              e.y,
-              e.isBoss ? 0xff3b52 : 0x38bdf8,
-              e.isBoss ? 2.45 : 1.75
-            );
             const remainingAlive = sim.enemies.filter((foe) => foe.aiState !== 'ko' && foe.hp > 0).length;
             if (e.isBoss || (remainingAlive === 0 && sim.pendingSpawns.length === 0)) {
               sim.slowMoTimer = 0.36;
@@ -7121,6 +7412,20 @@ export default function KaliyugaArena() {
               sim.screenFlashColor = '#ff521b';
               soundEngine.playGong('chamber');
               spawnShockwave(e.x, e.y, 195, '#ff5924', 0.45);
+              triggerImpactInversionFlash(bloodDemonArtsRef.current, e.x, e.y - 38, 0.055, '#ff5924');
+              spawnCycloneVortex(bloodDemonArtsRef.current, {
+                x: e.x,
+                y: e.y - 20,
+                outerRadius: 185,
+                armCount: 6,
+                palette: e.type === 'vrikodara' ? 'void' : 'bronze',
+              });
+              spawnSunHaloRing(bloodDemonArtsRef.current, {
+                x: e.x,
+                y: e.y - 24,
+                radius: 165,
+                palette: e.type === 'vrikodara' ? 'void' : 'sun',
+              });
               spawnParticles(e.x, e.y - 38, 42, '#ff5924', 240, 5.5, 80);
               spawnFloatingText(
                 e.x,
@@ -7193,7 +7498,6 @@ export default function KaliyugaArena() {
               e.vx = 0;
               e.vy = 0;
               soundEngine.playDundubhiWarDrum();
-              unifiedWorld3dRef.current?.triggerBossShockwave(e.x, e.y, 220, 'roar', true);
               spawnShockwave(e.x, e.y, 215, '#ffbe3b', 0.48);
               spawnFlipbookVfx(
                 PHASE2_VFX_SHEETS.dundubhiShockwaveAndShatter4x2.url,
@@ -7305,6 +7609,11 @@ export default function KaliyugaArena() {
             const perpX = (-dy / dist) * flankSign;
             const perpY = (dx / dist) * flankSign;
 
+            const isRangedArchetype =
+              e.type === 'ashen_oracle' ||
+              e.type === 'preta_bowman' ||
+              e.type === 'eternal_wheel_warden';
+
             if (e.type === 'charnel_ghoul') {
               const moveSpd = 210 * sprintBoost;
               const flankWeight = dist < 190 ? 0.45 : 0.22;
@@ -7316,28 +7625,35 @@ export default function KaliyugaArena() {
                 stepX = perpX * moveSpd * 0.52 * simDt;
                 stepY = perpY * moveSpd * 0.44 * simDt;
               }
-            } else if (e.type === 'ashen_oracle') {
-              const moveSpd = 175 * sprintBoost;
-              if (dist > 245) {
+            } else if (isRangedArchetype) {
+              const moveSpd = (e.type === 'preta_bowman' ? 192 : 175) * sprintBoost;
+              if (dist > 255) {
                 stepX = (dx / dist) * moveSpd * simDt;
                 stepY = (dy / dist) * moveSpd * 0.82 * simDt;
-              } else if (dist < 145) {
+              } else if (dist < 150) {
                 // Smart ranged kiting & evasive backstep when Rudra rushes in!
                 stepX = -((dx / dist) * 0.95 - perpX * 0.35) * moveSpd * 0.96 * simDt;
                 stepY = -((dy / dist) * 0.95 - perpY * 0.35) * moveSpd * 0.86 * simDt;
               } else {
-                // Tactical kiting & orbital strafe while lining up Aghori skulls / Preta arrows
+                // Tactical kiting & orbital strafe while lining up Aghori skulls / Preta arrows / Chakrams
                 stepX = perpX * moveSpd * 0.78 * simDt;
                 stepY = perpY * moveSpd * 0.65 * simDt;
               }
             } else if (
               e.type === 'ironmaw_gladiator' ||
               e.type === 'bloodmaw_brute' ||
-              e.type === 'semi_boss_bloodforge'
+              e.type === 'semi_boss_bloodforge' ||
+              e.type === 'ash_cyclone_warden' ||
+              e.type === 'molten_titan_warden'
             ) {
               const moveSpd =
-                (e.type === 'bloodmaw_brute' || e.type === 'semi_boss_bloodforge' ? 172 : 164) *
-                sprintBoost;
+                (e.type === 'bloodmaw_brute' ||
+                e.type === 'semi_boss_bloodforge' ||
+                e.type === 'molten_titan_warden'
+                  ? 172
+                  : e.type === 'ash_cyclone_warden'
+                  ? 188
+                  : 164) * sprintBoost;
               const flankWeight = dist < 175 ? 0.30 : 0.14;
               if (dist > 60) {
                 stepX = ((dx / dist) * 0.92 + perpX * flankWeight) * moveSpd * simDt;
@@ -7381,6 +7697,7 @@ export default function KaliyugaArena() {
               e.type === 'ironmaw_gladiator' ||
               e.type === 'bloodmaw_brute' ||
               e.type === 'semi_boss_bloodforge' ||
+              e.type === 'molten_titan_warden' ||
               e.trait === 'vajra_shield';
             // Deterministic Telegraph-Backed Iron Guard State (replaces per-frame Math.random() bug)
             const guardStep = stepEnemyIronGuardState({
@@ -7409,11 +7726,16 @@ export default function KaliyugaArena() {
             }
 
             const triggerDist =
-              e.type === 'ashen_oracle' ? 520 : e.isBoss ? 210 : e.type === 'charnel_ghoul' ? 125 : 135;
+              isRangedArchetype ? 520 : e.isBoss ? 210 : e.type === 'charnel_ghoul' ? 125 : 145;
 
             // Strict Hades Encounter Pacing: Cap simultaneous attackers to < 2 melee (max 1) + 1 ranged + Boss/Semi-Boss
-            const isRangedEnemy = e.type === 'ashen_oracle';
-            const isBossOrSemiBoss = e.isBoss || e.type === 'semi_boss_bloodforge';
+            const isRangedEnemy = isRangedArchetype;
+            const isBossOrSemiBoss =
+              e.isBoss ||
+              e.type === 'semi_boss_bloodforge' ||
+              e.type === 'ash_cyclone_warden' ||
+              e.type === 'molten_titan_warden' ||
+              e.type === 'eternal_wheel_warden';
             const withinRoleCap = isBossOrSemiBoss
               ? true
               : isRangedEnemy
@@ -7506,13 +7828,22 @@ export default function KaliyugaArena() {
                     Math.min(maxY, e.y + Math.sin(e.aimAngle) * archSpec.pounceRangePx)
                   );
                   e.comboHitsRemaining = e.trait === 'rakshasa_frenzy' ? 2 : 1;
-                } else if (e.type === 'ashen_oracle') {
-                  // Ashen Oracle: Ranged curse orb + Vedic ground yantra circle (650ms fill ring before burst)
+                } else if (
+                  e.type === 'ashen_oracle' ||
+                  e.type === 'preta_bowman' ||
+                  e.type === 'eternal_wheel_warden'
+                ) {
+                  // Ranged curse orb / Preta arrow volley / Dharma Chakram with ground yantra marker
                   e.attackKind = 'cone';
                   e.telegraphRadius = archSpec.yantraRadiusPx;
                   e.yantraTargetX = Math.max(minX, Math.min(maxX, targetX));
                   e.yantraTargetY = Math.max(minY, Math.min(maxY, targetY));
                   e.yantraRadius = archSpec.yantraRadiusPx;
+                  e.comboHitsRemaining = 1;
+                } else if (archSpec.attackKind === 'aoe') {
+                  // Ash Cyclone Vortex / Emberforged Titan Magma Geyser Slam
+                  e.attackKind = 'shockwave';
+                  e.telegraphRadius = archSpec.yantraRadiusPx;
                   e.comboHitsRemaining = 1;
                 } else {
                   // Ironmaw Gladiator / Bloodmaw Brute: Heavy overhead slam (550ms windup) vulnerable to Dash-behind backstab
@@ -7571,8 +7902,12 @@ export default function KaliyugaArena() {
               }
             }
           } else if (e.aiState === 'windup') {
-            // Relentless gap-closing lunge for melee Reavers & Bosses; evasive backstep for Ashen Oracles when rushed
-            if (e.type === 'ashen_oracle') {
+            // Relentless gap-closing lunge for melee Reavers & Bosses; evasive backstep for Ranged kiters when rushed
+            if (
+              e.type === 'ashen_oracle' ||
+              e.type === 'preta_bowman' ||
+              e.type === 'eternal_wheel_warden'
+            ) {
               if (dist < 160) {
                 e.vx = -(dx / dist) * 125;
                 e.vy = -(dy / dist) * 105;
@@ -7624,48 +7959,68 @@ export default function KaliyugaArena() {
               e.scaleX = 1.0;
               e.scaleY = 1.0;
               e.slashArcAlpha = 1.0;
-              if (!e.isBoss && e.type !== 'semi_boss_bloodforge' && e.type !== 'ashen_oracle') {
-                unifiedWorld3dRef.current?.triggerGruntBloodSlash(e.x, e.y, e.aimAngle, e.type, e.trait);
-              }
 
-              // Execute Enemy/Boss Attack with distinct multi-projectile patterns & yantra bursts!
+              // Execute Enemy/Boss Attack with distinct multi-projectile patterns & Demon Slayer Blood Demon Arts!
               let yantraBurstHitPlayer = false;
-              if (e.type === 'ashen_oracle') {
-                const spreadCount = e.trait === 'agni_aura' ? 3 : 2;
+              if (
+                e.type === 'ashen_oracle' ||
+                e.type === 'preta_bowman' ||
+                e.type === 'eternal_wheel_warden'
+              ) {
+                const spreadCount =
+                  e.type === 'preta_bowman'
+                    ? 3
+                    : e.type === 'eternal_wheel_warden'
+                    ? 3
+                    : e.trait === 'agni_aura'
+                    ? 3
+                    : 2;
+                const projSpeed =
+                  e.type === 'preta_bowman' ? 545 : e.type === 'eternal_wheel_warden' ? 405 : 435;
+                const spreadStep = e.type === 'eternal_wheel_warden' ? 0.24 : 0.16;
                 const isAghoriSkull = e.id % 2 === 0;
                 for (let s = 0; s < spreadCount; s++) {
                   const proj = sim.projectiles.find((pr) => !pr.active);
                   if (proj) {
-                    const spreadAngle = e.aimAngle + (s - (spreadCount - 1) * 0.5) * 0.16;
+                    const spreadAngle = e.aimAngle + (s - (spreadCount - 1) * 0.5) * spreadStep;
                     proj.active = true;
                     proj.x = e.x;
                     proj.y = e.y - 24;
-                    proj.vx = Math.cos(spreadAngle) * 435;
-                    proj.vy = Math.sin(spreadAngle) * 435;
-                    proj.radius = isAghoriSkull ? 13.0 : 11.0;
-                    proj.damage = 34;
-                    proj.color = isAghoriSkull ? '#ff7b24' : '#ff5224';
+                    proj.vx = Math.cos(spreadAngle) * projSpeed;
+                    proj.vy = Math.sin(spreadAngle) * projSpeed;
+                    proj.radius =
+                      e.type === 'eternal_wheel_warden' ? 14.5 : e.type === 'preta_bowman' ? 10.5 : isAghoriSkull ? 13.0 : 11.0;
+                    proj.damage = e.type === 'eternal_wheel_warden' ? 38 : 34;
+                    proj.color =
+                      e.type === 'eternal_wheel_warden'
+                        ? '#e61c4c'
+                        : e.type === 'preta_bowman'
+                        ? '#ff4818'
+                        : isAghoriSkull
+                        ? '#ff7b24'
+                        : '#ff5224';
                     proj.life = 2.8;
                     proj.deflected = false;
                   }
                 }
-                // Step 22: Detonate Ashen Oracle's Vedic Ground Yantra Circle after 650ms fill ring!
-                const yX = e.yantraTargetX ?? targetX;
-                const yY = e.yantraTargetY ?? targetY;
-                const yR = e.yantraRadius ?? 92;
-                spawnShockwave(yX, yY, yR, '#ff5924', 0.34);
-                spawnParticles(yX, yY - 12, 16, '#ffb833', 175, 4.0, 90);
-                if (Math.hypot(p.x - yX, p.y - yY) <= yR) {
-                  yantraBurstHitPlayer = true;
+                if (e.type === 'ashen_oracle') {
+                  // Detonate Ashen Oracle's Vedic Ground Yantra Circle
+                  const yX = e.yantraTargetX ?? targetX;
+                  const yY = e.yantraTargetY ?? targetY;
+                  const yR = e.yantraRadius ?? 92;
+                  spawnShockwave(yX, yY, yR, '#ff5924', 0.34);
+                  spawnParticles(yX, yY - 12, 16, '#ffb833', 175, 4.0, 90);
+                  if (Math.hypot(p.x - yX, p.y - yY) <= yR) {
+                    yantraBurstHitPlayer = true;
+                  }
                 }
                 if (dist < 140) {
                   e.vx = -(dx / dist) * 165;
                   e.vy = -(dy / dist) * 135;
                 }
               } else if (e.type === 'dundubhi' && (e.attackPattern === 1 || e.attackPattern === 4)) {
-                // Dundubhi beats his bronze war-drum chest and projects grounded isometric Sonic War-Drum Resonance Rings (no floating orange dart rings!)
+                // Dundubhi beats his bronze war-drum chest and projects grounded isometric Sonic War-Drum Resonance Rings
                 soundEngine.playDundubhiWarDrum();
-                unifiedWorld3dRef.current?.triggerBossShockwave(e.x, e.y, 195, 'slam', e.phase >= 2);
                 spawnFlipbookVfx(
                   PHASE2_VFX_SHEETS.dundubhiShockwaveAndShatter4x2.url,
                   e.x,
@@ -7701,7 +8056,6 @@ export default function KaliyugaArena() {
               } else if (e.type === 'vrikodara' && e.phase >= 2 && (e.attackPattern === 2 || e.attackPattern === 5)) {
                 // Vrikodara Phase 2/3 unleashes a 5-to-7-way Trident Fire-Lance Fan!
                 const fanCount = e.phase === 3 ? 7 : 5;
-                unifiedWorld3dRef.current?.triggerBossSickles(e.x, e.y, e.aimAngle, fanCount >= 7 ? 3 : 2, true);
                 for (let k = 0; k < fanCount; k++) {
                   const pr = sim.projectiles.find((item) => !item.active);
                   if (pr) {
@@ -7719,6 +8073,20 @@ export default function KaliyugaArena() {
                   }
                 }
               }
+
+              // Signature per-archetype Ufotable Blood Demon Art (Kekkijutsu) dispatch
+              triggerEnemyBloodDemonArtAttack(bloodDemonArtsRef.current, {
+                enemyType: e.type,
+                trait: e.trait,
+                phase: e.phase,
+                x: e.x,
+                y: e.y,
+                targetX: p.x,
+                targetY: p.y,
+                aimAngle: e.aimAngle,
+                radius: e.telegraphRadius,
+                attackPattern: e.attackPattern,
+              });
 
               // Geometric Hit Detection using pure unit-tested rules!
               let playerHit = yantraBurstHitPlayer;
@@ -7804,7 +8172,6 @@ export default function KaliyugaArena() {
                     sim.hitstopTimer = 0.06;
                     sim.cameraShakeTrauma = MAX_CLAMPED_CAMERA_TRAUMA;
                     soundEngine.playHit('heavy');
-                    unifiedWorld3dRef.current?.triggerBossShockwave(e.x, e.y, 210, 'pillar_break', e.phase >= 2);
                     spawnShockwave(e.x, e.y, 195, '#ff6a2b', 0.52);
                     spawnFlipbookVfx(
                       PHASE2_VFX_SHEETS.dundubhiShockwaveAndShatter4x2.url,
@@ -7865,13 +8232,6 @@ export default function KaliyugaArena() {
                   e.type === 'dundubhi' ? '#ff384c' : '#ff9233',
                   0.42
                 );
-                unifiedWorld3dRef.current?.triggerBossShockwave(
-                  e.x,
-                  e.y,
-                  e.telegraphRadius,
-                  'slam',
-                  e.phase >= 2
-                );
                 if (e.type === 'vrikodara' && (e.phase >= 2 || e.signatureSpawnsSlag)) {
                   const fissureCount = e.phase === 3 ? 3 : 1;
                   for (let fi = 0; fi < fissureCount; fi++) {
@@ -7898,7 +8258,11 @@ export default function KaliyugaArena() {
                     detonated: false,
                   });
                 }
-              } else if (e.type !== 'ashen_oracle') {
+              } else if (
+                e.type !== 'ashen_oracle' &&
+                e.type !== 'preta_bowman' &&
+                e.type !== 'eternal_wheel_warden'
+              ) {
                 // Directional Frontal Cone Cleave ('cone') with forward strike lunge step toward Rudra
                 if (dist > 42) {
                   const strikeStep = e.isBoss ? 180 : 130;
@@ -7928,9 +8292,6 @@ export default function KaliyugaArena() {
                     radius: e.telegraphRadius,
                     halfAngleRad: halfArc,
                   });
-                }
-                if (e.type === 'dundubhi') {
-                  unifiedWorld3dRef.current?.triggerBossSpikeBurst(e.x, e.y, 125, e.phase >= 2);
                 }
                 damagePropsNearPoint(
                   e.x + Math.cos(e.aimAngle) * 52,
@@ -8019,8 +8380,8 @@ export default function KaliyugaArena() {
                     sim.cameraShakeTrauma = Math.min(MAX_CLAMPED_CAMERA_TRAUMA, sim.cameraShakeTrauma + 0.52);
                     sim.screenFlashAlpha = 0.18;
                     sim.screenFlashColor = '#ffd86b';
-                    sim.animeImpactFlashTimer = 0.045;
-                    unifiedWorld3dRef.current?.triggerParryClash(p.x + p.facing * 20, p.y, 0xffe484);
+                    spawnTengenClashSparks(bloodDemonArtsRef.current, (p.x + e.x) * 0.5, (p.y + e.y) * 0.5 - 22, 18, 400);
+                    triggerImpactInversionFlash(bloodDemonArtsRef.current, p.x, p.y - 24, 0.045, '#fff3d1');
                     spawnShockwave(p.x, p.y, 124, '#ffd86b', 0.32);
                     spawnFlipbookVfx(
                       PHASE2_VFX_SHEETS.parryAndHitSparks4x2.url,
@@ -8051,7 +8412,6 @@ export default function KaliyugaArena() {
                     p.stylePoints = Math.min(1200, p.stylePoints + 55);
                     p.styleDecayTimer = 5.5;
                     sim.hitstopTimer = parryRes.hitstopSec;
-                    unifiedWorld3dRef.current?.triggerParryClash(p.x + p.facing * 20, p.y, 0xffe484);
                     spawnShockwave(p.x, p.y, 84, '#d8c398', 0.24);
                     spawnFlipbookVfx(
                       PHASE2_VFX_SHEETS.parryAndHitSparks4x2.url,
@@ -8185,7 +8545,11 @@ export default function KaliyugaArena() {
             if (e.aiTimer <= 0) {
               // Boss & Elite Relentless Multi-Hit Combo Chain: only chain in place if Rudra is still in reach; otherwise immediately sprint to close the gap!
               const inComboReach =
-                e.type === 'ashen_oracle' ? dist <= 520 : dist <= (e.isBoss ? 185 : 135);
+                e.type === 'ashen_oracle' ||
+                e.type === 'preta_bowman' ||
+                e.type === 'eternal_wheel_warden'
+                  ? dist <= 520
+                  : dist <= (e.isBoss ? 185 : 135);
               if (e.comboHitsRemaining > 0 && e.hp > 0 && inComboReach) {
                 e.comboHitsRemaining -= 1;
                 e.aiState = 'windup';
@@ -8331,7 +8695,8 @@ export default function KaliyugaArena() {
           sim.waveQueue = sim.waveQueue.filter((w) => w.wave !== sim.currentWave);
           for (const sp of nextWaveSpecs) {
             if (sp.type === 'semi_boss_bloodforge') {
-              unifiedWorld3dRef.current?.prewarmChamber([], 'semi_boss');
+              if (!boss3dRef.current) boss3dRef.current = new Boss3DRenderer(224);
+              boss3dRef.current.ensureBossLoaded('semi_boss');
             }
             sim.summoningRifts.push({
               x: sp.x * worldW,
@@ -8527,6 +8892,32 @@ export default function KaliyugaArena() {
         sim.lightningArcs[i].life -= dt;
         if (sim.lightningArcs[i].life <= 0) {
           sim.lightningArcs.splice(i, 1);
+        }
+      }
+
+      // Update Demon Slayer Blood Demon Arts Pool & Detonate Exploding Blood Seeds
+      const bloodDetonations = stepBloodDemonArtPool(bloodDemonArtsRef.current, dt);
+      for (let bi = 0; bi < bloodDetonations.length; bi++) {
+        const det = bloodDetonations[bi];
+        spawnShockwave(det.x, det.y, det.radius * 1.15, '#ff1f6d', 0.28);
+        spawnParticles(det.x, det.y - 16, 14, '#ff1f6d', 200, 4.2, 120);
+        if (det.ownerSide === 'player') {
+          sim.enemies.forEach((foe) => {
+            if (foe.aiState === 'ko') return;
+            if (Math.hypot(foe.x - det.x, foe.y - det.y) <= det.radius + (foe.isBoss ? 36 : 20)) {
+              foe.hp = Math.max(0, foe.hp - det.damage);
+              foe.hitFlashTimer = 0.08;
+              sim.runDamageDealt += det.damage;
+              spawnFloatingText(foe.x, foe.y - 54, `KEKKIJUTSU -${det.damage}`, '#ff4d8d', 0.96);
+            }
+          });
+        } else if (sim.state === 'playing' && sim.player.invulnTimer <= 0) {
+          if (Math.hypot(sim.player.x - det.x, sim.player.y - det.y) <= det.radius + 12) {
+            const seedDmg = Math.min(28, det.damage);
+            sim.player.hp = Math.max(0, sim.player.hp - seedDmg);
+            sim.player.hitFlashTimer = 0.06;
+            spawnFloatingText(sim.player.x, sim.player.y - 62, `-${seedDmg} BLOOD SEED`, '#ff2448', 1.05);
+          }
         }
       }
 
@@ -8740,6 +9131,8 @@ export default function KaliyugaArena() {
         ? GAME_ASSETS.arenaVideos.ashHubRiver
         : activeBoss && activeBoss.phase >= 2 && chamberSpec.phase2VideoUrl
         ? chamberSpec.phase2VideoUrl
+        : isChamberCleared && chamberSpec.unlockedVideoUrl
+        ? chamberSpec.unlockedVideoUrl
         : chamberSpec.videoUrl;
       renderIsometricChamberPlatform(
         ctx,
@@ -9083,31 +9476,70 @@ export default function KaliyugaArena() {
         }
       });
 
-      // 4. Unified Live 3D World Stage Floor Pass: Ground contact shadows & non-pillar 2D shrine props
-      const pillarShakeOffsets = new Map<number, number>();
+      const rudraIdleAsset = getProcessedSpriteSync(GAME_ASSETS.rudra.idle);
+
+      // 4. Stage B (Step 11): Depth-Sort all 2.5D Actors & Pillars strictly by Foot Y (y=0 ground contact) with deterministic tie-breaking
+      type RenderActor =
+        | { kind: 'player'; footY: number; order: number }
+        | { kind: 'savitri_npc'; footY: number; order: number }
+        | { kind: 'enemy'; footY: number; order: number; enemy: EnemyEntity }
+        | { kind: 'clone'; footY: number; order: number; clone: CloneEntity }
+        | { kind: 'decoy'; footY: number; order: number }
+        | { kind: 'prop'; footY: number; order: number; prop: DestructiblePropEntity };
+
+      let sortOrderCounter = 0;
+      const actors: RenderActor[] = [
+        { kind: 'player', footY: sim.player.y, order: ++sortOrderCounter },
+      ];
+      if (isRenderHubMode) {
+        actors.push({
+          kind: 'savitri_npc',
+          footY: HUB_SAVITRI_POS.y,
+          order: ++sortOrderCounter,
+        });
+      }
+      sim.enemies.forEach((e) =>
+        actors.push({ kind: 'enemy', footY: e.y, order: ++sortOrderCounter, enemy: e })
+      );
+      sim.clones.forEach((c) =>
+        actors.push({ kind: 'clone', footY: c.y, order: ++sortOrderCounter, clone: c })
+      );
       sim.props.forEach((pr) => {
-        if (pr.destroyed && pr.type !== 'kurukshetra_pillar') return;
-        const pillarStageIdx = Math.max(0, Math.min(2, pr.pillarStage ?? (pr.destroyed ? 2 : 0)));
-        const shakeX = pr.shakeTimer > 0 ? (Math.random() - 0.5) * 5 : 0;
-        if (pr.type === 'kurukshetra_pillar') {
-          pillarShakeOffsets.set(pr.id, shakeX);
-          drawGrounded3DContactShadow(ctx, {
-            worldX: pr.x + shakeX,
-            worldY: pr.y,
-            baseRadius: pr.destroyed ? 24 : 28,
-            elevationY: 0,
-            lightSourceX: primaryLightX,
-            accentColor: activeBoss && activeBoss.phase >= 2 ? '#ff5a1f' : '#d4a548',
-          });
-        } else {
+        // Render intact props AND shattered Kurukshetra Yupa Pillar rubble!
+        if (!pr.destroyed || pr.type === 'kurukshetra_pillar') {
+          actors.push({ kind: 'prop', footY: pr.y, order: ++sortOrderCounter, prop: pr });
+        }
+      });
+      if (sim.decoy.active) {
+        actors.push({ kind: 'decoy', footY: sim.decoy.y, order: ++sortOrderCounter });
+      }
+      actors.sort((a, b) => a.footY - b.footY || a.order - b.order);
+
+      actors.forEach((act) => {
+        if (act.kind === 'prop') {
+          const pr = act.prop;
+          const pillarSheetAsset =
+            pr.type === 'kurukshetra_pillar'
+              ? getProcessedSpriteSync(GAME_ASSETS.kaliyugaProps.kurukshetraPillarSheet3x1)
+              : undefined;
+          const use3StagePillar =
+            pr.type === 'kurukshetra_pillar' &&
+            pillarSheetAsset &&
+            pillarSheetAsset.frames.length >= 3;
           const propUrl =
-            pr.type === 'homa_cauldron'
+            pr.type === 'kurukshetra_pillar'
+              ? pr.destroyed
+                ? GAME_ASSETS.kaliyugaProps.pillarRubble
+                : GAME_ASSETS.kaliyugaProps.kurukshetraPillar
+              : pr.type === 'homa_cauldron'
               ? GAME_ASSETS.kaliyugaProps.brahmashiraShrine
               : pr.type === 'weapon_rack'
               ? GAME_ASSETS.kaliyugaProps.brokenChariot
               : GAME_ASSETS.kaliyugaProps.vaitaraniBoat;
-          const singlePropAsset = getProcessedSpriteSync(propUrl);
-          if (!singlePropAsset) {
+          const singlePropAsset = use3StagePillar
+            ? pillarSheetAsset
+            : getProcessedSpriteSync(propUrl);
+          if (!singlePropAsset && !use3StagePillar) {
             loadAndProcessSprite(propUrl, {
               removeBlackBg: true,
               stripCornerWatermark: true,
@@ -9116,7 +9548,24 @@ export default function KaliyugaArena() {
               gridLayout: '1xN',
             });
           }
-          const targetH = pr.type === 'weapon_rack' ? 62 : 58;
+
+          const pillarStageIdx = Math.max(0, Math.min(2, pr.pillarStage ?? (pr.destroyed ? 2 : 0)));
+          const targetH =
+            pr.type === 'kurukshetra_pillar'
+              ? pillarStageIdx >= 2 || pr.destroyed
+                ? 72
+                : pillarStageIdx === 1
+                ? 108
+                : 118
+              : pr.type === 'deepa_lantern'
+              ? 58
+              : pr.type === 'weapon_rack'
+              ? 62
+              : 58;
+          const targetW =
+            pr.type === 'kurukshetra_pillar' ? Math.round(targetH * 1.15) : targetH;
+          const shakeX = pr.shakeTimer > 0 ? (Math.random() - 0.5) * 5 : 0;
+
           if (!pr.destroyed && (pr.type === 'homa_cauldron' || pr.type === 'deepa_lantern')) {
             ctx.save();
             ctx.globalCompositeOperation = 'screen';
@@ -9131,14 +9580,15 @@ export default function KaliyugaArena() {
             ctx.fill();
             ctx.restore();
           }
+
           drawSpriteFrame(
             ctx,
             singlePropAsset,
-            0,
-            1,
+            use3StagePillar ? pillarStageIdx : 0,
+            use3StagePillar ? pillarSheetAsset.frames.length : 1,
             pr.x + shakeX,
             pr.y,
-            targetH,
+            targetW,
             targetH,
             1,
             1,
@@ -9150,349 +9600,916 @@ export default function KaliyugaArena() {
             0,
             primaryLightX
           );
-        }
-      });
 
-      if (isRenderHubMode) {
-        drawGrounded3DContactShadow(ctx, {
-          worldX: HUB_SAVITRI_POS.x,
-          worldY: HUB_SAVITRI_POS.y,
-          baseRadius: 16,
-          elevationY: 0,
-          lightSourceX: primaryLightX,
-          accentColor: '#f2c45a',
-        });
-      }
-
-      sim.enemies.forEach((e) => {
-        const growthMult = e.growthScale || 1.0;
-        const baseShadowRadius = e.isBoss
-          ? e.type === 'vrikodara'
-            ? 36
-            : e.type === 'dundubhi'
-              ? 33
-              : 27
-          : e.type === 'bloodmaw_brute'
-            ? 18
-            : e.type === 'ironmaw_gladiator'
-              ? 16
-              : 14;
-        drawGrounded3DContactShadow(ctx, {
-          worldX: e.x,
-          worldY: e.y,
-          baseRadius: Math.round(baseShadowRadius * growthMult),
-          elevationY: 0,
-          lightSourceX: primaryLightX,
-          accentColor: e.isBoss
-            ? '#ff3b52'
-            : e.aiState === 'windup'
-              ? '#ef4444'
-              : e.trait === 'vajra_shield'
-                ? '#38bdf8'
-                : '#b91c1c',
-        });
-      });
-
-      drawGrounded3DContactShadow(ctx, {
-        worldX: sim.player.x,
-        worldY: sim.player.y,
-        baseRadius: 18,
-        elevationY: 0,
-        lightSourceX: primaryLightX,
-        accentColor: '#ffb347',
-        isPlayer: true,
-      });
-
-      // 5. Single Live Full-Resolution 3D Orthographic Scene (Rudra, Clones, Decoy, Savitri, Enemies, Bosses, 3D Chola Pillars & Demon Slayer VFX)
-      if (!unifiedWorld3dRef.current) {
-        unifiedWorld3dRef.current = new UnifiedWorld3DStage();
-      }
-      if (unifiedWorld3dRef.current) {
-        const dsP = sim.player;
-        const dsAttackDur = Math.max(0.12, dsP.actionDuration || 0.24);
-        const dsAttackProg = Math.max(0.02, Math.min(0.98, 1 - dsP.actionTimer / dsAttackDur));
-        const dsSwingKind =
-          dsP.finisherVariant === 'spin_360_cleave'
-            ? 'cast'
-            : dsP.action === 'heavy_unleash' || dsP.action === 'execute' || dsP.comboStep === 4
-              ? 'heavy'
-              : dsP.comboStep === 3
-                ? 'attack3'
-                : dsP.comboStep === 2
-                  ? 'attack2'
-                  : 'attack1';
-        const rudraStateProgress =
-          dsP.hitFlashTimer > 0
-            ? Math.max(0, Math.min(0.99, 1 - dsP.hitFlashTimer / 0.16))
-            : dsP.action === 'dodge' || dsP.action === 'parry' || dsP.action === 'astra'
-              ? Math.max(0, Math.min(0.99, 1 - dsP.actionTimer / Math.max(0.05, dsP.actionDuration)))
-              : undefined;
-
-        unifiedWorld3dRef.current.updateAndComposite(ctx, rawDt, {
-          camX: sim.camX,
-          camY: sim.camY,
-          viewportW: cw,
-          viewportH: ch,
-          cameraZoom: zoom,
-          rudra: {
-            dt: simDt > 0 ? simDt : dt,
-            x: dsP.x,
-            y: dsP.y,
-            vx: dsP.vx,
-            vy: dsP.vy,
-            facingX: dsP.lastMoveDirX || dsP.facing,
-            facingY: dsP.lastMoveDirY,
-            slashAngle: dsP.slashAngle,
-            isAttacking: dsP.action === 'light_attack',
-            isHeavyAttack: dsP.action === 'heavy_unleash' || dsP.action === 'execute',
-            comboStep: dsP.comboStep,
-            attackProgress: dsP.weaponSwingProgress,
-            isDodging: dsP.action === 'dodge',
-            isParrying: dsP.action === 'parry',
-            isCasting: dsP.action === 'astra',
-            isHealing: dsP.action === 'gourd',
-            isHurt: dsP.hitFlashTimer > 0,
-            isDefeated: dsP.hp <= 0,
-            stance: dsP.stance,
-            focusOrbs: dsP.focusOrbs,
+          if (!pr.destroyed && pr.hp < pr.maxHp) {
+            const bw = 26;
+            const bx = pr.x - bw * 0.5;
+            const by = pr.y - targetH - 5;
+            ctx.fillStyle = 'rgba(0,0,0,0.8)';
+            ctx.fillRect(bx - 1, by - 1, bw + 2, 3.5);
+            ctx.fillStyle = '#f2c45a';
+            ctx.fillRect(bx, by, bw * Math.max(0, pr.hp / pr.maxHp), 2.0);
+          }
+        } else if (act.kind === 'decoy') {
+          const rudra3d = rudra3dRef.current;
+          if (rudra3d && rudra3d.isReady && rudra3d.canvas) {
+            const drawSize = 104;
+            ctx.save();
+            ctx.globalAlpha = 0.72;
+            ctx.translate(sim.decoy.x, sim.decoy.y);
+            ctx.drawImage(rudra3d.canvas, -drawSize * 0.5, -drawSize * 0.75, drawSize, drawSize);
+            ctx.restore();
+          } else {
+            const decoyAsset = getProcessedSpriteSync(GAME_ASSETS.rudra.idle);
+            ctx.save();
+            ctx.globalAlpha = 0.68;
+            drawSpriteFrame(
+              ctx,
+              decoyAsset,
+              0,
+              1,
+              sim.decoy.x,
+              sim.decoy.y,
+              68,
+              68,
+              sim.player.facing,
+              1,
+              1,
+              true,
+              0,
+              15,
+              'jade',
+              0,
+              primaryLightX
+            );
+            ctx.restore();
+          }
+        } else if (act.kind === 'clone') {
+          const c = act.clone;
+          const rudra3d = rudra3dRef.current;
+          if (rudra3d && rudra3d.isReady && rudra3d.canvas) {
+            const drawSize = 104;
+            ctx.save();
+            ctx.globalAlpha = 0.86;
+            ctx.translate(c.x, c.y);
+            ctx.scale(c.facing, 1);
+            ctx.drawImage(rudra3d.canvas, -drawSize * 0.5, -drawSize * 0.75, drawSize, drawSize);
+            ctx.restore();
+          } else {
+            const clonePoseUrl =
+              Math.floor(c.animTime) % 2 === 0
+                ? GAME_ASSETS.rudra.slash1
+                : GAME_ASSETS.rudra.run;
+            const cloneAsset = getProcessedSpriteSync(clonePoseUrl);
+            ctx.save();
+            ctx.globalAlpha = 0.90;
+            drawSpriteFrame(
+              ctx,
+              cloneAsset,
+              0,
+              1,
+              c.x,
+              c.y,
+              68,
+              68,
+              c.facing,
+              1,
+              1,
+              false,
+              0,
+              15,
+              'gold',
+              0,
+              primaryLightX
+            );
+            ctx.restore();
+          }
+        } else if (act.kind === 'savitri_npc') {
+          const savitriFacing: 1 | -1 = sim.player.x >= HUB_SAVITRI_POS.x ? 1 : -1;
+          const savitriAim = savitriFacing === 1 ? 0 : Math.PI;
+          drawGrounded3DContactShadow(ctx, {
+            worldX: HUB_SAVITRI_POS.x,
+            worldY: HUB_SAVITRI_POS.y,
+            baseRadius: 14,
             elevationY: 0,
-            stateProgress: rudraStateProgress,
-            finisherVariant: dsP.finisherVariant,
-            swingKind: dsSwingKind,
-            castProgress:
-              dsP.action === 'astra'
-                ? Math.max(0.05, Math.min(0.98, 1 - dsP.actionTimer / Math.max(0.1, dsP.actionDuration)))
-                : 0,
-            castElement: sim.lastCastElement,
-            reachBonus: stanceToAstraElement(dsP.stance) === 'vayu' ? 0.45 : 0,
-          },
-          enemies: sim.enemies.map((e) => {
-            const stateProg =
+            lightSourceX: primaryLightX,
+            accentColor: '#f2c45a',
+          });
+          if (!boss3dRef.current) {
+            boss3dRef.current = new Boss3DRenderer(256);
+          }
+          const savitri3d = boss3dRef.current;
+          const renderedSavitri3D = savitri3d.updateAndRender({
+            kind: 'savitri_hub',
+            dt: simDt > 0 ? simDt : dt,
+            vx: 0,
+            vy: 0,
+            facing: savitriFacing,
+            aimAngle: savitriAim,
+            aiState: 'idle',
+            attackKind: 'cone',
+            windupProgress: 0,
+            phase: 1,
+            armorCracked: false,
+            isPostureBroken: false,
+            isHitFlash: false,
+            isParrying: false,
+          });
+          if (renderedSavitri3D) {
+            const drawSize = 112;
+            ctx.save();
+            ctx.translate(HUB_SAVITRI_POS.x, HUB_SAVITRI_POS.y);
+            ctx.drawImage(
+              savitri3d.canvas,
+              -drawSize * 0.5,
+              -drawSize * 0.76,
+              drawSize,
+              drawSize
+            );
+            ctx.restore();
+          } else {
+            const savitriSheet =
+              getProcessedSpriteSync(GAME_ASSETS.companionSheets.savitriSheet4x1) || rudraIdleAsset;
+            const frameIdx = Math.floor(now * 0.004) % 4;
+            drawSpriteFrame(
+              ctx,
+              savitriSheet,
+              frameIdx,
+              4,
+              HUB_SAVITRI_POS.x,
+              HUB_SAVITRI_POS.y,
+              86,
+              86,
+              savitriFacing,
+              1,
+              1,
+              false,
+              0,
+              18,
+              'gold',
+              0,
+              primaryLightX
+            );
+          }
+          ctx.save();
+          ctx.font = "800 9px 'Cinzel', Georgia, serif";
+          ctx.textAlign = 'center';
+          ctx.strokeStyle = 'rgba(0,0,0,0.9)';
+          ctx.lineWidth = 2.6;
+          ctx.strokeText('SAVITRI · LANTERN KEEPER', HUB_SAVITRI_POS.x, HUB_SAVITRI_POS.y - 78);
+          ctx.fillStyle = '#f5d061';
+          ctx.fillText('SAVITRI · LANTERN KEEPER', HUB_SAVITRI_POS.x, HUB_SAVITRI_POS.y - 78);
+          ctx.restore();
+        } else if (act.kind === 'enemy') {
+          const e = act.enemy;
+          const isFlash = e.hitFlashTimer > 0;
+          const bob = 0;
+          const enemySkewX = 0;
+
+          if (
+            e.type === 'dundubhi' ||
+            e.type === 'vrikodara' ||
+            e.type === 'semi_boss_bloodforge'
+          ) {
+            const growthMult = e.growthScale || 1.0;
+
+            const bossAnimState: 'idle' | 'walk' | 'windup' | 'attack' | 'special' | 'hurt' | 'death' =
+              e.aiState === 'ko'
+                ? 'death'
+                : e.postureBrokenTimer > 0 || (e.tuskLodgedTimer && e.tuskLodgedTimer > 0)
+                ? 'hurt'
+                : e.aiState === 'attack'
+                ? e.attackKind === 'shockwave' || e.phase >= 2
+                  ? 'special'
+                  : 'attack'
+                : e.aiState === 'windup'
+                ? 'windup'
+                : e.aiState === 'chase'
+                ? 'walk'
+                : 'idle';
+
+            const bossStateProgress =
               e.aiState === 'ko'
                 ? 1 - Math.max(0, e.koTimer / 0.92)
                 : e.aiState === 'windup'
-                  ? 1 - Math.max(0, e.aiTimer / Math.max(0.05, e.windupDuration))
-                  : e.aiState === 'attack'
-                    ? 1 - Math.max(0, e.aiTimer / 0.34)
-                    : 0;
-            return {
-              id: e.id,
-              x: e.x,
-              y: e.y,
-              vx: e.vx,
-              vy: e.vy,
-              facing: e.facing,
-              aimAngle: e.aimAngle,
-              kind: e.type,
-              wardenRigKey: e.wardenRigKey,
-              trait: e.trait,
-              aiState: e.aiState,
-              attackKind: e.attackKind,
-              attackPattern: e.attackPattern,
-              windupProgress:
-                e.aiState === 'windup'
-                  ? Math.min(1, Math.max(0, 1 - e.aiTimer / Math.max(0.01, e.windupDuration)))
-                  : 0,
-              stateProgress: stateProg,
-              animTime: e.animTime,
-              phase: e.phase,
-              armorCracked: Boolean(e.armorCracked),
-              isPostureBroken: e.postureBrokenTimer > 0 || Boolean(e.tuskLodgedTimer && e.tuskLodgedTimer > 0),
-              isHitFlash: e.hitFlashTimer > 0,
-              isParrying: e.parryStanceTimer > 0,
-              growthScale: e.growthScale,
-              scaleX: e.scaleX,
-              scaleY: e.scaleY,
-            };
-          }),
-          pillars: sim.props
-            .filter((pr) => pr.type === 'kurukshetra_pillar')
-            .map((pr) => ({
-              x: pr.x,
-              y: pr.y,
-              stage: Math.max(0, Math.min(2, pr.pillarStage ?? (pr.destroyed ? 2 : 0))) as 0 | 1 | 2,
-              destroyed: Boolean(pr.destroyed),
-              hitFlash: pr.hitFlashTimer > 0,
-              bossEnraged: Boolean(activeBoss && activeBoss.phase >= 2),
-              shakeOffsetX: pillarShakeOffsets.get(pr.id) ?? 0,
-            })),
-          clones: sim.clones.map((c) => ({
-            id: c.id,
-            x: c.x,
-            y: c.y,
-            facing: c.facing,
-            animTime: c.animTime,
-          })),
-          decoy: sim.decoy.active
-            ? { active: true, x: sim.decoy.x, y: sim.decoy.y, facing: sim.player.facing }
-            : undefined,
-          savitriHub: isRenderHubMode
-            ? {
-                active: true,
-                x: HUB_SAVITRI_POS.x,
-                y: HUB_SAVITRI_POS.y,
-                facing: sim.player.x >= HUB_SAVITRI_POS.x ? 1 : -1,
+                ? 1 - Math.max(0, e.aiTimer / Math.max(0.05, e.windupDuration))
+                : e.aiState === 'attack'
+                ? 1 - Math.max(0, e.aiTimer / 0.38)
+                : 0;
+
+            // Fluent boss combat squash/stretch & lunge interpolation
+            const bossWindupCoil =
+              e.aiState === 'windup' ? Math.sin(bossStateProgress * Math.PI) * 0.09 : 0;
+            const bossAttackStretch =
+              e.aiState === 'attack' ? Math.sin((1 - bossStateProgress) * Math.PI) * 0.12 : 0;
+            const bossScaleX = (1 - bossWindupCoil * 0.45 + bossAttackStretch) * (e.scaleX || 1);
+            const bossScaleY = (1 + bossWindupCoil - bossAttackStretch * 0.45) * (e.scaleY || 1);
+
+            // Resolve 2D Hand-Painted Boss Multi-Row Sheet first so bosses match Rudra's 2D ink-and-gold aesthetic
+            const bossSheetUrl =
+              e.type === 'dundubhi'
+                ? e.phase >= 2
+                  ? GAME_ASSETS.bossSheets.dundubhiMinotaurSheetP2
+                  : GAME_ASSETS.bossSheets.dundubhiMinotaurSheetP1
+                : e.type === 'semi_boss_bloodforge'
+                ? GAME_ASSETS.enemySheets.nagaWarriorSheet
+                : e.phase >= 2
+                ? GAME_ASSETS.bossSheets.vrikodaraDemonicKingSheet
+                : GAME_ASSETS.enemySheets.demonicOgreSheet ||
+                  GAME_ASSETS.bossSheets.vrikodaraDemonicKingSheet;
+
+            let boss2DAsset = getProcessedSpriteSync(bossSheetUrl);
+            if (!boss2DAsset) {
+              loadAndProcessSprite(bossSheetUrl, {
+                mode: 'character',
+                gridLayout: 'multirow',
+              });
+              const fallback2x2Url =
+                e.type === 'dundubhi'
+                  ? e.phase >= 2
+                    ? GAME_ASSETS.bossSheets.dundubhiPhase2Sheet2x2
+                    : GAME_ASSETS.bossSheets.dundubhiPhase1SheetA2x2
+                  : e.phase >= 2
+                  ? GAME_ASSETS.bossSheets.vrikodaraPhase2Sheet2x2
+                  : GAME_ASSETS.bossSheets.vrikodaraPhase1Sheet2x2;
+              boss2DAsset = getProcessedSpriteSync(fallback2x2Url);
+              if (!boss2DAsset) {
+                loadAndProcessSprite(fallback2x2Url, {
+                  mode: 'character',
+                  gridLayout: '2x2',
+                });
               }
-            : undefined,
-        });
-      }
+            }
 
-      // 6. World-Space Overlay Indicators ON TOP of 3D Stage (HP/Posture bars, Parry Glints, Lodged Casts, Savitri Label)
-      sim.props.forEach((pr) => {
-        if (!pr.destroyed && pr.hp < pr.maxHp) {
-          const pillarStageIdx = Math.max(0, Math.min(2, pr.pillarStage ?? 0));
-          const targetH =
-            pr.type === 'kurukshetra_pillar'
-              ? pillarStageIdx === 1
-                ? 108
-                : 118
-              : 58;
-          const bw = 26;
-          const bx = pr.x - bw * 0.5;
-          const by = pr.y - targetH - 5;
-          ctx.fillStyle = 'rgba(0,0,0,0.8)';
-          ctx.fillRect(bx - 1, by - 1, bw + 2, 3.5);
-          ctx.fillStyle = '#f2c45a';
-          ctx.fillRect(bx, by, bw * Math.max(0, pr.hp / pr.maxHp), 2.0);
-        }
-      });
+            const use3DBakedBoss = sim.enemyRenderMode === 'all_3d' || !boss2DAsset;
+            let drew3DBakedBoss = false;
 
-      if (isRenderHubMode) {
-        ctx.save();
-        ctx.font = "800 9px 'Cinzel', Georgia, serif";
-        ctx.textAlign = 'center';
-        ctx.strokeStyle = 'rgba(0,0,0,0.9)';
-        ctx.lineWidth = 2.6;
-        ctx.strokeText('SAVITRI · LANTERN KEEPER', HUB_SAVITRI_POS.x, HUB_SAVITRI_POS.y - 84);
-        ctx.fillStyle = '#f5d061';
-        ctx.fillText('SAVITRI · LANTERN KEEPER', HUB_SAVITRI_POS.x, HUB_SAVITRI_POS.y - 84);
-        ctx.restore();
-      }
+            if (use3DBakedBoss && sim.state !== 'title') {
+              if (!boss3dRef.current) {
+                boss3dRef.current = new Boss3DRenderer(256);
+              }
+              const boss3d = boss3dRef.current;
+              const bossType =
+                e.type === 'semi_boss_bloodforge'
+                  ? 'semi_boss'
+                  : e.type === 'dundubhi'
+                  ? 'dundubhi'
+                  : 'vrikodara';
+              const renderedBoss3D =
+                boss3d &&
+                boss3d.updateAndRender({
+                  kind: bossType,
+                  dt: simDt > 0 ? simDt : dt,
+                  vx: e.vx,
+                  vy: e.vy,
+                  facing: e.facing,
+                  aimAngle: e.aimAngle,
+                  aiState: e.aiState,
+                  attackKind: e.attackKind,
+                  attackPattern: e.attackPattern,
+                  windupProgress:
+                    e.aiState === 'windup'
+                      ? Math.min(1, Math.max(0, 1 - e.aiTimer / Math.max(0.01, e.windupDuration)))
+                      : 0,
+                  phase: e.phase,
+                  armorCracked: Boolean(e.armorCracked),
+                  isPostureBroken: e.postureBrokenTimer > 0,
+                  isHitFlash: isFlash,
+                  isParrying: e.parryStanceTimer > 0,
+                });
 
-      sim.enemies.forEach((e) => {
-        if ((e.ironGuardWindupTimer || 0) > 0 && e.aiState !== 'ko') {
-          const wProg = Math.max(0, Math.min(1, 1 - (e.ironGuardWindupTimer || 0) / 0.22));
-          drawAdditiveFlipbookCell(ctx, {
-            sheetSpec: PHASE2_VFX_SHEETS.parryAndHitSparks4x2,
-            col: wProg > 0.55 ? 2 : 0,
-            row: PARRY_SPARKS_FLIPBOOK_ROWS.VEDIC_PARRY_FLASH,
-            x: e.x + e.facing * (e.isBoss ? 24 : 14),
-            y: e.y - (e.isBoss ? 86 : 44),
-            width: e.isBoss ? 58 : 44,
-            height: e.isBoss ? 58 : 44,
-            rotationRad: e.facing >= 0 ? 0 : Math.PI,
-            alpha: 0.56,
-          });
-        } else if (e.parryStanceTimer > 0 && e.aiState !== 'ko') {
-          drawAdditiveFlipbookCell(ctx, {
-            sheetSpec: PHASE2_VFX_SHEETS.parryAndHitSparks4x2,
-            col: Math.floor(now * 0.008) % 2 === 0 ? 0 : 2,
-            row: PARRY_SPARKS_FLIPBOOK_ROWS.VEDIC_PARRY_FLASH,
-            x: e.x + e.facing * (e.isBoss ? 24 : 14),
-            y: e.y - (e.isBoss ? 86 : 44),
-            width: e.isBoss ? 56 : 42,
-            height: e.isBoss ? 56 : 42,
-            rotationRad: e.facing >= 0 ? 0 : Math.PI,
-            alpha: 0.62,
-          });
-        }
+              if (renderedBoss3D && boss3d) {
+                const scaleAuthority =
+                  e.type === 'vrikodara'
+                    ? BOSS_SCALE_AUTHORITY.vrikodara
+                    : e.type === 'dundubhi'
+                    ? BOSS_SCALE_AUTHORITY.dundubhi
+                    : BOSS_SCALE_AUTHORITY.semi_boss;
+                const clampedGrowth = Math.min(1.06, growthMult);
+                drawGrounded3DContactShadow(ctx, {
+                  worldX: e.x,
+                  worldY: e.y,
+                  baseRadius: Math.round(11 * scaleAuthority * clampedGrowth),
+                  elevationY: bob,
+                  lightSourceX: primaryLightX,
+                  accentColor: '#ff5a1f',
+                });
 
-        if ((e.lodgedCasts || 0) > 0 && e.aiState !== 'ko') {
-          const count = e.lodgedCasts || 0;
-          for (let cIdx = 0; cIdx < count; cIdx++) {
-            const orbitAng = now * 0.0055 + (cIdx * Math.PI * 2) / count;
-            const ox = e.x + Math.cos(orbitAng) * (e.isBoss ? 15 : 10);
-            const oy = e.y - (e.isBoss ? 22 : 15) + Math.sin(orbitAng) * 6;
+                // Demon-Slayer Boss Scale Authority (200px Semi-Boss, 245px Dundubhi, 268px Vrikodara)
+                const drawSize = Math.round(114 * scaleAuthority * clampedGrowth);
+                const anchorX = -drawSize * 0.5;
+                const anchorY = -drawSize * 0.76;
+
+                ctx.save();
+                ctx.translate(e.x, e.y);
+                ctx.scale(bossScaleX, bossScaleY);
+                ctx.drawImage(boss3d.canvas, anchorX, anchorY, drawSize, drawSize);
+                ctx.restore();
+                drew3DBakedBoss = true;
+              }
+            }
+
+            if (!drew3DBakedBoss && boss2DAsset) {
+              const is2x2Sheet = !boss2DAsset.rows && boss2DAsset.frames.length === 4;
+              const explicitBossFrame = is2x2Sheet
+                ? undefined
+                : getMultiRowFrameBounds(
+                    boss2DAsset,
+                    bossAnimState,
+                    e.animTime,
+                    bossStateProgress
+                  );
+              const frameIdx = is2x2Sheet
+                ? bossAnimState === 'attack' || bossAnimState === 'special'
+                  ? 2
+                  : bossAnimState === 'windup'
+                  ? 1
+                  : Math.floor(e.animTime * 4) % 4
+                : 0;
+              const scaleAuth2d =
+                e.type === 'vrikodara'
+                  ? BOSS_SCALE_AUTHORITY.vrikodara
+                  : e.type === 'dundubhi'
+                  ? BOSS_SCALE_AUTHORITY.dundubhi
+                  : BOSS_SCALE_AUTHORITY.semi_boss;
+              const clampedGrowth2d = Math.min(1.06, growthMult);
+              const bossTargetH = Math.round(86 * scaleAuth2d * clampedGrowth2d);
+              drawSpriteFrame(
+                ctx,
+                boss2DAsset,
+                frameIdx,
+                4,
+                e.x,
+                e.y,
+                bossTargetH,
+                bossTargetH,
+                e.facing,
+                bossScaleX,
+                bossScaleY,
+                isFlash,
+                bob,
+                (e.type === 'vrikodara' ? 24 : 22) * clampedGrowth2d,
+                'gold',
+                enemySkewX,
+                primaryLightX,
+                explicitBossFrame
+              );
+            } else if (!drew3DBakedBoss && !boss2DAsset) {
+              // Millisecond-1 streaming safety net: grounded 2.5D Boss silhouette so no Boss is ever invisible
+              const scaleAuth =
+                e.type === 'vrikodara'
+                  ? BOSS_SCALE_AUTHORITY.vrikodara
+                  : e.type === 'dundubhi'
+                  ? BOSS_SCALE_AUTHORITY.dundubhi
+                  : BOSS_SCALE_AUTHORITY.semi_boss;
+              const clampedGrowth = Math.min(1.06, growthMult);
+              drawGrounded3DContactShadow(ctx, {
+                worldX: e.x,
+                worldY: e.y,
+                baseRadius: Math.round(11 * scaleAuth * clampedGrowth),
+                elevationY: bob,
+                lightSourceX: primaryLightX,
+                accentColor: '#ff5a1f',
+              });
+              // Sculpted horned rakshasa warlord silhouette while 3D boss rig finishes streaming
+              ctx.save();
+              ctx.translate(e.x, e.y);
+              ctx.scale(e.facing * bossScaleX, bossScaleY);
+              const hPx = Math.round(86 * scaleAuth * clampedGrowth);
+              const wPx = hPx * 0.56;
+              const bodyGrad = ctx.createLinearGradient(0, -hPx, 0, 0);
+              bodyGrad.addColorStop(0, isFlash ? '#ffb847' : '#6e1920');
+              bodyGrad.addColorStop(0.55, isFlash ? '#9c4c1f' : '#2a0f14');
+              bodyGrad.addColorStop(1, '#120806');
+              ctx.fillStyle = bodyGrad;
+              ctx.strokeStyle = '#120806';
+              ctx.lineWidth = 3.2;
+              ctx.beginPath();
+              ctx.moveTo(-wPx * 0.34, 0);
+              ctx.lineTo(-wPx * 0.16, -hPx * 0.36);
+              ctx.lineTo(-wPx * 0.44, -hPx * 0.58);
+              ctx.lineTo(-wPx * 0.42, -hPx * 0.74);
+              ctx.lineTo(-wPx * 0.18, -hPx * 0.78);
+              // Left horn & crown
+              ctx.lineTo(-wPx * 0.28, -hPx * 0.96);
+              ctx.lineTo(-wPx * 0.08, -hPx * 0.88);
+              ctx.lineTo(0, -hPx * 0.94);
+              ctx.lineTo(wPx * 0.08, -hPx * 0.88);
+              // Right horn & raised war-mace
+              ctx.lineTo(wPx * 0.28, -hPx * 0.96);
+              ctx.lineTo(wPx * 0.18, -hPx * 0.78);
+              ctx.lineTo(wPx * 0.44, -hPx * 0.72);
+              ctx.lineTo(wPx * 0.62, -hPx * 0.88);
+              ctx.lineTo(wPx * 0.48, -hPx * 0.54);
+              ctx.lineTo(wPx * 0.24, -hPx * 0.40);
+              ctx.lineTo(wPx * 0.34, 0);
+              ctx.lineTo(wPx * 0.10, 0);
+              ctx.lineTo(0, -hPx * 0.30);
+              ctx.lineTo(-wPx * 0.10, 0);
+              ctx.closePath();
+              ctx.fill();
+              ctx.stroke();
+              ctx.strokeStyle = isFlash ? '#ffd86b' : '#ff5a1f';
+              ctx.lineWidth = 1.8;
+              ctx.stroke();
+              ctx.restore();
+            }
+          } else {
+            // REGULAR ENEMIES & ELITE WARDENS: Crisp HD Hades-scale stature (92px–108px) with cold steel/crimson-ash rim
+            const sheetUrl =
+              e.spriteSheetUrl ||
+              (e.type === 'charnel_ghoul'
+                ? GAME_ASSETS.enemySheets.bronzeSpearmanSheet
+                : e.type === 'ashen_oracle'
+                ? GAME_ASSETS.enemySheets.hoodedMageSheet
+                : e.type === 'ironmaw_gladiator'
+                ? GAME_ASSETS.enemySheets.fantasyKnightSheet
+                : GAME_ASSETS.enemySheets.demonicOgreSheet);
+
+            const sheetAsset = getProcessedSpriteSync(sheetUrl);
+            if (!sheetAsset && isMultiRowSpriteUrl(sheetUrl)) {
+              loadAndProcessSprite(sheetUrl, {
+                mode: 'character',
+                gridLayout: 'multirow',
+              });
+            }
+
+            const enemyAnimState: 'idle' | 'walk' | 'windup' | 'attack' | 'special' | 'hurt' | 'death' =
+              e.aiState === 'ko'
+                ? 'death'
+                : e.postureBrokenTimer > 0
+                ? 'hurt'
+                : e.aiState === 'attack'
+                ? e.attackKind === 'shockwave' || e.trait === 'agni_aura'
+                  ? 'special'
+                  : 'attack'
+                : e.aiState === 'windup'
+                ? 'windup'
+                : e.aiState === 'chase'
+                ? 'walk'
+                : 'idle';
+
+            const enemyStateProgress =
+              e.aiState === 'ko'
+                ? 1 - Math.max(0, e.koTimer / 0.92)
+                : e.aiState === 'windup'
+                ? 1 - Math.max(0, e.aiTimer / Math.max(0.05, e.windupDuration))
+                : e.aiState === 'attack'
+                ? 1 - Math.max(0, e.aiTimer / 0.32)
+                : 0;
+
+            const explicitEnemyFrame = getMultiRowFrameBounds(
+              sheetAsset,
+              enemyAnimState,
+              e.animTime,
+              enemyStateProgress
+            );
+
+            const animFrame =
+              e.aiState === 'attack'
+                ? 3
+                : e.aiState === 'windup'
+                ? 2
+                : e.aiState === 'chase'
+                ? Math.floor(e.animTime * 8.0) % 4
+                : Math.floor(e.animTime * 3.2) % 2;
+
+            // Balanced Demon-Slayer Enemy & Warden Stature (106px–128px downsampled from 256x256)
+            const targetH =
+              e.type === 'bloodmaw_brute' || e.type === 'molten_titan_warden'
+                ? 128
+                : e.type === 'ironmaw_gladiator' ||
+                  e.type === 'ash_cyclone_warden' ||
+                  e.type === 'eternal_wheel_warden'
+                ? 118
+                : 106;
+
+            // Fluent combat squash/stretch & lunge interpolation during windup/attack
+            const windupCoil =
+              e.aiState === 'windup' ? Math.sin(enemyStateProgress * Math.PI) * 0.05 : 0;
+            const attackStretch =
+              e.aiState === 'attack' ? Math.sin((1 - enemyStateProgress) * Math.PI) * 0.07 : 0;
+            const animScaleX = e.scaleX * (1 - windupCoil * 0.5 + attackStretch);
+            const animScaleY = e.scaleY * (1 + windupCoil - attackStretch * 0.5);
+            const lungeOffsetX =
+              e.aiState === 'attack'
+                ? Math.cos(e.aimAngle) * Math.sin((1 - enemyStateProgress) * Math.PI) * 8
+                : e.aiState === 'windup'
+                ? -Math.cos(e.aimAngle) * windupCoil * 4
+                : 0;
+            const lungeOffsetY =
+              e.aiState === 'attack'
+                ? Math.sin(e.aimAngle) * Math.sin((1 - enemyStateProgress) * Math.PI) * 5
+                : 0;
+            const hitShudderX = isFlash ? Math.sin(now * 0.14 + e.id) * 3.5 : 0;
+            const hitShudderY = isFlash ? Math.cos(now * 0.14 + e.id) * 2.0 : 0;
+
+            const enemy3d = enemy3dRef.current;
+            const renderedEnemy3D =
+              sim.state !== 'title' &&
+              sim.enemyRenderMode === 'all_3d' &&
+              enemy3d &&
+              enemy3d.renderEnemy({
+                id: e.id,
+                kind: e.type as RegularEnemy3DKind,
+                wardenRigKey: e.wardenRigKey,
+                trait: e.trait,
+                animTime: e.animTime,
+                stateProgress: enemyStateProgress,
+                vx: e.vx,
+                vy: e.vy,
+                facing: e.facing,
+                aimAngle: e.aimAngle,
+                aiState: e.aiState,
+                windupProgress:
+                  e.aiState === 'windup'
+                    ? Math.min(1, Math.max(0, 1 - e.aiTimer / Math.max(0.01, e.windupDuration)))
+                    : 0,
+                isPostureBroken: e.postureBrokenTimer > 0,
+                isHitFlash: isFlash,
+                isParrying: e.parryStanceTimer > 0,
+              });
+
+            if (renderedEnemy3D && enemy3d) {
+              drawGrounded3DContactShadow(ctx, {
+                worldX: e.x + lungeOffsetX,
+                worldY: e.y + lungeOffsetY,
+                baseRadius:
+                  e.type === 'bloodmaw_brute' || e.type === 'molten_titan_warden'
+                    ? 14.5
+                    : e.type === 'ironmaw_gladiator' ||
+                      e.type === 'ash_cyclone_warden' ||
+                      e.type === 'eternal_wheel_warden'
+                    ? 13
+                    : 11.5,
+                elevationY: bob,
+                lightSourceX: primaryLightX,
+                accentColor:
+                  e.aiState === 'windup'
+                    ? '#ef4444'
+                    : e.trait === 'vajra_shield'
+                    ? '#94a3b8'
+                    : '#94a3b8',
+              });
+
+              const drawSize = targetH;
+              const anchorX = -drawSize * 0.5;
+              const anchorY = -drawSize * 0.75;
+              const activeEnemyCanvas = enemy3d.getActiveCanvas();
+
+              ctx.save();
+              ctx.translate(
+                e.x + lungeOffsetX + hitShudderX,
+                e.y + lungeOffsetY + hitShudderY - bob
+              );
+              ctx.scale(animScaleX, animScaleY);
+              ctx.drawImage(activeEnemyCanvas, anchorX, anchorY, drawSize, drawSize);
+              ctx.restore();
+            } else {
+              drawSpriteFrame(
+                ctx,
+                sheetAsset,
+                animFrame,
+                4,
+                e.x + lungeOffsetX,
+                e.y + lungeOffsetY,
+                targetH,
+                targetH,
+                e.facing,
+                animScaleX,
+                animScaleY,
+                isFlash,
+                bob,
+                targetH * 0.26,
+                e.trait === 'vajra_shield' ? 'jade' : 'gold',
+                enemySkewX,
+                primaryLightX,
+                explicitEnemyFrame
+              );
+            }
+          }
+
+          if ((e.ironGuardWindupTimer || 0) > 0 && e.aiState !== 'ko') {
+            // Visible gold Vedic parry shield windup telegraph at chest/shield height before Iron Guard becomes active
+            const wProg = Math.max(0, Math.min(1, 1 - (e.ironGuardWindupTimer || 0) / 0.22));
             drawAdditiveFlipbookCell(ctx, {
-              sheetSpec: PHASE2_VFX_SHEETS.lohitShardAndBoonOrbs2x2,
-              col: LOHIT_SHARD_PICKUP_CELL.col,
-              row: LOHIT_SHARD_PICKUP_CELL.row,
-              x: ox,
-              y: oy,
-              width: 18,
-              height: 18,
-              rotationRad: orbitAng + Math.PI * 0.5,
-              alpha: 0.9,
+              sheetSpec: PHASE2_VFX_SHEETS.parryAndHitSparks4x2,
+              col: wProg > 0.55 ? 2 : 0,
+              row: PARRY_SPARKS_FLIPBOOK_ROWS.VEDIC_PARRY_FLASH,
+              x: e.x + e.facing * (e.isBoss ? 24 : 14),
+              y: e.y - (e.isBoss ? 86 : 44),
+              width: e.isBoss ? 58 : 44,
+              height: e.isBoss ? 58 : 44,
+              rotationRad: e.facing >= 0 ? 0 : Math.PI,
+              alpha: 0.56,
+            });
+          } else if (e.parryStanceTimer > 0 && e.aiState !== 'ko') {
+            drawAdditiveFlipbookCell(ctx, {
+              sheetSpec: PHASE2_VFX_SHEETS.parryAndHitSparks4x2,
+              col: Math.floor(now * 0.008) % 2 === 0 ? 0 : 2,
+              row: PARRY_SPARKS_FLIPBOOK_ROWS.VEDIC_PARRY_FLASH,
+              x: e.x + e.facing * (e.isBoss ? 24 : 14),
+              y: e.y - (e.isBoss ? 86 : 44),
+              width: e.isBoss ? 56 : 42,
+              height: e.isBoss ? 56 : 42,
+              rotationRad: e.facing >= 0 ? 0 : Math.PI,
+              alpha: 0.62,
             });
           }
-        }
 
-        if (e.aiState === 'windup' && e.aiTimer <= 0.45) {
-          const windupProg = Math.min(
-            1,
-            Math.max(0, 1 - e.aiTimer / Math.max(0.01, e.windupDuration))
-          );
-          const weaponGlint = computeWeaponTipGlintPosition({
-            enemyX: e.x,
-            enemyY: e.y,
-            facing: e.facing,
-            windupProgress: windupProg,
-            isBoss: e.isBoss,
-            attackKind: e.attackKind,
+          if ((e.lodgedCasts || 0) > 0 && e.aiState !== 'ko') {
+            const count = e.lodgedCasts || 0;
+            for (let cIdx = 0; cIdx < count; cIdx++) {
+              const orbitAng = now * 0.0055 + (cIdx * Math.PI * 2) / count;
+              const ox = e.x + Math.cos(orbitAng) * (e.isBoss ? 15 : 10);
+              const oy = e.y - (e.isBoss ? 22 : 15) + Math.sin(orbitAng) * 6;
+              drawAdditiveFlipbookCell(ctx, {
+                sheetSpec: PHASE2_VFX_SHEETS.lohitShardAndBoonOrbs2x2,
+                col: LOHIT_SHARD_PICKUP_CELL.col,
+                row: LOHIT_SHARD_PICKUP_CELL.row,
+                x: ox,
+                y: oy,
+                width: 18,
+                height: 18,
+                rotationRad: orbitAng + Math.PI * 0.5,
+                alpha: 0.9,
+              });
+            }
+          }
+
+          // Weapon-Tip 4-Point Starburst Threat Glints (Gold = Parriable [SHIFT], Crimson = Unblockable [SPACE])
+          if (e.aiState === 'windup' && e.aiTimer <= 0.45) {
+            const windupProg = Math.min(
+              1,
+              Math.max(0, 1 - e.aiTimer / Math.max(0.01, e.windupDuration))
+            );
+            const weaponGlint = computeWeaponTipGlintPosition({
+              enemyX: e.x,
+              enemyY: e.y,
+              facing: e.facing,
+              windupProgress: windupProg,
+              isBoss: e.isBoss,
+              attackKind: e.attackKind,
+            });
+            renderWeaponTipStarburstGlint(ctx, weaponGlint, now);
+          }
+
+          if (e.immobilizedTimer > 0 && decalsAsset && decalsAsset.frames.length > 0) {
+            const mf = decalsAsset.frames[0];
+            ctx.save();
+            ctx.globalCompositeOperation = 'screen';
+            ctx.translate(e.x, e.y - 20);
+            ctx.rotate(now * 0.003);
+            ctx.drawImage(
+              decalsAsset.goldCanvas,
+              mf.sx,
+              mf.sy,
+              mf.sw,
+              mf.sh,
+              -22,
+              -22,
+              44,
+              44
+            );
+            ctx.restore();
+          }
+
+          if (e.isWarden3D && e.aiState !== 'ko' && e.type !== 'semi_boss_bloodforge') {
+            const bw = 54;
+            const bx = e.x - bw * 0.5;
+            const by = e.y - 56;
+            ctx.save();
+            ctx.font = "bold 8px 'Cinzel', Georgia, serif";
+            ctx.textAlign = 'center';
+            ctx.strokeStyle = 'rgba(0,0,0,0.92)';
+            ctx.lineWidth = 2.5;
+            ctx.strokeText(e.name, e.x, by - 4);
+            ctx.fillStyle = '#ffd86b';
+            ctx.fillText(e.name, e.x, by - 4);
+            ctx.fillStyle = 'rgba(10, 6, 8, 0.85)';
+            ctx.fillRect(bx - 1, by - 1, bw + 2, 6.0);
+            ctx.fillStyle = 'rgba(255, 232, 168, 0.85)';
+            ctx.fillRect(bx, by, bw * Math.max(0, e.displayHp / e.maxHp), 3.0);
+            ctx.fillStyle = '#e0313c';
+            ctx.fillRect(bx, by, bw * Math.max(0, e.hp / e.maxHp), 3.0);
+            ctx.fillStyle = '#f2c45a';
+            ctx.fillRect(bx, by + 3.4, bw * Math.max(0, e.posture / e.maxPosture), 1.6);
+            ctx.restore();
+          } else if (
+            !e.isBoss &&
+            e.type !== 'semi_boss_bloodforge' &&
+            e.aiState !== 'ko' &&
+            (e.hp < e.maxHp || e.posture < e.maxPosture * 0.98)
+          ) {
+            const bw = 26;
+            const bx = e.x - bw * 0.5;
+            const by =
+              e.y -
+              (e.type === 'ironmaw_gladiator' || e.type === 'bloodmaw_brute' ? 46 : 42);
+            ctx.fillStyle = 'rgba(0,0,0,0.65)';
+            ctx.fillRect(bx, by, bw, 3.2);
+            ctx.fillStyle = 'rgba(255, 232, 168, 0.80)';
+            ctx.fillRect(bx, by, bw * Math.max(0, e.displayHp / e.maxHp), 1.8);
+            ctx.fillStyle = '#e0313c';
+            ctx.fillRect(bx, by, bw * Math.max(0, e.hp / e.maxHp), 1.8);
+            ctx.fillStyle = '#f2c45a';
+            ctx.fillRect(bx, by + 2.0, bw * Math.max(0, e.posture / e.maxPosture), 1.2);
+          }
+        } else if (act.kind === 'player') {
+          const p = sim.player;
+          const speedMag = Math.hypot(p.vx, p.vy);
+          const isMoving = speedMag > 14;
+          const stridePhase = p.walkDistance * 0.085;
+          const walkBob = isMoving ? Math.abs(Math.sin(stridePhase)) * 2.5 : 0;
+
+          let activeRudraUrl: string = GAME_ASSETS.rudra.idle;
+          if (p.hp <= 0 || (p.hp / p.maxHp < 0.22 && p.action === 'idle' && !isMoving)) {
+            activeRudraUrl = GAME_ASSETS.rudra.kneel;
+          } else if (p.action === 'parry') {
+            activeRudraUrl = GAME_ASSETS.rudra.parry;
+          } else if (p.action === 'astra') {
+            activeRudraUrl = GAME_ASSETS.rudra.astra;
+          } else if (p.action === 'gourd') {
+            activeRudraUrl = GAME_ASSETS.rudra.heal;
+          } else if (p.action === 'heavy_unleash' || p.action === 'execute' || p.elevationY > 18) {
+            activeRudraUrl = GAME_ASSETS.rudra.slam;
+          } else if (p.action === 'light_attack') {
+            activeRudraUrl =
+              p.comboStep === 2 || p.comboStep === 4
+                ? GAME_ASSETS.rudra.slash2
+                : GAME_ASSETS.rudra.slash1;
+          } else if (p.action === 'dodge' || isMoving) {
+            activeRudraUrl =
+              p.action === 'dodge' || Math.floor(p.walkDistance * 0.035) % 2 === 0
+                ? GAME_ASSETS.rudra.run
+                : GAME_ASSETS.rudra.idle;
+          } else {
+            activeRudraUrl = GAME_ASSETS.rudra.idle;
+          }
+
+          const activeRudraSheet = getProcessedSpriteSync(activeRudraUrl) || rudraIdleAsset;
+          const frame = 0;
+
+          const velocitySkewX = Math.max(-0.22, Math.min(0.22, (p.vx / 225) * 0.16));
+
+          // 2. Ground Location Tracking (Handled by drawGrounded3DContactShadow — subtle saffron foot contact ring on floor Layer 2!)
+
+          // 5.5. 60FPS Real-Time 3D Animated Rudra
+          const playerRim = 'gold';
+          const rudra3d = rudra3dRef.current;
+          const rudraStateProgress =
+            p.hitFlashTimer > 0
+              ? Math.max(0, Math.min(0.99, 1 - p.hitFlashTimer / 0.16))
+              : p.action === 'dodge' || p.action === 'parry' || p.action === 'astra'
+                ? Math.max(0, Math.min(0.99, 1 - p.actionTimer / Math.max(0.05, p.actionDuration)))
+                : undefined;
+          const rendered3D =
+            rudra3d &&
+            rudra3d.updateAndRender({
+              dt: simDt > 0 ? simDt : dt,
+              vx: p.vx,
+              vy: p.vy,
+              facingX: p.lastMoveDirX || p.facing,
+              facingY: p.lastMoveDirY,
+              slashAngle: p.slashAngle,
+              isAttacking: p.action === 'light_attack',
+              isHeavyAttack: p.action === 'heavy_unleash' || p.action === 'execute',
+              comboStep: p.comboStep,
+              attackProgress: p.weaponSwingProgress,
+              isDodging: p.action === 'dodge',
+              isParrying: p.action === 'parry',
+              isCasting: p.action === 'astra',
+              isHealing: p.action === 'gourd',
+              isHurt: p.hitFlashTimer > 0,
+              isDefeated: p.hp <= 0,
+              stance: p.stance,
+              focusOrbs: p.focusOrbs,
+              elevationY: 0,
+              stateProgress: rudraStateProgress,
+              finisherVariant: p.finisherVariant,
+            });
+
+          if (rendered3D && rudra3d) {
+            drawGrounded3DContactShadow(ctx, {
+              worldX: p.x,
+              worldY: p.y,
+              baseRadius: 14,
+              elevationY: 0,
+              lightSourceX: primaryLightX,
+              accentColor: '#eab308',
+              isPlayer: true,
+            });
+
+            // Rudra Demon-Slayer Scale Authority: 116px tall (downsampled from 256x256)
+            const drawSize = 116;
+            const anchorX = -drawSize * 0.5;
+            const anchorY = -drawSize * 0.75;
+
+            ctx.save();
+            ctx.translate(p.x, p.y);
+            ctx.drawImage(rudra3d.canvas, anchorX, anchorY, drawSize, drawSize);
+            ctx.restore();
+          } else {
+            drawSpriteFrame(
+              ctx,
+              activeRudraSheet,
+              frame,
+              1,
+              p.x,
+              p.y,
+              112,
+              112,
+              p.facing,
+              1,
+              1,
+              p.hitFlashTimer > 0 || p.action === 'dodge',
+              walkBob,
+              19,
+              playerRim,
+              0,
+              primaryLightX
+            );
+          }
+
+          // 7. Phase 2: Hand-Painted Parashu Slashes & 3 Finishers (sqvx4f...png, 3x3) synced to modernCombat.ts Startup / Active / Recovery timestamps
+          const slashPlan = resolveParashuSlashFlipbookPlan({
+            action: p.action,
+            actionTimerSec: p.actionTimer,
+            actionDurationSec: p.actionDuration,
+            comboStep: p.comboStep,
+            finisherVariant: p.finisherVariant,
+            slashAngleRad: p.slashAngle,
           });
-          renderWeaponTipStarburstGlint(ctx, weaponGlint, now);
-        }
+          if (slashPlan && p.slashArcAlpha > 0.02) {
+            const reachOffset =
+              p.finisherVariant === 'spin_360_cleave'
+                ? 0
+                : p.finisherVariant === 'impaling_lunge'
+                ? 42
+                : 28;
+            const slashDrawX = p.x + Math.cos(p.slashAngle) * reachOffset;
+            const slashDrawY = p.y - 22 + Math.sin(p.slashAngle) * (reachOffset * 0.68);
+            const isMajorSlash =
+              p.action === 'execute' ||
+              p.action === 'heavy_unleash' ||
+              Boolean(p.finisherVariant);
+            const baseSlashSize =
+              p.action === 'execute' || p.action === 'heavy_unleash'
+                ? 156
+                : p.finisherVariant
+                ? 142
+                : 118;
 
-        if (e.immobilizedTimer > 0 && decalsAsset && decalsAsset.frames.length > 0) {
-          const mf = decalsAsset.frames[0];
-          ctx.save();
-          ctx.globalCompositeOperation = 'screen';
-          ctx.translate(e.x, e.y - 20);
-          ctx.rotate(now * 0.003);
-          ctx.drawImage(
-            decalsAsset.goldCanvas,
-            mf.sx,
-            mf.sy,
-            mf.sw,
-            mf.sh,
-            -22,
-            -22,
-            44,
-            44
-          );
-          ctx.restore();
-        }
+            drawAdditiveFlipbookCell(ctx, {
+              sheetSpec: slashPlan.sheetSpec,
+              col: slashPlan.frameSync.frameCol,
+              row: slashPlan.primaryRow,
+              x: slashDrawX,
+              y: slashDrawY,
+              width: baseSlashSize * slashPlan.scaleMultiplier,
+              height: baseSlashSize * slashPlan.scaleMultiplier,
+              rotationRad: slashPlan.rotationRad,
+              scaleY: p.finisherVariant === 'spin_360_cleave' ? 0.68 : 1,
+              alpha: Math.min(
+                isMajorSlash ? 0.88 : 0.78,
+                slashPlan.frameSync.alpha * p.slashArcAlpha * (isMajorSlash ? 0.95 : 0.86)
+              ),
+            });
 
-        if (e.isWarden3D && e.aiState !== 'ko' && e.type !== 'semi_boss_bloodforge') {
-          const bw = 56;
-          const bx = e.x - bw * 0.5;
-          const by = e.y - 82;
-          ctx.save();
-          ctx.font = "bold 8px 'Cinzel', Georgia, serif";
-          ctx.textAlign = 'center';
-          ctx.strokeStyle = 'rgba(0,0,0,0.92)';
-          ctx.lineWidth = 2.5;
-          ctx.strokeText(e.name, e.x, by - 4);
-          ctx.fillStyle = '#ffd86b';
-          ctx.fillText(e.name, e.x, by - 4);
-          ctx.fillStyle = 'rgba(10, 6, 8, 0.85)';
-          ctx.fillRect(bx - 1, by - 1, bw + 2, 6.0);
-          ctx.fillStyle = 'rgba(255, 232, 168, 0.85)';
-          ctx.fillRect(bx, by, bw * Math.max(0, e.displayHp / e.maxHp), 3.0);
-          ctx.fillStyle = '#e0313c';
-          ctx.fillRect(bx, by, bw * Math.max(0, e.hp / e.maxHp), 3.0);
-          ctx.fillStyle = '#f2c45a';
-          ctx.fillRect(bx, by + 3.4, bw * Math.max(0, e.posture / e.maxPosture), 1.6);
-          ctx.restore();
-        } else if (
-          !e.isBoss &&
-          e.type !== 'semi_boss_bloodforge' &&
-          e.aiState !== 'ko' &&
-          (e.hp < e.maxHp || e.posture < e.maxPosture * 0.98)
-        ) {
-          const bw = 28;
-          const bx = e.x - bw * 0.5;
-          const by =
-            e.y -
-            (e.type === 'ironmaw_gladiator' || e.type === 'bloodmaw_brute' ? 66 : 56);
-          ctx.fillStyle = 'rgba(0,0,0,0.65)';
-          ctx.fillRect(bx, by, bw, 3.2);
-          ctx.fillStyle = 'rgba(255, 232, 168, 0.80)';
-          ctx.fillRect(bx, by, bw * Math.max(0, e.displayHp / e.maxHp), 1.8);
-          ctx.fillStyle = '#e0313c';
-          ctx.fillRect(bx, by, bw * Math.max(0, e.hp / e.maxHp), 1.8);
-          ctx.fillStyle = '#f2c45a';
-          ctx.fillRect(bx, by + 2.0, bw * Math.max(0, e.posture / e.maxPosture), 1.2);
+            if (isMajorSlash && slashPlan.secondaryRow !== null) {
+              drawAdditiveFlipbookCell(ctx, {
+                sheetSpec: slashPlan.sheetSpec,
+                col: slashPlan.frameSync.frameCol,
+                row: slashPlan.secondaryRow,
+                x: slashDrawX + Math.cos(p.slashAngle) * 18,
+                y: slashDrawY + Math.sin(p.slashAngle) * 12,
+                width: baseSlashSize * 1.08,
+                height: baseSlashSize * 0.78,
+                rotationRad: slashPlan.rotationRad,
+                alpha: Math.min(0.74, slashPlan.frameSync.alpha * 0.78),
+              });
+            }
+
+            if (isMajorSlash && slashPlan.frameSync.phase === 'active') {
+              const bespokeSlashAsset = getProcessedSpriteSync(GAME_ASSETS.bespokeSlashArc);
+              if (bespokeSlashAsset) {
+                const arcSize = baseSlashSize * 0.84;
+                ctx.save();
+                ctx.globalCompositeOperation = 'screen';
+                ctx.globalAlpha = Math.min(0.36, slashPlan.frameSync.alpha * 0.36);
+                ctx.translate(slashDrawX, slashDrawY);
+                ctx.rotate(slashPlan.rotationRad);
+                ctx.drawImage(
+                  bespokeSlashAsset.cleanCanvas,
+                  -arcSize * 0.5,
+                  -arcSize * 0.5,
+                  arcSize,
+                  arcSize
+                );
+                ctx.restore();
+              }
+            }
+          }
         }
       });
 
@@ -9541,7 +10558,7 @@ export default function KaliyugaArena() {
         });
       }
 
-      // 6.5. Anti-Occlusion Overhead Sovereign Hero Crest & Health Bar
+      // 6.5. Anti-Occlusion X-Ray Hero Silhouette Outline & Overhead Sovereign Hero Crest
       {
         const p = sim.player;
         const isMoving = Math.hypot(p.vx, p.vy) > 14;
@@ -9560,7 +10577,9 @@ export default function KaliyugaArena() {
               Math.hypot(pr.x - p.x, (pr.y - p.y) * 1.2) < 38
           );
 
+        const rudra3d = rudra3dRef.current;
         if (isOccludedByActor) {
+          // Additive Vedic mandala highlight when obscured by enemies or pillars (zero procedural ellipse strokes)
           drawAdditiveFlipbookCell(ctx, {
             sheetSpec: PHASE2_VFX_SHEETS.parryAndHitSparks4x2,
             col: 0,
@@ -9573,16 +10592,18 @@ export default function KaliyugaArena() {
             scaleY: 0.54,
             alpha: 0.68,
           });
+
+          // Overhead "▼ RUDRA" indicator when obscured
           ctx.save();
           ctx.font = '700 10px sans-serif';
           ctx.textAlign = 'center';
           ctx.fillStyle = '#ffd86b';
-          ctx.fillText('▼ RUDRA', p.x, p.y - 74 - p.elevationY - walkBob);
+          ctx.fillText('▼ RUDRA', p.x, p.y - 58 - p.elevationY - walkBob);
           ctx.restore();
         }
 
         if (p.hp < p.maxHp * 0.9) {
-          const markerY = p.y - 54 - p.elevationY - walkBob;
+          const markerY = p.y - 46 - p.elevationY - walkBob;
           const barW = 28;
           const barX = p.x - barW * 0.5;
           ctx.save();
@@ -9594,42 +10615,86 @@ export default function KaliyugaArena() {
         }
       }
 
-      // 7. Draw Crisp Blazing Agneyastra Fire-Arrow Projectiles
+      // 7. Draw Distinct Demon-Art Orbs, Spinning Chakrams & Agneyastra Fire Arrows
       const agneyastraArrowAsset = getProcessedSpriteSync(GAME_ASSETS.agneyastraArrow);
       sim.projectiles.forEach((pr) => {
         if (!pr.active) return;
         const pAngle = Math.atan2(pr.vy, pr.vx);
+        const isDharmaWheel = pr.color === '#e61c4c';
+        const isCursedOrb =
+          !pr.isPlayerCast && (pr.color === '#ff5224' || pr.color === '#ff7b24');
+
         ctx.save();
         ctx.translate(pr.x, pr.y);
-        ctx.rotate(pAngle);
 
-        if (agneyastraArrowAsset) {
-          const projW = Math.max(28, pr.radius * 5.2);
-          const projH = Math.max(14, pr.radius * 2.6);
-          ctx.drawImage(
-            agneyastraArrowAsset.cleanCanvas,
-            -projW * 0.55,
-            -projH * 0.5,
-            projW,
-            projH
-          );
+        if (isDharmaWheel) {
+          ctx.rotate(now * 0.014);
+          const r = Math.max(10, pr.radius * 0.95);
+          ctx.strokeStyle = '#0c0508';
+          ctx.lineWidth = 5;
+          ctx.beginPath();
+          ctx.arc(0, 0, r, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.strokeStyle = '#ff1f5a';
+          ctx.lineWidth = 2.6;
+          ctx.beginPath();
+          ctx.arc(0, 0, r, 0, Math.PI * 2);
+          ctx.stroke();
+          for (let sp = 0; sp < 4; sp++) {
+            const sa = (sp * Math.PI) / 2;
+            ctx.fillStyle = '#ffe680';
+            ctx.beginPath();
+            ctx.moveTo(Math.cos(sa) * (r + 5), Math.sin(sa) * (r + 5));
+            ctx.lineTo(Math.cos(sa + 0.25) * (r - 2), Math.sin(sa + 0.25) * (r - 2));
+            ctx.lineTo(Math.cos(sa - 0.25) * (r - 2), Math.sin(sa - 0.25) * (r - 2));
+            ctx.closePath();
+            ctx.fill();
+          }
+        } else if (isCursedOrb) {
+          const r = Math.max(8, pr.radius * 0.85);
+          ctx.fillStyle = '#0c0508';
+          ctx.beginPath();
+          ctx.arc(0, 0, r + 2.4, 0, Math.PI * 2);
+          ctx.fill();
+          const orbG = ctx.createRadialGradient(0, 0, 1, 0, 0, r);
+          orbG.addColorStop(0, '#ffd8f0');
+          orbG.addColorStop(0.55, '#d926a9');
+          orbG.addColorStop(1, '#5c0824');
+          ctx.fillStyle = orbG;
+          ctx.beginPath();
+          ctx.arc(0, 0, r, 0, Math.PI * 2);
+          ctx.fill();
         } else {
-          const len = Math.max(18, pr.radius * 3.2);
-          const rad = Math.max(4, pr.radius * 0.75);
-          ctx.fillStyle = pr.deflected ? '#fbbf24' : '#ea580c';
-          ctx.beginPath();
-          ctx.ellipse(0, 0, len * 0.5, rad, 0, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.fillStyle = '#fef3c7';
-          ctx.beginPath();
-          ctx.ellipse(len * 0.12, 0, len * 0.28, rad * 0.5, 0, 0, Math.PI * 2);
-          ctx.fill();
+          ctx.rotate(pAngle);
+          if (agneyastraArrowAsset) {
+            const projW = Math.max(28, pr.radius * 5.2);
+            const projH = Math.max(14, pr.radius * 2.6);
+            ctx.drawImage(
+              agneyastraArrowAsset.cleanCanvas,
+              -projW * 0.55,
+              -projH * 0.5,
+              projW,
+              projH
+            );
+          } else {
+            const len = Math.max(18, pr.radius * 3.2);
+            const rad = Math.max(4, pr.radius * 0.75);
+            ctx.fillStyle = pr.deflected ? '#fbbf24' : '#ea580c';
+            ctx.beginPath();
+            ctx.ellipse(0, 0, len * 0.5, rad, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#fef3c7';
+            ctx.beginPath();
+            ctx.ellipse(len * 0.12, 0, len * 0.28, rad * 0.5, 0, 0, Math.PI * 2);
+            ctx.fill();
+          }
         }
         ctx.restore();
       });
 
-      // 8. Pillar 3 Multi-Archetype Canvas Particle Renderer
+      // 8. Pillar 3 Multi-Archetype Canvas Particle Renderer + Demon Slayer Ufotable Blood Demon Arts
       renderParticlePoolCanvas(ctx, sim.particles);
+      renderBloodDemonArtWorldPass(ctx, bloodDemonArtsRef.current);
 
       // 8.2. Hand-Painted Phase 2 Additive VFX Flipbook Burst Pool (uses real dt so flipbooks stay crisp during hit-stop!)
       for (let i = 0; i < sim.flipbookVfx.length; i++) {
@@ -9981,6 +11046,9 @@ export default function KaliyugaArena() {
         ctx.restore();
       }
 
+      // 11.2. Demon Slayer 2-Frame Sumi-e Impact Inversion Flash (on Execute, Golden Parry & Boss Phase Awakenings)
+      renderBloodDemonArtScreenFlash(ctx, bloodDemonArtsRef.current, cw, ch);
+
       // 11.5. Stage B (Step 13): Hide DIVYA RADAR minimap behind ?debug=1 query flag
       if (isDebugMode && sim.modernSettings.showMinimap && sim.state === 'playing') {
         const mapW = 132;
@@ -10153,11 +11221,12 @@ export default function KaliyugaArena() {
         setHud((prev) => (shouldSyncHudSnapshot(prev, nextHud) ? nextHud : prev));
       }
 
-      rafId = window.requestAnimationFrame(tick);
+      afterDraw(tick);
     };
 
     rafId = window.requestAnimationFrame(tick);
     return () => {
+      if (softTimerId !== null) window.clearTimeout(softTimerId);
       window.cancelAnimationFrame(rafId);
       window.removeEventListener('resize', resizeCanvas);
     };
@@ -10632,47 +11701,6 @@ export default function KaliyugaArena() {
         onContextMenu={(e) => e.preventDefault()}
         className="block w-full h-full cursor-crosshair touch-none"
       />
-
-      {/* Demon Slayer 2-Frame Manga Impact Flash + 36-Wedge Radial Speed-Lines SVG Overlay */}
-      <div
-        ref={impactFlashRef}
-        aria-hidden="true"
-        className="pointer-events-none fixed inset-0 z-10 mix-blend-screen transition-opacity duration-75"
-        style={{
-          opacity: 0,
-          background:
-            'radial-gradient(circle at 50% 50%, rgba(255,250,235,0.95) 0%, rgba(255,235,190,0.45) 42%, rgba(8,4,10,0.85) 100%)',
-        }}
-      />
-      <div
-        ref={speedLinesRef}
-        aria-hidden="true"
-        className="pointer-events-none fixed inset-0 z-10 transition-opacity duration-100"
-        style={{ opacity: 0 }}
-      >
-        <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full">
-          {Array.from({ length: 84 }, (_, idx) => {
-            const angle = (idx / 84) * Math.PI * 2 + (idx % 2 === 0 ? 0.008 : -0.006);
-            const spread = idx % 3 === 0 ? 0.0042 : 0.0026;
-            const innerR = idx % 4 === 0 ? 41 : idx % 2 === 0 ? 44 : 47;
-            const outerR = 76;
-            const x1 = 50 + Math.cos(angle) * innerR;
-            const y1 = 50 + Math.sin(angle) * innerR;
-            const x2 = 50 + Math.cos(angle - spread) * outerR;
-            const y2 = 50 + Math.sin(angle - spread) * outerR;
-            const x3 = 50 + Math.cos(angle + spread) * outerR;
-            const y3 = 50 + Math.sin(angle + spread) * outerR;
-            return (
-              <polygon
-                key={idx}
-                points={`${x1.toFixed(2)},${y1.toFixed(2)} ${x2.toFixed(2)},${y2.toFixed(2)} ${x3.toFixed(2)},${y3.toFixed(2)}`}
-                fill={idx % 3 === 0 ? '#060208' : '#fff8e7'}
-                opacity={idx % 3 === 0 ? 0.55 : 0.65}
-              />
-            );
-          })}
-        </svg>
-      </div>
 
       {/* High-Readability PC HUD: Large Top-Left Vital Crest, 8-Chamber Route Strip, Prominent Top-Center Boss Bar, Top-Right Menu, Bottom PC Combat Hotbar */}
       <div className="fixed inset-0 z-20 pointer-events-none flex flex-col justify-between p-3 sm:p-4">

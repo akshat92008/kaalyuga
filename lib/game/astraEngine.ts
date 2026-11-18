@@ -349,24 +349,32 @@ export function classifyEnemyRole(
   }
   switch (enemyType) {
     case 'ashen_oracle':
+    case 'preta_bowman':
+    case 'eternal_wheel_warden':
     case 'fire_monk':
     case 'archer':
     case 'shaman':
       return {
         role: 'spear_wraith',
-        roleTitle: 'Spear Wraith',
+        roleTitle:
+          enemyType === 'preta_bowman'
+            ? 'Preta Bowman'
+            : enemyType === 'eternal_wheel_warden'
+              ? 'Dharma Chakram'
+              : 'Spear Wraith',
         slotCategory: 'ranged',
         hasFrontalShield: false,
       };
     case 'bloodmaw_brute':
     case 'semi_boss_bloodforge':
+    case 'molten_titan_warden':
     case 'furnace_titan':
     case 'executioner':
     case 'heavy_infantry':
     case 'cavalry':
       return {
         role: 'rakshasa_brute',
-        roleTitle: 'Rakshasa Brute',
+        roleTitle: enemyType === 'molten_titan_warden' ? 'Emberforged Titan' : 'Rakshasa Brute',
         slotCategory: 'heavy',
         hasFrontalShield: false,
       };

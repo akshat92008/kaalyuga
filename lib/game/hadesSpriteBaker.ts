@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { attachSumiInkOutlines, liftTextureToAnimeVibrancy } from './demonSlayerShader';
 
 export type HadesPaletteProfile = 'rudra_bronze' | 'dundubhi_chola' | 'vrikodara_crimson';
 
@@ -270,43 +271,43 @@ export interface SilhouetteRoleSpec {
 export const SILHOUETTE_ROLE_PRESETS: Record<SilhouetteRole, SilhouetteRoleSpec> = {
   rudra: {
     role: 'rudra',
-    rimHex: '#ffb347',
-    rimRgba: 'rgba(255, 179, 71, 0.78)',
+    rimHex: '#ffe4b8',
+    rimRgba: 'rgba(255, 228, 184, 0.34)',
     outlineColor: SHARED_STUDIO_OUTLINE_COLOR,
     outlineThickness: 2.2,
     scaleAuthorityMin: 1.0,
     scaleAuthorityMax: 1.0,
-    footContactRingHex: '#ffb347',
+    footContactRingHex: '#eab308',
   },
   regular_enemy: {
     role: 'regular_enemy',
-    rimHex: '#94a3b8',
-    rimRgba: 'rgba(148, 163, 184, 0.62)',
+    rimHex: '#cbd5e1',
+    rimRgba: 'rgba(203, 213, 225, 0.24)',
     outlineColor: SHARED_STUDIO_OUTLINE_COLOR,
-    outlineThickness: 2.0,
+    outlineThickness: 1.9,
     scaleAuthorityMin: 1.0,
     scaleAuthorityMax: 1.12,
     footContactRingHex: null,
   },
   regular_enemy_crimson: {
     role: 'regular_enemy_crimson',
-    rimHex: '#ef4444',
-    rimRgba: 'rgba(239, 68, 68, 0.68)',
+    rimHex: '#fde68a',
+    rimRgba: 'rgba(253, 230, 138, 0.28)',
     outlineColor: SHARED_STUDIO_OUTLINE_COLOR,
-    outlineThickness: 2.1,
+    outlineThickness: 2.0,
     scaleAuthorityMin: 1.0,
     scaleAuthorityMax: 1.12,
     footContactRingHex: null,
   },
   boss: {
     role: 'boss',
-    rimHex: '#ff5a1f',
-    rimRgba: 'rgba(255, 90, 31, 0.88)',
+    rimHex: '#ffd89e',
+    rimRgba: 'rgba(255, 216, 158, 0.32)',
     outlineColor: SHARED_STUDIO_OUTLINE_COLOR,
-    outlineThickness: 2.6,
+    outlineThickness: 2.3,
     scaleAuthorityMin: 1.75,
     scaleAuthorityMax: 2.35,
-    footContactRingHex: '#ff5a1f',
+    footContactRingHex: '#f59e0b',
   },
 };
 
@@ -321,7 +322,7 @@ export function getSilhouetteSpecForRole(role: SilhouetteRole): SilhouetteRoleSp
 }
 
 export interface SharedStudioRigLights {
-  ambient: THREE.AmbientLight;
+  ambient: THREE.HemisphereLight | THREE.AmbientLight;
   keyLight: THREE.DirectionalLight;
   fillLight: THREE.DirectionalLight;
   rimLight: THREE.DirectionalLight;
@@ -372,7 +373,7 @@ export function getSharedStudioWebGLRenderer(size: number): THREE.WebGLRenderer 
       sharedStudioWebGLRenderer.setPixelRatio(1);
       sharedStudioWebGLRenderer.outputColorSpace = THREE.SRGBColorSpace;
       sharedStudioWebGLRenderer.toneMapping = THREE.ACESFilmicToneMapping;
-      sharedStudioWebGLRenderer.toneMappingExposure = 0.98;
+      sharedStudioWebGLRenderer.toneMappingExposure = 1.24;
       sharedStudioWebGLRenderer.shadowMap.enabled = false;
       sharedStudioWebGLRenderer.setClearColor(0x000000, 0);
       cachedIsSoftwareWebGL = null;
@@ -392,28 +393,26 @@ export function getSharedStudioWebGLRenderer(size: number): THREE.WebGLRenderer 
 }
 
 /**
- * Attaches the unified Demon Slayer Anime Key / Cool-Shadow Fill / Warm-Rim Lighting Rig to any
- * 3D character or boss scene so Rudra, Enemies, and Bosses show crisp 2-tone cel shadows and authentic colors.
+ * Attaches the Demon Slayer / KaalyugaStage Studio Key / Fill / Rim Lighting Rig to any
+ * 3D character or boss scene so Rudra, Enemies, and Bosses share vivid anime cel-shading
+ * and strong warm-vs-cool silhouette separation.
  */
 export function setupSharedStudioLightingRig(
   scene: THREE.Scene,
   distanceScale = 1.0
 ): SharedStudioRigLights {
-  const ambient = new THREE.AmbientLight(0x4b4268, 0.56);
+  const ambient = new THREE.HemisphereLight(0xdce6ff, 0x5c4a3e, 1.36);
   scene.add(ambient);
 
-  const hemi = new THREE.HemisphereLight(0xffe8d2, 0x1e182e, 0.42);
-  scene.add(hemi);
-
-  const keyLight = new THREE.DirectionalLight(0xfff1dc, 1.32);
+  const keyLight = new THREE.DirectionalLight(0xfff4e0, 2.25);
   keyLight.position.set(3.0 * distanceScale, 5.2 * distanceScale, 4.0 * distanceScale);
   scene.add(keyLight);
 
-  const fillLight = new THREE.DirectionalLight(0x7ca2de, 0.36);
+  const fillLight = new THREE.DirectionalLight(0xc2d4f2, 0.78);
   fillLight.position.set(-3.2 * distanceScale, 2.4 * distanceScale, 2.0 * distanceScale);
   scene.add(fillLight);
 
-  const rimLight = new THREE.DirectionalLight(0xffb85c, 0.72);
+  const rimLight = new THREE.DirectionalLight(0xffe8c2, 1.05);
   rimLight.position.set(0.0, 3.6 * distanceScale, -3.8 * distanceScale);
   scene.add(rimLight);
 
@@ -456,25 +455,34 @@ export function computeArenaFloorGradeSpec(chamberIndex: number): {
 }
 
 /**
- * Applies clean, color-true sRGB diffuse material settings to a 3D hierarchy
- * (zero muddy step-shader banding, zero plastic specular glare) so models show
- * the exact colors of their uploaded .png textures under the shared studio rig.
+ * Applies Ufotable / Demon Slayer cel-step shading, wide Fresnel rim-light,
+ * self-lit emissiveMap warmth, and anime gamma vibrancy lift (`pow(c, 0.70) * 1.34` + `1.38x` saturation)
+ * while strictly preserving PBR normal/roughness/metalness 1.0 scalar bindings on MeshStandardMaterial.
  */
 export function applyHadesCelShadingToHierarchy(
   root: THREE.Object3D,
-  _options?: {
+  options?: {
     rimColor?: number;
     rimIntensity?: number;
+    emissiveTint?: number;
+    emissiveStrength?: number;
+    attachInkOutline?: boolean;
+    outlineRatio?: number;
   }
 ): void {
+  const rimHex = options?.rimColor ?? 0xffe4b8;
+  const rimStr = Math.min(0.42, Math.max(0.18, options?.rimIntensity ?? 0.30));
+  const emissiveHex = options?.emissiveTint ?? 0x262220;
+  const emissiveStr = Math.min(0.30, Math.max(0.18, options?.emissiveStrength ?? 0.24));
+
   root.traverse((child) => {
-    if (!(child as THREE.Mesh).isMesh) return;
+    if (!(child as THREE.Mesh).isMesh || child.userData?.isInkOutline) return;
     const mesh = child as THREE.Mesh;
     const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
 
     const updated = mats.map((m) => {
       if (!m) return m;
-      const std = m as THREE.MeshStandardMaterial;
+      const std = m as THREE.MeshStandardMaterial & THREE.MeshToonMaterial;
       if ('roughness' in std) {
         std.roughness = std.roughnessMap ? 1.0 : 0.84;
       }
@@ -484,16 +492,105 @@ export function applyHadesCelShadingToHierarchy(
       if ('envMapIntensity' in std) {
         std.envMapIntensity = std.metalnessMap ? 0.35 : 0.0;
       }
-      if ('emissive' in std && std.emissive) {
-        std.emissive.setHex(0x000000);
-        std.emissiveIntensity = 0.0;
+
+      if (std.map && !std.map.userData?.animeLifted && typeof document !== 'undefined') {
+        const lifted = liftTextureToAnimeVibrancy(std.map, 1.18, 1.12);
+        if (lifted) {
+          lifted.userData.animeLifted = true;
+          std.map = lifted;
+        }
       }
+
+      if ('emissive' in std && std.emissive) {
+        std.emissive.setHex(emissiveHex);
+        std.emissiveIntensity = emissiveStr;
+        if (std.map) {
+          std.emissiveMap = std.map;
+        }
+      }
+
+      if (std.userData?.celUniforms) {
+        std.userData.celUniforms.uRimColor.value.setHex(rimHex);
+        std.userData.celUniforms.uRimStrength.value = rimStr;
+      } else if (!std.userData.celHooked) {
+        const celUniforms = {
+          uRimColor: { value: new THREE.Color(rimHex) },
+          uRimStrength: { value: rimStr },
+          uRimPower: { value: 3.1 },
+          uFlashColor: { value: new THREE.Color(0xfff3d1) },
+          uFlashMix: { value: 0.0 },
+        };
+        std.userData.celUniforms = celUniforms;
+        std.userData.celHooked = true;
+        std.onBeforeCompile = (shader) => {
+          shader.uniforms.uRimColor = celUniforms.uRimColor;
+          shader.uniforms.uRimStrength = celUniforms.uRimStrength;
+          shader.uniforms.uRimPower = celUniforms.uRimPower;
+          shader.uniforms.uFlashColor = celUniforms.uFlashColor;
+          shader.uniforms.uFlashMix = celUniforms.uFlashMix;
+
+          shader.fragmentShader =
+            `
+            uniform vec3 uRimColor;
+            uniform float uRimStrength;
+            uniform float uRimPower;
+            uniform vec3 uFlashColor;
+            uniform float uFlashMix;
+            ` +
+            shader.fragmentShader
+              .replace(
+                '#include <metalnessmap_fragment>',
+                `
+                #include <metalnessmap_fragment>
+                metalnessFactor = min(metalnessFactor, 0.08);
+                `
+              )
+              .replace(
+                '#include <lights_fragment_end>',
+                `
+                #include <lights_fragment_end>
+                float celLum = dot(reflectedLight.directDiffuse, vec3(0.299, 0.587, 0.114));
+                float celTargetLum = celLum > 0.42 ? 1.04 : (celLum > 0.16 ? 0.82 : 0.60);
+                vec3 celChroma = reflectedLight.directDiffuse / max(celLum, 0.04);
+                vec3 celQuant = celLum > 0.004 ? celChroma * min(celTargetLum, celLum * 1.18 + 0.24) : vec3(0.0);
+                reflectedLight.directDiffuse = mix(
+                  reflectedLight.directDiffuse,
+                  celQuant,
+                  0.92
+                );
+                `
+              )
+              .replace(
+                '#include <dithering_fragment>',
+                `
+                vec3 celViewDir = normalize(vViewPosition);
+                float celNdotV = clamp(dot(normalize(vNormal), celViewDir), 0.0, 1.0);
+                float celRimRaw = pow(1.0 - celNdotV, uRimPower);
+                float celRimStep = smoothstep(0.56, 0.78, celRimRaw);
+                gl_FragColor.rgb = gl_FragColor.rgb * 1.04 + uRimColor * celRimStep * uRimStrength;
+                gl_FragColor.rgb = mix(gl_FragColor.rgb, uFlashColor, clamp(uFlashMix * (0.45 + 0.55 * celRimStep), 0.0, 0.85));
+                #include <dithering_fragment>
+                `
+              );
+        };
+        std.customProgramCacheKey = () => 'kaliyuga-ufotable-cel-std-v6';
+      }
+
       std.needsUpdate = true;
       return std;
     });
 
     mesh.material = Array.isArray(mesh.material) ? updated : updated[0];
   });
+
+  if (
+    options?.attachInkOutline === true &&
+    !isSoftwareWebGLRenderer() &&
+    !root.userData?.inkOutlinesAttached
+  ) {
+    root.userData.inkOutlinesAttached = true;
+    attachSumiInkOutlines(root, options?.outlineRatio ?? 0.005, 0x080509);
+  }
 }
 
 const sharedFrameCache = new Map<string, HTMLCanvasElement>();
@@ -553,11 +650,11 @@ export function bake2DSpriteFrameFromCanvas(
   const outlineColor =
     options?.outlineColor ?? rolePreset?.outlineColor ?? SHARED_STUDIO_OUTLINE_COLOR;
   const rimHighlightStyle = options?.hitFlash
-    ? 'rgba(255, 204, 92, 0.96)'
+    ? 'rgba(255, 214, 112, 0.85)'
     : options?.rimColor ?? rolePreset?.rimRgba ?? SILHOUETTE_ROLE_PRESETS.rudra.rimRgba;
-  const rimOffset = options?.role === 'boss' ? -1.85 : options?.role === 'rudra' ? -1.6 : -1.35;
+  const rimOffset = -0.95;
 
-  // 1. Draw crisp 2D silhouette outline using GPU-composited directional offsets on reused scratch canvas
+  // 1. Draw crisp 2D anime Sumi-e black ink outline using GPU-composited offsets (clean ink edge, zero red halo smear)
   const { canvas: silhouetteCanvas, ctx: sCtx } = getSharedSilhouetteCanvas(w, h);
   if (sCtx) {
     sCtx.globalCompositeOperation = 'source-over';
@@ -580,17 +677,14 @@ export function bake2DSpriteFrameFromCanvas(
       ctx.drawImage(silhouetteCanvas, offsets[i][0], offsets[i][1], w, h);
     }
 
-    // Role-specific directional rim-light highlight so Rudra (#ffb347), Enemies (#94a3b8/#ef4444), and Bosses (#ff5a1f) read razor-sharp at 0.96 zoom
+    // Subtle crisp 1px top-left anime edge highlight (never a glowing crimson/wine ring)
     sCtx.globalCompositeOperation = 'source-in';
     sCtx.fillStyle = rimHighlightStyle;
     sCtx.fillRect(0, 0, w, h);
     ctx.drawImage(silhouetteCanvas, rimOffset, rimOffset, w, h);
-    if (options?.hitFlash) {
-      ctx.drawImage(silhouetteCanvas, -rimOffset * 0.75, rimOffset * 0.75, w, h);
-    }
   }
 
-  // 2. Draw crisp character sprite over the dark ink outline & directional rim
+  // 2. Draw crisp cel-shaded 2D anime sprite cleanly over the Sumi-e ink outline
   ctx.globalCompositeOperation = 'source-over';
   ctx.drawImage(sourceCanvas, 0, 0, w, h);
 

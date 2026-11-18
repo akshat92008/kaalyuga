@@ -122,9 +122,9 @@ describe('Hades 2D Sprite Sheet Baker & Texture Re-Grader', () => {
 
     const scene = new THREE.Scene();
     const rig = setupSharedStudioLightingRig(scene, 1.0);
-    assert.equal(scene.children.length, 5);
+    assert.equal(scene.children.length, 4);
     assert.ok(rig.keyLight.intensity > rig.fillLight.intensity);
-    assert.ok(rig.keyLight.intensity > 1.0);
+    assert.ok(rig.rimLight.intensity > 1.0);
 
     const ch0Grade = computeArenaFloorGradeSpec(0);
     const ch4Grade = computeArenaFloorGradeSpec(4);

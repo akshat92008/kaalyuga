@@ -120,7 +120,7 @@ export function TitleScreen({
       } else if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') {
         e.preventDefault();
         setActiveIndex((prev) => (prev - 1 + menuItems.length) % menuItems.length);
-      } else if (e.key === 'Enter' || e.key === ' ') {
+      } else if (e.key === 'Enter') {
         e.preventDefault();
         menuItems[activeIndex]?.onSelect();
       }

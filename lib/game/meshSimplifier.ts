@@ -499,6 +499,9 @@ export function simplifyBufferGeometry(
 ): THREE.BufferGeometry {
   const posAttr = geo.attributes.position as THREE.BufferAttribute | undefined;
   if (!posAttr || posAttr.count < minVertexThreshold) {
+    if (posAttr && !geo.attributes.normal) {
+      geo.computeVertexNormals();
+    }
     return geo;
   }
 

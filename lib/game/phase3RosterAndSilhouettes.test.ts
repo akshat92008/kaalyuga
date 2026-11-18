@@ -14,23 +14,23 @@ describe('Phase 3 — Wide-Camera (0.96) Silhouette Readability & 3D Character R
     assert.equal(BASE_CAMERA_ZOOM, 0.96);
 
     const rudraSpec = getSilhouetteSpecForRole('rudra');
-    assert.equal(rudraSpec.rimHex, '#ffb347');
+    assert.equal(rudraSpec.rimHex, '#ffe4b8');
     assert.equal(rudraSpec.outlineColor, '#120806');
 
     const enemySteelSpec = getSilhouetteSpecForRole('regular_enemy');
-    assert.equal(enemySteelSpec.rimHex, '#94a3b8');
+    assert.equal(enemySteelSpec.rimHex, '#cbd5e1');
 
     const enemyCrimsonSpec = getSilhouetteSpecForRole('regular_enemy_crimson');
-    assert.equal(enemyCrimsonSpec.rimHex, '#ef4444');
+    assert.equal(enemyCrimsonSpec.rimHex, '#fde68a');
 
     const bossSpec = getSilhouetteSpecForRole('boss');
-    assert.equal(bossSpec.rimHex, '#ff5a1f');
+    assert.equal(bossSpec.rimHex, '#ffd89e');
     assert.ok(bossSpec.outlineThickness >= 2.2);
 
     assert.equal(BOSS_SCALE_AUTHORITY.semi_boss, 1.75);
     assert.equal(BOSS_SCALE_AUTHORITY.dundubhi, 2.15);
     assert.equal(BOSS_SCALE_AUTHORITY.vrikodara, 2.35);
-    assert.ok(SILHOUETTE_ROLE_PRESETS.rudra.rimHex === '#ffb347');
+    assert.ok(SILHOUETTE_ROLE_PRESETS.rudra.rimHex === '#ffe4b8');
   });
 
   it('wires Dundubhi to Bellhorn_Warlord + Creature Pack (4) with mutant dying.fbx (zero mutant_idle death placeholders)', () => {

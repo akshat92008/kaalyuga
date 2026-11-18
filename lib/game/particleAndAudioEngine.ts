@@ -315,7 +315,7 @@ export function renderParticlePoolCanvas(
   for (let i = 0; i < pool.length; i++) {
     const pt = pool[i];
     if (!pt.active) continue;
-    if (particlesRendered >= 42) break;
+    if (particlesRendered >= 64) break;
     particlesRendered++;
 
     const mapping = resolveParticleFlipbookSpec(pt.archetype);
@@ -324,7 +324,7 @@ export function renderParticlePoolCanvas(
       ? Math.atan2(pt.vy, pt.vx)
       : pt.phase * 0.6;
     const stretch = mapping.alignToVelocity
-      ? Math.min(1.5, Math.max(0.85, spd / 260))
+      ? Math.min(1.65, Math.max(0.88, spd / 240))
       : 1.0;
     const lifeNorm = 1 - Math.max(0, Math.min(0.999, pt.life / Math.max(0.01, pt.maxLife)));
     const colCount = mapping.sheetSpec.cols;
@@ -349,6 +349,34 @@ export function renderParticlePoolCanvas(
       rotationRad: rot,
       alpha,
     });
+
+    // 2D Anime cel-shaded spark / ember / droplet overlay with crisp #120806 Sumi-e ink rim
+    if (pt.alpha > 0.14) {
+      ctx.save();
+      ctx.translate(pt.x, pt.y);
+      ctx.rotate(rot);
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = Math.min(0.92, pt.alpha * 0.92);
+      const rX = Math.max(2.4, pt.size * 0.85 * stretch);
+      const rY = Math.max(1.6, pt.size * 0.52);
+      ctx.beginPath();
+      ctx.moveTo(rX * 1.35, 0);
+      ctx.quadraticCurveTo(0, rY, -rX * 1.15, 0);
+      ctx.quadraticCurveTo(0, -rY, rX * 1.35, 0);
+      ctx.closePath();
+      ctx.fillStyle = pt.color;
+      ctx.fill();
+      ctx.lineWidth = 1.25;
+      ctx.strokeStyle = '#120806';
+      ctx.stroke();
+
+      // White-hot / gold anime core highlight
+      ctx.fillStyle = pt.coreColor || '#fffbeb';
+      ctx.beginPath();
+      ctx.ellipse(rX * 0.15, 0, rX * 0.48, rY * 0.42, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
   }
 }
 
