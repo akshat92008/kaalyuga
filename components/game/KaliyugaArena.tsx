@@ -181,6 +181,10 @@ import {
   triggerImpactInversionFlash,
 } from '@/lib/game/bloodDemonArts';
 import {
+  DemonSlayerVfxPalette,
+  WebglDemonSlayerVfxOverlay,
+} from '@/lib/game/webglDemonSlayerVfx';
+import {
   DUNDUBHI_FLIPBOOK_ROWS,
   FlipbookSheetSpec,
   ISOMETRIC_TELEGRAPH_CELLS,
@@ -481,6 +485,7 @@ export default function KaliyugaArena() {
   const rudra3dRef = useRef<Rudra3DRenderer | null>(null);
   const boss3dRef = useRef<Boss3DRenderer | null>(null);
   const enemy3dRef = useRef<Enemy3DRenderer | null>(null);
+  const webglDemonSlayerVfxRef = useRef<WebglDemonSlayerVfxOverlay | null>(null);
   const bloodDemonArtsRef = useRef<BloodDemonArtPool>(createBloodDemonArtPool());
   const enemyVariantCounterRef = useRef<number>(0);
   const gamepadPrevButtonsRef = useRef<boolean[]>([]);
@@ -1069,6 +1074,9 @@ export default function KaliyugaArena() {
     if (!enemy3dRef.current) {
       enemy3dRef.current = new Enemy3DRenderer(256);
     }
+    if (!webglDemonSlayerVfxRef.current) {
+      webglDemonSlayerVfxRef.current = new WebglDemonSlayerVfxOverlay();
+    }
   }, []);
 
   // Path A Stylized Hybrid Pipeline — 60FPS 3D Animated Rudra + Bosses + Hand-Painted 2D Enemy Horde
@@ -1144,9 +1152,11 @@ export default function KaliyugaArena() {
       rudra3dRef.current?.dispose();
       enemy3dRef.current?.dispose();
       boss3dRef.current?.dispose();
+      webglDemonSlayerVfxRef.current?.dispose();
       rudra3dRef.current = null;
       boss3dRef.current = null;
       enemy3dRef.current = null;
+      webglDemonSlayerVfxRef.current = null;
     };
   }, [ensure3DRenderersBooted]);
 
@@ -3195,17 +3205,21 @@ export default function KaliyugaArena() {
       soundEngine.playBreathingStyle(
         astraId === 'agneyastra' ? 'sun' : astraId === 'vayavyastra' ? 'wind' : 'thunder'
       );
+      const astraPalette: DemonSlayerVfxPalette =
+        astraId === 'agneyastra' ? 'sun' : astraId === 'vayavyastra' ? 'wind' : 'thunder';
+      const astraSecondPalette: DemonSlayerVfxPalette =
+        astraId === 'agneyastra' ? 'hinokami' : astraId === 'vayavyastra' ? 'wind' : 'water';
       spawnSunHaloRing(bloodDemonArtsRef.current, {
         x: p.x,
         y: p.y - 16,
-        radius: spec.radius * 0.85,
-        palette: astraId === 'agneyastra' ? 'sun' : astraId === 'vayavyastra' ? 'wind' : 'thunder',
+        radius: spec.radius * 1.12,
+        palette: astraPalette,
       });
       if (astraId === 'vayavyastra') {
         spawnCycloneVortex(bloodDemonArtsRef.current, {
           x: p.x,
           y: p.y - 14,
-          outerRadius: spec.radius * 0.92,
+          outerRadius: spec.radius * 1.18,
           armCount: 6,
           palette: 'wind',
         });
@@ -3213,32 +3227,79 @@ export default function KaliyugaArena() {
           x: p.x,
           y: p.y - 22,
           angle: aimAngle,
-          arcSpan: 3.1,
-          radius: spec.radius * 0.76,
-          thickness: 26,
+          arcSpan: 3.3,
+          radius: spec.radius * 1.05,
+          thickness: 34,
           palette: 'wind',
+        });
+        webglDemonSlayerVfxRef.current?.spawnCycloneVortex({
+          x: p.x,
+          y: p.y - 16,
+          radius: spec.radius * 1.08,
+          palette: 'wind',
+          duration: 0.62,
+          ringCount: 3,
         });
       } else {
         spawnHinokamiSlashArc(bloodDemonArtsRef.current, {
           x: p.x,
           y: p.y - 24,
           angle: aimAngle,
-          arcSpan: 2.9,
-          radius: spec.radius * 0.72,
-          thickness: 28,
-          palette: astraId === 'agneyastra' ? 'sun' : 'thunder',
+          arcSpan: 3.15,
+          radius: spec.radius * 1.02,
+          thickness: 36,
+          palette: astraPalette,
         });
         spawnHinokamiSlashArc(bloodDemonArtsRef.current, {
           x: p.x,
           y: p.y - 24,
           angle: aimAngle + 0.22,
-          arcSpan: 2.35,
-          radius: spec.radius * 0.58,
-          thickness: 20,
-          palette: astraId === 'agneyastra' ? 'hinokami' : 'water',
+          arcSpan: 2.65,
+          radius: spec.radius * 0.84,
+          thickness: 26,
+          palette: astraSecondPalette,
           direction: -1,
         });
+        webglDemonSlayerVfxRef.current?.spawnCycloneVortex({
+          x: p.x,
+          y: p.y - 18,
+          radius: spec.radius * 0.96,
+          palette: astraPalette,
+          duration: 0.54,
+          ringCount: 3,
+        });
       }
+      webglDemonSlayerVfxRef.current?.spawnSlashRibbon({
+        x: p.x,
+        y: p.y - 24,
+        angle: aimAngle,
+        radius: spec.radius * 1.08,
+        width: 78,
+        arcSpan: 3.2,
+        direction: 1,
+        palette: astraPalette,
+        duration: 0.44,
+        tiltX: 0.64,
+      });
+      webglDemonSlayerVfxRef.current?.spawnSlashRibbon({
+        x: p.x,
+        y: p.y - 26,
+        angle: aimAngle + 0.35,
+        radius: spec.radius * 0.88,
+        width: 60,
+        arcSpan: 2.8,
+        direction: -1,
+        palette: astraSecondPalette,
+        duration: 0.4,
+        tiltX: 0.48,
+      });
+      webglDemonSlayerVfxRef.current?.spawnSparkBurst({
+        x: p.x,
+        y: p.y - 24,
+        count: 26,
+        speed: 480,
+        palette: astraPalette,
+      });
 
       const corridorEndX = p.x + Math.cos(aimAngle) * spec.range;
       const corridorEndY = p.y + Math.sin(aimAngle) * spec.range;
@@ -3662,12 +3723,38 @@ export default function KaliyugaArena() {
     p.invulnTimer = Math.max(p.invulnTimer, 0.32);
     recordQuestEvent('kalaripayattu_parries', 1);
     soundEngine.playSpell('parry');
-    spawnShockwave(p.x, p.y, 122, '#ffd86b', 0.34);
+    spawnShockwave(p.x, p.y, 148, '#ffd86b', 0.34);
+    spawnSunHaloRing(bloodDemonArtsRef.current, {
+      x: p.x,
+      y: p.y - 20,
+      radius: 112,
+      palette: 'thunder',
+    });
+    spawnTengenClashSparks(bloodDemonArtsRef.current, p.x + p.facing * 18, p.y - 24, 16, 360);
+    webglDemonSlayerVfxRef.current?.spawnSlashRibbon({
+      x: p.x + p.facing * 12,
+      y: p.y - 24,
+      angle: p.facing > 0 ? 0 : Math.PI,
+      radius: 124,
+      width: 52,
+      arcSpan: 2.4,
+      direction: 1,
+      palette: 'thunder',
+      duration: 0.28,
+      tiltX: 0.52,
+    });
+    webglDemonSlayerVfxRef.current?.spawnSparkBurst({
+      x: p.x + p.facing * 18,
+      y: p.y - 24,
+      count: 18,
+      speed: 420,
+      palette: 'thunder',
+    });
     spawnFlipbookVfx(
       PHASE2_VFX_SHEETS.parryAndHitSparks4x2.url,
       p.x + p.facing * 18,
       p.y - 24,
-      138,
+      188,
       0.28,
       0,
       1,
@@ -3675,7 +3762,7 @@ export default function KaliyugaArena() {
       PHASE2_VFX_SHEETS.parryAndHitSparks4x2,
       PARRY_SPARKS_FLIPBOOK_ROWS.VEDIC_PARRY_FLASH
     );
-    spawnParticles(p.x, p.y - 28, 24, '#ffd86b', 165, 4.4, 80);
+    spawnParticles(p.x, p.y - 28, 28, '#ffd86b', 185, 4.6, 80);
 
     // Proactive God-of-War / Sekiro Instant Golden Deflect if an enemy is winding up a parriable strike within 215px!
     let instantDeflected = false;
@@ -4262,20 +4349,20 @@ export default function KaliyugaArena() {
     gainAstraEnergy(ASTRA_ENERGY_GAINS.EXECUTION);
 
     soundEngine.playHit('execute');
-    spawnShockwave(brokenEnemy.x, brokenEnemy.y, 245, '#ff4d3b', 0.46);
+    spawnShockwave(brokenEnemy.x, brokenEnemy.y, 290, '#ff4d3b', 0.48);
     spawnSunHaloRing(bloodDemonArtsRef.current, {
       x: brokenEnemy.x,
       y: brokenEnemy.y - 22,
-      radius: 142,
+      radius: 196,
       palette: 'sun',
     });
     spawnHinokamiSlashArc(bloodDemonArtsRef.current, {
       x: brokenEnemy.x,
       y: brokenEnemy.y - 24,
       angle: p.slashAngle,
-      arcSpan: 3.1,
-      radius: 132,
-      thickness: 30,
+      arcSpan: 3.3,
+      radius: 198,
+      thickness: 38,
       palette: 'sun',
       direction: 1,
     });
@@ -4284,14 +4371,45 @@ export default function KaliyugaArena() {
       x: brokenEnemy.x,
       y: brokenEnemy.y - 24,
       angle: p.slashAngle + 0.35,
-      arcSpan: 2.65,
-      radius: 112,
-      thickness: 24,
+      arcSpan: 2.95,
+      radius: 168,
+      thickness: 32,
       palette: 'water',
       direction: -1,
     });
-    spawnTengenClashSparks(bloodDemonArtsRef.current, brokenEnemy.x, brokenEnemy.y - 24, 24, 450);
-    triggerImpactInversionFlash(bloodDemonArtsRef.current, brokenEnemy.x, brokenEnemy.y - 24, 0.05, '#ff4d3b');
+    webglDemonSlayerVfxRef.current?.spawnSlashRibbon({
+      x: brokenEnemy.x,
+      y: brokenEnemy.y - 24,
+      angle: p.slashAngle,
+      radius: 235,
+      width: 78,
+      arcSpan: 3.2,
+      direction: 1,
+      palette: 'sun',
+      duration: 0.44,
+      tiltX: 0.58,
+    });
+    webglDemonSlayerVfxRef.current?.spawnSlashRibbon({
+      x: brokenEnemy.x,
+      y: brokenEnemy.y - 24,
+      angle: p.slashAngle + 0.35,
+      radius: 205,
+      width: 64,
+      arcSpan: 2.9,
+      direction: -1,
+      palette: 'water',
+      duration: 0.4,
+      tiltX: 0.48,
+    });
+    webglDemonSlayerVfxRef.current?.spawnSparkBurst({
+      x: brokenEnemy.x,
+      y: brokenEnemy.y - 24,
+      count: 28,
+      speed: 520,
+      palette: 'sun',
+    });
+    spawnTengenClashSparks(bloodDemonArtsRef.current, brokenEnemy.x, brokenEnemy.y - 24, 30, 500);
+    triggerImpactInversionFlash(bloodDemonArtsRef.current, brokenEnemy.x, brokenEnemy.y - 24, 0.06, '#ff4d3b');
     const execSlashRow =
       finisherSpec.variant === 'spin_360_cleave'
         ? PARASHU_FLIPBOOK_ROWS.SPIN_360_WHIRLWIND_RING
@@ -4300,8 +4418,8 @@ export default function KaliyugaArena() {
       PHASE2_VFX_SHEETS.parashuSlashes3x3.url,
       brokenEnemy.x,
       brokenEnemy.y - 22,
-      168,
-      0.32,
+      248,
+      0.34,
       finisherSpec.variant === 'impaling_lunge' ? p.slashAngle : 0,
       finisherSpec.variant === 'spin_360_cleave' ? 0.72 : 1,
       'screen',
@@ -4459,22 +4577,30 @@ export default function KaliyugaArena() {
         spawnShockwave(
           wx,
           wy,
-          115 + orbsUsed * 20 + waveIdx * 18,
+          135 + orbsUsed * 24 + waveIdx * 22,
           waveIdx === 0 ? '#ff2a3c' : '#ff9233',
-          0.34 + waveIdx * 0.06
+          0.36 + waveIdx * 0.06
         );
-        spawnParticles(wx, wy - 12, 16, '#ff6a2b', 210, 4.8, 140);
+        spawnParticles(wx, wy - 12, 20, '#ff6a2b', 235, 5.2, 140);
       }
     } else if (heavySpec.styleId === 'sudarshana_vortex') {
       // God of War Pillar Style: 360° Sanemi Wind Breathing Hurricane Vortex that pulls nearby foes inward!
-      spawnShockwave(p.x, p.y, heavySpec.cleaveRadiusPx, '#10b981', 0.42);
-      spawnShockwave(p.x, p.y, heavySpec.cleaveRadiusPx * 0.72, '#6ee7b7', 0.32);
+      spawnShockwave(p.x, p.y, heavySpec.cleaveRadiusPx * 1.15, '#10b981', 0.44);
+      spawnShockwave(p.x, p.y, heavySpec.cleaveRadiusPx * 0.85, '#6ee7b7', 0.34);
       spawnCycloneVortex(bloodDemonArtsRef.current, {
         x: p.x,
         y: p.y - 16,
-        outerRadius: heavySpec.cleaveRadiusPx * 0.92,
+        outerRadius: heavySpec.cleaveRadiusPx * 1.18,
         armCount: 6,
         palette: 'wind',
+      });
+      webglDemonSlayerVfxRef.current?.spawnCycloneVortex({
+        x: p.x,
+        y: p.y - 18,
+        radius: heavySpec.cleaveRadiusPx * 1.12,
+        palette: 'wind',
+        duration: 0.58,
+        ringCount: 3,
       });
       sim.enemies.forEach((e) => {
         if (e.aiState === 'ko') return;
@@ -4487,16 +4613,16 @@ export default function KaliyugaArena() {
       });
     } else {
       // God of War Thrust Style: Impaling Water Dragon & Thunder Lunge!
-      spawnShockwave(impactX, impactY, 132 + orbsUsed * 18, '#38bdf8', 0.36);
-      spawnShockwave(p.x, p.y, 78, '#ffd86b', 0.26);
+      spawnShockwave(impactX, impactY, 165 + orbsUsed * 22, '#38bdf8', 0.38);
+      spawnShockwave(p.x, p.y, 108, '#ffd86b', 0.28);
     }
-    const primaryHeavyPalette =
+    const primaryHeavyPalette: DemonSlayerVfxPalette =
       p.stance === 'pillar'
         ? 'wind'
         : p.stance === 'thrust'
         ? 'water'
         : 'sun';
-    const secondaryHeavyPalette =
+    const secondaryHeavyPalette: DemonSlayerVfxPalette =
       p.stance === 'pillar'
         ? 'wind'
         : p.stance === 'thrust'
@@ -4508,9 +4634,9 @@ export default function KaliyugaArena() {
       x: impactX,
       y: impactY - 22,
       angle: p.slashAngle,
-      arcSpan: p.stance === 'pillar' ? 3.15 : 2.85,
-      radius: 126 + orbsUsed * 12,
-      thickness: 28,
+      arcSpan: p.stance === 'pillar' ? 3.35 : 3.05,
+      radius: 174 + orbsUsed * 16,
+      thickness: 36,
       palette: primaryHeavyPalette,
       direction: 1,
     });
@@ -4518,19 +4644,50 @@ export default function KaliyugaArena() {
       x: impactX,
       y: impactY - 24,
       angle: p.slashAngle + 0.18,
-      arcSpan: 2.25,
-      radius: 98 + orbsUsed * 10,
-      thickness: 20,
+      arcSpan: 2.55,
+      radius: 142 + orbsUsed * 14,
+      thickness: 28,
       palette: secondaryHeavyPalette,
       direction: -1,
     });
     spawnSunHaloRing(bloodDemonArtsRef.current, {
       x: impactX,
       y: impactY - 16,
-      radius: 96 + orbsUsed * 14,
+      radius: 138 + orbsUsed * 18,
       palette: primaryHeavyPalette,
     });
-    spawnTengenClashSparks(bloodDemonArtsRef.current, impactX, impactY - 22, 16 + orbsUsed * 4, 380);
+    webglDemonSlayerVfxRef.current?.spawnSlashRibbon({
+      x: impactX,
+      y: impactY - 24,
+      angle: p.slashAngle,
+      radius: 205 + orbsUsed * 16,
+      width: 74,
+      arcSpan: p.stance === 'pillar' ? 3.35 : 2.95,
+      direction: 1,
+      palette: primaryHeavyPalette,
+      duration: 0.42,
+      tiltX: 0.58,
+    });
+    webglDemonSlayerVfxRef.current?.spawnSlashRibbon({
+      x: impactX,
+      y: impactY - 26,
+      angle: p.slashAngle + 0.24,
+      radius: 168 + orbsUsed * 12,
+      width: 58,
+      arcSpan: 2.65,
+      direction: -1,
+      palette: secondaryHeavyPalette,
+      duration: 0.36,
+      tiltX: 0.46,
+    });
+    webglDemonSlayerVfxRef.current?.spawnSparkBurst({
+      x: impactX,
+      y: impactY - 22,
+      count: 24 + orbsUsed * 4,
+      speed: 450,
+      palette: primaryHeavyPalette,
+    });
+    spawnTengenClashSparks(bloodDemonArtsRef.current, impactX, impactY - 22, 22 + orbsUsed * 5, 440);
     sim.battleScars = spawnBattleScar(sim.battleScars, {
       id: ++sim.nextScarId,
       kind: 'scorch_crater',
@@ -5082,7 +5239,7 @@ export default function KaliyugaArena() {
       activeFinisherSpec || p.comboStep === 4 || isDashStrike || isRiposteStrike ? 'heavy' : 'light',
       p.stance
     );
-    const lightSlashPalette =
+    const lightSlashPalette: DemonSlayerVfxPalette =
       p.stance === 'pillar'
         ? 'wind'
         : p.stance === 'thrust'
@@ -5095,20 +5252,44 @@ export default function KaliyugaArena() {
         ? 'sun'
         : 'hinokami';
 
+    const arcRadius = p.comboStep === 4 || activeFinisherSpec ? 162 : p.comboStep === 3 ? 138 : 122;
+    const arcThick = p.comboStep === 4 || activeFinisherSpec ? 34 : 26;
+    const arcDir: 1 | -1 = p.comboStep % 2 === 0 ? -1 : 1;
+
     spawnHinokamiSlashArc(bloodDemonArtsRef.current, {
-      x: p.x + p.facing * 14,
+      x: p.x + p.facing * 16,
       y: p.y - 22,
       angle: p.slashAngle,
-      arcSpan: p.comboStep === 4 || activeFinisherSpec ? 2.75 : p.comboStep === 3 ? 2.45 : 2.2,
-      radius: p.comboStep === 4 || activeFinisherSpec ? 112 : p.comboStep === 3 ? 96 : 88,
-      thickness: p.comboStep === 4 || activeFinisherSpec ? 26 : 20,
+      arcSpan: p.comboStep === 4 || activeFinisherSpec ? 2.95 : p.comboStep === 3 ? 2.65 : 2.35,
+      radius: arcRadius,
+      thickness: arcThick,
       palette: lightSlashPalette,
-      direction: p.comboStep % 2 === 0 ? -1 : 1,
+      direction: arcDir,
+    });
+
+    webglDemonSlayerVfxRef.current?.spawnSlashRibbon({
+      x: p.x + p.facing * 16,
+      y: p.y - 24,
+      angle: p.slashAngle,
+      radius: arcRadius * 1.18,
+      width: arcThick * 2.15,
+      arcSpan: p.comboStep === 4 || activeFinisherSpec ? 3.05 : 2.45,
+      direction: arcDir,
+      palette: lightSlashPalette,
+      duration: p.comboStep === 4 || activeFinisherSpec ? 0.38 : 0.30,
+      tiltX: p.comboStep === 2 ? -0.45 : 0.60,
+    });
+    webglDemonSlayerVfxRef.current?.spawnSparkBurst({
+      x: p.x + Math.cos(p.slashAngle) * 52,
+      y: p.y - 24 + Math.sin(p.slashAngle) * 34,
+      count: p.comboStep >= 3 || activeFinisherSpec ? 18 : 12,
+      speed: 380,
+      palette: lightSlashPalette,
     });
 
     // Dual-element or finisher companion Breathing arc on Combo Step 3/4, Dash-Strike, or Riposte!
     if (p.comboStep >= 3 || activeFinisherSpec || isDashStrike || isRiposteStrike) {
-      const companionPalette =
+      const companionPalette: DemonSlayerVfxPalette =
         p.stance === 'smash'
           ? p.comboStep === 4
             ? 'water'
@@ -5117,29 +5298,49 @@ export default function KaliyugaArena() {
           ? 'wind'
           : 'thunder';
       spawnHinokamiSlashArc(bloodDemonArtsRef.current, {
-        x: p.x + p.facing * 16,
+        x: p.x + p.facing * 18,
         y: p.y - 24,
         angle: p.slashAngle + (p.comboStep % 2 === 0 ? -0.22 : 0.22),
-        arcSpan: 2.1,
-        radius: p.comboStep === 4 ? 96 : 78,
-        thickness: 16,
+        arcSpan: 2.35,
+        radius: p.comboStep === 4 ? 136 : 112,
+        thickness: 24,
         palette: companionPalette,
         direction: p.comboStep % 2 === 0 ? 1 : -1,
+      });
+      webglDemonSlayerVfxRef.current?.spawnSlashRibbon({
+        x: p.x + p.facing * 18,
+        y: p.y - 26,
+        angle: p.slashAngle + (p.comboStep % 2 === 0 ? -0.24 : 0.24),
+        radius: (p.comboStep === 4 ? 148 : 122) * 1.12,
+        width: 50,
+        arcSpan: 2.45,
+        direction: p.comboStep % 2 === 0 ? 1 : -1,
+        palette: companionPalette,
+        duration: 0.34,
+        tiltX: 0.44,
       });
       if (p.comboStep === 4 || activeFinisherSpec) {
         if (p.stance === 'pillar') {
           spawnCycloneVortex(bloodDemonArtsRef.current, {
             x: p.x + p.facing * 18,
             y: p.y - 18,
-            outerRadius: 108,
+            outerRadius: 152,
             armCount: 5,
             palette: 'wind',
+          });
+          webglDemonSlayerVfxRef.current?.spawnCycloneVortex({
+            x: p.x + p.facing * 18,
+            y: p.y - 18,
+            radius: 158,
+            palette: 'wind',
+            duration: 0.46,
+            ringCount: 2,
           });
         } else {
           spawnSunHaloRing(bloodDemonArtsRef.current, {
             x: p.x + p.facing * 18,
             y: p.y - 18,
-            radius: 92,
+            radius: 132,
             palette: lightSlashPalette,
           });
         }
@@ -7411,20 +7612,48 @@ export default function KaliyugaArena() {
               sim.screenFlashAlpha = 0.25;
               sim.screenFlashColor = '#ff521b';
               soundEngine.playGong('chamber');
-              spawnShockwave(e.x, e.y, 195, '#ff5924', 0.45);
-              triggerImpactInversionFlash(bloodDemonArtsRef.current, e.x, e.y - 38, 0.055, '#ff5924');
+              spawnShockwave(e.x, e.y, 240, '#ff5924', 0.48);
+              triggerImpactInversionFlash(bloodDemonArtsRef.current, e.x, e.y - 38, 0.06, '#ff5924');
+              const bossPhasePalette: DemonSlayerVfxPalette = e.type === 'vrikodara' ? 'void' : 'bronze';
               spawnCycloneVortex(bloodDemonArtsRef.current, {
                 x: e.x,
                 y: e.y - 20,
-                outerRadius: 185,
+                outerRadius: 225,
                 armCount: 6,
-                palette: e.type === 'vrikodara' ? 'void' : 'bronze',
+                palette: bossPhasePalette,
               });
               spawnSunHaloRing(bloodDemonArtsRef.current, {
                 x: e.x,
                 y: e.y - 24,
-                radius: 165,
+                radius: 205,
                 palette: e.type === 'vrikodara' ? 'void' : 'sun',
+              });
+              webglDemonSlayerVfxRef.current?.spawnCycloneVortex({
+                x: e.x,
+                y: e.y - 22,
+                radius: 235,
+                palette: bossPhasePalette,
+                duration: 0.68,
+                ringCount: 3,
+              });
+              webglDemonSlayerVfxRef.current?.spawnSlashRibbon({
+                x: e.x,
+                y: e.y - 28,
+                angle: 0,
+                radius: 210,
+                width: 74,
+                arcSpan: 3.4,
+                direction: 1,
+                palette: bossPhasePalette,
+                duration: 0.5,
+                tiltX: 0.62,
+              });
+              webglDemonSlayerVfxRef.current?.spawnSparkBurst({
+                x: e.x,
+                y: e.y - 34,
+                count: 28,
+                speed: 520,
+                palette: bossPhasePalette,
               });
               spawnParticles(e.x, e.y - 38, 42, '#ff5924', 240, 5.5, 80);
               spawnFloatingText(
@@ -8087,6 +8316,40 @@ export default function KaliyugaArena() {
                 radius: e.telegraphRadius,
                 attackPattern: e.attackPattern,
               });
+              const enemyVfxPal: DemonSlayerVfxPalette =
+                e.type === 'vrikodara'
+                  ? 'void'
+                  : e.type === 'dundubhi'
+                  ? 'bronze'
+                  : e.type === 'molten_titan_warden' || e.type === 'semi_boss_bloodforge'
+                  ? 'magma'
+                  : e.type === 'ash_cyclone_warden'
+                  ? 'wind'
+                  : e.type === 'eternal_wheel_warden'
+                  ? 'thunder'
+                  : 'blood';
+              webglDemonSlayerVfxRef.current?.spawnSlashRibbon({
+                x: e.x + Math.cos(e.aimAngle) * 18,
+                y: e.y - 24 + Math.sin(e.aimAngle) * 12,
+                angle: e.aimAngle,
+                radius: Math.max(128, Math.min(220, e.telegraphRadius * 1.05)),
+                width: e.isBoss ? 68 : 48,
+                arcSpan: e.isBoss ? 2.9 : 2.35,
+                direction: 1,
+                palette: enemyVfxPal,
+                duration: e.isBoss ? 0.40 : 0.30,
+                tiltX: 0.56,
+              });
+              if (e.isBoss) {
+                webglDemonSlayerVfxRef.current?.spawnCycloneVortex({
+                  x: e.x,
+                  y: e.y - 16,
+                  radius: Math.max(145, e.telegraphRadius * 0.95),
+                  palette: enemyVfxPal,
+                  duration: 0.48,
+                  ringCount: 2,
+                });
+              }
 
               // Geometric Hit Detection using pure unit-tested rules!
               let playerHit = yantraBurstHitPlayer;
@@ -9276,28 +9539,107 @@ export default function KaliyugaArena() {
         sim.slagFissures
       );
 
-      // Step 2.4: Keep ground flagstone art crystal clear without radial orange/pink GI blob noise during combat
+      // Dynamic Elemental Floor Illumination + Animated Sanctuary Brazier Flames
       void renderWorldSpaceLumenGI;
 
-      // 2. Brazier floor glow pools only needed in static artwork fallback (MP4 arenas already contain dynamic fire lighting)
       ctx.save();
-      if (!sim.videoBgEnabled) {
-        chamberSpec.braziers.forEach((b) => {
-          const bx = b.x * worldW;
-          const by = b.y * worldH;
-          const r = b.radius * 1.15 * flicker;
+      chamberSpec.braziers.forEach((b, bIdx) => {
+        const bx = b.x * worldW;
+        const by = b.y * worldH;
+        const bFlicker = flicker * (0.92 + Math.sin(now * 0.011 + bIdx * 1.9) * 0.08);
+        const r = b.radius * 1.32 * bFlicker;
+
+        // Warm radiant stone-floor brazier bounce pool (always visible for theatrical light contrast)
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        const grad = ctx.createRadialGradient(bx, by, 4, bx, by, r);
+        grad.addColorStop(0, b.color + '4a');
+        grad.addColorStop(0.45, b.color + '1c');
+        grad.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(bx, by, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        // Crisp 4-frame animated flame plume above brazier bowl
+        if (brazierFlameAsset && brazierFlameAsset.frames.length >= 4) {
+          const fIdx = (Math.floor(now * 0.012) + bIdx) % brazierFlameAsset.frames.length;
+          const bf = brazierFlameAsset.frames[fIdx];
+          const fw = 46 * bFlicker;
+          const fh = 64 * bFlicker;
           ctx.save();
-          ctx.globalCompositeOperation = 'screen';
-          const grad = ctx.createRadialGradient(bx, by, 4, bx, by, r);
-          grad.addColorStop(0, b.color + '55');
-          grad.addColorStop(0.5, b.color + '1c');
-          grad.addColorStop(1, 'rgba(0,0,0,0)');
-          ctx.fillStyle = grad;
+          ctx.globalCompositeOperation = 'lighter';
+          ctx.globalAlpha = 0.88;
+          ctx.drawImage(
+            brazierFlameAsset.cleanCanvas,
+            bf.sx,
+            bf.sy,
+            bf.sw,
+            bf.sh,
+            bx - fw * 0.5,
+            by - fh * 0.86,
+            fw,
+            fh
+          );
+          ctx.restore();
+        }
+      });
+
+      // Dynamic Demon Slayer Floor Illumination beneath Rudra & active elemental slashes/mandalas
+      {
+        const bdaPool = bloodDemonArtsRef.current;
+        const p = sim.player;
+        const playerGlowColor =
+          p.stance === 'pillar'
+            ? 'rgba(38, 247, 141, '
+            : p.stance === 'thrust'
+            ? 'rgba(56, 232, 255, '
+            : 'rgba(255, 138, 36, ';
+        const isCombating = p.action !== 'idle' || p.slashArcAlpha > 0.08 || p.focusOrbs > 0;
+        if (isCombating) {
+          const rGlow = p.action !== 'idle' ? 165 : 108;
+          const gAlpha = p.action !== 'idle' ? 0.24 : 0.12;
+          ctx.save();
+          ctx.globalCompositeOperation = 'lighter';
+          const pg = ctx.createRadialGradient(p.x, p.y - 8, 6, p.x, p.y - 8, rGlow);
+          pg.addColorStop(0, `${playerGlowColor}${gAlpha})`);
+          pg.addColorStop(0.55, `${playerGlowColor}${(gAlpha * 0.42).toFixed(3)})`);
+          pg.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          ctx.fillStyle = pg;
           ctx.beginPath();
-          ctx.arc(bx, by, r, 0, Math.PI * 2);
+          ctx.ellipse(p.x, p.y, rGlow, rGlow * 0.62, 0, 0, Math.PI * 2);
           ctx.fill();
           ctx.restore();
-        });
+        }
+
+        for (let i = 0; i < bdaPool.slashArcs.length; i++) {
+          const arc = bdaPool.slashArcs[i];
+          if (!arc.active) continue;
+          const fade = Math.max(0, 1 - arc.life / Math.max(0.01, arc.maxLife));
+          const lr = arc.radius * 1.45;
+          const cRgb =
+            arc.palette === 'water' || arc.palette === 'bronze'
+              ? '56, 210, 255'
+              : arc.palette === 'wind'
+              ? '38, 247, 141'
+              : arc.palette === 'thunder'
+              ? '255, 224, 64'
+              : arc.palette === 'void' || arc.palette === 'blood'
+              ? '255, 36, 108'
+              : '255, 124, 28';
+          ctx.save();
+          ctx.globalCompositeOperation = 'lighter';
+          const ag = ctx.createRadialGradient(arc.x, arc.y + 18, 8, arc.x, arc.y + 18, lr);
+          ag.addColorStop(0, `rgba(${cRgb}, ${(0.28 * fade).toFixed(3)})`);
+          ag.addColorStop(0.5, `rgba(${cRgb}, ${(0.11 * fade).toFixed(3)})`);
+          ag.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          ctx.fillStyle = ag;
+          ctx.beginPath();
+          ctx.ellipse(arc.x, arc.y + 18, lr, lr * 0.62, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
       }
 
       // Draw Active Hades Multi-Wave Summoning Pentagram Rifts using Hand-Painted Ground Decal Frame 3
@@ -10455,10 +10797,10 @@ export default function KaliyugaArena() {
               Boolean(p.finisherVariant);
             const baseSlashSize =
               p.action === 'execute' || p.action === 'heavy_unleash'
-                ? 156
+                ? 248
                 : p.finisherVariant
-                ? 142
-                : 118;
+                ? 218
+                : 182;
 
             drawAdditiveFlipbookCell(ctx, {
               sheetSpec: slashPlan.sheetSpec,
@@ -10696,6 +11038,35 @@ export default function KaliyugaArena() {
       renderParticlePoolCanvas(ctx, sim.particles);
       renderBloodDemonArtWorldPass(ctx, bloodDemonArtsRef.current);
 
+      // 8.1. Dynamic Elemental Bounce Glow over Hero Torso during Active Breathing Strikes & Astras
+      {
+        const p = sim.player;
+        if (
+          p.action === 'light_attack' ||
+          p.action === 'heavy_unleash' ||
+          p.action === 'execute' ||
+          p.action === 'astra'
+        ) {
+          const bounceRgb =
+            p.stance === 'pillar'
+              ? '38, 247, 141'
+              : p.stance === 'thrust'
+              ? '56, 232, 255'
+              : '255, 168, 48';
+          ctx.save();
+          ctx.globalCompositeOperation = 'lighter';
+          const bGrad = ctx.createRadialGradient(p.x, p.y - 34, 4, p.x, p.y - 34, 86);
+          bGrad.addColorStop(0, `rgba(${bounceRgb}, 0.26)`);
+          bGrad.addColorStop(0.55, `rgba(${bounceRgb}, 0.10)`);
+          bGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          ctx.fillStyle = bGrad;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y - 34, 86, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+
       // 8.2. Hand-Painted Phase 2 Additive VFX Flipbook Burst Pool (uses real dt so flipbooks stay crisp during hit-stop!)
       for (let i = 0; i < sim.flipbookVfx.length; i++) {
         const fx = sim.flipbookVfx[i];
@@ -10796,8 +11167,18 @@ export default function KaliyugaArena() {
         ctx.restore();
       });
 
-      // End World-Space Camera Pass
+      // End World-Space Camera Pass (-sim.camX, -sim.camY)
       ctx.restore();
+
+      // 9.8. Three.js Custom GLSL Demon Slayer Ribbons, Cyclones & Sparks (Zoom/Shake Aligned!)
+      const webglVfx = webglDemonSlayerVfxRef.current;
+      if (webglVfx && webglVfx.updateAndRender(dt, sim.camX, sim.camY, 1, cw, ch)) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.drawImage(webglVfx.canvas, 0, 0, cw, ch);
+        ctx.restore();
+      }
+
       // End Camera Zoom & Shake Pass so Screen-Space Overlays cover 100% of Viewport (0..cw, 0..ch)
       ctx.restore();
 

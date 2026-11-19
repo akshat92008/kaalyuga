@@ -532,42 +532,74 @@ export function renderIsometricChamberPlatform(
     ctx.restore();
   }
 
-  // 1.5. Ufotable 2D Anime Atmospheric Contrast:
-  // Warm golden sunlit lift over the central fighting courtyard + subtle cool-indigo twilight edge tint
+  // 1.5. Ufotable Nocturnal / Twilight Theatrical Contrast Grading & Stone Flagstone Depth:
+  // Deepen the courtyard backdrop into rich obsidian-indigo slate so bright cel flames, water, and lightning pop like Demon Slayer
   ctx.save();
-  ctx.globalCompositeOperation = 'screen';
-  const liftGrad = ctx.createRadialGradient(
+  const moodGrad = ctx.createRadialGradient(
     worldW * 0.5,
     worldH * 0.52,
-    worldW * 0.06,
+    worldW * 0.1,
     worldW * 0.5,
     worldH * 0.52,
-    worldW * 0.62
+    worldW * 0.7
   );
-  liftGrad.addColorStop(0, 'rgba(255, 224, 178, 0.20)');
-  liftGrad.addColorStop(0.55, 'rgba(226, 168, 108, 0.11)');
-  liftGrad.addColorStop(1, 'rgba(120, 82, 58, 0.02)');
-  ctx.fillStyle = liftGrad;
+  if (chamberIndex >= 5) {
+    moodGrad.addColorStop(0, 'rgba(28, 10, 12, 0.22)');
+    moodGrad.addColorStop(0.55, 'rgba(18, 8, 16, 0.42)');
+    moodGrad.addColorStop(1, 'rgba(6, 4, 12, 0.72)');
+  } else {
+    moodGrad.addColorStop(0, 'rgba(12, 18, 36, 0.20)');
+    moodGrad.addColorStop(0.55, 'rgba(8, 13, 28, 0.40)');
+    moodGrad.addColorStop(1, 'rgba(4, 6, 16, 0.68)');
+  }
+  ctx.fillStyle = moodGrad;
   ctx.fillRect(0, 0, worldW, worldH);
-  ctx.restore();
 
-  // Subtle cool indigo-slate twilight framing around outer columns for anime depth contrast
+  // Subtle crisp isometric courtyard flagstone masonry & center arena combat seal (Mugen / Courtyard floor depth)
   ctx.save();
-  const focusCx = worldW * 0.5;
-  const focusCy = worldH * 0.54;
-  const focusGrad = ctx.createRadialGradient(
-    focusCx,
-    focusCy,
-    worldW * 0.36,
-    focusCx,
-    focusCy,
-    worldW * 0.72
-  );
-  focusGrad.addColorStop(0, 'rgba(24, 34, 62, 0)');
-  focusGrad.addColorStop(0.74, 'rgba(24, 34, 62, 0.08)');
-  focusGrad.addColorStop(1, 'rgba(18, 24, 46, 0.22)');
-  ctx.fillStyle = focusGrad;
-  ctx.fillRect(0, 0, worldW, worldH);
+  ctx.beginPath();
+  geom.outerPolygon.forEach((pt, idx) => {
+    const px = pt.x * worldW;
+    const py = pt.y * worldH;
+    if (idx === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  });
+  ctx.closePath();
+  ctx.clip();
+
+  const cx = worldW * 0.5;
+  const cy = worldH * 0.54;
+  ctx.strokeStyle = chamberIndex >= 5 ? 'rgba(255, 136, 86, 0.10)' : 'rgba(148, 194, 255, 0.11)';
+  ctx.lineWidth = 1.2;
+  const tileStep = 76;
+  for (let i = -14; i <= 14; i++) {
+    ctx.beginPath();
+    ctx.moveTo(cx + i * tileStep - 640, cy - 360);
+    ctx.lineTo(cx + i * tileStep + 640, cy + 360);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(cx + i * tileStep + 640, cy - 360);
+    ctx.lineTo(cx + i * tileStep - 640, cy + 360);
+    ctx.stroke();
+  }
+
+  // Carved Center Courtyard Ring & Octagonal Seal
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(1, 0.56);
+  ctx.strokeStyle = chamberIndex >= 5 ? 'rgba(255, 160, 92, 0.18)' : 'rgba(186, 220, 255, 0.16)';
+  ctx.lineWidth = 2.0;
+  ctx.beginPath();
+  ctx.arc(0, 0, 220, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.strokeStyle = chamberIndex >= 5 ? 'rgba(255, 92, 56, 0.12)' : 'rgba(120, 178, 255, 0.11)';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.arc(0, 0, 152, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+  ctx.restore();
   ctx.restore();
 
   // 1.6. Always layer 2D Anime Demon Slayer atmospheric effects (sunbeams, wind streaks, brazier blooms, wisteria petals & Hinokami sparks)
@@ -965,30 +997,26 @@ export function renderProceduralArenaAtmosphere(
   const t = nowMs * 0.001;
   ctx.save();
 
-  // 1. Diagonal Ufotable Volumetric Sunbeams / Twilight Mist Shafts (Komorebi)
+  // 1. Diagonal Ufotable Volumetric Moonlight / Blood-Eclipse Shafts (Komorebi)
   ctx.save();
-  ctx.globalCompositeOperation = 'screen';
+  ctx.globalCompositeOperation = 'lighter';
   const beamColorTop =
     chamberIndex >= 5
-      ? 'rgba(255, 198, 132, 0.13)'
-      : chamberIndex % 2 === 1
-      ? 'rgba(218, 232, 255, 0.12)'
-      : 'rgba(255, 236, 188, 0.13)';
+      ? 'rgba(255, 138, 72, 0.18)'
+      : 'rgba(168, 214, 255, 0.16)';
   const beamColorMid =
     chamberIndex >= 5
-      ? 'rgba(255, 152, 74, 0.055)'
-      : chamberIndex % 2 === 1
-      ? 'rgba(186, 206, 255, 0.045)'
-      : 'rgba(255, 212, 146, 0.055)';
+      ? 'rgba(255, 92, 42, 0.07)'
+      : 'rgba(98, 156, 255, 0.055)';
 
   for (let s = 0; s < 4; s++) {
-    const sway = Math.sin(t * 0.45 + s * 1.7) * 22;
+    const sway = Math.sin(t * 0.45 + s * 1.7) * 20;
     const xTop = worldW * (0.14 + s * 0.23) + sway;
-    const topW = 68 + (s % 2) * 24;
-    const xBot = xTop + worldW * 0.22;
-    const botW = topW * 2.05;
+    const topW = 54 + (s % 2) * 26;
+    const xBot = xTop + worldW * 0.2;
+    const botW = topW * 1.95;
 
-    const beamGrad = ctx.createLinearGradient(xTop, 0, xBot, worldH * 0.86);
+    const beamGrad = ctx.createLinearGradient(xTop, 0, xBot, worldH * 0.84);
     beamGrad.addColorStop(0, beamColorTop);
     beamGrad.addColorStop(0.55, beamColorMid);
     beamGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
@@ -997,46 +1025,44 @@ export function renderProceduralArenaAtmosphere(
     ctx.beginPath();
     ctx.moveTo(xTop, 0);
     ctx.lineTo(xTop + topW, 0);
-    ctx.lineTo(xBot + botW, worldH * 0.88);
-    ctx.lineTo(xBot, worldH * 0.88);
+    ctx.lineTo(xBot + botW, worldH * 0.86);
+    ctx.lineTo(xBot, worldH * 0.86);
     ctx.closePath();
     ctx.fill();
   }
   ctx.restore();
 
-  // 2. Crisp Moat Water / Lava Reflection Shimmer
+  // 2. Crisp Obsidian Water / Lava Reflection Shimmer
   ctx.save();
-  ctx.globalCompositeOperation = 'screen';
+  ctx.globalCompositeOperation = 'lighter';
   ctx.strokeStyle =
     chamberIndex >= 4
-      ? 'rgba(255, 156, 76, 0.10)'
-      : chamberIndex % 2 === 1
-      ? 'rgba(196, 222, 255, 0.09)'
-      : 'rgba(246, 204, 134, 0.09)';
+      ? 'rgba(255, 128, 56, 0.14)'
+      : 'rgba(148, 206, 255, 0.14)';
   ctx.lineWidth = 1.6;
   for (let i = 0; i < 6; i++) {
     const bandY = worldH * (0.26 + i * 0.11) + Math.sin(t * 1.2 + i * 1.4) * 5;
     const bandX = worldW * (i % 2 === 0 ? 0.11 : 0.83) + Math.cos(t * 0.85 + i) * 12;
     ctx.beginPath();
-    ctx.ellipse(bandX, bandY, 58 + (i % 3) * 16, 10, 0, 0, Math.PI * 2);
+    ctx.ellipse(bandX, bandY, 62 + (i % 3) * 18, 10, 0, 0, Math.PI * 2);
     ctx.stroke();
   }
   ctx.restore();
 
   // 3. Layered 2D Anime Brazier Flame Blooms on Sanctuary Courtyard
   ctx.save();
-  ctx.globalCompositeOperation = 'screen';
+  ctx.globalCompositeOperation = 'lighter';
   for (let b = 0; b < 4; b++) {
     const bx = worldW * (b % 2 === 0 ? 0.23 : 0.77);
     const by = worldH * (b < 2 ? 0.41 : 0.72);
     const flicker =
-      0.86 +
+      0.88 +
       Math.sin(t * 6.0 + b * 2.1) * 0.09 +
       Math.cos(t * 12.8 + b * 1.3) * 0.05;
-    const radius = 148 * flicker;
+    const radius = 165 * flicker;
     const poolGrad = ctx.createRadialGradient(bx, by, 6, bx, by, radius);
-    poolGrad.addColorStop(0, `rgba(255, 214, 128, ${(0.14 * flicker).toFixed(3)})`);
-    poolGrad.addColorStop(0.45, `rgba(255, 148, 56, ${(0.075 * flicker).toFixed(3)})`);
+    poolGrad.addColorStop(0, `rgba(255, 188, 92, ${(0.22 * flicker).toFixed(3)})`);
+    poolGrad.addColorStop(0.45, `rgba(255, 92, 32, ${(0.11 * flicker).toFixed(3)})`);
     poolGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
     ctx.fillStyle = poolGrad;
     ctx.beginPath();
@@ -1045,18 +1071,21 @@ export function renderProceduralArenaAtmosphere(
   }
   ctx.restore();
 
-  // 4. Swept 2D Anime Wind-Gust Ribbons Gliding Across Courtyard
+  // 4. Swept 2D Anime Wind-Gust Ribbons & Twilight Mist Gliding Across Courtyard
   ctx.save();
-  for (let w = 0; w < 5; w++) {
+  for (let w = 0; w < 6; w++) {
     const speed = 135 + w * 28;
-    const spanW = 140 + (w % 3) * 45;
+    const spanW = 155 + (w % 3) * 48;
     const baseProgress = ((t * speed + w * 310 + chamberIndex * 97) % (worldW + 320)) - 160;
-    const wy = worldH * (0.24 + w * 0.14) + Math.sin(t * 1.8 + w * 1.5) * 14;
+    const wy = worldH * (0.22 + w * 0.125) + Math.sin(t * 1.8 + w * 1.5) * 14;
     const arcLift = Math.cos(t * 1.6 + w) * 14;
-    const streakAlpha = 0.09 + 0.06 * Math.sin(t * 2.4 + w);
+    const streakAlpha = 0.14 + 0.07 * Math.sin(t * 2.4 + w);
 
-    ctx.strokeStyle = `rgba(255, 246, 224, ${streakAlpha.toFixed(3)})`;
-    ctx.lineWidth = 1.6;
+    ctx.strokeStyle =
+      chamberIndex >= 5
+        ? `rgba(255, 210, 175, ${streakAlpha.toFixed(3)})`
+        : `rgba(205, 234, 255, ${streakAlpha.toFixed(3)})`;
+    ctx.lineWidth = 1.8;
     ctx.lineCap = 'round';
     ctx.beginPath();
     ctx.moveTo(baseProgress, wy);

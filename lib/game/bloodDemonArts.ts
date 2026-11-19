@@ -219,17 +219,71 @@ export interface BloodDemonArtPool {
 
 const PALETTE_COLORS: Record<
   BloodDemonArtPalette,
-  { outer: string; mid: string; core: string; ink: string }
+  { outer: string; mid: string; core: string; ink: string; bloom: string }
 > = {
-  hinokami: { outer: '#e6241c', mid: '#ff6a18', core: '#fff5b8', ink: '#120806' },
-  blood: { outer: '#9c0929', mid: '#ff1f5a', core: '#ffd1dc', ink: '#0d0306' },
-  thunder: { outer: '#d98816', mid: '#ffd84a', core: '#e0f7ff', ink: '#140f08' },
-  void: { outer: '#4b1139', mid: '#e11d74', core: '#ffe6f0', ink: '#0a0408' },
-  sun: { outer: '#ff3b14', mid: '#ffab1f', core: '#fffbe0', ink: '#140804' },
-  magma: { outer: '#b81f0d', mid: '#ff6a18', core: '#ffe89c', ink: '#120705' },
-  bronze: { outer: '#0ea5e9', mid: '#38bdf8', core: '#e0f2fe', ink: '#081426' },
-  water: { outer: '#0a3d91', mid: '#1ca8ff', core: '#ffffff', ink: '#081226' },
-  wind: { outer: '#059669', mid: '#34d399', core: '#ecfdf5', ink: '#061a12' },
+  hinokami: {
+    outer: '#e62200',
+    mid: '#ff9614',
+    core: '#fffce6',
+    ink: '#140604',
+    bloom: '#ff5e00',
+  },
+  blood: {
+    outer: '#990024',
+    mid: '#ff1744',
+    core: '#ffe4ec',
+    ink: '#0d0205',
+    bloom: '#ff1f5a',
+  },
+  thunder: {
+    outer: '#f59e0b',
+    mid: '#ffe94d',
+    core: '#ffffff',
+    ink: '#120e04',
+    bloom: '#38e8ff',
+  },
+  void: {
+    outer: '#520c3c',
+    mid: '#e11d74',
+    core: '#ffd6f5',
+    ink: '#0a0208',
+    bloom: '#ff2478',
+  },
+  sun: {
+    outer: '#ff2e00',
+    mid: '#ffba1a',
+    core: '#ffffff',
+    ink: '#140604',
+    bloom: '#ff7700',
+  },
+  magma: {
+    outer: '#b81a06',
+    mid: '#ff6a18',
+    core: '#fff0b3',
+    ink: '#120705',
+    bloom: '#ff4818',
+  },
+  bronze: {
+    outer: '#0284c7',
+    mid: '#38e8ff',
+    core: '#ffffff',
+    ink: '#04101f',
+    bloom: '#00d4ff',
+  },
+  water: {
+    outer: '#062b7a',
+    mid: '#009dff',
+    core: '#ffffff',
+    ink: '#040d21',
+    bloom: '#38e8ff',
+  },
+  wind: {
+    outer: '#047857',
+    mid: '#26f78d',
+    core: '#eefff7',
+    ink: '#04120c',
+    bloom: '#10b981',
+  },
 };
 
 export const BDA_POOL_CAPS = {
@@ -1250,113 +1304,131 @@ export function renderBloodDemonArtWorldPass(
   ctx: CanvasRenderingContext2D,
   pool: BloodDemonArtPool
 ): void {
-  // 1. Ground Sonic / Akaza-Style Geometric Compass Mandalas & Exploding Blood Seeds
+  // 1. Akaza Destructive Death: Compass Needle Floor Mandalas & Exploding Blood Seeds
   for (let i = 0; i < pool.sonicMandalas.length; i++) {
     const m = pool.sonicMandalas[i];
     if (!m.active) continue;
     const p = 1 - m.life / m.maxLife;
-    const alpha = Math.max(0, (1 - p) * 0.94);
+    const alpha = Math.max(0, Math.sin(Math.min(1, (1 - p) * 1.15) * Math.PI * 0.5) * 0.98);
     const pal = PALETTE_COLORS[m.palette];
+    const outerR = Math.max(36, m.maxRadius * Math.min(1.06, p * 1.4 + 0.22));
+    const spokes = 12;
 
+    // Ground radial additive illumination pool (Akaza reference #2 glowing blue/crimson floor!)
     ctx.save();
     ctx.translate(m.x, m.y);
     ctx.scale(1, 0.58);
-    ctx.globalAlpha = alpha;
-
-    // Akaza-style 12-spoke Destructive Death: Compass Needle geometric snowflake array
-    const outerR = Math.max(24, m.maxRadius * Math.min(1, p * 1.35 + 0.18));
-    const spokes = 12;
-
-    // Luminous ground glow beneath the geometric compass
-    const compassGlow = ctx.createRadialGradient(0, 0, outerR * 0.08, 0, 0, outerR * 1.12);
-    compassGlow.addColorStop(0, pal.mid + '66');
-    compassGlow.addColorStop(0.65, pal.outer + '33');
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = alpha * 0.72;
+    const compassGlow = ctx.createRadialGradient(0, 0, outerR * 0.05, 0, 0, outerR * 1.48);
+    compassGlow.addColorStop(0, pal.core);
+    compassGlow.addColorStop(0.28, pal.bloom);
+    compassGlow.addColorStop(0.66, pal.outer);
     compassGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
     ctx.fillStyle = compassGlow;
     ctx.beginPath();
-    ctx.arc(0, 0, outerR * 1.12, 0, Math.PI * 2);
+    ctx.arc(0, 0, outerR * 1.48, 0, Math.PI * 2);
     ctx.fill();
 
-    // Snowflake cross-bars on each spoke
-    ctx.strokeStyle = pal.ink;
-    ctx.lineWidth = 5.2 * (1 - p * 0.35);
-    for (let s = 0; s < spokes; s++) {
-      const sa = m.rotation + (s / spokes) * Math.PI * 2;
-      const tipR = s % 2 === 0 ? outerR * 1.1 : outerR * 0.88;
+    // Inner hexagram star-of-david lattice + outer snowflake compass crystal arms
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = alpha;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+
+    for (let hex = 0; hex < 2; hex++) {
       ctx.beginPath();
-      ctx.moveTo(Math.cos(sa) * (outerR * 0.16), Math.sin(sa) * (outerR * 0.16));
-      ctx.lineTo(Math.cos(sa) * tipR, Math.sin(sa) * tipR);
+      for (let v = 0; v < 3; v++) {
+        const ha = m.rotation + hex * (Math.PI / 3) + (v / 3) * Math.PI * 2;
+        const hx = Math.cos(ha) * (outerR * 0.74);
+        const hy = Math.sin(ha) * (outerR * 0.74);
+        if (v === 0) ctx.moveTo(hx, hy);
+        else ctx.lineTo(hx, hy);
+      }
+      ctx.closePath();
+      ctx.strokeStyle = pal.ink;
+      ctx.lineWidth = 6.2;
       ctx.stroke();
-    }
-    ctx.strokeStyle = pal.core;
-    ctx.lineWidth = 2.4 * (1 - p * 0.35);
-    for (let s = 0; s < spokes; s++) {
-      const sa = m.rotation + (s / spokes) * Math.PI * 2;
-      const tipR = s % 2 === 0 ? outerR * 1.1 : outerR * 0.88;
-      const branchR = tipR * 0.68;
-      const bx = Math.cos(sa) * branchR;
-      const by = Math.sin(sa) * branchR;
-      ctx.beginPath();
-      ctx.moveTo(Math.cos(sa) * (outerR * 0.16), Math.sin(sa) * (outerR * 0.16));
-      ctx.lineTo(Math.cos(sa) * tipR, Math.sin(sa) * tipR);
-      // Snowflake barb left & right
-      ctx.moveTo(bx, by);
-      ctx.lineTo(
-        bx + Math.cos(sa + 0.55) * (outerR * 0.16),
-        by + Math.sin(sa + 0.55) * (outerR * 0.16)
-      );
-      ctx.moveTo(bx, by);
-      ctx.lineTo(
-        bx + Math.cos(sa - 0.55) * (outerR * 0.16),
-        by + Math.sin(sa - 0.55) * (outerR * 0.16)
-      );
+      ctx.strokeStyle = pal.mid;
+      ctx.lineWidth = 2.6;
       ctx.stroke();
     }
 
+    // 12 crystal snowflake spokes with double chevron barbs
+    for (let pass = 0; pass < 3; pass++) {
+      if (pass === 0) {
+        ctx.strokeStyle = pal.ink;
+        ctx.lineWidth = 6.4 * (1 - p * 0.3);
+      } else if (pass === 1) {
+        ctx.strokeStyle = pal.mid;
+        ctx.lineWidth = 3.2 * (1 - p * 0.3);
+      } else {
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.strokeStyle = pal.core;
+        ctx.lineWidth = 1.6 * (1 - p * 0.3);
+      }
+      ctx.beginPath();
+      for (let s = 0; s < spokes; s++) {
+        const sa = m.rotation + (s / spokes) * Math.PI * 2;
+        const tipR = s % 2 === 0 ? outerR * 1.14 : outerR * 0.86;
+        ctx.moveTo(Math.cos(sa) * (outerR * 0.14), Math.sin(sa) * (outerR * 0.14));
+        ctx.lineTo(Math.cos(sa) * tipR, Math.sin(sa) * tipR);
+
+        for (const frac of [0.54, 0.76]) {
+          const br = tipR * frac;
+          const bx = Math.cos(sa) * br;
+          const by = Math.sin(sa) * br;
+          const barbLen = outerR * (frac > 0.65 ? 0.17 : 0.13);
+          ctx.moveTo(bx, by);
+          ctx.lineTo(bx + Math.cos(sa + 0.62) * barbLen, by + Math.sin(sa + 0.62) * barbLen);
+          ctx.moveTo(bx, by);
+          ctx.lineTo(bx + Math.cos(sa - 0.62) * barbLen, by + Math.sin(sa - 0.62) * barbLen);
+        }
+      }
+      ctx.stroke();
+    }
+
+    // Glowing compass rings
+    ctx.globalCompositeOperation = 'source-over';
     for (let r = 0; r < m.ringCount; r++) {
-      const rp = Math.min(1, p * (1 + r * 0.16));
-      const rad = Math.max(12, m.maxRadius * rp * (1 - r * 0.2));
+      const rp = Math.min(1, p * (1 + r * 0.14) + 0.15);
+      const rad = Math.max(16, m.maxRadius * rp * (1 - r * 0.22));
       ctx.strokeStyle = pal.ink;
-      ctx.lineWidth = 7.2 * (1 - p * 0.45);
+      ctx.lineWidth = 8.4 * (1 - p * 0.35);
       ctx.beginPath();
       ctx.arc(0, 0, rad, 0, Math.PI * 2);
       ctx.stroke();
 
       ctx.strokeStyle = r === 0 ? pal.core : pal.mid;
-      ctx.lineWidth = 3.6 * (1 - p * 0.35);
+      ctx.lineWidth = 4.0 * (1 - p * 0.35);
       ctx.beginPath();
       ctx.arc(0, 0, rad, 0, Math.PI * 2);
       ctx.stroke();
     }
     ctx.restore();
 
-    // Vertical rising Akaza spirit-flame pillars at the 6 primary compass vertices (un-foreshortened in Y!)
+    // Tall vertical additive Akaza spirit-light pillars rising smoothly from 6 outer compass vertices
     ctx.save();
     ctx.translate(m.x, m.y);
-    ctx.globalAlpha = alpha * 0.88;
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = alpha * 0.78;
     for (let s = 0; s < 6; s++) {
       const sa = m.rotation + (s / 6) * Math.PI * 2;
-      const vx = Math.cos(sa) * outerR * 0.96;
-      const vy = Math.sin(sa) * outerR * 0.96 * 0.58;
-      const pillarH = (38 + (s % 2) * 18) * (1 - p * 0.5);
-      const pillarW = 9 * (1 - p * 0.35);
+      const vx = Math.cos(sa) * outerR * 1.02;
+      const vy = Math.sin(sa) * outerR * 1.02 * 0.58;
+      const pillarH = (96 + (s % 2) * 34) * (1 - p * 0.38);
+      const pillarW = 18 * (1 - p * 0.28);
+
+      const beamGrad = ctx.createLinearGradient(vx, vy, vx, vy - pillarH);
+      beamGrad.addColorStop(0, pal.core);
+      beamGrad.addColorStop(0.38, pal.bloom);
+      beamGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = beamGrad;
       ctx.beginPath();
       ctx.moveTo(vx - pillarW, vy);
-      ctx.lineTo(vx, vy - pillarH);
-      ctx.lineTo(vx + pillarW, vy);
+      ctx.quadraticCurveTo(vx - pillarW * 0.3, vy - pillarH * 0.55, vx, vy - pillarH);
+      ctx.quadraticCurveTo(vx + pillarW * 0.3, vy - pillarH * 0.55, vx + pillarW, vy);
       ctx.closePath();
-      ctx.fillStyle = pal.mid;
-      ctx.fill();
-      ctx.strokeStyle = pal.ink;
-      ctx.lineWidth = 2.0;
-      ctx.stroke();
-
-      ctx.beginPath();
-      ctx.moveTo(vx - pillarW * 0.45, vy);
-      ctx.lineTo(vx, vy - pillarH * 0.82);
-      ctx.lineTo(vx + pillarW * 0.45, vy);
-      ctx.closePath();
-      ctx.fillStyle = pal.core;
       ctx.fill();
     }
     ctx.restore();
@@ -1368,292 +1440,490 @@ export function renderBloodDemonArtWorldPass(
     if (!seed.active) continue;
     const p = 1 - seed.life / seed.maxLife;
     const pal = PALETTE_COLORS[seed.palette];
-    const pulse = 0.8 + Math.sin(p * Math.PI * 5) * 0.14;
-    const rad = seed.radius * (0.35 + p * 0.65);
+    const pulse = 0.86 + Math.sin(p * Math.PI * 6) * 0.14;
+    const rad = seed.radius * (0.42 + p * 0.62);
 
     ctx.save();
     ctx.translate(seed.x, seed.y);
     ctx.scale(1, 0.56);
 
-    // Soft outer magma/blood aura
-    const seedGlow = ctx.createRadialGradient(0, 0, rad * 0.15, 0, 0, seed.radius);
-    seedGlow.addColorStop(0, p > 0.72 ? 'rgba(255, 190, 215, 0.52)' : 'rgba(255, 31, 109, 0.36)');
-    seedGlow.addColorStop(0.7, 'rgba(180, 14, 52, 0.22)');
-    seedGlow.addColorStop(1, 'rgba(18, 8, 6, 0)');
+    ctx.globalCompositeOperation = 'lighter';
+    const seedGlow = ctx.createRadialGradient(0, 0, rad * 0.1, 0, 0, seed.radius * 1.25);
+    seedGlow.addColorStop(0, pal.core);
+    seedGlow.addColorStop(0.45, pal.bloom);
+    seedGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.globalAlpha = 0.45 + p * 0.35;
     ctx.fillStyle = seedGlow;
     ctx.beginPath();
-    ctx.arc(0, 0, seed.radius, 0, Math.PI * 2);
+    ctx.arc(0, 0, seed.radius * 1.25, 0, Math.PI * 2);
     ctx.fill();
 
-    // Jagged ink-edged lotus flame ring (6 tapered petals)
-    const petals = 6;
+    ctx.globalCompositeOperation = 'source-over';
+    const petals = 7;
     ctx.beginPath();
     for (let k = 0; k < petals * 2; k++) {
-      const a = seed.seed + (k / (petals * 2)) * Math.PI * 2 + p * 1.1;
-      const r = k % 2 === 0 ? rad * (0.98 * pulse) : rad * 0.48;
+      const a = seed.seed + (k / (petals * 2)) * Math.PI * 2 + p * 1.25;
+      const sway = Math.sin(k * 2.1 + p * 8) * 0.16;
+      const r = k % 2 === 0 ? rad * (1.06 * pulse) : rad * (0.44 + sway * 0.3);
       if (k === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
       else ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
     }
     ctx.closePath();
     ctx.fillStyle = pal.outer;
-    ctx.globalAlpha = 0.72 + p * 0.22;
+    ctx.globalAlpha = 0.84 + p * 0.14;
     ctx.fill();
     ctx.strokeStyle = pal.ink;
-    ctx.lineWidth = 3.8;
+    ctx.lineWidth = 4.2;
     ctx.stroke();
 
-    // Inner bright crimson-gold cel flame core
     ctx.beginPath();
     for (let k = 0; k < petals * 2; k++) {
-      const a = seed.seed + (k / (petals * 2)) * Math.PI * 2 - p * 0.8;
-      const r = k % 2 === 0 ? rad * 0.64 : rad * 0.26;
+      const a = seed.seed + (k / (petals * 2)) * Math.PI * 2 - p * 0.9;
+      const r = k % 2 === 0 ? rad * 0.68 : rad * 0.25;
       if (k === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
       else ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
     }
     ctx.closePath();
-    ctx.fillStyle = p > 0.75 ? pal.core : pal.mid;
+    ctx.fillStyle = p > 0.72 ? pal.core : pal.mid;
     ctx.fill();
 
-    // Expanding thin outer warning contour
-    ctx.globalAlpha = 0.68;
+    ctx.globalAlpha = 0.76;
     ctx.strokeStyle = pal.mid;
-    ctx.lineWidth = 2.0;
+    ctx.lineWidth = 2.4;
     ctx.beginPath();
     ctx.arc(0, 0, seed.radius * (0.88 + p * 0.12), 0, Math.PI * 2);
     ctx.stroke();
-
     ctx.restore();
   }
 
-  // 2. Magma Fissure Geysers (Jagged Anime Cel Flame Pillars)
+  // 2. Magma Fissure Geysers (Roaring S-Curved Flame Pillars + Additive Bloom)
   for (let i = 0; i < pool.magmaGeysers.length; i++) {
     const g = pool.magmaGeysers[i];
     if (!g.active) continue;
     const p = 1 - g.life / g.maxLife;
-    const h = g.maxHeight * Math.sin(Math.min(1, p * 1.15) * Math.PI);
-    const w = g.radius * (1 - p * 0.25);
+    const h = g.maxHeight * Math.sin(Math.min(1, p * 1.15) * Math.PI) * 1.25;
+    const w = g.radius * (1.15 - p * 0.25);
     const pal = PALETTE_COLORS[g.palette];
+    const alpha = Math.max(0, 1 - p * 0.82);
 
     ctx.save();
     ctx.translate(g.x, g.y);
-    ctx.globalAlpha = Math.max(0, 1 - p * 0.85);
 
-    // Base stone scorch circle
+    // Additive floor/plume glow
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = alpha * 0.65;
+    const plumeGlow = ctx.createRadialGradient(0, -h * 0.35, 4, 0, -h * 0.35, Math.max(w, h) * 1.15);
+    plumeGlow.addColorStop(0, pal.core);
+    plumeGlow.addColorStop(0.45, pal.bloom);
+    plumeGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = plumeGlow;
+    ctx.beginPath();
+    ctx.arc(0, -h * 0.35, Math.max(w, h) * 1.15, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = alpha;
     ctx.fillStyle = pal.ink;
     ctx.beginPath();
     ctx.ellipse(0, 0, w, w * 0.48, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // Multi-tongue jagged eruption silhouette with crisp #120806 ink outline
+    // Flowing curved multi-tongue flame pillar
     ctx.beginPath();
-    ctx.moveTo(-w * 0.72, 0);
-    ctx.lineTo(-w * 0.45, -h * 0.62);
-    ctx.lineTo(-w * 0.22, -h * 0.42);
-    ctx.lineTo(0, -h);
-    ctx.lineTo(w * 0.26, -h * 0.48);
-    ctx.lineTo(w * 0.52, -h * 0.68);
-    ctx.lineTo(w * 0.72, 0);
+    ctx.moveTo(-w * 0.78, 0);
+    ctx.quadraticCurveTo(-w * 0.64, -h * 0.48, -w * 0.44, -h * 0.68);
+    ctx.quadraticCurveTo(-w * 0.25, -h * 0.46, -w * 0.22, -h * 0.44);
+    ctx.quadraticCurveTo(-w * 0.12, -h * 0.85, 0, -h * 1.05);
+    ctx.quadraticCurveTo(w * 0.18, -h * 0.72, w * 0.26, -h * 0.48);
+    ctx.quadraticCurveTo(w * 0.48, -h * 0.76, w * 0.56, -h * 0.66);
+    ctx.quadraticCurveTo(w * 0.74, -h * 0.32, w * 0.78, 0);
     ctx.closePath();
     ctx.fillStyle = pal.outer;
     ctx.fill();
     ctx.strokeStyle = pal.ink;
-    ctx.lineWidth = 4.4;
+    ctx.lineWidth = 4.8;
     ctx.stroke();
 
-    // Inner bright core tongue
     ctx.beginPath();
-    ctx.moveTo(-w * 0.34, 0);
-    ctx.lineTo(0, -h * 0.76);
-    ctx.lineTo(w * 0.34, 0);
+    ctx.moveTo(-w * 0.46, 0);
+    ctx.quadraticCurveTo(-w * 0.22, -h * 0.52, 0, -h * 0.88);
+    ctx.quadraticCurveTo(w * 0.22, -h * 0.52, w * 0.46, 0);
+    ctx.closePath();
+    ctx.fillStyle = pal.mid;
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(-w * 0.22, 0);
+    ctx.quadraticCurveTo(0, -h * 0.64, w * 0.22, 0);
     ctx.closePath();
     ctx.fillStyle = pal.core;
     ctx.fill();
     ctx.restore();
   }
 
-  // 3. Swirling Cyclone Vortexes (Tapered multi-arm anime ribbon spirals + Sanemi black wind shards)
+  // 3. Swirling Cyclone Vortexes (Sanemi Hurricane Emerald Ribbons + Sumi-e Black Gale Shards + Additive Halo)
   for (let i = 0; i < pool.cycloneArms.length; i++) {
     const c = pool.cycloneArms[i];
     if (!c.active) continue;
     const p = 1 - c.life / c.maxLife;
-    const alpha = Math.max(0, Math.sin((1 - p) * Math.PI * 0.5) * 0.96);
+    const alpha = Math.max(0, Math.sin((1 - p) * Math.PI * 0.5) * 0.98);
     const pal = PALETTE_COLORS[c.palette];
 
     ctx.save();
     ctx.translate(c.x, c.y);
-    ctx.scale(1, 0.64);
+    ctx.scale(1, 0.62);
+
+    // Wide additive cyclone floor illumination
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = alpha * 0.52;
+    const vortexGlow = ctx.createRadialGradient(0, 0, c.innerRadius * 0.5, 0, 0, c.outerRadius * 1.38);
+    vortexGlow.addColorStop(0, pal.core);
+    vortexGlow.addColorStop(0.42, pal.bloom);
+    vortexGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = vortexGlow;
+    ctx.beginPath();
+    ctx.arc(0, 0, c.outerRadius * 1.38, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.globalCompositeOperation = 'source-over';
     ctx.globalAlpha = alpha;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
 
     for (let arm = 0; arm < c.armCount; arm++) {
       const baseA = c.rotation + (arm / c.armCount) * Math.PI * 2;
+      const steps = 18;
+      // Trace tapered cyclone ribbon polygon instead of flat uniform line stroke
       ctx.beginPath();
-      const steps = 14;
       for (let s = 0; s <= steps; s++) {
         const t = s / steps;
         const r = c.innerRadius + (c.outerRadius - c.innerRadius) * t;
-        const a = baseA + t * 2.55;
+        const a = baseA + t * 2.85;
+        const halfW = Math.sin(Math.pow(t, 0.7) * Math.PI) * 14 * (1 - p * 0.35);
+        const px = Math.cos(a) * (r + halfW);
+        const py = Math.sin(a) * (r + halfW);
+        if (s === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      for (let s = steps; s >= 0; s--) {
+        const t = s / steps;
+        const r = c.innerRadius + (c.outerRadius - c.innerRadius) * t;
+        const a = baseA + t * 2.85;
+        const halfW = Math.sin(Math.pow(t, 0.7) * Math.PI) * 14 * (1 - p * 0.35);
+        const px = Math.cos(a) * Math.max(4, r - halfW);
+        const py = Math.sin(a) * Math.max(4, r - halfW);
+        ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fillStyle = pal.outer;
+      ctx.fill();
+      ctx.strokeStyle = pal.ink;
+      ctx.lineWidth = 4.2;
+      ctx.stroke();
+
+      // Inner bright core spine along the swirling cyclone arm
+      ctx.beginPath();
+      for (let s = 0; s <= steps; s++) {
+        const t = s / steps;
+        const r = c.innerRadius + (c.outerRadius - c.innerRadius) * t;
+        const a = baseA + t * 2.85;
         const px = Math.cos(a) * r;
         const py = Math.sin(a) * r;
         if (s === 0) ctx.moveTo(px, py);
         else ctx.lineTo(px, py);
       }
-      ctx.lineCap = 'round';
-      ctx.strokeStyle = pal.ink;
-      ctx.lineWidth = 17 * (1 - p * 0.38);
-      ctx.stroke();
-
-      ctx.strokeStyle = pal.outer;
-      ctx.lineWidth = 12 * (1 - p * 0.38);
-      ctx.stroke();
-
       ctx.strokeStyle = pal.mid;
-      ctx.lineWidth = 7.5 * (1 - p * 0.38);
+      ctx.lineWidth = 8.5 * (1 - p * 0.38);
       ctx.stroke();
-
       ctx.strokeStyle = pal.core;
-      ctx.lineWidth = 3.2 * (1 - p * 0.45);
+      ctx.lineWidth = 3.4 * (1 - p * 0.42);
       ctx.stroke();
 
-      // Sanemi-style flying black Sumi-e wind/ember shards along the vortex perimeter
-      const shardA = baseA + 1.85;
-      const shardR = c.outerRadius * (0.72 + (arm % 2) * 0.22);
-      const sx = Math.cos(shardA) * shardR;
-      const sy = Math.sin(shardA) * shardR;
-      ctx.save();
-      ctx.translate(sx, sy);
-      ctx.rotate(shardA + 1.2);
-      ctx.fillStyle = '#0e0706';
-      ctx.strokeStyle = pal.mid;
-      ctx.lineWidth = 1.4;
-      ctx.beginPath();
-      ctx.moveTo(-12, 0);
-      ctx.lineTo(-2, -5.5);
-      ctx.lineTo(13, 0);
-      ctx.lineTo(-2, 5.5);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-      ctx.restore();
+      // Sanemi-style jagged Sumi-e black gale shards tearing outward (Reference Image #4)
+      for (let sh = 0; sh < 2; sh++) {
+        const shardA = baseA + 1.55 + sh * 0.9;
+        const shardR = c.outerRadius * (0.68 + sh * 0.28 + (arm % 2) * 0.14);
+        const sx = Math.cos(shardA) * shardR;
+        const sy = Math.sin(shardA) * shardR;
+        ctx.save();
+        ctx.translate(sx, sy);
+        ctx.rotate(shardA + 1.35 + sh * 0.4);
+        ctx.fillStyle = '#070a08';
+        ctx.strokeStyle = pal.mid;
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.moveTo(-16, -2);
+        ctx.lineTo(-4, -8.5);
+        ctx.lineTo(18, 0);
+        ctx.lineTo(-1, 7.5);
+        ctx.lineTo(-10, 3);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+      }
     }
     ctx.restore();
   }
 
-  // 4. Sun Halo Flame Wheels (Rengoku / Tanjiro Hinokami Kagura burning sun wheel with sculpted cel flame teeth)
+  // 4. Breathing Sun / Water / Thunder / Wind Halos (Organic Ufotable Vortexes — Zero Gear Teeth!)
   for (let i = 0; i < pool.sunHaloRings.length; i++) {
     const r = pool.sunHaloRings[i];
     if (!r.active) continue;
     const p = 1 - r.life / r.maxLife;
     const pal = PALETTE_COLORS[r.palette];
-    const rad = r.radius * (0.68 + p * 0.42);
+    const rad = r.radius * (0.74 + p * 0.44);
+    const alpha = Math.max(0, 1 - Math.pow(p, 1.55));
 
     ctx.save();
     ctx.translate(r.x, r.y);
-    ctx.scale(1, 0.74);
-    ctx.globalAlpha = Math.max(0, 1 - p * 0.88);
+    ctx.scale(1, 0.72);
 
-    ctx.strokeStyle = pal.ink;
-    ctx.lineWidth = 20 * (1 - p * 0.38);
+    // Wide additive ground & air bloom
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = alpha * 0.68;
+    const haloGlow = ctx.createRadialGradient(0, 0, rad * 0.35, 0, 0, rad * 1.48);
+    haloGlow.addColorStop(0, 'rgba(0, 0, 0, 0)');
+    haloGlow.addColorStop(0.58, pal.bloom);
+    haloGlow.addColorStop(0.78, pal.core);
+    haloGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = haloGlow;
     ctx.beginPath();
-    ctx.arc(0, 0, rad, 0, Math.PI * 2);
-    ctx.stroke();
+    ctx.arc(0, 0, rad * 1.48, 0, Math.PI * 2);
+    ctx.fill();
 
-    ctx.strokeStyle = pal.outer;
-    ctx.lineWidth = 13.5 * (1 - p * 0.38);
-    ctx.beginPath();
-    ctx.arc(0, 0, rad, 0, Math.PI * 2);
-    ctx.stroke();
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = alpha;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
 
-    ctx.strokeStyle = pal.mid;
-    ctx.lineWidth = 8.2 * (1 - p * 0.42);
-    ctx.beginPath();
-    ctx.arc(0, 0, rad * 0.96, 0, Math.PI * 2);
-    ctx.stroke();
-
-    ctx.strokeStyle = pal.core;
-    ctx.lineWidth = 3.8 * (1 - p * 0.48);
-    ctx.beginPath();
-    ctx.arc(0, 0, rad * 0.92, 0, Math.PI * 2);
-    ctx.stroke();
-
-    // Perimeter Breathing Style Ornaments (Water Hokusai foam curls / Thunder bolts / Wind blades / Flame tongues)
-    if (r.palette === 'water') {
-      const curlCount = 10;
-      for (let s = 0; s < curlCount; s++) {
-        const a = r.rotation + (s / curlCount) * Math.PI * 2;
-        const tipA = a + 0.36;
-        const cx = Math.cos(tipA) * (rad * 1.14);
-        const cy = Math.sin(tipA) * (rad * 1.14);
+    if (r.palette === 'thunder') {
+      // Zenitsu Thunderclap Rings + 10 Branching Jagged Lightning Bolts (Ref Image #5!)
+      for (let ringIdx = 0; ringIdx < 2; ringIdx++) {
+        const ringR = rad * (ringIdx === 0 ? 1.0 : 0.76);
+        const segs = 28;
         ctx.beginPath();
-        ctx.moveTo(Math.cos(a) * (rad * 0.96), Math.sin(a) * (rad * 0.96));
-        ctx.quadraticCurveTo(
-          Math.cos(a + 0.18) * (rad * 1.24),
-          Math.sin(a + 0.18) * (rad * 1.24),
-          cx,
-          cy
-        );
+        for (let k = 0; k <= segs; k++) {
+          const a = r.rotation * (ringIdx === 0 ? 1 : -1.2) + (k / segs) * Math.PI * 2;
+          const jitter = Math.sin(k * 5.7 + p * 24 + ringIdx) * (rad * 0.08);
+          const px = Math.cos(a) * (ringR + jitter);
+          const py = Math.sin(a) * (ringR + jitter);
+          if (k === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
         ctx.strokeStyle = pal.ink;
-        ctx.lineWidth = 6.0;
+        ctx.lineWidth = 10 * (1 - p * 0.3);
         ctx.stroke();
-        ctx.strokeStyle = pal.core;
-        ctx.lineWidth = 3.2;
+        ctx.strokeStyle = ringIdx === 0 ? '#ffe94d' : '#38e8ff';
+        ctx.lineWidth = 5.4 * (1 - p * 0.3);
         ctx.stroke();
-
-        ctx.fillStyle = pal.core;
-        ctx.strokeStyle = pal.ink;
-        ctx.lineWidth = 1.6;
-        ctx.beginPath();
-        ctx.arc(cx, cy, 4.2, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2.2;
         ctx.stroke();
       }
-    } else if (r.palette === 'thunder') {
+
       const boltCount = 10;
       for (let s = 0; s < boltCount; s++) {
-        const a = r.rotation + (s / boltCount) * Math.PI * 2;
-        const b1 = rad * 1.02;
-        const b2 = rad * 1.18;
-        const b3 = rad * 1.38;
+        const a = r.rotation * 0.8 + (s / boltCount) * Math.PI * 2;
+        const r1 = rad * 0.35;
+        const r2 = rad * 0.78;
+        const r3 = rad * 1.15;
+        const r4 = rad * (1.42 + (s % 2) * 0.24);
+        const j1 = ((s % 2 === 0 ? 1 : -1) * 0.14);
+        const j2 = -j1 * 0.85;
+        const x1 = Math.cos(a) * r1;
+        const y1 = Math.sin(a) * r1;
+        const x2 = Math.cos(a + j1) * r2;
+        const y2 = Math.sin(a + j1) * r2;
+        const x3 = Math.cos(a + j2) * r3;
+        const y3 = Math.sin(a + j2) * r3;
+        const x4 = Math.cos(a + j1 * 0.4) * r4;
+        const y4 = Math.sin(a + j1 * 0.4) * r4;
+
         ctx.beginPath();
-        ctx.moveTo(Math.cos(a) * b1, Math.sin(a) * b1);
-        ctx.lineTo(Math.cos(a + 0.11) * b2, Math.sin(a + 0.11) * b2);
-        ctx.lineTo(Math.cos(a - 0.04) * b3, Math.sin(a - 0.04) * b3);
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.lineTo(x3, y3);
+        ctx.lineTo(x4, y4);
+        // Side fork
+        ctx.moveTo(x2, y2);
+        ctx.lineTo(Math.cos(a + j1 * 2.4) * (r2 * 1.38), Math.sin(a + j1 * 2.4) * (r2 * 1.38));
         ctx.strokeStyle = pal.ink;
-        ctx.lineWidth = 5.4;
+        ctx.lineWidth = 7.2;
         ctx.stroke();
-        ctx.strokeStyle = s % 2 === 0 ? pal.mid : '#38bdf8';
-        ctx.lineWidth = 2.8;
+        ctx.strokeStyle = s % 3 === 0 ? '#38e8ff' : '#ffe94d';
+        ctx.lineWidth = 3.8;
         ctx.stroke();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.6;
+        ctx.stroke();
+        ctx.globalCompositeOperation = 'source-over';
+      }
+    } else if (r.palette === 'water') {
+      // Ukiyo-e Flowing Water Wheel (3 intertwined wave tracks + Hokusai multi-finger seafoam claws!)
+      const segs = 36;
+      for (let band = 0; band < 3; band++) {
+        const bandOffset = (band - 1) * 12;
+        ctx.beginPath();
+        for (let k = 0; k <= segs; k++) {
+          const a = r.rotation + (k / segs) * Math.PI * 2;
+          const wave = Math.sin(a * 4 + p * 8 + band) * 8;
+          const rr = rad + bandOffset + wave;
+          const px = Math.cos(a) * rr;
+          const py = Math.sin(a) * rr;
+          if (k === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        if (band === 0) {
+          ctx.strokeStyle = pal.ink;
+          ctx.lineWidth = 22 * (1 - p * 0.35);
+          ctx.stroke();
+          ctx.strokeStyle = pal.outer;
+          ctx.lineWidth = 15 * (1 - p * 0.35);
+          ctx.stroke();
+        } else if (band === 1) {
+          ctx.strokeStyle = pal.mid;
+          ctx.lineWidth = 9.5 * (1 - p * 0.35);
+          ctx.stroke();
+        } else {
+          ctx.strokeStyle = pal.core;
+          ctx.lineWidth = 3.8 * (1 - p * 0.4);
+          ctx.stroke();
+        }
+      }
+
+      // 8 Clustered 3-finger Hokusai seafoam crests + scattered droplets
+      const clusterCount = 8;
+      for (let s = 0; s < clusterCount; s++) {
+        const a = r.rotation + (s / clusterCount) * Math.PI * 2;
+        for (let finger = 0; finger < 3; finger++) {
+          const fa = a + finger * 0.11;
+          const baseR = rad + 6 + finger * 4;
+          const tipR = rad + 26 + (2 - finger) * 10;
+          const tipA = fa + 0.24;
+          ctx.beginPath();
+          ctx.moveTo(Math.cos(fa - 0.06) * baseR, Math.sin(fa - 0.06) * baseR);
+          ctx.quadraticCurveTo(
+            Math.cos(fa + 0.1) * (tipR + 6),
+            Math.sin(fa + 0.1) * (tipR + 6),
+            Math.cos(tipA) * tipR,
+            Math.sin(tipA) * tipR
+          );
+          ctx.quadraticCurveTo(
+            Math.cos(fa + 0.12) * (baseR + 6),
+            Math.sin(fa + 0.12) * (baseR + 6),
+            Math.cos(fa + 0.08) * baseR,
+            Math.sin(fa + 0.08) * baseR
+          );
+          ctx.closePath();
+          ctx.fillStyle = '#ffffff';
+          ctx.fill();
+          ctx.strokeStyle = pal.ink;
+          ctx.lineWidth = 2.2;
+          ctx.stroke();
+        }
+        // Splash droplets
+        for (let d = 0; d < 2; d++) {
+          const da = a + 0.32 + d * 0.16;
+          const dr = rad + 36 + d * 14;
+          ctx.fillStyle = '#ffffff';
+          ctx.strokeStyle = pal.ink;
+          ctx.lineWidth = 1.6;
+          ctx.beginPath();
+          ctx.arc(Math.cos(da) * dr, Math.sin(da) * dr, 3.8 - d * 1.0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        }
       }
     } else {
-      const spikes = 16;
-      for (let s = 0; s < spikes; s++) {
-        const a = r.rotation + (s / spikes) * Math.PI * 2;
-        const baseR = rad * 0.93;
-        const tipR = rad * (1.28 + (s % 3) * 0.11);
+      // Hinokami Kagura / Sun Dragon-Wheel OR Sanemi Wind Ring (3 Organic Swirling Ribbons + Asymmetrical Hooked Crests!)
+      const segs = 40;
+      const traceTurbulentLoop = (radiusMul: number, thick: number, phaseOffset: number) => {
         ctx.beginPath();
-        ctx.moveTo(Math.cos(a - 0.14) * baseR, Math.sin(a - 0.14) * baseR);
+        for (let k = 0; k <= segs; k++) {
+          const a = r.rotation + (k / segs) * Math.PI * 2;
+          const wobble =
+            Math.sin(a * 5 + p * 6 + phaseOffset) * (thick * 0.45) +
+            Math.cos(a * 9 - p * 9 + phaseOffset) * (thick * 0.22);
+          const rr = rad * radiusMul + wobble + thick * 0.52;
+          const px = Math.cos(a) * rr;
+          const py = Math.sin(a) * rr;
+          if (k === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        for (let k = segs; k >= 0; k--) {
+          const a = r.rotation + (k / segs) * Math.PI * 2;
+          const wobble =
+            Math.sin(a * 5 + p * 6 + phaseOffset) * (thick * 0.45) +
+            Math.cos(a * 9 - p * 9 + phaseOffset) * (thick * 0.22);
+          const rr = Math.max(10, rad * radiusMul + wobble - thick * 0.48);
+          const px = Math.cos(a) * rr;
+          const py = Math.sin(a) * rr;
+          ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+      };
+
+      const baseThick = Math.max(18, rad * 0.24) * (1 - p * 0.35);
+      traceTurbulentLoop(1.0, baseThick, 0);
+      ctx.fillStyle = pal.outer;
+      ctx.fill();
+      ctx.strokeStyle = pal.ink;
+      ctx.lineWidth = 4.6;
+      ctx.stroke();
+
+      traceTurbulentLoop(0.98, baseThick * 0.62, 1.2);
+      ctx.fillStyle = pal.mid;
+      ctx.fill();
+
+      traceTurbulentLoop(0.96, baseThick * 0.28, 2.4);
+      ctx.fillStyle = pal.core;
+      ctx.fill();
+
+      // 8 Asymmetrical Swept Hooked Flame/Wind Crests licking tangentially (NEVER uniform gears!)
+      const crestCount = 8;
+      for (let s = 0; s < crestCount; s++) {
+        const a = r.rotation + (s / crestCount) * Math.PI * 2 + Math.sin(s * 2.1) * 0.14;
+        const baseR = rad * 0.96;
+        const tipR = rad * (1.36 + ((s * 3) % 4) * 0.11);
+        const sweep = 0.36 + (s % 2) * 0.14;
+
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a - 0.12) * baseR, Math.sin(a - 0.12) * baseR);
         ctx.quadraticCurveTo(
-          Math.cos(a + 0.05) * (tipR * 0.93),
-          Math.sin(a + 0.05) * (tipR * 0.93),
-          Math.cos(a + 0.15) * tipR,
-          Math.sin(a + 0.15) * tipR
+          Math.cos(a + sweep * 0.5) * (tipR * 1.06),
+          Math.sin(a + sweep * 0.5) * (tipR * 1.06),
+          Math.cos(a + sweep) * tipR,
+          Math.sin(a + sweep) * tipR
         );
-        ctx.lineTo(Math.cos(a + 0.16) * baseR, Math.sin(a + 0.16) * baseR);
+        ctx.quadraticCurveTo(
+          Math.cos(a + sweep * 0.45) * (baseR * 1.08),
+          Math.sin(a + sweep * 0.45) * (baseR * 1.08),
+          Math.cos(a + 0.15) * baseR,
+          Math.sin(a + 0.15) * baseR
+        );
         ctx.closePath();
         ctx.fillStyle = s % 2 === 0 ? pal.outer : pal.mid;
         ctx.fill();
         ctx.strokeStyle = pal.ink;
-        ctx.lineWidth = 2.8;
+        ctx.lineWidth = 3.0;
         ctx.stroke();
 
-        // Inner bright highlight core
+        // Inner bright flame streak inside each crest
         ctx.beginPath();
-        ctx.moveTo(Math.cos(a - 0.06) * baseR, Math.sin(a - 0.06) * baseR);
-        ctx.lineTo(Math.cos(a + 0.1) * (tipR * 0.88), Math.sin(a + 0.1) * (tipR * 0.88));
-        ctx.lineTo(Math.cos(a + 0.08) * baseR, Math.sin(a + 0.08) * baseR);
-        ctx.closePath();
-        ctx.fillStyle = pal.core;
-        ctx.fill();
+        ctx.moveTo(Math.cos(a - 0.04) * baseR, Math.sin(a - 0.04) * baseR);
+        ctx.quadraticCurveTo(
+          Math.cos(a + sweep * 0.45) * (tipR * 0.94),
+          Math.sin(a + sweep * 0.45) * (tipR * 0.94),
+          Math.cos(a + sweep * 0.88) * (tipR * 0.9),
+          Math.sin(a + sweep * 0.88) * (tipR * 0.9)
+        );
+        ctx.strokeStyle = pal.core;
+        ctx.lineWidth = 3.2;
+        ctx.stroke();
       }
     }
     ctx.restore();
@@ -1669,56 +1939,55 @@ export function renderBloodDemonArtWorldPass(
     const pal = PALETTE_COLORS[t.palette];
     ctx.save();
     ctx.globalAlpha = Math.max(0, 1 - p);
-    const mx = (t.x1 + t.x2) * 0.5 + Math.sin(t.pulsePhase) * 16;
-    const my = (t.y1 + t.y2) * 0.5 + Math.cos(t.pulsePhase) * 10;
+    const mx = (t.x1 + t.x2) * 0.5 + Math.sin(t.pulsePhase) * 18;
+    const my = (t.y1 + t.y2) * 0.5 + Math.cos(t.pulsePhase) * 12;
     ctx.beginPath();
     ctx.moveTo(t.x1, t.y1);
     ctx.quadraticCurveTo(mx, my, t.x2, t.y2);
     ctx.strokeStyle = pal.ink;
-    ctx.lineWidth = 6.2;
+    ctx.lineWidth = 6.8;
     ctx.stroke();
     ctx.strokeStyle = pal.outer;
-    ctx.lineWidth = 3.6;
+    ctx.lineWidth = 4.0;
     ctx.stroke();
     ctx.strokeStyle = pal.mid;
-    ctx.lineWidth = 2.0;
+    ctx.lineWidth = 2.2;
     ctx.stroke();
+    ctx.globalCompositeOperation = 'lighter';
     ctx.strokeStyle = pal.core;
-    ctx.lineWidth = 0.9;
+    ctx.lineWidth = 1.2;
     ctx.stroke();
     ctx.restore();
   }
-  // Cross-webbing fibers between adjacent Rui blood threads (Image 15)
   if (activeThreads.length >= 2) {
     ctx.save();
     for (let i = 0; i < activeThreads.length - 1; i++) {
       const tA = activeThreads[i];
       const tB = activeThreads[i + 1];
       const pal = PALETTE_COLORS[tA.palette];
-      const alpha = Math.min(tA.life / tA.maxLife, tB.life / tB.maxLife) * 0.85;
+      const alpha = Math.min(tA.life / tA.maxLife, tB.life / tB.maxLife) * 0.88;
       ctx.globalAlpha = Math.max(0, alpha);
       for (const frac of [0.38, 0.72]) {
         const ax = tA.x1 + (tA.x2 - tA.x1) * frac;
         const ay = tA.y1 + (tA.y2 - tA.y1) * frac;
         const bx = tB.x1 + (tB.x2 - tB.x1) * frac;
         const by = tB.y1 + (tB.y2 - tB.y1) * frac;
-        if (Math.hypot(bx - ax, by - ay) < 180) {
+        if (Math.hypot(bx - ax, by - ay) < 220) {
           ctx.beginPath();
           ctx.moveTo(ax, ay);
           ctx.lineTo(bx, by);
           ctx.strokeStyle = pal.ink;
-          ctx.lineWidth = 3.8;
+          ctx.lineWidth = 4.0;
           ctx.stroke();
           ctx.strokeStyle = pal.mid;
-          ctx.lineWidth = 1.6;
+          ctx.lineWidth = 1.8;
           ctx.stroke();
 
-          // Crimson blood knot node at web intersection
           ctx.fillStyle = pal.core;
           ctx.strokeStyle = pal.ink;
           ctx.lineWidth = 1.8;
           ctx.beginPath();
-          ctx.arc(ax, ay, 3.2, 0, Math.PI * 2);
+          ctx.arc(ax, ay, 3.6, 0, Math.PI * 2);
           ctx.fill();
           ctx.stroke();
         }
@@ -1738,41 +2007,59 @@ export function renderBloodDemonArtWorldPass(
     ctx.moveTo(a.x1, a.y1);
     ctx.lineTo(a.x2, a.y2);
     ctx.strokeStyle = pal.ink;
-    ctx.lineWidth = 6.5 * (1 - p * 0.5);
+    ctx.lineWidth = 7.2 * (1 - p * 0.45);
     ctx.stroke();
     ctx.strokeStyle = pal.mid;
-    ctx.lineWidth = 3.2 * (1 - p * 0.5);
+    ctx.lineWidth = 3.6 * (1 - p * 0.45);
     ctx.stroke();
+    ctx.globalCompositeOperation = 'lighter';
     ctx.strokeStyle = pal.core;
-    ctx.lineWidth = 1.5;
+    ctx.lineWidth = 1.8;
     ctx.stroke();
     ctx.restore();
   }
 
-  // 6. Blood Sickle Crescents (Gyutaro / Daki black-inked crimson blood blades) & Dharma Chakrams
+  // 6. Blood Sickle Crescents (Gyutaro crimson-black crescents) & Dharma Chakrams
   for (let i = 0; i < pool.bloodSickles.length; i++) {
     const s = pool.bloodSickles[i];
     if (!s.active) continue;
     const p = 1 - s.life / s.maxLife;
     const pal = PALETTE_COLORS[s.palette];
+    const alpha = Math.max(0, 1 - p * 0.82);
 
     ctx.save();
     ctx.translate(s.x, s.y);
     ctx.rotate(s.angle);
-    ctx.globalAlpha = Math.max(0, 1 - p * 0.85);
+
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = alpha * 0.55;
+    const sickleGlow = ctx.createRadialGradient(0, 0, s.radius * 0.2, 0, 0, s.radius * 1.45);
+    sickleGlow.addColorStop(0, pal.bloom);
+    sickleGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = sickleGlow;
     ctx.beginPath();
-    ctx.arc(0, 0, s.radius, -1.25, 1.25, false);
-    ctx.arc(-s.radius * 0.34, 0, s.radius * 0.86, 1.12, -1.12, true);
+    ctx.arc(0, 0, s.radius * 1.45, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = alpha;
+    ctx.beginPath();
+    ctx.arc(0, 0, s.radius * 1.15, -1.28, 1.28, false);
+    ctx.arc(-s.radius * 0.36, 0, s.radius * 0.95, 1.15, -1.15, true);
     ctx.closePath();
     ctx.fillStyle = pal.outer;
     ctx.fill();
     ctx.strokeStyle = pal.ink;
-    ctx.lineWidth = 4.4;
+    ctx.lineWidth = 4.6;
     ctx.stroke();
-    ctx.strokeStyle = pal.core;
-    ctx.lineWidth = 2.2;
+    ctx.strokeStyle = pal.mid;
+    ctx.lineWidth = 3.2;
     ctx.beginPath();
-    ctx.arc(0, 0, s.radius * 0.94, -0.95, 0.95);
+    ctx.arc(0, 0, s.radius * 1.06, -1.05, 1.05);
+    ctx.stroke();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.strokeStyle = pal.core;
+    ctx.lineWidth = 1.8;
     ctx.stroke();
     ctx.restore();
   }
@@ -1790,13 +2077,13 @@ export function renderBloodDemonArtWorldPass(
     ctx.globalAlpha = Math.max(0, 1 - p * 0.85);
 
     ctx.strokeStyle = pal.ink;
-    ctx.lineWidth = 7.5;
+    ctx.lineWidth = 8.2;
     ctx.beginPath();
     ctx.arc(0, 0, ch.radius, 0, Math.PI * 2);
     ctx.stroke();
 
     ctx.strokeStyle = pal.mid;
-    ctx.lineWidth = 3.8;
+    ctx.lineWidth = 4.2;
     ctx.beginPath();
     ctx.arc(0, 0, ch.radius, 0, Math.PI * 2);
     ctx.stroke();
@@ -1805,51 +2092,50 @@ export function renderBloodDemonArtWorldPass(
       const a = (b / ch.blades) * Math.PI * 2;
       ctx.beginPath();
       ctx.moveTo(Math.cos(a) * (ch.radius * 0.85), Math.sin(a) * (ch.radius * 0.85));
-      ctx.lineTo(Math.cos(a + 0.16) * (ch.radius * 1.42), Math.sin(a + 0.16) * (ch.radius * 1.42));
+      ctx.lineTo(Math.cos(a + 0.16) * (ch.radius * 1.48), Math.sin(a + 0.16) * (ch.radius * 1.48));
       ctx.lineTo(Math.cos(a + 0.34) * (ch.radius * 0.88), Math.sin(a + 0.34) * (ch.radius * 0.88));
       ctx.closePath();
       ctx.fillStyle = b % 2 === 0 ? pal.core : pal.outer;
       ctx.fill();
       ctx.strokeStyle = pal.ink;
-      ctx.lineWidth = 2.2;
+      ctx.lineWidth = 2.4;
       ctx.stroke();
     }
     ctx.restore();
   }
 
-  // 7. Tapered 2D Anime Breathing Style & Blood Demon Art Crescent Ribbons:
-  //    - Hinokami / Sun / Magma: Multi-band cel fire ribbons + hooked black-inked flame tongues + diamond embers (Images 1, 6, 9, 10)
-  //    - Ukiyo-e Water ('water'): Deep indigo-to-cyan wave ribbons + white Hokusai sea-foam claw curls & droplets (Images 7, 8, 11, 12)
-  //    - Sanemi Wind ('wind'): Emerald wind crescents + flying black Sumi-e hurricane slash shards (Image 4)
-  //    - Zenitsu / Kaigaku Thunder ('thunder'): Dual golden-amber & electric-blue branching jagged lightning bolts (Images 5, 14)
+  // 7. Sweeping Ufotable Demon Slayer Crescent Ribbons + Multi-Pass Additive Bloom
   for (let i = 0; i < pool.slashArcs.length; i++) {
     const s = pool.slashArcs[i];
     if (!s.active) continue;
     const p = 1 - s.life / s.maxLife;
-    const alpha = Math.max(0, 1 - Math.pow(p, 1.65));
+    const alpha = Math.max(0, 1 - Math.pow(p, 1.75));
     const pal = PALETTE_COLORS[s.palette];
-    const startA = s.direction === 1 ? s.angle - s.arcSpan * 0.52 : s.angle + s.arcSpan * 0.52;
+    const startA = s.direction === 1 ? s.angle - s.arcSpan * 0.54 : s.angle + s.arcSpan * 0.54;
     const sweepSpan = s.arcSpan * s.direction;
-    const rad = s.radius * (0.94 + p * 0.15);
-    const widthScale = Math.sin(Math.min(1, p * 1.2 + 0.18) * Math.PI);
-    const maxThick = Math.max(12, s.thickness * 1.35 * widthScale);
-    const segs = 18;
+    // Scale up arc sweep dramatically so every Breathing slash fills combat space cleanly
+    const rad = s.radius * (1.06 + p * 0.18);
+    const widthScale = Math.sin(Math.min(1, p * 1.15 + 0.22) * Math.PI);
+    const maxThick = Math.max(18, s.thickness * 1.65 * widthScale);
+    const segs = 26;
 
     ctx.save();
     ctx.translate(s.x, s.y);
     ctx.scale(1, 0.72);
-    ctx.globalAlpha = alpha;
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
 
-    // Helper to trace a tapered crescent polygon band (t=0 razor tail -> t=0.68 wide belly -> t=1.0 sharp tip)
-    const traceTaperedBand = (innerMul: number, outerMul: number, radiusOffset = 0) => {
+    // Trace organic fluid-modulated tapered crescent band
+    const traceOrganicBand = (innerMul: number, outerMul: number, radiusOffset = 0, waveAmp = 0.12) => {
       ctx.beginPath();
       for (let k = 0; k <= segs; k++) {
         const t = k / segs;
         const a = startA + sweepSpan * t;
-        const taper = Math.sin(Math.pow(t, 0.74) * Math.PI);
-        const rOut = rad + radiusOffset + maxThick * outerMul * taper;
+        const taper = Math.sin(Math.pow(t, 0.7) * Math.PI);
+        const fluidWave =
+          Math.sin(t * 14 + s.seed + p * 8) * (maxThick * waveAmp * taper) +
+          Math.cos(t * 23 - s.seed) * (maxThick * waveAmp * 0.45 * taper);
+        const rOut = rad + radiusOffset + maxThick * outerMul * taper + fluidWave;
         const px = Math.cos(a) * rOut;
         const py = Math.sin(a) * rOut;
         if (k === 0) ctx.moveTo(px, py);
@@ -1858,8 +2144,9 @@ export function renderBloodDemonArtWorldPass(
       for (let k = segs; k >= 0; k--) {
         const t = k / segs;
         const a = startA + sweepSpan * t;
-        const taper = Math.sin(Math.pow(t, 0.74) * Math.PI);
-        const rIn = Math.max(8, rad + radiusOffset - maxThick * innerMul * taper);
+        const taper = Math.sin(Math.pow(t, 0.7) * Math.PI);
+        const fluidWave = Math.sin(t * 11 + s.seed * 1.3) * (maxThick * waveAmp * 0.5 * taper);
+        const rIn = Math.max(10, rad + radiusOffset - maxThick * innerMul * taper + fluidWave);
         const px = Math.cos(a) * rIn;
         const py = Math.sin(a) * rIn;
         ctx.lineTo(px, py);
@@ -1867,199 +2154,240 @@ export function renderBloodDemonArtWorldPass(
       ctx.closePath();
     };
 
-    // Band 1: Outer Primary Elemental Cel Ribbon + Bold #120806 Sumi-e Woodblock Ink Border
-    traceTaperedBand(0.55, 0.58);
+    // PASS A: Wide Additive Ufotable Emissive Bloom Halo around the slash
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = alpha * 0.36;
+    traceOrganicBand(0.95, 1.08, 0, 0.08);
+    ctx.fillStyle = pal.bloom;
+    ctx.fill();
+
+    // PASS B: Crisp Hand-Inked Multi-Band Cel Slash Body
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = alpha;
+
+    traceOrganicBand(0.58, 0.64, 0, 0.14);
     ctx.fillStyle = pal.outer;
     ctx.fill();
     ctx.strokeStyle = pal.ink;
-    ctx.lineWidth = 4.6;
+    ctx.lineWidth = 4.8;
     ctx.stroke();
 
-    // Band 2: Vibrant Mid-Core Cel Ribbon (Solar Orange / Cerulean Wave / Emerald Wind / Lightning Gold)
-    traceTaperedBand(0.28, 0.34, maxThick * 0.04);
+    traceOrganicBand(0.32, 0.38, maxThick * 0.04, 0.10);
     ctx.fillStyle = pal.mid;
     ctx.fill();
 
-    // Band 3: White-Hot Inner Blade Trajectory Core
-    traceTaperedBand(0.08, 0.14, maxThick * 0.08);
+    traceOrganicBand(0.10, 0.16, maxThick * 0.08, 0.05);
     ctx.fillStyle = pal.core;
     ctx.fill();
 
-    // Detached Secondary Outer Echo Ribbon (gives Demon Slayer multi-layered fluid swirl depth)
-    traceTaperedBand(0.08, 0.16, maxThick * 0.78);
+    // Detached Secondary Outer Echo Ribbon (Ufotable sweeping double-ribbon silhouette)
+    traceOrganicBand(0.10, 0.22, maxThick * 0.88, 0.16);
     ctx.fillStyle = pal.mid;
     ctx.fill();
     ctx.strokeStyle = pal.ink;
-    ctx.lineWidth = 2.4;
+    ctx.lineWidth = 2.6;
     ctx.stroke();
 
-    // Palette-Specific Ufotable Signature Ornaments along the outer slash crest
+    // PASS C: Signature Element Ornaments (Images 1, 4, 5, 6, 7, 8, 9, 10)
     if (s.palette === 'water') {
-      // Ukiyo-e Water Breathing (Images 7, 8, 11, 12): Internal cobalt wave stripes + White Hokusai Sea-Foam Claw Curls!
-      ctx.strokeStyle = '#062356';
-      ctx.lineWidth = 2.0;
-      ctx.beginPath();
-      for (let k = 2; k <= segs - 2; k++) {
-        const t = k / segs;
-        const a = startA + sweepSpan * t;
-        const rWave = rad + Math.sin(t * Math.PI * 5 + s.seed) * (maxThick * 0.16);
-        const px = Math.cos(a) * rWave;
-        const py = Math.sin(a) * rWave;
-        if (k === 2) ctx.moveTo(px, py);
-        else ctx.lineTo(px, py);
+      // Multi-strand Ukiyo-e parallel flow curves inside the water body
+      for (const offsetFrac of [-0.22, 0.05, 0.28]) {
+        ctx.strokeStyle = offsetFrac < 0 ? '#031842' : '#7df9ff';
+        ctx.lineWidth = offsetFrac < 0 ? 2.4 : 2.0;
+        ctx.beginPath();
+        for (let k = 2; k <= segs - 2; k++) {
+          const t = k / segs;
+          const a = startA + sweepSpan * t;
+          const taper = Math.sin(Math.pow(t, 0.7) * Math.PI);
+          const rr = rad + maxThick * offsetFrac * taper + Math.sin(t * Math.PI * 5 + s.seed) * 4;
+          const px = Math.cos(a) * rr;
+          const py = Math.sin(a) * rr;
+          if (k === 2) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
       }
-      ctx.stroke();
 
-      const foamCount = 7;
-      for (let f = 0; f < foamCount; f++) {
-        const tf = (f + 0.4) / foamCount;
+      // Clustered 3-Finger Hokusai White Sea-Foam Claws + Scattered Spray Droplets (Images 7 & 8)
+      const clusterCount = 7;
+      for (let f = 0; f < clusterCount; f++) {
+        const tf = (f + 0.35) / clusterCount;
         const fa = startA + sweepSpan * tf;
-        const taper = Math.sin(Math.pow(tf, 0.74) * Math.PI);
-        const baseR = rad + maxThick * 0.52 * taper;
-        const crestR = baseR + maxThick * (0.48 + (f % 2) * 0.22);
-        const curlAngle = fa + s.direction * 0.14;
+        const taper = Math.sin(Math.pow(tf, 0.7) * Math.PI);
+        const baseR = rad + maxThick * 0.48 * taper;
 
-        // White Hokusai foam claw curl with crisp dark indigo-black ink outline
-        ctx.beginPath();
-        ctx.moveTo(Math.cos(fa - s.direction * 0.09) * baseR, Math.sin(fa - s.direction * 0.09) * baseR);
-        ctx.quadraticCurveTo(
-          Math.cos(fa) * crestR,
-          Math.sin(fa) * crestR,
-          Math.cos(curlAngle) * (crestR * 0.96),
-          Math.sin(curlAngle) * (crestR * 0.96)
-        );
-        ctx.quadraticCurveTo(
-          Math.cos(fa + s.direction * 0.06) * (baseR * 1.03),
-          Math.sin(fa + s.direction * 0.06) * (baseR * 1.03),
-          Math.cos(fa + s.direction * 0.08) * baseR,
-          Math.sin(fa + s.direction * 0.08) * baseR
-        );
-        ctx.closePath();
-        ctx.fillStyle = '#ffffff';
-        ctx.fill();
-        ctx.strokeStyle = pal.ink;
-        ctx.lineWidth = 2.4;
-        ctx.stroke();
+        for (let finger = 0; finger < 3; finger++) {
+          const fAng = fa + s.direction * (finger * 0.085);
+          const fTipR = baseR + maxThick * (0.48 + (2 - finger) * 0.20 + ((f + finger) % 2) * 0.12);
+          const curlTipA = fAng + s.direction * 0.18;
 
-        // Detached white sea-foam splash droplets around the wave crest
-        const dropR = crestR + 9 + (f % 3) * 5;
-        const dx = Math.cos(curlAngle + s.direction * 0.05) * dropR;
-        const dy = Math.sin(curlAngle + s.direction * 0.05) * dropR;
-        ctx.beginPath();
-        ctx.arc(dx, dy, 3.4 - (f % 2) * 0.8, 0, Math.PI * 2);
-        ctx.fillStyle = '#ffffff';
-        ctx.fill();
-        ctx.strokeStyle = pal.ink;
-        ctx.lineWidth = 1.8;
-        ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(Math.cos(fAng - s.direction * 0.06) * baseR, Math.sin(fAng - s.direction * 0.06) * baseR);
+          ctx.quadraticCurveTo(
+            Math.cos(fAng + s.direction * 0.04) * (fTipR * 1.06),
+            Math.sin(fAng + s.direction * 0.04) * (fTipR * 1.06),
+            Math.cos(curlTipA) * fTipR,
+            Math.sin(curlTipA) * fTipR
+          );
+          ctx.quadraticCurveTo(
+            Math.cos(fAng + s.direction * 0.07) * (baseR * 1.05),
+            Math.sin(fAng + s.direction * 0.07) * (baseR * 1.05),
+            Math.cos(fAng + s.direction * 0.08) * baseR,
+            Math.sin(fAng + s.direction * 0.08) * baseR
+          );
+          ctx.closePath();
+          ctx.fillStyle = '#ffffff';
+          ctx.fill();
+          ctx.strokeStyle = pal.ink;
+          ctx.lineWidth = 2.4;
+          ctx.stroke();
+        }
+
+        // 2 irregular white spray droplets flying off the wave crest
+        for (let d = 0; d < 2; d++) {
+          const dropR = baseR + maxThick * (0.95 + d * 0.36);
+          const da = fa + s.direction * (0.22 + d * 0.1);
+          ctx.beginPath();
+          ctx.ellipse(
+            Math.cos(da) * dropR,
+            Math.sin(da) * dropR,
+            4.2 - d * 1.1,
+            2.6 - d * 0.5,
+            da + 0.5,
+            0,
+            Math.PI * 2
+          );
+          ctx.fillStyle = '#ffffff';
+          ctx.fill();
+          ctx.strokeStyle = pal.ink;
+          ctx.lineWidth = 1.6;
+          ctx.stroke();
+        }
       }
     } else if (s.palette === 'wind') {
-      // Sanemi Wind Breathing (Image 4): Razor emerald wind tongues + Flying Black Sumi-e Hurricane Shards
-      const shardCount = 8;
+      // Sanemi Wind Breathing (Image 4): Overlapping Emerald Scythe Blades + 12 Angular Black Sumi-e Wind Shards!
+      const shardCount = 12;
       for (let w = 0; w < shardCount; w++) {
-        const tw = (w + 0.35) / shardCount;
+        const tw = (w + 0.25) / shardCount;
         const wa = startA + sweepSpan * tw;
-        const shardDist = rad + maxThick * (0.62 + (w % 3) * 0.28);
+        const shardDist = rad + maxThick * (0.48 + ((w * 3) % 4) * 0.34);
         const sx = Math.cos(wa) * shardDist;
         const sy = Math.sin(wa) * shardDist;
 
         ctx.save();
         ctx.translate(sx, sy);
-        ctx.rotate(wa + s.direction * 1.45);
-        ctx.fillStyle = w % 2 === 0 ? '#090d0b' : pal.mid;
-        ctx.strokeStyle = w % 2 === 0 ? pal.mid : pal.ink;
+        ctx.rotate(wa + s.direction * 1.48);
+        ctx.fillStyle = w % 3 === 0 ? pal.mid : '#070b09';
+        ctx.strokeStyle = w % 3 === 0 ? pal.ink : pal.mid;
         ctx.lineWidth = 1.8;
         ctx.beginPath();
-        ctx.moveTo(-14, 0);
-        ctx.lineTo(-2, -5.2);
-        ctx.lineTo(15, 0);
-        ctx.lineTo(-2, 5.2);
+        ctx.moveTo(-18, -2);
+        ctx.lineTo(-4, -8.5);
+        ctx.lineTo(20, 0);
+        ctx.lineTo(-2, 7.5);
+        ctx.lineTo(-12, 3);
         ctx.closePath();
         ctx.fill();
         ctx.stroke();
         ctx.restore();
       }
     } else if (s.palette === 'thunder') {
-      // Zenitsu / Kaigaku Thunder Breathing (Images 5, 14): Dual Golden-Amber + Electric-Blue Branching Lightning Forks!
-      for (let bolt = 0; bolt < 2; bolt++) {
-        const isBlue = bolt === 1;
+      // Zenitsu Thunder Breathing (Image 5): Multi-Branch Fractal Canary Gold & Electric Cyan Lightning Forks!
+      for (let bolt = 0; bolt < 3; bolt++) {
+        const isBlue = bolt === 2;
+        const isWhiteCore = bolt === 1;
+        const boltSteps = 14;
         ctx.beginPath();
-        const boltSteps = 10;
         for (let b = 0; b <= boltSteps; b++) {
           const bf = b / boltSteps;
           const ba = startA + sweepSpan * bf;
-          const zig = (b % 2 === 0 ? 1 : -1) * maxThick * (isBlue ? 0.56 : 0.42);
-          const br = rad + zig + (isBlue ? 8 : -4);
+          const seedSig = Math.sin(b * 6.3 + s.seed + bolt * 2.1);
+          const zig = (seedSig >= 0 ? 1 : -1) * maxThick * (isBlue ? 0.65 : 0.48) * (0.5 + Math.abs(seedSig) * 0.7);
+          const br = rad + zig + (isBlue ? 12 : -4);
           const bx = Math.cos(ba) * br;
           const by = Math.sin(ba) * br;
           if (b === 0) ctx.moveTo(bx, by);
           else ctx.lineTo(bx, by);
         }
-        ctx.strokeStyle = pal.ink;
-        ctx.lineWidth = isBlue ? 5.2 : 6.4;
-        ctx.stroke();
-        ctx.strokeStyle = isBlue ? '#38bdf8' : '#ffd84a';
-        ctx.lineWidth = isBlue ? 2.6 : 3.4;
-        ctx.stroke();
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 1.2;
-        ctx.stroke();
+        if (!isWhiteCore) {
+          ctx.strokeStyle = pal.ink;
+          ctx.lineWidth = isBlue ? 5.8 : 7.6;
+          ctx.stroke();
+          ctx.strokeStyle = isBlue ? '#38e8ff' : '#ffe94d';
+          ctx.lineWidth = isBlue ? 3.2 : 4.4;
+          ctx.stroke();
+        } else {
+          ctx.globalCompositeOperation = 'lighter';
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 2.4;
+          ctx.stroke();
+          ctx.globalCompositeOperation = 'source-over';
+        }
       }
     } else {
-      // Hinokami Kagura / Rengoku Flame / Blood Art (Images 1, 6, 9, 10, 13):
-      // 9 Sculpted Hooked Cel Flame Tongues + Detached Ink-Rimmed Ember Chunks
-      const tongueCount = 9;
+      // Hinokami Kagura / Rengoku Flame Breathing / Blood Demon Art (Images 1, 6, 9, 10):
+      // 11 Asymmetrical Hooked S-Curved Flame Tongues + Detached Curling Ember Chunks!
+      const tongueCount = 11;
       for (let t = 0; t < tongueCount; t++) {
-        const tf = (t + 0.4) / tongueCount;
+        const tf = (t + 0.3) / tongueCount;
         const ta = startA + sweepSpan * tf;
-        const taper = Math.sin(Math.pow(tf, 0.74) * Math.PI);
-        const baseR = rad + maxThick * 0.44 * taper;
-        const tipR = baseR + maxThick * (0.68 + ((t + Math.floor(s.seed)) % 3) * 0.25);
+        const taper = Math.sin(Math.pow(tf, 0.7) * Math.PI);
+        const baseR = rad + maxThick * 0.46 * taper;
+        const amp = 0.78 + ((t * 5 + Math.floor(s.seed)) % 4) * 0.24;
+        const tipR = baseR + maxThick * amp;
+        const hookSweep = s.direction * (0.24 + (t % 2) * 0.08);
 
         ctx.beginPath();
         ctx.moveTo(Math.cos(ta - s.direction * 0.11) * baseR, Math.sin(ta - s.direction * 0.11) * baseR);
         ctx.quadraticCurveTo(
-          Math.cos(ta + s.direction * 0.06) * (tipR * 0.94),
-          Math.sin(ta + s.direction * 0.06) * (tipR * 0.94),
-          Math.cos(ta + s.direction * 0.19) * tipR,
-          Math.sin(ta + s.direction * 0.19) * tipR
+          Math.cos(ta + hookSweep * 0.45) * (tipR * 1.02),
+          Math.sin(ta + hookSweep * 0.45) * (tipR * 1.02),
+          Math.cos(ta + hookSweep) * tipR,
+          Math.sin(ta + hookSweep) * tipR
         );
-        ctx.lineTo(Math.cos(ta + s.direction * 0.11) * baseR, Math.sin(ta + s.direction * 0.11) * baseR);
+        ctx.quadraticCurveTo(
+          Math.cos(ta + hookSweep * 0.5) * (baseR * 1.08),
+          Math.sin(ta + hookSweep * 0.5) * (baseR * 1.08),
+          Math.cos(ta + s.direction * 0.12) * baseR,
+          Math.sin(ta + s.direction * 0.12) * baseR
+        );
         ctx.closePath();
         ctx.fillStyle = t % 2 === 0 ? pal.outer : pal.mid;
         ctx.fill();
         ctx.strokeStyle = pal.ink;
-        ctx.lineWidth = 2.8;
+        ctx.lineWidth = 3.0;
         ctx.stroke();
 
-        // Inner bright yellow-white flame tongue core
+        // Inner blazing yellow-white flame tongue core
         ctx.beginPath();
         ctx.moveTo(Math.cos(ta - s.direction * 0.04) * baseR, Math.sin(ta - s.direction * 0.04) * baseR);
-        ctx.lineTo(
-          Math.cos(ta + s.direction * 0.14) * (tipR * 0.88),
-          Math.sin(ta + s.direction * 0.14) * (tipR * 0.88)
+        ctx.quadraticCurveTo(
+          Math.cos(ta + hookSweep * 0.45) * (tipR * 0.92),
+          Math.sin(ta + hookSweep * 0.45) * (tipR * 0.92),
+          Math.cos(ta + hookSweep * 0.85) * (tipR * 0.88),
+          Math.sin(ta + hookSweep * 0.85) * (tipR * 0.88)
         );
-        ctx.lineTo(Math.cos(ta + s.direction * 0.07) * baseR, Math.sin(ta + s.direction * 0.07) * baseR);
+        ctx.lineTo(Math.cos(ta + s.direction * 0.06) * baseR, Math.sin(ta + s.direction * 0.06) * baseR);
         ctx.closePath();
         ctx.fillStyle = pal.core;
         ctx.fill();
 
-        // Detached anime ember chunk outside every second flame tongue (Image 9)
+        // Detached curling flame ember droplet (Image 1 & 9 signature!)
         if (t % 2 === 0) {
-          const emberR = tipR + 10 + (t % 3) * 4;
-          const ex = Math.cos(ta + s.direction * 0.22) * emberR;
-          const ey = Math.sin(ta + s.direction * 0.22) * emberR;
+          const emberR = tipR + 12 + (t % 3) * 7;
+          const ea = ta + hookSweep * 1.08;
+          const ex = Math.cos(ea) * emberR;
+          const ey = Math.sin(ea) * emberR;
           ctx.save();
           ctx.translate(ex, ey);
-          ctx.rotate(ta + p * 2.5);
-          ctx.fillStyle = pal.core;
+          ctx.rotate(ea + s.direction * 0.6 + p * 2.2);
+          ctx.fillStyle = t % 4 === 0 ? pal.core : pal.mid;
           ctx.strokeStyle = pal.ink;
-          ctx.lineWidth = 2.0;
+          ctx.lineWidth = 2.2;
           ctx.beginPath();
-          ctx.moveTo(0, -5.2);
-          ctx.lineTo(3.6, 0);
-          ctx.lineTo(0, 5.2);
-          ctx.lineTo(-3.6, 0);
+          ctx.moveTo(-7, 0);
+          ctx.quadraticCurveTo(0, -6.5, 9, -1);
+          ctx.quadraticCurveTo(1, 5.5, -7, 0);
           ctx.closePath();
           ctx.fill();
           ctx.stroke();
@@ -2067,6 +2395,14 @@ export function renderBloodDemonArtWorldPass(
         }
       }
     }
+
+    // PASS D: Additive White-Hot Blade Spine Accent
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = alpha * 0.48;
+    traceOrganicBand(0.06, 0.09, maxThick * 0.06, 0.04);
+    ctx.fillStyle = pal.core;
+    ctx.fill();
+
     ctx.restore();
   }
 
@@ -2084,8 +2420,9 @@ export function renderBloodDemonArtWorldPass(
     ctx.moveTo(st.x, st.y);
     ctx.lineTo(ex, ey);
     ctx.strokeStyle = '#120806';
-    ctx.lineWidth = st.width + 2.6;
+    ctx.lineWidth = st.width + 2.8;
     ctx.stroke();
+    ctx.globalCompositeOperation = 'lighter';
     ctx.strokeStyle = st.color;
     ctx.lineWidth = st.width;
     ctx.stroke();
@@ -2096,20 +2433,24 @@ export function renderBloodDemonArtWorldPass(
     const sp = pool.clashSparks[i];
     if (!sp.active) continue;
     const p = 1 - sp.life / sp.maxLife;
-    const len = sp.length * (1 - p * 0.45);
+    const len = sp.length * (1 - p * 0.35);
     const nx = Math.cos(sp.angle);
     const ny = Math.sin(sp.angle);
     ctx.save();
     ctx.globalAlpha = Math.max(0, 1 - p);
     ctx.lineCap = 'round';
     ctx.beginPath();
-    ctx.moveTo(sp.x - nx * len * 0.35, sp.y - ny * len * 0.25);
+    ctx.moveTo(sp.x - nx * len * 0.4, sp.y - ny * len * 0.28);
     ctx.lineTo(sp.x + nx * len, sp.y + ny * len * 0.72);
     ctx.strokeStyle = '#120806';
-    ctx.lineWidth = 5.4;
+    ctx.lineWidth = 6.0;
     ctx.stroke();
     ctx.strokeStyle = sp.color;
-    ctx.lineWidth = 2.6;
+    ctx.lineWidth = 3.2;
+    ctx.stroke();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1.4;
     ctx.stroke();
     ctx.restore();
   }
@@ -2125,22 +2466,23 @@ export function renderBloodDemonArtScreenFlash(
   const p = pool.impactInversionTimer / Math.max(0.001, pool.impactInversionDuration);
 
   ctx.save();
-  // Crisp high-contrast Sumi-e impact inversion flash (2-frame manga clash look)
-  ctx.fillStyle = p > 0.5 ? '#070405' : pool.impactInversionColor;
-  ctx.globalAlpha = p > 0.5 ? 0.52 : 0.34;
+  // Crisp Ufotable impact flash + radial action speed-lines converging around the strike
+  ctx.globalCompositeOperation = p > 0.55 ? 'source-over' : 'lighter';
+  ctx.fillStyle = p > 0.55 ? '#070405' : pool.impactInversionColor;
+  ctx.globalAlpha = p > 0.55 ? 0.38 : 0.28;
   ctx.fillRect(0, 0, width, height);
 
-  // Radial white-hot manga speed lines converging toward impact point or screen center
-  const cx = pool.impactOriginX > 0 ? width * 0.5 : width * 0.5;
-  const cy = pool.impactOriginY > 0 ? height * 0.5 : height * 0.5;
-  ctx.strokeStyle = p > 0.5 ? '#fff9e6' : '#120806';
-  ctx.globalAlpha = 0.72 * p;
-  ctx.lineWidth = 2.6;
-  const rayCount = 24;
+  const cx = width * 0.5;
+  const cy = height * 0.5;
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.strokeStyle = p > 0.5 ? '#fff9e6' : pool.impactInversionColor;
+  ctx.globalAlpha = 0.78 * p;
+  ctx.lineWidth = 2.8;
+  const rayCount = 32;
   for (let i = 0; i < rayCount; i++) {
-    const a = (i / rayCount) * Math.PI * 2 + (i % 2) * 0.04;
-    const r0 = Math.min(width, height) * (0.16 + (i % 3) * 0.05);
-    const r1 = Math.max(width, height) * 0.75;
+    const a = (i / rayCount) * Math.PI * 2 + (i % 2) * 0.045;
+    const r0 = Math.min(width, height) * (0.20 + (i % 3) * 0.06);
+    const r1 = Math.max(width, height) * 0.78;
     ctx.beginPath();
     ctx.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0);
     ctx.lineTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1);
