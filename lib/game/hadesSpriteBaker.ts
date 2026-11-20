@@ -337,9 +337,18 @@ let cachedIsSoftwareWebGL: boolean | null = null;
  */
 export function isSoftwareWebGLRenderer(): boolean {
   if (cachedIsSoftwareWebGL !== null) return cachedIsSoftwareWebGL;
-  if (typeof window === 'undefined' || !sharedStudioWebGLRenderer) return false;
+  if (typeof window === 'undefined' || typeof document === 'undefined') return false;
   try {
-    const gl = sharedStudioWebGLRenderer.getContext();
+    let gl: WebGLRenderingContext | WebGL2RenderingContext | null = null;
+    if (sharedStudioWebGLRenderer) {
+      gl = sharedStudioWebGLRenderer.getContext();
+    } else {
+      const probe = document.createElement('canvas');
+      gl =
+        (probe.getContext('webgl2') as WebGL2RenderingContext | null) ||
+        (probe.getContext('webgl') as WebGLRenderingContext | null);
+    }
+    if (!gl) return false;
     let rendererStr = String(gl.getParameter(gl.RENDERER) || '');
     const dbg = gl.getExtension('WEBGL_debug_renderer_info');
     if (dbg) {

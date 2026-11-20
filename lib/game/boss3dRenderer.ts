@@ -35,6 +35,7 @@ import {
   liftTextureToAnimeVibrancy,
   setCelHitFlash,
   setCelRimStyle,
+  setCelUnderGlow,
 } from './demonSlayerShader';
 
 export type Boss3DKind = 'dundubhi' | 'vrikodara' | 'semi_boss' | 'savitri_hub';
@@ -1719,6 +1720,26 @@ export class Boss3DRenderer {
     }
 
     setCelRimStyle(rig.materials, phaseRimHex, phaseRimStrength);
+    // Akaza Compass Needle / Blood Demon Art dramatic upward floor under-lighting on Boss 3D cel model
+    const bossUnderHex =
+      params.kind === 'dundubhi'
+        ? 0x18d8ff
+        : params.kind === 'vrikodara'
+          ? 0xff1f5a
+          : params.kind === 'semi_boss'
+            ? 0xff5218
+            : 0xffe4b8;
+    const bossUnderStrength =
+      params.kind === 'savitri_hub'
+        ? 0.08
+        : params.aiState === 'windup'
+          ? 0.42 + params.windupProgress * 0.28
+          : params.aiState === 'attack'
+            ? 0.62
+            : params.phase >= 2
+              ? 0.38
+              : 0.14;
+    setCelUnderGlow(rig.materials, bossUnderHex, bossUnderStrength);
     setCelHitFlash(
       rig.materials,
       params.isHitFlash,

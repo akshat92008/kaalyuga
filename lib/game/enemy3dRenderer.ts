@@ -10,6 +10,7 @@ import {
 } from './hadesSpriteBaker';
 import {
   createDemonSlayerCelMaterial,
+  gradeEnemyTextureToDemonAnime,
   liftTextureToAnimeVibrancy,
 } from './demonSlayerShader';
 import { loadFbxCached, simplifyBufferGeometry } from './meshSimplifier';
@@ -245,9 +246,9 @@ export const ENEMY_MODEL_SLOTS: Record<
       hurt: `${ANIM_BASE}/Great Sword Pack/great sword impact.fbx`,
       death: `${ANIM_BASE}/Great Sword Pack/two handed sword death.fbx`,
     },
-    rimColor: 0xcbd5e1,
-    rimIntensity: 0.32,
-    scaleMultiplier: 1.02,
+    rimColor: 0xff5470,
+    rimIntensity: 0.56,
+    scaleMultiplier: 1.04,
   },
   witch_oracle: {
     key: 'witch_oracle',
@@ -263,9 +264,9 @@ export const ENEMY_MODEL_SLOTS: Record<
       hurt: `${ANIM_BASE}/Pro Magic Pack/Standing React Small From Front.fbx`,
       death: `${ANIM_BASE}/Pro Magic Pack/Standing React Death Forward.fbx`,
     },
-    rimColor: 0xd8b4fe,
-    rimIntensity: 0.34,
-    scaleMultiplier: 1.0,
+    rimColor: 0xc084fc,
+    rimIntensity: 0.58,
+    scaleMultiplier: 1.02,
   },
   club_brute: {
     key: 'club_brute',
@@ -301,9 +302,9 @@ export const ENEMY_MODEL_SLOTS: Record<
       hurt: `${ANIM_BASE}/Pro Melee Axe Pack/standing block react large.fbx`,
       death: `${ANIM_BASE}/Pro Magic Pack/Standing React Death Backward.fbx`,
     },
-    rimColor: 0xfde68a,
-    rimIntensity: 0.34,
-    scaleMultiplier: 1.10,
+    rimColor: 0x67e8f9,
+    rimIntensity: 0.54,
+    scaleMultiplier: 1.12,
   },
   axe_guardian: {
     key: 'axe_guardian',
@@ -1107,17 +1108,28 @@ export class Enemy3DRenderer {
 
       slot.standingHipY = extractStandingHipY(baseGroup);
 
-      const liftedDiffuse = liftTextureToAnimeVibrancy(diffuseMap, 1.18, 1.12);
-      if (liftedDiffuse) liftedDiffuse.userData.animeLifted = true;
+      const gradedDiffuse = gradeEnemyTextureToDemonAnime(diffuseMap, 1.34);
+      if (gradedDiffuse) gradedDiffuse.userData.animeLifted = true;
+
+      // Archetype-tuned ufotable Demon shadow & under-glow tint (replaces pale mud-grey flatness)
+      const isArcaneDemon = slot.key === 'witch_oracle' || slot.key === 'eternal_wheel_warden';
+      const isSteelDemon = slot.key === 'shield_gladiator' || slot.key === 'horned_warbringer';
+      const shadowTintHex = isArcaneDemon ? 0x1e0e38 : isSteelDemon ? 0x101c30 : 0x260d18;
+      const underGlowHex = isArcaneDemon ? 0x9333ea : isSteelDemon ? 0x38bdf8 : 0xe11d48;
 
       const celMat = createDemonSlayerCelMaterial({
-        map: liftedDiffuse,
-        tintHex: liftedDiffuse ? 0xffffff : slot.rimColor,
-        emissiveHex: 0x262220,
-        emissiveIntensity: 0.24,
+        map: gradedDiffuse,
+        tintHex: gradedDiffuse ? 0xf2ece6 : slot.rimColor,
+        emissiveHex: shadowTintHex,
+        emissiveIntensity: 0.14,
         rimColorHex: slot.rimColor,
-        rimStrength: 0.28,
-        rimPower: 3.1,
+        rimStrength: Math.max(0.48, slot.rimIntensity),
+        rimPower: 2.35,
+        underGlowColorHex: underGlowHex,
+        underGlowStrength: 0.24,
+        shadowTintHex,
+        shadowTintStrength: 0.55,
+        useDemonContrastRamp: true,
       });
 
       if (riggedGroup) {
@@ -1134,7 +1146,7 @@ export class Enemy3DRenderer {
 
       const rawBox = new THREE.Box3().setFromObject(baseGroup);
       const rawHeight = Math.max(0.001, rawBox.max.y - rawBox.min.y);
-      const targetHeight = 1.44 * slot.scaleMultiplier;
+      const targetHeight = 1.48 * slot.scaleMultiplier;
       const scale = targetHeight / rawHeight;
       baseGroup.scale.setScalar(scale);
       // Mixamo clips set mixamorigHips.position.y = standingHipY (~+100), which already grounds feet at Y=0.
@@ -1144,10 +1156,10 @@ export class Enemy3DRenderer {
       this.attachWeaponToRig(baseGroup, slot);
       applyHadesCelShadingToHierarchy(baseGroup, {
         rimColor: slot.rimColor,
-        rimIntensity: 0.28,
-        emissiveTint: 0x262220,
-        emissiveStrength: 0.24,
-        outlineRatio: 0.0048,
+        rimIntensity: Math.max(0.48, slot.rimIntensity),
+        emissiveTint: shadowTintHex,
+        emissiveStrength: 0.14,
+        outlineRatio: 0.0085,
       });
 
       const wrapper = new THREE.Group();
@@ -1420,13 +1432,13 @@ export class Enemy3DRenderer {
     const rimR = (slot.rimColor >> 16) & 255;
     const rimG = (slot.rimColor >> 8) & 255;
     const rimB = slot.rimColor & 255;
-    const slotRimRgba = `rgba(${rimR}, ${rimG}, ${rimB}, 0.24)`;
+    const slotRimRgba = `rgba(${rimR}, ${rimG}, ${rimB}, 0.36)`;
 
     const bakedCanvas = bake2DSpriteFrameFromCanvas(this.renderer.domElement, cacheKey, {
       role: silhouetteRole,
       rimColor: slotRimRgba,
       outlineColor: outlineHex,
-      outlineThickness: isElite ? 1.85 : 1.7,
+      outlineThickness: isElite ? 2.6 : 2.35,
       hitFlash,
       cacheFrame: false,
     });

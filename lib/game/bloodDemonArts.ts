@@ -2464,25 +2464,67 @@ export function renderBloodDemonArtScreenFlash(
 ): void {
   if (pool.impactInversionTimer <= 0) return;
   const p = pool.impactInversionTimer / Math.max(0.001, pool.impactInversionDuration);
-
-  ctx.save();
-  // Crisp Ufotable impact flash + radial action speed-lines converging around the strike
-  ctx.globalCompositeOperation = p > 0.55 ? 'source-over' : 'lighter';
-  ctx.fillStyle = p > 0.55 ? '#070405' : pool.impactInversionColor;
-  ctx.globalAlpha = p > 0.55 ? 0.38 : 0.28;
-  ctx.fillRect(0, 0, width, height);
-
   const cx = width * 0.5;
   const cy = height * 0.5;
-  ctx.globalCompositeOperation = 'lighter';
-  ctx.strokeStyle = p > 0.5 ? '#fff9e6' : pool.impactInversionColor;
-  ctx.globalAlpha = 0.78 * p;
-  ctx.lineWidth = 2.8;
-  const rayCount = 32;
+
+  ctx.save();
+
+  // Frame 1-2 (p > 0.56): True Ufotable High-Contrast Sumi-e Negative Impact Inversion!
+  if (p > 0.56) {
+    ctx.globalCompositeOperation = 'difference';
+    ctx.fillStyle = '#ffffff';
+    ctx.globalAlpha = 0.88;
+    ctx.fillRect(0, 0, width, height);
+
+    // Stark black ink impact border vignette
+    ctx.globalCompositeOperation = 'source-over';
+    const vig = ctx.createRadialGradient(
+      cx,
+      cy,
+      Math.min(width, height) * 0.24,
+      cx,
+      cy,
+      Math.max(width, height) * 0.72
+    );
+    vig.addColorStop(0, 'rgba(0, 0, 0, 0)');
+    vig.addColorStop(1, 'rgba(5, 3, 6, 0.72)');
+    ctx.fillStyle = vig;
+    ctx.globalAlpha = 1;
+    ctx.fillRect(0, 0, width, height);
+  } else {
+    // Recovery frames: Chromatic RGB shockwave split + crisp elemental tint flash
+    const expand = 1 - p / 0.56;
+    const baseR = Math.min(width, height) * (0.16 + expand * 0.44);
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = 0.22 * (1 - expand);
+    ctx.fillStyle = pool.impactInversionColor;
+    ctx.fillRect(0, 0, width, height);
+
+    // Cyan / Crimson chromatic aberration ring pair
+    ctx.lineWidth = 4.5 * (1 - expand * 0.5);
+    ctx.globalAlpha = 0.65 * (1 - expand);
+    ctx.strokeStyle = '#38e8ff';
+    ctx.beginPath();
+    ctx.arc(cx - 5, cy, baseR, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.strokeStyle = '#ff2a55';
+    ctx.beginPath();
+    ctx.arc(cx + 5, cy, baseR * 1.02, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  // Sharp converging Ufotable anime action speed-lines (alternating Sumi-e ink & blazing white)
+  const rayCount = 36;
   for (let i = 0; i < rayCount; i++) {
-    const a = (i / rayCount) * Math.PI * 2 + (i % 2) * 0.045;
-    const r0 = Math.min(width, height) * (0.20 + (i % 3) * 0.06);
-    const r1 = Math.max(width, height) * 0.78;
+    const a = (i / rayCount) * Math.PI * 2 + (i % 2) * 0.038;
+    const r0 = Math.min(width, height) * (0.18 + (i % 3) * 0.07);
+    const r1 = Math.max(width, height) * 0.82;
+    const isInkRay = p > 0.56 && i % 3 === 0;
+    ctx.globalCompositeOperation = isInkRay ? 'source-over' : 'lighter';
+    ctx.strokeStyle = isInkRay ? '#080406' : p > 0.56 ? '#ffffff' : pool.impactInversionColor;
+    ctx.globalAlpha = (isInkRay ? 0.82 : 0.78) * p;
+    ctx.lineWidth = isInkRay ? 4.2 : 2.6;
     ctx.beginPath();
     ctx.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0);
     ctx.lineTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1);

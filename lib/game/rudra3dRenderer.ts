@@ -16,6 +16,8 @@ import {
   createDemonSlayerCelMaterial,
   createParashuFlameSheathGroup,
   liftTextureToAnimeVibrancy,
+  setCelRimStyle,
+  setCelUnderGlow,
 } from './demonSlayerShader';
 import { loadFbxCached, simplifyBufferGeometry } from './meshSimplifier';
 
@@ -206,6 +208,9 @@ export class Rudra3DRenderer {
   private stateElapsedSec = 0;
   private lastAnimState: RudraAnimState = 'idle';
   private frameCache: Map<string, HTMLCanvasElement> = new Map();
+  private celMaterials: THREE.Material[] = [];
+  private parashuAuraMat: THREE.ShaderMaterial | null = null;
+  private studioRimLight: THREE.DirectionalLight | null = null;
   private disposed = false;
   private prewarmQueue: Array<() => void> = [];
   private prewarmTimer: number | null = null;
@@ -225,6 +230,7 @@ export class Rudra3DRenderer {
     const studioLights = setupSharedStudioLightingRig(this.scene, 1.0);
     studioLights.rimLight.color.setHex(0xffe8c2);
     studioLights.rimLight.intensity = 1.05;
+    this.studioRimLight = studioLights.rimLight;
 
     if (typeof document !== 'undefined') {
       this.canvas = document.createElement('canvas');
@@ -302,6 +308,7 @@ export class Rudra3DRenderer {
           rimStrength: 0.28,
           rimPower: 3.1,
         });
+        this.celMaterials.push(mat);
 
         if (riggedGroup) {
           bindTexturedGeometryToSkeleton(riggedGroup, texturedGroup, mat);
@@ -339,6 +346,7 @@ export class Rudra3DRenderer {
             rimStrength: 0.32,
             rimPower: 3.0,
           });
+          this.celMaterials.push(wepMat);
           weaponGroup.traverse((c) => {
             if ((c as THREE.Mesh).isMesh) {
               const wm = c as THREE.Mesh;
@@ -366,6 +374,10 @@ export class Rudra3DRenderer {
 
           // Subtle golden-amber blade edge accent around the Parashu axe head
           const flameSheath = createParashuFlameSheathGroup(maxDim * localWepScale);
+          const sheathMesh = flameSheath.children[0] as THREE.Mesh | undefined;
+          if (sheathMesh && sheathMesh.material instanceof THREE.ShaderMaterial) {
+            this.parashuAuraMat = sheathMesh.material;
+          }
           weaponSocket.add(flameSheath);
           rightHand.add(weaponSocket);
         }
@@ -550,7 +562,7 @@ export class Rudra3DRenderer {
         ? input.slashAngle
         : Math.atan2(input.facingY || 0, input.facingX || 1);
 
-    const baked = this.renderFrame(state, animClock, facingAngle, input.isHurt);
+    const baked = this.renderFrame(state, animClock, facingAngle, input.isHurt, input.stance);
     if (baked) {
       this.canvas = baked;
       return true;
@@ -562,7 +574,8 @@ export class Rudra3DRenderer {
     state: RudraAnimState,
     animTimeSec: number,
     facingAngleRad: number,
-    hitFlash = false
+    hitFlash = false,
+    stance = 'smash'
   ): HTMLCanvasElement | null {
     if (!this.isReady || !this.model || !this.mixer) return null;
 
@@ -595,8 +608,9 @@ export class Rudra3DRenderer {
       : Math.floor(((Math.max(0, animTimeSec) % clipDur) / clipDur) * steps);
     const quantizedTime = (stepIndex / steps) * clipDur;
 
+    const stanceTag = isAttack || state === 'dash' || state === 'block' ? stance : 'base';
     const flashTag = hitFlash ? 'flash' : 'norm';
-    const cacheKey = `rudra:${state}:y${yawIndex}:f${stepIndex}:${flashTag}`;
+    const cacheKey = `rudra:${state}:${stanceTag}:y${yawIndex}:f${stepIndex}:${flashTag}`;
 
     const cached = this.frameCache.get(cacheKey);
     if (cached) return cached;
@@ -611,21 +625,63 @@ export class Rudra3DRenderer {
       this.mixer.setTime(quantizedTime);
     }
 
+    // Stance-synced Demon Slayer anime rim & upward floor bounce light on Rudra's 3D cel model
+    const isPillar = stance === 'pillar';
+    const isThrust = stance === 'thrust';
+    const stanceRimHex = isPillar ? 0x6ee7b7 : isThrust ? 0x7dd3fc : 0xffd27d;
+    const stanceGlowHex = isPillar ? 0x10b981 : isThrust ? 0x38e8ff : 0xff6a18;
+    const activeBoost = state === 'cast' || state === 'heavy' ? 1.0 : isAttack ? 0.72 : state === 'block' ? 0.55 : 0.0;
+
+    if (this.celMaterials.length > 0) {
+      setCelRimStyle(
+        this.celMaterials,
+        activeBoost > 0 ? stanceRimHex : 0xffe4b8,
+        activeBoost > 0 ? 0.34 + activeBoost * 0.24 : 0.28
+      );
+      setCelUnderGlow(this.celMaterials, stanceGlowHex, activeBoost * 0.44);
+    }
+    if (this.studioRimLight) {
+      this.studioRimLight.color.setHex(activeBoost > 0 ? stanceRimHex : 0xffe8c2);
+      this.studioRimLight.intensity = activeBoost > 0 ? 1.25 : 1.05;
+    }
+    if (this.parashuAuraMat) {
+      this.parashuAuraMat.uniforms.uTime.value = quantizedTime * 3.5;
+      if (isPillar) {
+        this.parashuAuraMat.uniforms.uMidColor.value.setHex(0x26f78d);
+        this.parashuAuraMat.uniforms.uOuterColor.value.setHex(0x047857);
+      } else if (isThrust) {
+        this.parashuAuraMat.uniforms.uMidColor.value.setHex(0x38e8ff);
+        this.parashuAuraMat.uniforms.uOuterColor.value.setHex(0x0284c7);
+      } else {
+        this.parashuAuraMat.uniforms.uMidColor.value.setHex(0xff9f2e);
+        this.parashuAuraMat.uniforms.uOuterColor.value.setHex(0xe64d1c);
+      }
+    }
+
     this.wrapper.rotation.y = Math.PI * 0.5 - quantizedYaw;
     this.wrapper.rotation.x = 0;
 
     renderer.render(this.scene, this.camera);
 
+    const rimRgba =
+      activeBoost > 0
+        ? isPillar
+          ? 'rgba(52, 245, 165, 0.36)'
+          : isThrust
+            ? 'rgba(72, 228, 255, 0.38)'
+            : 'rgba(255, 178, 72, 0.38)'
+        : 'rgba(255, 242, 214, 0.30)';
+
     const baked = bake2DSpriteFrameFromCanvas(renderer.domElement, cacheKey, {
       role: 'rudra',
-      rimColor: 'rgba(255, 242, 214, 0.30)',
+      rimColor: rimRgba,
       outlineColor: SHARED_STUDIO_OUTLINE_COLOR,
       outlineThickness: 1.85,
       hitFlash,
       cacheFrame: false,
     });
 
-    if (this.frameCache.size > 720) {
+    if (this.frameCache.size > 960) {
       const oldest = this.frameCache.keys().next().value;
       if (oldest) this.frameCache.delete(oldest);
     }
