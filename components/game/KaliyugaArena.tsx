@@ -7418,6 +7418,14 @@ export default function KaliyugaArena() {
             if (gate.shouldFireNow || p.actionTimer <= 0) {
               pendingStrike.fired = true;
               pendingStrike.execute();
+              if (isDebugMode && p.action === 'light_attack') {
+                qaRecentEventsRef.current.push({
+                  name: 'light-contact',
+                  frameTime: performance.now(),
+                  meta: p.stance,
+                });
+                if (qaRecentEventsRef.current.length > 50) qaRecentEventsRef.current.shift();
+              }
               pendingStrikeVfxRef.current = null;
             }
           }
