@@ -9,12 +9,13 @@ import {Boss3DRenderer} from '@/lib/game/boss3dRenderer';
 import {GAME_ASSETS} from '@/lib/game/assets';
 import {
   createDundubhiScene, MeruTimelinePlayer, sampleCinematic,
-  validateCinematic, type MeruCinematic,
+  validateCinematic, type MeruCinematic, type BossCharacter,
 } from '@/engine/meru/cinematicTimeline';
 import {GRAPHICS_PRESETS,type GraphicsTier} from '@/engine/meru/adaptiveQuality';
 import {makeMeruBossParams,paintMeruFrame} from '@/engine/meru/cinematicVisuals';
+import {meruStorageKey,readBossIntro,defaultBossIntro} from '@/engine/meru/runtimePolicy';
 
-const W=960,H=540,KEY='meru.studio.cinematic.v1';
+const W=960,H=540;
 function fmt(n:number){return Number.isFinite(n)?n.toFixed(2):'0.00';}
 function clamp(n:number,a:number,b:number){return Math.max(a,Math.min(b,n));}
 export default function MeruCinematicStudio(){
@@ -23,6 +24,7 @@ export default function MeruCinematicStudio(){
   const [playing,setPlaying]=useState(false);
   const [status,setStatus]=useState('Initializing original Dundubhi rig…');
   const [error,setError]=useState('');
+  const [hydrated,setHydrated]=useState(false);
   const [tier,setTier]=useState<GraphicsTier>('balanced');
   const canvasRef=useRef<HTMLCanvasElement>(null);
   const videoRef=useRef<HTMLVideoElement>(null);
@@ -47,27 +49,32 @@ export default function MeruCinematicStudio(){
   },[]);
 
   useEffect(()=>{
-    try{
-      const saved=localStorage.getItem(KEY);
-      if(saved)loadScene(JSON.parse(saved));
-    }catch { /* invalid local data should never prevent editor loading */ }
+    // Hydrate before enabling persistence: otherwise the default scene silently
+    // overwrites an existing user's authored camera/lighting keyframes on mount.
+    loadScene(readBossIntro('dundubhi'));
+    setHydrated(true);
   },[loadScene]);
   useEffect(()=>{
-    try{localStorage.setItem(KEY,JSON.stringify(scene));}catch{/* Storage may be disabled */ }
-  },[scene]);
+    if(!hydrated)return;
+    try{localStorage.setItem(meruStorageKey(scene.boss),JSON.stringify(scene));}
+    catch{/* Storage may be disabled */ }
+  },[scene,hydrated]);
   useEffect(()=>{
     let disposed=false;
-    const portrait=new Image();portrait.src=GAME_ASSETS.portraits.dundubhi;portraitRef.current=portrait;
+    readyRef.current=false;
+    lastRef.current=0;
+    setStatus('Initializing original '+scene.boss+' rig…');
+    const portrait=new Image();portrait.src=GAME_ASSETS.portraits[scene.boss];portraitRef.current=portrait;
     for(const [kind,url] of Object.entries({drum:GAME_ASSETS.sfx.warDrum,roar:GAME_ASSETS.sfx.bossRoarDeep,impact:GAME_ASSETS.sfx.weaponSmash})){
       const audio=new Audio(url);audio.preload='auto';audioRef.current[kind]=audio;
     }
     try{
       const boss=new Boss3DRenderer(384);
       bossRef.current=boss;
-      void boss.waitForBossReady('dundubhi',20000).then(ok=>{
+      void boss.waitForBossReady(scene.boss,12000).then(ok=>{
         if(disposed)return;
         readyRef.current=ok;
-        setStatus(ok?'Original Dundubhi 3D rig loaded':'Rig unavailable: original portrait fallback');
+        setStatus(ok?'Original '+scene.boss+' 3D rig loaded':'Rig unavailable: original portrait fallback');
       }).catch(()=>{if(!disposed)setStatus('Rig loading failed: portrait fallback');});
     }catch{
       setStatus('WebGL unavailable: portrait fallback');
@@ -102,7 +109,7 @@ export default function MeruCinematicStudio(){
       for(const sound of Object.values(audioRef.current)){sound.pause();sound.src='';}
       audioRef.current={};
     };
-  },[]);
+  },[scene.boss]);
 
   const seek=(value:number)=>{
     timelineRef.current.pause();
@@ -157,7 +164,7 @@ export default function MeruCinematicStudio(){
         <div>
           <div className="text-[11px] uppercase tracking-[.24em] text-[#da9d60]">Kaliyuga · Meru Engine</div>
           <h1 className="font-serif text-3xl font-bold">Cinematic Studio</h1>
-          <p className="text-xs text-[#a99c94]">Editable, validated scene timeline · original game assets · isolated from combat</p>
+          <p className="text-xs text-[#a99c94]">Editable, validated scene timeline · two original boss rigs · isolated from combat</p>
         </div>
         <a href="/" className="rounded border border-[#665043] px-4 py-2 text-sm hover:bg-[#20151a]">← Back to game</a>
       </header>
@@ -220,6 +227,14 @@ export default function MeruCinematicStudio(){
           </div>
           <div className="rounded-lg border border-[#43352e] bg-[#171216] p-4 space-y-3">
             <h2 className="font-semibold">Project and export</h2>
+            <label className="block text-xs">Act I boss cinematic
+              <select aria-label="Select boss cinematic" value={scene.boss}
+                onChange={e=>loadScene(readBossIntro(e.target.value as BossCharacter))}
+                className="mt-1 block w-full rounded bg-[#2d2529] p-2 text-sm">
+                <option value="dundubhi">Dundubhi · Chamber IV</option>
+                <option value="vrikodara">Vrikodara · Chamber VIII</option>
+              </select>
+            </label>
             <label className="block text-xs">Graphics target
               <select value={tier} onChange={e=>setTier(e.target.value as GraphicsTier)} className="mt-1 block w-full rounded bg-[#2d2529] p-2 text-sm">
                 <option value="lite">Lite</option><option value="balanced">Balanced</option><option value="cinematic">Cinematic</option>
@@ -230,7 +245,7 @@ export default function MeruCinematicStudio(){
               <input type="file" accept=".json,.meru.json,application/json" onChange={e=>void upload(e.target.files?.[0])}
                 className="mt-2 block w-full text-xs text-[#cdb196]"/>
             </label>
-            <button onClick={()=>loadScene(createDundubhiScene())} className="w-full rounded border border-[#665043] px-4 py-2 text-sm">Restore original scene</button>
+            <button onClick={()=>loadScene(defaultBossIntro(scene.boss))} className="w-full rounded border border-[#665043] px-4 py-2 text-sm">Restore original scene</button>
             <p className="text-xs text-[#998879]">Changes autosave locally in this browser. Import/export never changes your combat saves.</p>
           </div>
         </aside>
