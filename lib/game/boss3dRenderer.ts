@@ -1775,14 +1775,23 @@ export class Boss3DRenderer {
           ? `a${Math.round((1 - this.attackSwingTimer / Math.max(0.05, this.attackSwingDuration)) * (isSoft ? 2 : 6))}`
           : 'loc';
     const flashSuffix = params.isHitFlash ? 'flash' : 'norm';
-    const frameKey = `${baseKey}:${actionSubStep}:${flashSuffix}`;
+    // Pose-aware quantization keeps the cutscene's authored body performance
+    // without re-baking nearly identical high-resolution frames every tick.
+    // Software WebGL uses coarser 0.14rad steps; real GPUs preserve ~0.06rad.
+    const pose=params.cinematicPose;
+    const poseStep=isSoft?0.14:0.06;
+    const poseKey=pose?':pose-'+[
+      pose.rootYaw,pose.torsoYaw,pose.torsoLean,pose.rightArmLift,
+      pose.rightElbowBend,pose.leftArmLift,
+    ].map(v=>Math.round(v/poseStep)).join('_'):'';
+    const frameKey = `${baseKey}:${actionSubStep}:${flashSuffix}${poseKey}`;
 
-    // A cinematic pose changes between neighboring keyframes even when the
-    // underlying FBX sprite-cache key does not; never recycle stale posed art.
-    const cached = params.cinematicPose ? undefined : this.frameCache.get(frameKey);
+    // The above pose signature prevents stale joint poses and bounds memory.
+    const cached = this.frameCache.get(frameKey);
     if (cached) {
       this.canvas = cached;
       rig.mixer.update(dt);
+      if(pose)this.applyCinematicBossPose(rig.bones,pose);
       return true;
     }
 
@@ -1975,13 +1984,12 @@ export class Boss3DRenderer {
       cacheFrame: false,
     });
     this.canvas = baked;
-    if (!params.cinematicPose) {
-    if (this.frameCache.size > 96) {
+    const cacheLimit=pose?(isSoft?40:64):96;
+    if (this.frameCache.size > cacheLimit) {
       const oldest = this.frameCache.keys().next().value;
       if (oldest) this.frameCache.delete(oldest);
     }
     this.frameCache.set(frameKey, baked);
-    }
     return true;
   }
 
