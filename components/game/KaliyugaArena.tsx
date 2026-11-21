@@ -39,7 +39,7 @@ import {
 } from '@/lib/game/rules';
 import { soundEngine } from '@/lib/game/audio';
 import { Act1FrameProfiler } from '@/lib/game/act1Performance';
-import { Act1CinematicCamera } from '@/lib/game/act1CinematicCamera';
+import { Act1CinematicCamera, composeAct1CinematicZoom, getAct1FinisherCameraShot } from '@/lib/game/act1CinematicCamera';
 import {
   DUNDUBHI_CHARGE_TRAVEL_SEC,
   advanceDundubhiCharge,
@@ -4573,8 +4573,8 @@ export default function KaliyugaArena() {
     // Short original Parashu finisher camera cue; it never steals input or changes damage.
     act1CameraRef.current?.start({
       kind: 'execution', focusX: (p.x + brokenEnemy.x) * 0.5,
-      focusY: (p.y + brokenEnemy.y) * 0.5, durationSec: 0.58,
-      focusWeight: 0.30, zoomBoost: 0.06,
+      focusY: (p.y + brokenEnemy.y) * 0.5,
+      ...getAct1FinisherCameraShot(finisherSpec.variant),
     });
     p.action = 'execute';
     p.attackSerial += 1;
@@ -7249,7 +7249,9 @@ export default function KaliyugaArena() {
           dt,
         });
         if (cw < 640) nextZoom *= 0.82;
-        sim.cameraZoom = nextZoom + cinematicCue.zoomBoost * Math.min(1, dt * 2.8);
+        // The camera cue already fades itself over time. The old extra dt
+        // multiplier nearly erased its execution close-up at 60 Hz.
+        sim.cameraZoom = composeAct1CinematicZoom(nextZoom, cinematicCue.zoomBoost);
       } else {
         const rawPresetZoom = sim.cameraPreset === 'tactical_wide' ? 0.82 : 0.98;
         const presetBaseZoom = cw < 640 ? rawPresetZoom * 0.78 : rawPresetZoom;
