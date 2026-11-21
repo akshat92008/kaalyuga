@@ -38,6 +38,7 @@
     "sfx",
     "soundtracks",
     "videos",
-    "public"
+    "public",
+    "vite.config.ts"
   ]
 }
