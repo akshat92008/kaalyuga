@@ -171,6 +171,33 @@ export function resolveRudraAnimStateAndClock(
   };
 }
 
+/**
+ * Maps an animation clock to one exact baked sprite frame. Trim attack clips once,
+ * not twice: double trimming shortened the visible cleave and shifted contact timing.
+ * The same quantization is used by preview/prewarm and normal combat.
+ */
+export function computeRudraBakedFrameTime(
+  clockSec: number,
+  clipDurationSec: number,
+  steps: number,
+  isAction: boolean,
+  isAttack: boolean
+): { frame: number; timeSec: number } {
+  const count = Math.max(2, Math.floor(Number.isFinite(steps) ? steps : 2));
+  const duration = Math.max(0.01, Number.isFinite(clipDurationSec) ? clipDurationSec : 1);
+  const clock = Number.isFinite(clockSec) ? Math.max(0, clockSec) : 0;
+  const frame = isAction
+    ? Math.min(count - 1, Math.floor(Math.min(0.9999, clock) * count))
+    : Math.floor(((clock % duration) / duration) * count);
+  const phase = frame / (count - 1);
+  return {
+    frame,
+    timeSec: isAttack
+      ? computeTrimmedCleaveClock(phase, 0.14, 0.88) * duration
+      : (frame / count) * duration,
+  };
+}
+
 // Exact 1:1 vertex match (493,632 verts === 493,632 verts) between Pro Melee Axe Pack rig & Ashen_Warborn texture FBX!
 const RUDRA_RIGGED_FBX_URL =
   '/new_3d_assets/Animations/Pro Melee Axe Pack/Meshy_AI_Ashen_Warborn_20261025_generate.fbx';
@@ -647,15 +674,9 @@ export class Rudra3DRenderer {
     // Higher swing frame density (12 software / 24 GPU) + active cleave window [0.14..0.88] eliminates stalled axe swings
     const steps = isSoft ? (isAttack ? 12 : 8) : isAttack ? 24 : 14;
 
-    const effectiveNorm = isAttack
-      ? computeTrimmedCleaveClock(animTimeSec, 0.14, 0.88)
-      : Math.max(0, Math.min(0.999, animTimeSec));
-    const stepIndex = isAction
-      ? Math.min(steps - 1, Math.floor(effectiveNorm * steps))
-      : Math.floor(((Math.max(0, animTimeSec) % clipDur) / clipDur) * steps);
-    const quantizedTime = isAttack
-      ? (0.14 + (stepIndex / Math.max(1, steps - 1)) * 0.74) * clipDur
-      : (stepIndex / steps) * clipDur;
+    const { frame: stepIndex, timeSec: quantizedTime } = computeRudraBakedFrameTime(
+      animTimeSec, clipDur, steps, isAction, isAttack
+    );
 
     const stanceTag = susanooActive
       ? 'susanoo'
