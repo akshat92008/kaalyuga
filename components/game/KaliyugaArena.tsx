@@ -6922,6 +6922,10 @@ export default function KaliyugaArena() {
     let hudSyncAccum = 0;
     let telemetryLastMs = 0;
     const perfTelemetryEnabled = new URLSearchParams(window.location.search).get('perf') === '1';
+    // Capture ONE actual rendered active frame per action for QA. Browser
+    // screenshots issued *after* an async Playwright cue can miss the entire
+    // 0.3-second attack on slow software WebGL. Disabled for regular players.
+    const capturedActiveFrames = new Set<string>();
     // Bounded, opt-in evidence of animation-cue dispatch. A fired cue does NOT
     // prove enemy contact or that the rendered blade visually touched a target.
     const bossChargeTrace: Array<{
@@ -12566,6 +12570,34 @@ export default function KaliyugaArena() {
         setHud((prev) => (shouldSyncHudSnapshot(prev, nextHud) ? nextHud : prev));
       }
 
+      if (perfTelemetryEnabled && sim.state === 'playing') {
+        const active = sim.player.action === 'light_attack'
+          ? 'light'
+          : sim.player.action === 'heavy_unleash' ? 'heavy' : null;
+        const swing = sim.player.weaponSwingProgress;
+        const key = active ? `ch${sim.chamberIndex + 1}-${active}` : null;
+        if (key && swing >= 0.33 && swing <= 0.58 &&
+            !capturedActiveFrames.has(key)) {
+          capturedActiveFrames.add(key);
+          // The game canvas has now finished all world, WebGL and UI passes;
+          // capture synchronously from that EXACT visual frame, not later.
+          try {
+            const activeFramesWindow = window as Window & {
+              __KALIYUGA_ACT1_ACTIVE_FRAMES__?: Record<string,string>;
+            };
+            const png = canvasRef.current?.toDataURL('image/png');
+            if (png?.startsWith('data:image/png;base64,')) {
+              if (!activeFramesWindow.__KALIYUGA_ACT1_ACTIVE_FRAMES__) {
+                activeFramesWindow.__KALIYUGA_ACT1_ACTIVE_FRAMES__ = {};
+              }
+              activeFramesWindow.__KALIYUGA_ACT1_ACTIVE_FRAMES__[key] = png;
+            }
+          } catch {
+            // Cross-origin image taint must not affect gameplay. The QA
+            // artifact will report a missing active-frame capture instead.
+          }
+        }
+      }
       afterDraw(tick);
     };
 
@@ -12576,6 +12608,7 @@ export default function KaliyugaArena() {
       window.removeEventListener('resize', resizeCanvas);
       if (perfTelemetryEnabled) {
         delete (window as Window & { __KALIYUGA_ACT1_PERF__?: unknown }).__KALIYUGA_ACT1_PERF__;
+        delete (window as Window & { __KALIYUGA_ACT1_ACTIVE_FRAMES__?: unknown }).__KALIYUGA_ACT1_ACTIVE_FRAMES__;
         act1FrameProfilerRef.current?.reset();
       }
       act1CameraRef.current?.cancel();
