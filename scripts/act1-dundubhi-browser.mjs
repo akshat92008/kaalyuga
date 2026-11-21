@@ -1,9 +1,11 @@
 /**
  * Actual production-browser Dundubhi charge traversal audit.
  *
- * Does not mutate enemies or spawn debug targets: lets the boss AI approach and
- * attack naturally from the canonical Chapter 4 room. Runs in headless
- * SwiftShader; timing is NOT a GPU performance claim about the user's Mac.
+ * Drives the canonical Phase 1 horn-gore as the first AI-selected signature
+ * under a production-browser QA query flag. Movement, windup, pillar
+ * intersection, hit resolution and 3D animation are UNMODIFIED game paths.
+ * This proves charge locomotion, NOT natural attack-selection frequency.
+ * Runs in SwiftShader; timing is NOT Mac M3 Air performance evidence.
  */
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -23,9 +25,10 @@ page.on('pageerror', e=>errors.push(e.message));
 const report = { checkedAt:new Date().toISOString(),
   browserVersion:browser.version(), platform:process.platform, chamber:4,
   warning:'SwiftShader visuals and timings are not measurements of physical Mac GPU performance.',
-  result:'not_finished', errors:[], trace:[], movement:null };
+  selectionMode:'forced-first-signature (actual game AI movement/collision; not natural move frequency)',
+  result:'not_finished', errors:[], trace:[], movement:null, lastTelemetry:null };
 try {
-  await page.goto(base+'/?autostart=1&chamber=4&perf=1',{
+  await page.goto(base+'/?autostart=1&chamber=4&perf=1&qaBossCharge=1',{
     waitUntil:'domcontentloaded',timeout:60000,
   });
   await page.waitForFunction(() =>
@@ -33,9 +36,10 @@ try {
     (window.__KALIYUGA_ACT1_PERF__?.samples || 0) >= 18,
     null,{timeout:90000}
   );
-  // Avoid input cheating: just let the natural boss attack cycle play.
-  // Capture the first complete charge trace; it survives its 420ms movement
-  // inside an opt-in 96-sample ring even if the next telemetry tick is later.
+  // The game selects one authentic horn charge through its live AI path.
+  // Never inject positions, hp, animation time or damage into the game;
+  // the first selection is intentionally forced for deterministic CI.
+  // A separate selector unit test covers ordinary natural AI eligibility.
   await page.waitForFunction(() => {
     const trace = window.__KALIYUGA_ACT1_PERF__?.bossChargeTrace || [];
     return trace.some(x=>x.chamber===4 && x.phase==='launch') &&
@@ -44,6 +48,14 @@ try {
   const raw = await page.evaluate(() =>
     window.__KALIYUGA_ACT1_PERF__?.bossChargeTrace || []
   );
+  report.lastTelemetry = await page.evaluate(() => {
+    const t = window.__KALIYUGA_ACT1_PERF__ || {};
+    return {
+      chamber:t.chamber,gameState:t.gameState,
+      boss:t.boss,qa:t.bossChargeQa,
+      combat:t.combat,frameSamples:t.samples,
+    };
+  });
   const trace = raw.filter(x=>x.chamber===4);
   const launchIndex = trace.findIndex(x=>x.phase==='launch');
   const impactIndex = trace.findIndex((x,i)=>i>launchIndex && x.phase==='impact');
@@ -78,6 +90,18 @@ try {
 }catch(error){
   report.result='failed';
   report.errors.push(String(error.message||error));
+  try {
+    report.lastTelemetry = await page.evaluate(() => {
+      const t=window.__KALIYUGA_ACT1_PERF__ || {};
+      return {chamber:t.chamber, gameState:t.gameState,
+        boss:t.boss, qa:t.bossChargeQa,combat:t.combat,
+        bossChargeTrace:t.bossChargeTrace,
+        frameSamples:t.samples};
+    });
+  }catch{}
+  if(report.lastTelemetry?.gameState==='dead') {
+    report.errors.push('Rudra died before full charge was observed; this is an inconclusive movement probe.');
+  }
   report.errors.push(...errors.slice(0,20));
   try {
     await page.screenshot({path:path.join(out,'dundubhi-failure.png'),
