@@ -1213,9 +1213,12 @@ export default function KaliyugaArena() {
       rudra3dRef.current?.dispose();
       enemy3dRef.current?.dispose();
       boss3dRef.current?.dispose();
+      susanoo3dRef.current?.dispose();
+      releaseArenaVideos();
       webglDemonSlayerVfxRef.current?.dispose();
       rudra3dRef.current = null;
       boss3dRef.current = null;
+      susanoo3dRef.current = null;
       enemy3dRef.current = null;
       webglDemonSlayerVfxRef.current = null;
     };
