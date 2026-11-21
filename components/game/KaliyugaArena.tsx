@@ -1124,6 +1124,10 @@ export default function KaliyugaArena() {
           attackProgress: sim.player.weaponSwingProgress,
           focusOrbs: sim.player.focusOrbs,
           astraEnergy: sim.player.astraEnergy,
+          health: sim.player.hp,
+          maximumHealth: sim.player.maxHp,
+          transformRemaining: sim.player.transformTimer,
+          fps: sim.fps,
           cameraKind: liveCameraRef.current?.kind ?? null,
           cameraZoom: sim.cameraZoom,
           rudra3dReady: rudra3dRef.current?.isReady ?? false,
@@ -1132,8 +1136,78 @@ export default function KaliyugaArena() {
         };
       },
     });
+    if (new URLSearchParams(window.location.search).get('qaFixtures') === '1') {
+      // These fixtures are never installed in normal gameplay: both debug=1
+      // and qaFixtures=1 must be explicitly present in the address bar.
+      const prepareArena = () => {
+        const sim = simRef.current;
+        if (sim.state !== 'playing') throw new Error('QA fixture requires a live arena');
+        const p = sim.player;
+        p.hp = p.maxHp;
+        p.displayHp = p.maxHp;
+        p.invulnTimer = Math.max(45, p.invulnTimer);
+        p.astraEnergy = p.maxAstraEnergy;
+        p.focusOrbs = 4;
+        p.agneyastraCd = 0;
+        p.vayavyastraCd = 0;
+        p.vajrastraCd = 0;
+        p.transformCd = 0;
+        p.action = 'idle';
+        p.actionTimer = 0;
+        p.actionDuration = 0;
+        sim.input.bufferedAction = null;
+        sim.input.bufferTimer = 0;
+        sim.hitstopTimer = 0;
+        sim.slowMoTimer = 0;
+        sim.activeAstraZones.length = 0;
+        sim.chamberClearTimer = 0;
+        for (const enemy of sim.enemies) {
+          if (enemy.aiState === 'ko') continue;
+          enemy.aiState = 'recover';
+          enemy.aiTimer = 45;
+          enemy.immobilizedTimer = 45;
+          enemy.vx = 0;
+          enemy.vy = 0;
+        }
+      };
+      const fixture = {
+        grantResources: () => { prepareArena(); },
+        prepareExecution: (variant: ParashuFinisherVariant) => {
+          if (!['downward_crush', 'spin_360_cleave', 'impaling_lunge'].includes(variant)) {
+            throw new Error('Unknown finisher fixture ' + String(variant));
+          }
+          prepareArena();
+          const sim = simRef.current;
+          const p = sim.player;
+          p.stance = variant === 'spin_360_cleave' ? 'pillar' : variant === 'impaling_lunge' ? 'thrust' : 'smash';
+          const target = sim.enemies.find((enemy) => enemy.aiState !== 'ko');
+          if (!target) throw new Error('No active enemy for execution test');
+          sim.enemies.forEach((enemy, index) => {
+            if (enemy === target || enemy.aiState === 'ko') return;
+            enemy.x = p.x + 850 + index * 50;
+            enemy.y = p.y + 600;
+            enemy.aiState = 'recover';
+            enemy.aiTimer = 45;
+          });
+          target.x = p.x + 74;
+          target.y = p.y + 2;
+          target.hp = Math.max(9000, target.hp);
+          target.postureBrokenTimer = 9;
+          target.posture = 0;
+          target.aiState = 'recover';
+          target.aiTimer = 9;
+          target.vx = 0;
+          target.vy = 0;
+          p.facing = 1;
+          p.invulnTimer = 45;
+          qaRecentEventsRef.current.push({ name: 'execution-fixture', frameTime: performance.now(), meta: variant });
+        },
+      };
+      Object.defineProperty(window, '__kaliyugaPhaseQAFixture', { configurable: true, value: fixture });
+    }
     return () => {
       delete (window as Window & { __kaliyugaPhaseQA?: unknown }).__kaliyugaPhaseQA;
+      delete (window as Window & { __kaliyugaPhaseQAFixture?: unknown }).__kaliyugaPhaseQAFixture;
     };
   }, [isDebugMode]);
 
@@ -3335,6 +3409,10 @@ export default function KaliyugaArena() {
       p.action = 'astra';
       p.actionDuration = 0.38;
       p.actionTimer = 0.38;
+      if (isDebugMode) {
+        qaRecentEventsRef.current.push({ name: 'astra-invoked', frameTime: performance.now(), meta: astraId });
+        if (qaRecentEventsRef.current.length > 50) qaRecentEventsRef.current.shift();
+      }
       p.invulnTimer = Math.max(p.invulnTimer, 0.36);
       sim.runAstrasInvoked += 1;
       sim.cameraShakeTrauma = Math.min(1, sim.cameraShakeTrauma + 0.48);
@@ -6401,6 +6479,10 @@ export default function KaliyugaArena() {
           sim.input.pointerActive ? sim.input.pointerX - p.x : p.lastMoveDirX || p.facing
         );
         soundEngine.playBreathingStyle('water');
+        if (isDebugMode) {
+          qaRecentEventsRef.current.push({ name: 'varuna-water-dragon', frameTime: performance.now(), meta: 'varuna' });
+          if (qaRecentEventsRef.current.length > 50) qaRecentEventsRef.current.shift();
+        }
         // Tier 3 Cinema Ultimate: Coiled Hokusai Water Dragon + Dual Tidal Vortex Ripples + Foam Spark Burst
         webglDemonSlayerVfxRef.current?.spawnWaterDragon({
           x: p.x,
