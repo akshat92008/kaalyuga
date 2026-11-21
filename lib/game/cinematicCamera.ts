@@ -142,10 +142,13 @@ export function boundCinematicCameraToPaintedVideo(
   const canPanLeft = Math.max(0, (1 - px) * w * (zoom - 1) - margin);
   const canPanDown = Math.max(0, py * h * (zoom - 1) - margin);
   const canPanUp = Math.max(0, (1 - py) * h * (zoom - 1) - margin);
+  const x = clamp(shot.offsetX, -canPanLeft, canPanRight);
+  const y = clamp(shot.offsetY, -canPanUp, canPanDown);
   return {
     zoom,
-    offsetX: clamp(shot.offsetX, -canPanLeft, canPanRight),
-    offsetY: clamp(shot.offsetY, -canPanUp, canPanDown),
+    // Canonicalize -0 from zero-sized pans to a true resting identity.
+    offsetX: x === 0 ? 0 : x,
+    offsetY: y === 0 ? 0 : y,
   };
 }
 
