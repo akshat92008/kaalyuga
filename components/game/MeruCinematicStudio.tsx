@@ -9,7 +9,7 @@ import {Boss3DRenderer} from '@/lib/game/boss3dRenderer';
 import {GAME_ASSETS} from '@/lib/game/assets';
 import {isSoftwareWebGLRenderer} from '@/lib/game/hadesSpriteBaker';
 import {
-  createDundubhiScene, createBossPhaseScene, MeruTimelinePlayer, sampleCinematic,
+  createDundubhiScene, createBossPhaseScene, MeruTimelinePlayer, sampleCinematic, retimeCinematic,
   validateCinematic, NEUTRAL_CINEMATIC_POSE, type MeruCinematic, type BossCharacter,
 } from '@/engine/meru/cinematicTimeline';
 import {GRAPHICS_PRESETS,type GraphicsTier} from '@/engine/meru/adaptiveQuality';
@@ -24,6 +24,7 @@ export default function MeruCinematicStudio(){
   const [scene,setScene]=useState<MeruCinematic>(()=>createDundubhiScene());
   const [time,setTime]=useState(0);
   const [playing,setPlaying]=useState(false);
+  const [editTrack,setEditTrack]=useState<'camera'|'actor'|'pose'|'lighting'>('camera');
   const [status,setStatus]=useState('Initializing original Dundubhi rig…');
   const [error,setError]=useState('');
   const [hydrated,setHydrated]=useState(false);
@@ -180,6 +181,22 @@ export default function MeruCinematicStudio(){
     setTime(time);
   };
 
+  const adjustDuration=(duration:number)=>{
+    const current=sceneRef.current;
+    const next=retimeCinematic(current,duration);
+    const nextTime=time/current.duration*duration;
+    loadScene(next);
+    timelineRef.current.seek(nextTime);setTime(nextTime);
+  };
+  const removeSelectedKeyframe=()=>{
+    const current=sceneRef.current;
+    const keys=current[editTrack];
+    if(!keys||keys.length<=1)return;
+    const index=keys.findIndex(k=>k.time>0&&Math.abs(k.time-time)<=0.03);
+    if(index<0)return;
+    loadScene({...current,[editTrack]:keys.filter((_,i)=>i!==index)});
+    timelineRef.current.seek(time);setTime(time);
+  };
   const addHardCut=()=>{
     const current=sceneRef.current;
     const at=Number(time.toFixed(2));
@@ -321,6 +338,18 @@ export default function MeruCinematicStudio(){
               </div>
             </div>)}
             <button type="button" aria-label="Insert camera cut at playhead" onClick={addHardCut} disabled={time<=0.04||time>=scene.duration-0.04} className="mb-3 rounded border border-[#8c6252] px-3 py-1.5 text-xs text-[#edc0a1] disabled:opacity-40">+ Insert hard camera cut at playhead</button>
+            <div className="mb-3 flex flex-wrap gap-2 items-center">
+              <label className="text-xs">Edit keyframe track
+                <select aria-label="Track for keyframe deletion" value={editTrack} onChange={e=>setEditTrack(e.target.value as typeof editTrack)}
+                  className="ml-2 rounded bg-[#30272e] px-2 py-1.5">
+                  <option value="camera">Camera</option><option value="actor">Actor</option>
+                  <option value="pose">FBX pose</option><option value="lighting">Lighting</option>
+                </select>
+              </label>
+              <button type="button" aria-label="Delete keyframe at playhead" onClick={removeSelectedKeyframe}
+                disabled={!(scene[editTrack]?.some(k=>k.time>0&&Math.abs(k.time-time)<=0.03))}
+                className="rounded border border-[#814f48] px-3 py-1.5 text-xs text-[#ecc0b2] disabled:opacity-40">Delete selected keyframe</button>
+            </div>
             <div className="grid grid-cols-[75px_1fr] items-center gap-2">
               <span className="text-sm text-[#beae9b]">Cues</span>
               <div className="relative h-6 rounded bg-[#30272e]">
@@ -427,6 +456,12 @@ export default function MeruCinematicStudio(){
               <select value={tier} onChange={e=>setTier(e.target.value as GraphicsTier)} className="mt-1 block w-full rounded bg-[#2d2529] p-2 text-sm">
                 <option value="lite">Lite</option><option value="balanced">Balanced</option><option value="cinematic">Cinematic</option>
               </select>
+            </label>
+            <label className="block text-xs">Cinematic duration · {fmt(scene.duration)}s
+              <input aria-label="Retime entire scene" type="range" min={3} max={30} step={0.5} value={scene.duration}
+                onChange={e=>adjustDuration(Number(e.target.value))}
+                className="mt-2 w-full accent-[#d18d55]"/>
+              <span className="mt-1 block text-[#967f74]">Retimes camera cuts, joint poses, music, VFX and subtitles together.</span>
             </label>
             <button onClick={download} className="w-full rounded bg-[#8f5434] px-4 py-2 text-sm font-semibold">Export scene JSON</button>
             <button onClick={()=>void captureFrame()} className="w-full rounded border border-[#9d7148] px-4 py-2 text-sm">Capture current frame PNG</button>
