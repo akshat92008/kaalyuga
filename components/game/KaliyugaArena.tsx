@@ -1162,20 +1162,13 @@ export default function KaliyugaArena() {
       ensure3DRenderersBooted();
     }
 
-    let ticks = 0;
+    // Title screen may start instantly, but gameplay assets never display a fake timed 100%.
+    // The proper per-chamber gate separately checks hero, enemies, boss and the painted arena.
     const preloadTimer = window.setInterval(() => {
-      ticks += 1;
       const r3d = rudra3dRef.current;
-      const rProg =
-        r3d && (r3d.isReady || r3d.loadProgress >= 1)
-          ? 100
-          : Math.min(95, Math.round((r3d?.loadProgress || 0.45) * 100));
-      const timeFloor = Math.min(100, 32 + ticks * 16);
-      const combined = Math.min(100, Math.max(timeFloor, rProg));
-      setPreloadProgress(combined);
-      if (combined >= 100) {
-        window.clearInterval(preloadTimer);
-      }
+      const progress = r3d ? (r3d.isReady ? 100 : Math.min(95, Math.round(r3d.loadProgress * 100))) : 100;
+      setPreloadProgress(progress);
+      if (progress >= 100) window.clearInterval(preloadTimer);
     }, 150);
 
     // Load persisted Ashen Karma & Homa Fire Shrine upgrade ranks from localStorage
@@ -2074,6 +2067,18 @@ export default function KaliyugaArena() {
     setChamberLoadPercent(0);
     sim.modalPaused = true;
     const requirements: Array<() => Promise<boolean>> = [];
+    // Hero rig is mandatory: never reveal combat with Rudra still missing.
+    requirements.push(async () => {
+      const hero = rudra3dRef.current;
+      if (!hero) return false;
+      if (hero.isReady) return true;
+      const deadline = Date.now() + 20000;
+      while (Date.now() < deadline && seq === chamberLoadSeqRef.current) {
+        await new Promise<void>((resolve) => window.setTimeout(resolve, 120));
+        if (hero.isReady) return true;
+      }
+      return false;
+    });
     const enemySlots = [
       ...sim.enemies.filter((e) => !e.isBoss && e.type !== 'semi_boss_bloodforge')
         .map((e) => ({ id: e.id, kind: e.type as RegularEnemy3DKind, wardenRigKey: e.wardenRigKey, trait: e.trait })),
