@@ -367,6 +367,7 @@ interface EnemyEntity {
   chargeEndY?: number;
   chargeElapsedSec?: number;
   chargeImpactReady?: boolean;
+  chargeContactFound?: boolean;
   vacuumActiveTimer?: number;
   lodgedCasts?: number;
   activeBossMoveId?: BossMoveId;
@@ -8664,6 +8665,7 @@ export default function KaliyugaArena() {
               e.animTime = 0;
               e.chargeElapsedSec = undefined;
               e.chargeImpactReady = false;
+              e.chargeContactFound = false;
               e.parryStanceTimer = 0;
               e.ironGuardWindupTimer = 0;
               e.attackPattern = (e.attackPattern + 1) % (e.isBoss ? 6 : 3);
@@ -8886,6 +8888,7 @@ export default function KaliyugaArena() {
                 e.corridorEndX = e.chargeEndX;
                 e.corridorEndY = e.chargeEndY;
                 e.chargeElapsedSec = 0;
+                e.chargeContactFound = false;
                 e.aiState = 'attack';
                 e.animTime = 0;
                 e.aiTimer = DUNDUBHI_CHARGE_TRAVEL_SEC;
@@ -9096,15 +9099,20 @@ export default function KaliyugaArena() {
                 const originX = e.telegraphX;
                 const originY = e.telegraphY;
                 const halfW = e.isBoss ? 56 : 34;
-                playerHit = isPointInDashCorridor({
-                  px: p.x,
-                  py: p.y,
-                  startX: originX,
-                  startY: originY,
-                  endX: e.corridorEndX,
-                  endY: e.corridorEndY,
-                  halfWidth: halfW,
-                });
+                // Dundubhi records contact on the swept segment as it runs.
+                // Checking the ENTIRE historical corridor here would hit
+                // players retroactively after they had already dodged past him.
+                playerHit = e.type === 'dundubhi'
+                  ? Boolean(e.chargeContactFound)
+                  : isPointInDashCorridor({
+                      px: p.x,
+                      py: p.y,
+                      startX: originX,
+                      startY: originY,
+                      endX: e.corridorEndX,
+                      endY: e.corridorEndY,
+                      halfWidth: halfW,
+                    });
                 e.x = Math.max(minX, Math.min(maxX, e.corridorEndX));
                 e.y = Math.max(minY, Math.min(maxY, e.corridorEndY));
 
@@ -9588,13 +9596,29 @@ export default function KaliyugaArena() {
               e.vy = frame.vy;
               e.chargeElapsedSec = frame.elapsedSec;
               e.aiTimer = Math.max(0, DUNDUBHI_CHARGE_TRAVEL_SEC - frame.elapsedSec);
+              const touchedPlayer = !e.chargeContactFound && isPointInDashCorridor({
+                px: p.x, py: p.y,
+                startX: frame.previousX, startY: frame.previousY,
+                endX: frame.x, endY: frame.y,
+                halfWidth: 56,
+              });
+              if (touchedPlayer) {
+                // Resolve existing parry/i-frame/armor rules at the very next
+                // simulation tick. Freeze at actual contact, not the far
+                // corridor endpoint, so there is no delayed ghost hit.
+                e.chargeContactFound = true;
+                e.chargeEndX = e.x;
+                e.chargeEndY = e.y;
+                e.corridorEndX = e.x;
+                e.corridorEndY = e.y;
+              }
               // Low-noise ground debris every ~100ms; no giant VFX that
               // hides the player or the pillar target during the charge.
               if (Math.floor(frame.elapsedSec / 0.10) >
                   Math.floor((frame.elapsedSec - simDt) / 0.10)) {
                 spawnParticles(e.x, e.y - 8, 5, '#c5a782', 95, 2.8, 42);
               }
-              if (frame.complete) {
+              if (frame.complete || touchedPlayer) {
                 // Return to the windup resolver for one simulation tick so
                 // the EXISTING hit/parry, pillar shatter and rage systems own
                 // exactly one impact. No duplicated boss-damage path.
