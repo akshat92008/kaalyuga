@@ -29,6 +29,7 @@ export default function MeruCinematicPlayback({scene,onFinish,muted=false}:MeruC
   const [status,setStatus]=useState('Summoning the Warden…');
   const [seconds,setSeconds]=useState(0);
   const [ready,setReady]=useState(false);
+  const [videoDecoded,setVideoDecoded]=useState(false);
   const [startedWithRig,setStartedWithRig]=useState<boolean|null>(null);
 
   const finish=(reason:MeruCinematicEndReason)=>{
@@ -40,6 +41,7 @@ export default function MeruCinematicPlayback({scene,onFinish,muted=false}:MeruC
   };
   useEffect(()=>{
     finishOnceRef.current=false;
+    setVideoDecoded(false);
     let disposed=false;
     let frameId=0;
     let lastNow=0, lastUi=0, lastBoss=0;
@@ -193,7 +195,10 @@ export default function MeruCinematicPlayback({scene,onFinish,muted=false}:MeruC
           <video
             ref={videoRef} src={scene.backgroundUrl} poster={scene.posterUrl}
             muted playsInline loop preload="auto" autoPlay
-            className="absolute inset-0 h-full w-full object-cover"
+            onLoadedData={()=>setVideoDecoded(true)}
+            onError={()=>setVideoDecoded(false)}
+            data-meru-video-status={videoDecoded?'decoded':'poster'}
+            className={'absolute inset-0 h-full w-full object-cover transition-opacity duration-700 '+(videoDecoded?'opacity-100':'opacity-0')}
             aria-hidden="true"
           />
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/35 via-transparent to-black/30"/>
