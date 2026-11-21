@@ -2605,6 +2605,11 @@ export default function KaliyugaArena() {
         // ?perf=1&qaExecution=1 normal gameplay/spawns are unchanged.
         if (params.get('perf') === '1' &&
             params.get('qaExecution') === '1' && clampedIdx === 0) {
+          // Production-only real-input variant rehearsal; no weapon damage,
+          // enemy behavior or animation is mocked. Default remains Downward.
+          const qaFinisher = params.get('qaExecutionVariant');
+          if (qaFinisher === 'spin_360_cleave') sim.player.stance = 'pillar';
+          else if (qaFinisher === 'impaling_lunge') sim.player.stance = 'thrust';
           const target = sim.enemies.find(e => !e.isBoss && e.aiState !== 'ko');
           if (target) {
             target.x = sim.player.x + 78;
