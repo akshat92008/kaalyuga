@@ -223,6 +223,7 @@ export class Susanoo3DRenderer {
   private isLoaded = false;
   private isLoading = false;
   private loadFailed = false;
+  private disposed = false;
   private lastRenderMs = 0;
   private lastSignature = '';
   public readonly footAnchorRatio: number;
@@ -282,12 +283,13 @@ export class Susanoo3DRenderer {
   }
 
   private async loadMeshAndAnimations(): Promise<void> {
-    if (this.isLoading || this.isLoaded || this.loadFailed) return;
+    if (this.isLoading || this.isLoaded || this.loadFailed || this.disposed) return;
     this.isLoading = true;
     try {
       const fbx = await loadFbxCached(SUSANOO_FBX_URL, false);
       // loadFbxCached already returns a SkeletonUtils-safe independent rig.
       // A second Object3D.clone(true) can rebind SkinnedMesh bones to the wrong skeleton.
+      if (this.disposed) return;
       const clone = fbx;
 
       let foundBones = false;
@@ -363,7 +365,7 @@ export class Susanoo3DRenderer {
     Promise.allSettled(
       entries.map(([, url]) => loadFbxCached(url, false))
     ).then((results) => {
-      if (!this.mixer) return;
+      if (this.disposed || !this.mixer) return;
       results.forEach((res, idx) => {
         if (res.status !== 'fulfilled') return;
         const [key, , loop] = entries[idx];
@@ -416,7 +418,7 @@ export class Susanoo3DRenderer {
   }
 
   public renderFrame(input: Susanoo3DRenderInput): HTMLCanvasElement | null {
-    if (!this.isLoaded || !this.ctx2d || input.transformTimer <= 0) {
+    if (this.disposed || !this.isLoaded || !this.ctx2d || input.transformTimer <= 0) {
       this.roarPlayedForSummon = false;
       this.lastTransformTimer = 0;
       return null;
@@ -527,8 +529,20 @@ export class Susanoo3DRenderer {
   }
 
   public dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.mixer?.stopAllAction();
+    this.mixer = null;
+    this.actions = {};
+    this.meshGroup?.removeFromParent();
+    this.meshGroup = null;
+    this.modelPivot.clear();
+    this.scene.clear();
     this.chakraMaterial.dispose();
     this.haloRing.geometry.dispose();
     (this.haloRing.material as THREE.Material).dispose();
+    this.canvas.width = 0;
+    this.canvas.height = 0;
+    this.ctx2d = null;
   }
 }
