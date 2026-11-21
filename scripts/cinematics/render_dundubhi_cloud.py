@@ -20,8 +20,8 @@ import bpy
 from mathutils import Vector
 
 ROOT = Path.cwd()
-MODEL = ROOT / "public/kaalyuga/dundubhi/model.fbx"
-DIFFUSE = ROOT / "public/kaalyuga/dundubhi/diffuse.png"
+MODEL = ROOT / "new 3D assets and animations/Animations/Creature Pack (4)/Meshy_AI_Bellhorn_Warlord_20261114_generate.fbx"
+DIFFUSE = ROOT / "new 3D assets and animations/3D Models/Bellhorn_Warlord/Meshy_AI_Bellhorn_Warlord_20261114_texture_fbx/Meshy_AI_Bellhorn_Warlord_20261114_texture.png"
 IDLE = ROOT / "public/kaalyuga/anims/dundubhi/idle.fbx"
 ROAR = ROOT / "public/kaalyuga/anims/dundubhi/roar.fbx"
 
