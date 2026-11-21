@@ -1152,6 +1152,7 @@ export default function KaliyugaArena() {
         p.vayavyastraCd = 0;
         p.vajrastraCd = 0;
         p.transformCd = 0;
+        p.transformTimer = 0;
         p.action = 'idle';
         p.actionTimer = 0;
         p.actionDuration = 0;
@@ -1162,9 +1163,10 @@ export default function KaliyugaArena() {
         sim.activeAstraZones.length = 0;
         sim.chamberClearTimer = 0;
         for (const enemy of sim.enemies) {
-          if (enemy.aiState === 'ko') continue;
+          enemy.hp = Math.max(9000, enemy.hp);
           enemy.aiState = 'recover';
           enemy.aiTimer = 45;
+          enemy.postureBrokenTimer = 0;
           enemy.immobilizedTimer = 45;
           enemy.vx = 0;
           enemy.vy = 0;
