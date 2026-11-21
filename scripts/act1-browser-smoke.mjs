@@ -40,6 +40,7 @@ try {
     page.on('requestfailed', request =>
       failuresDuringNavigation.push({url:request.url().slice(0,170),reason:request.failure()?.errorText}));
     let ready=false, telemetry=null, state=null, inputGate=null;
+    const activeFrameEvidence=[];
     const strikeEvidence=[];
     let weaponPoseEvidence=[];
     let start = Date.now();
@@ -179,8 +180,22 @@ try {
       }));
       await page.screenshot({path:path.join(outDir,'act1-ch'+chamber+'.png'),
            animations:'disabled', timeout:45000});
+      // The exact attack frame is captured *inside* the game render tick,
+      // before a slow headless browser can advance the animation past it.
+      const renderedFrames = await page.evaluate(() =>
+        window.__KALIYUGA_ACT1_ACTIVE_FRAMES__ || {}
+      );
+      for (const [name,dataUrl] of Object.entries(renderedFrames).slice(0,2)) {
+        if (!/^ch[1-8]-(light|heavy)$/.test(name)) continue;
+        if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/png;base64,')) continue;
+        const png = Buffer.from(dataUrl.slice('data:image/png;base64,'.length),'base64');
+        if (png.length < 1000) continue;
+        const filename='act1-'+name+'-active.png';
+        await fs.writeFile(path.join(outDir,filename),png);
+        activeFrameEvidence.push({name,filename,bytes:png.length});
+      }
     } catch (e) { errors.push('capture: '+String(e.message||e).slice(0,200)); }
-    const record={chamber,preset,ready,elapsedMs:Date.now()-start,telemetry,state,inputGate,strikeEvidence,weaponPoseEvidence,
+    const record={chamber,preset,ready,elapsedMs:Date.now()-start,telemetry,state,inputGate,strikeEvidence,weaponPoseEvidence,activeFrameEvidence,
        pageErrors:errors.slice(0,30),
        httpErrors:misses.slice(0,50),
        networkFailures:failuresDuringNavigation.slice(0,40)};
