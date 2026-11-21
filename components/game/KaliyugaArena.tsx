@@ -4469,7 +4469,8 @@ export default function KaliyugaArena() {
   const triggerExecuteBrokenTarget = useCallback(() => {
     const sim = simRef.current;
     const p = sim.player;
-    if (sim.state !== 'playing') return;
+    // Avoid repeated F/L presses restarting the same cinematic before impact.
+    if (sim.state !== 'playing' || p.action === 'execute') return;
 
     const brokenEnemy = sim.enemies.find(
       (e) => e.aiState !== 'ko' && e.postureBrokenTimer > 0
