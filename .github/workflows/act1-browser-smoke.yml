@@ -5,6 +5,9 @@ on:
       - ".github/workflows/act1-browser-smoke.yml"
       - "scripts/act1-browser-smoke.mjs"
   workflow_dispatch:
+concurrency:
+  group: act1-browser-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   gameplay-smoke:
     runs-on: ubuntu-24.04
