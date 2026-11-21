@@ -1069,12 +1069,15 @@ export class Enemy3DRenderer {
   }
 
   private slotLoadPromises = new Map<string, Promise<void>>();
+  // Failed stage-one loads may be retried from the chamber gate, never per animation frame.
+  private readonly failedSlotRetryAt = new Map<string, number>();
 
   private ensureSlotLoaded(slotKey: string): Promise<void> {
     const existing = this.slotLoadPromises.get(slotKey);
     if (existing) return existing;
     const slot = this.slots.get(slotKey);
     if (!slot || slot.ready) return Promise.resolve();
+    if (Date.now() < (this.failedSlotRetryAt.get(slotKey) ?? 0)) return Promise.resolve();
 
     this.loadingSlots.add(slotKey);
     const texLoader = new THREE.TextureLoader();
@@ -1111,7 +1114,7 @@ export class Enemy3DRenderer {
       loadRawFbx(slot.animUrls.chase, true),
     ]).then(([riggedGroup, texturedGroup, diffuseMap, idleAnimGroup, chaseAnimGroup]) => {
       const baseGroup = riggedGroup || texturedGroup;
-      if (!baseGroup) return;
+      if (!baseGroup) throw new Error(`Missing rig for enemy slot: ${slotKey}`);
 
       slot.standingHipY = extractStandingHipY(baseGroup);
 
@@ -1232,7 +1235,13 @@ export class Enemy3DRenderer {
       } else {
         runStage2();
       }
-    }).catch(() => {});
+    }).catch((error) => {
+      console.warn('[Enemy3DRenderer] Failed to prepare enemy rig:', slotKey, error);
+      this.failedSlotRetryAt.set(slotKey, Date.now() + 2000);
+    }).finally(() => {
+      this.loadingSlots.delete(slotKey);
+      this.slotLoadPromises.delete(slotKey);
+    });
 
     this.slotLoadPromises.set(slotKey, stage1Promise);
     return stage1Promise;
@@ -1294,7 +1303,7 @@ export class Enemy3DRenderer {
       uniqueSlots.add(selectSlotKeyFromInput(e.kind, e.id, e.wardenRigKey, e.trait));
     }
     uniqueSlots.forEach((slotKey) => {
-      this.ensureSlotLoaded(slotKey);
+      void this.ensureSlotLoaded(slotKey);
       this.prewarmSlotFrames(slotKey);
     });
   }
@@ -1311,22 +1320,30 @@ export class Enemy3DRenderer {
       trait?: EnemyTrait;
     }>,
     timeoutMs = 4500
-  ): Promise<void> {
+  ): Promise<boolean> {
     const uniqueSlots = new Set<string>();
     for (const e of enemies) {
       uniqueSlots.add(selectSlotKeyFromInput(e.kind, e.id, e.wardenRigKey, e.trait));
     }
     const promises = Array.from(uniqueSlots).map((key) => this.ensureSlotLoaded(key));
-    if (promises.length === 0) return;
-    await Promise.race([
-      Promise.allSettled(promises),
-      new Promise<void>((resolve) => setTimeout(resolve, timeoutMs)),
-    ]);
+    if (promises.length === 0) return true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        Promise.allSettled(promises),
+        new Promise<void>((resolve) => { timer = setTimeout(resolve, timeoutMs); }),
+      ]);
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
+    }
+    return Array.from(uniqueSlots).every((key) => this.slots.get(key)?.ready === true);
   }
 
   public clearFrameCache(): void {
     this.atlasFrameCache.clear();
     this.slotLastCanvas.clear();
+    this.prewarmTimers.forEach((tid) => clearTimeout(tid));
+    this.prewarmTimers.length = 0;
   }
 
   public isReady(archetype?: EnemyArchetype, idHash = 0): boolean {
@@ -1411,7 +1428,7 @@ export class Enemy3DRenderer {
           fCtx.fillStyle = 'rgba(255, 184, 71, 0.34)';
           fCtx.fillRect(0, 0, flashCanvas.width, flashCanvas.height);
           fCtx.globalCompositeOperation = 'source-over';
-          if (this.atlasFrameCache.size > 120) {
+          if (this.atlasFrameCache.size >= 48) {
             const oldestKey = this.atlasFrameCache.keys().next().value;
             if (oldestKey) this.atlasFrameCache.delete(oldestKey);
           }
@@ -1569,6 +1586,8 @@ export class Enemy3DRenderer {
     }
     this.prewarmTimers.length = 0;
     this.atlasFrameCache.clear();
+    this.slotLastCanvas.clear();
+    this.failedSlotRetryAt.clear();
     this.renderer = null;
   }
 }
