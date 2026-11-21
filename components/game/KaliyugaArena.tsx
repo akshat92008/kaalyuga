@@ -7174,6 +7174,11 @@ export default function KaliyugaArena() {
         p.dashStrikeWindowTimer = Math.max(0, p.dashStrikeWindowTimer - simDt);
         p.slashArcAlpha = Math.max(0, p.slashArcAlpha - simDt * 4.8);
         p.dashStreakAlpha = Math.max(0, p.dashStreakAlpha - simDt * 4.2);
+        // Preserve existing idle recovery for the guardian/afterimage renderer;
+        // attack clocks are advanced separately AFTER actionTimer is ticked.
+        if (p.action === 'idle') {
+          p.weaponSwingProgress = Math.min(0.99, p.weaponSwingProgress + simDt * 3.8);
+        }
         for (let si = sim.devanagariStamps.length - 1; si >= 0; si--) {
           sim.devanagariStamps[si].life += simDt;
           if (sim.devanagariStamps[si].life >= sim.devanagariStamps[si].maxLife) {
