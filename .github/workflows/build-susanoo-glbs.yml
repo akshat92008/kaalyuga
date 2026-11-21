@@ -1,10 +1,10 @@
 name: Build Susanoo optimized GLBs
 on:
-  push:
-    branches:
-      - fix/act1-loading-susanoo-stability-20261121
+  pull_request:
     paths:
       - ".github/workflows/build-susanoo-glbs.yml"
+      - "scripts/build-optimized-glbs.py"
+      - "scripts/optimized-asset-aliases.json"
   workflow_dispatch:
 
 jobs:
