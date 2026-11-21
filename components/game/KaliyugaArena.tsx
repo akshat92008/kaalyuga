@@ -39,6 +39,7 @@ import {
 } from '@/lib/game/rules';
 import { soundEngine } from '@/lib/game/audio';
 import { Act1FrameProfiler } from '@/lib/game/act1Performance';
+import { Act1CinematicCamera } from '@/lib/game/act1CinematicCamera';
 import {
   loadAndProcessSprite,
   getProcessedSpriteSync,
@@ -539,6 +540,7 @@ export default function KaliyugaArena() {
   const gamepadPrevButtonsRef = useRef<boolean[]>([]);
   const [preloadProgress, setPreloadProgress] = useState<number>(18);
   const act1FrameProfilerRef = useRef<Act1FrameProfiler>(new Act1FrameProfiler(1200));
+  const act1CameraRef = useRef<Act1CinematicCamera>(new Act1CinematicCamera());
   const [cameraPreset, setCameraPreset] = useState<HadesCameraPreset>('dynamic_action');
   const [enemyRenderMode, setEnemyRenderMode] = useState<EnemyRenderMode>('all_3d');
   const [activeHubDialogueNpc, setActiveHubDialogueNpc] = useState<HubNpcId | null>(null);
@@ -2147,6 +2149,7 @@ export default function KaliyugaArena() {
       const clampedIdx = Math.max(0, Math.min(CHAMBERS.length - 1, index));
       const spec = CHAMBERS[clampedIdx];
       const isTitleMode = sim.state === 'title';
+      act1CameraRef.current.cancel();
       // Release old chamber's live rigs before loading the next wave of distinct models.
       // This prevents scenes from retaining every boss and enemy encountered in Act I.
       if (!isTitleMode && lastRigChamberRef.current >= 0 && lastRigChamberRef.current !== clampedIdx) {
@@ -4477,6 +4480,12 @@ export default function KaliyugaArena() {
     p.facing = brokenEnemy.x >= p.x ? 1 : -1;
     p.x = brokenEnemy.x - p.facing * 48;
     p.y = brokenEnemy.y + 6;
+    // Short original Parashu finisher camera cue; it never steals input or changes damage.
+    act1CameraRef.current.start({
+      kind: 'execution', focusX: (p.x + brokenEnemy.x) * 0.5,
+      focusY: (p.y + brokenEnemy.y) * 0.5, durationSec: 0.58,
+      focusWeight: 0.30, zoomBoost: 0.06,
+    });
     p.action = 'execute';
     p.finisherVariant = finisherSpec.variant;
     p.actionTimer = finisherSpec.durationSec;
@@ -6893,6 +6902,7 @@ export default function KaliyugaArena() {
       );
       const isHubCamera =
         sliceStageRef.current === 'vaitarani_hub' || sliceStageRef.current === 'opening_wake';
+      const cinematicCue = act1CameraRef.current.step(dt, sim.modalPaused || sim.state !== 'playing' || isHubCamera);
       if (sim.cameraPreset === 'dynamic_action') {
         const activeBossKind: 'dundubhi' | 'vrikodara' | 'semi_boss' | null = activeBoss
           ? activeBoss.type === 'semi_boss_bloodforge'
@@ -6910,14 +6920,15 @@ export default function KaliyugaArena() {
           dt,
         });
         if (cw < 640) nextZoom *= 0.82;
-        sim.cameraZoom = nextZoom;
+        sim.cameraZoom = nextZoom + cinematicCue.zoomBoost;
       } else {
         const rawPresetZoom = sim.cameraPreset === 'tactical_wide' ? 0.82 : 0.98;
         const presetBaseZoom = cw < 640 ? rawPresetZoom * 0.78 : rawPresetZoom;
         const targetZoom =
           presetBaseZoom +
           (sim.player.action === 'heavy_unleash' || sim.player.action === 'execute' ? 0.03 : 0) -
-          (activeBoss && activeBoss.phase >= 2 ? 0.04 : 0);
+          (activeBoss && activeBoss.phase >= 2 ? 0.04 : 0) +
+          cinematicCue.zoomBoost;
         sim.cameraZoom += (targetZoom - sim.cameraZoom) * (1 - Math.exp(-6.5 * dt));
       }
       const zoom = sim.cameraZoom;
@@ -6930,6 +6941,10 @@ export default function KaliyugaArena() {
       if (activeBoss && Math.hypot(activeBoss.x - sim.player.x, activeBoss.y - sim.player.y) < 1100) {
         focusX = focusX * 0.78 + activeBoss.x * 0.22;
         focusY = focusY * 0.78 + activeBoss.y * 0.22;
+      }
+      if (cinematicCue.active) {
+        focusX += (cinematicCue.focusX - focusX) * cinematicCue.focusWeight;
+        focusY += (cinematicCue.focusY - focusY) * cinematicCue.focusWeight;
       }
 
       // Clamp camera strictly inside [0, worldW] x [0, worldH] accounting for current zoom
@@ -8086,6 +8101,10 @@ export default function KaliyugaArena() {
                 : computeBossPhase(e.hp, e.maxHp);
             if (nextPhase > e.phase) {
               e.phase = nextPhase;
+              act1CameraRef.current.start({
+                kind: 'boss_phase', focusX: e.x, focusY: e.y - 18,
+                durationSec: 0.9, focusWeight: 0.30, zoomBoost: 0.04,
+              });
               e.posture = e.maxPosture;
               e.immobilizedTimer = 0;
               sim.slowMoTimer = 0.32;
@@ -12185,6 +12204,7 @@ export default function KaliyugaArena() {
         delete (window as Window & { __KALIYUGA_ACT1_PERF__?: unknown }).__KALIYUGA_ACT1_PERF__;
         act1FrameProfilerRef.current.reset();
       }
+      act1CameraRef.current.cancel();
     };
   }, [
     createEnemyFromSpec,
