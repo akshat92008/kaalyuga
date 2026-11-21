@@ -286,7 +286,9 @@ export class Susanoo3DRenderer {
     this.isLoading = true;
     try {
       const fbx = await loadFbxCached(SUSANOO_FBX_URL, false);
-      const clone = fbx.clone(true);
+      // loadFbxCached already returns a SkeletonUtils-safe independent rig.
+      // A second Object3D.clone(true) can rebind SkinnedMesh bones to the wrong skeleton.
+      const clone = fbx;
 
       let foundBones = false;
       clone.traverse((child) => {
