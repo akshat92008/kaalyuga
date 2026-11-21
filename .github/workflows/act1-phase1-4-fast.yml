@@ -9,6 +9,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: act1-phase1-4-fast-check
+  cancel-in-progress: true
+
 jobs:
   fast-validation:
     name: "Sparse repo checkout, all Phase 1-4 tests and full TypeScript check"
