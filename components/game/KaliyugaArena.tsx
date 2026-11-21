@@ -49,6 +49,7 @@ import {
 import { Rudra3DRenderer } from '@/lib/game/rudra3dRenderer';
 import { Boss3DRenderer } from '@/lib/game/boss3dRenderer';
 import MeruCinematicPlayback from '@/components/game/MeruCinematicPlayback';
+import MeruPortalTravel, { type MeruPortalJourney } from '@/components/game/MeruPortalTravel';
 import type { MeruCinematic } from '@/engine/meru/cinematicTimeline';
 import { shouldStartBossIntro, readBossIntro } from '@/engine/meru/runtimePolicy';
 import { renderMeruPortal } from '@/engine/meru/portalDirector';
@@ -545,6 +546,9 @@ export default function KaliyugaArena() {
   const [chamberLoadingLabel, setChamberLoadingLabel] = useState<string | null>(null);
   // Meru cinematic handoff. When present, gameplay is paused until finish or skip.
   const [activeMeruScene, setActiveMeruScene] = useState<MeruCinematic | null>(null);
+  const meruTravelPendingRef = useRef(false);
+  const meruPortalCommitRef = useRef<(() => void) | null>(null);
+  const [activeMeruJourney, setActiveMeruJourney] = useState<MeruPortalJourney | null>(null);
   const [isDebugMode] = useState<boolean>(() =>
     typeof window !== 'undefined'
       ? new URLSearchParams(window.location.search).get('debug') === '1'
@@ -2643,6 +2647,50 @@ export default function KaliyugaArena() {
     [ensure3DRenderersBooted, loadChamber]
   );
 
+  // Meru journey: freeze the outgoing chamber, wait for destination artwork,
+  // and change rooms only behind the portal veil. Direct URL starts stay fast.
+  const queueMeruJourney = useCallback((journey: MeruPortalJourney, cross: () => void) => {
+    if (meruTravelPendingRef.current) return;
+    meruTravelPendingRef.current = true;
+    const sim = simRef.current;
+    sim.modalPaused = true;
+    sim.input.keysHeld.clear();
+    sim.input.justPressed.clear();
+    sim.player.vx = 0;
+    sim.player.vy = 0;
+    meruPortalCommitRef.current = cross;
+    setActiveMeruJourney(journey);
+  }, []);
+
+  const beginMeruHubCrossing = useCallback(() => {
+    if (sliceStageRef.current !== 'vaitarani_hub' &&
+        sliceStageRef.current !== 'opening_wake') return;
+    queueMeruJourney({
+      style: 'vaitarani', destination: 'charnel-plains',
+      label: 'THE CHARNEL PLAINS',
+      sourcePoster: GAME_ASSETS.chambers.vaitaraniAshHub,
+      destinationPoster: CHAMBERS[0].backgroundUrl,
+    }, () => startGameAtChamber(0));
+  }, [queueMeruJourney, startGameAtChamber]);
+
+  const advanceToNextChamber = useCallback((prevIdx: number) => {
+    const target = CHAMBERS[prevIdx + 1];
+    const source = CHAMBERS[prevIdx];
+    if (!target || !source) return;
+    queueMeruJourney({
+      style: prevIdx + 1 === 3 || prevIdx + 1 === CHAMBERS.length - 1 ? 'warden' : 'deva',
+      destination: 'chamber-' + target.id,
+      label: 'CHAMBER ' + target.id + ' · ' + target.name.toUpperCase(),
+      sourcePoster: source.backgroundUrl,
+      destinationPoster: target.backgroundUrl,
+    }, () => {
+      loadChamber(prevIdx + 1, false);
+      if (prevIdx === 0) setSliceStage('savitri_lantern_interlude');
+      else if (prevIdx === 1) setSliceStage('preserver_interlude');
+      else if (prevIdx === 3) setSliceStage('dundubhi_aftermath');
+    });
+  }, [loadChamber, queueMeruJourney]);
+
   // Hades-Style Celestial Boon Altar Handlers
   const openBoonAltar = useCallback(() => {
     const sim = simRef.current;
@@ -2714,17 +2762,10 @@ export default function KaliyugaArena() {
         sim.chamberIndex < CHAMBERS.length - 1
       ) {
         const prevIdx = sim.chamberIndex;
-        loadChamber(prevIdx + 1, false);
-        if (prevIdx === 0) {
-          setSliceStage('savitri_lantern_interlude');
-        } else if (prevIdx === 1) {
-          setSliceStage('preserver_interlude');
-        } else if (prevIdx === 3) {
-          setSliceStage('dundubhi_aftermath');
-        }
+        advanceToNextChamber(prevIdx);
       }
     },
-    [loadChamber, spawnFloatingText, spawnParticles, spawnShockwave]
+    [advanceToNextChamber, spawnFloatingText, spawnParticles, spawnShockwave]
   );
 
   const handleRerollBoons = useCallback(() => {
@@ -6469,7 +6510,7 @@ export default function KaliyugaArena() {
           } else if (prox.station?.id === 'homa_shrine') {
             setActiveHubDialogueNpc('lohakara');
           } else if (prox.station?.id === 'ferry_gate') {
-            startGameAtChamber(0);
+            beginMeruHubCrossing();
           } else {
             setActiveHubDialogueNpc('savitri');
           }
@@ -6551,6 +6592,7 @@ export default function KaliyugaArena() {
     shrineOpen,
     storyOpen,
     startGameAtChamber,
+    beginMeruHubCrossing,
     triggerPartyLinkStrike,
     triggerSwitchStance,
     triggerSwitchWeapon,
@@ -7508,7 +7550,7 @@ export default function KaliyugaArena() {
           p.x = Math.max(180, Math.min(worldW - 180, p.x));
           p.y = Math.max(175, Math.min(worldH - 180, p.y));
           if (isInsideHubFerryGate(p.x, p.y)) {
-            startGameAtChamber(0);
+            beginMeruHubCrossing();
           }
         } else {
           // Constrain Rudra to 2:1 Isometric Chamber Platform Polygon & Interior Chasm Channels
@@ -9637,10 +9679,7 @@ export default function KaliyugaArena() {
               setBoonReadyCount(0);
               soundEngine.playSpell('gourd');
               const prevIdx = sim.chamberIndex;
-              loadChamber(prevIdx + 1, false);
-              if (prevIdx === 0) setSliceStage('savitri_lantern_interlude');
-              else if (prevIdx === 1) setSliceStage('preserver_interlude');
-              else if (prevIdx === 3) setSliceStage('dundubhi_aftermath');
+              advanceToNextChamber(prevIdx);
             } else if (
               sim.boonReadyCount > 0 &&
               (enteredLeftGate || sim.chamberClearTimer >= 14.0)
@@ -9655,17 +9694,11 @@ export default function KaliyugaArena() {
                 sim.boonReadyCount = 0;
                 setBoonReadyCount(0);
                 const prevIdx = sim.chamberIndex;
-                loadChamber(prevIdx + 1, false);
-                if (prevIdx === 0) setSliceStage('savitri_lantern_interlude');
-                else if (prevIdx === 1) setSliceStage('preserver_interlude');
-                else if (prevIdx === 3) setSliceStage('dundubhi_aftermath');
+                advanceToNextChamber(prevIdx);
               }
             } else if (sim.chamberClearTimer >= 15.0) {
               const prevIdx = sim.chamberIndex;
-              loadChamber(prevIdx + 1, false);
-              if (prevIdx === 0) setSliceStage('savitri_lantern_interlude');
-              else if (prevIdx === 1) setSliceStage('preserver_interlude');
-              else if (prevIdx === 3) setSliceStage('dundubhi_aftermath');
+              advanceToNextChamber(prevIdx);
             }
           }
         }
@@ -12158,6 +12191,8 @@ export default function KaliyugaArena() {
     damagePropsNearPoint,
     gainAstraEnergy,
     loadChamber,
+    advanceToNextChamber,
+    beginMeruHubCrossing,
     recordQuestEvent,
     spawnAfterimage,
     spawnFloatingText,
@@ -12195,6 +12230,7 @@ export default function KaliyugaArena() {
       activeHubDialogueNpc !== null ||
       chamberLoadingLabel !== null ||
       activeMeruScene !== null ||
+      activeMeruJourney !== null ||
       (sliceStage !== 'combat_arena' &&
         sliceStage !== 'vaitarani_hub' &&
         sliceStage !== 'opening_wake');
@@ -12208,6 +12244,7 @@ export default function KaliyugaArena() {
     activeHubDialogueNpc,
     chamberLoadingLabel,
     activeMeruScene,
+    activeMeruJourney,
     sliceStage,
   ]);
 
@@ -12715,10 +12752,7 @@ export default function KaliyugaArena() {
                       setBoonReadyCount(0);
                       soundEngine.playSpell('gourd');
                       const prevIdx = sim.chamberIndex;
-                      loadChamber(prevIdx + 1, false);
-                      if (prevIdx === 0) setSliceStage('savitri_lantern_interlude');
-                      else if (prevIdx === 1) setSliceStage('preserver_interlude');
-                      else if (prevIdx === 3) setSliceStage('dundubhi_aftermath');
+                      advanceToNextChamber(prevIdx);
                     }}
                     className="px-3 py-1.5 bg-[#1a140d] hover:bg-[#2a2014] border border-[#d4a548] text-left cursor-pointer"
                   >
@@ -13143,7 +13177,29 @@ export default function KaliyugaArena() {
           }}
           onEnterCharnelPlains={() => {
             setActiveHubDialogueNpc(null);
-            startGameAtChamber(0);
+            beginMeruHubCrossing();
+          }}
+        />
+      )}
+
+      {/* Loading-safe Meru portal journey. Its passage covers the scene swap,
+          and the next MP4 is allowed to fade in using the existing video pool. */}
+      {activeMeruJourney && (
+        <MeruPortalTravel
+          key={activeMeruJourney.destination}
+          journey={activeMeruJourney}
+          onCross={() => {
+            meruPortalCommitRef.current?.();
+            meruPortalCommitRef.current = null;
+          }}
+          onFinish={() => {
+            const sim = simRef.current;
+            sim.input.keysHeld.clear();
+            sim.input.justPressed.clear();
+            sim.player.invulnTimer = Math.max(sim.player.invulnTimer, 0.8);
+            meruTravelPendingRef.current = false;
+            meruPortalCommitRef.current = null;
+            setActiveMeruJourney(null);
           }}
         />
       )}
@@ -13179,7 +13235,7 @@ export default function KaliyugaArena() {
       )}
 
       {/* Fast Pre-Chamber Asset Loader Overlay (Solid obsidian, zero backdrop-blur over WebGL) */}
-      {chamberLoadingLabel && (
+      {chamberLoadingLabel && !activeMeruJourney && (
         <div
           data-testid="chamber-loader"
           className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#090608]/95 pointer-events-auto"
