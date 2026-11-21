@@ -609,6 +609,40 @@ export function renderWeaponPoseTrail(
   return true;
 }
 
+/**
+ * During a baked-pose transition a single valid socket point may be all we
+ * have. Keep the hot edge on that actual point; never hallucinate a wide
+ * crescent while 3D source animation has not advanced to a second sample.
+ */
+export function renderParashuBladeTipGlint(
+  ctx: CanvasRenderingContext2D,
+  point: {x:number;y:number},
+  alpha: number,
+  stance: 'smash' | 'pillar' | 'thrust' | string
+): boolean {
+  if (![point.x,point.y,alpha].every(Number.isFinite) || alpha <= 0.01)
+    return false;
+  const opacity = Math.max(0,Math.min(1,alpha));
+  const accent = stance === 'thrust' ? '#6fefff'
+    : stance === 'pillar' ? '#5bffc1' : '#ffb66b';
+  ctx.save();
+  ctx.globalCompositeOperation='source-over';
+  ctx.lineCap='round';
+  ctx.strokeStyle='#12080b';
+  ctx.lineWidth=5.4;
+  ctx.globalAlpha=opacity*0.8;
+  ctx.beginPath();ctx.moveTo(point.x-5,point.y+2);ctx.lineTo(point.x+5,point.y-2);ctx.stroke();
+  ctx.strokeStyle=accent;
+  ctx.lineWidth=2.8;
+  ctx.globalAlpha=opacity;
+  ctx.beginPath();ctx.moveTo(point.x-5,point.y+2);ctx.lineTo(point.x+5,point.y-2);ctx.stroke();
+  ctx.lineWidth=1.3;
+  ctx.strokeStyle='#fff1c3';
+  ctx.beginPath();ctx.moveTo(point.x-2,point.y+3);ctx.lineTo(point.x+2,point.y-3);ctx.stroke();
+  ctx.restore();
+  return true;
+}
+
 export function renderWeaponBoneSlashRibbon(
   ctx: CanvasRenderingContext2D,
   mesh: WeaponSlashRibbonMesh,
