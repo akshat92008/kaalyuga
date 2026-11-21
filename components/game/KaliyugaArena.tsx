@@ -11812,7 +11812,12 @@ export default function KaliyugaArena() {
                   })
                 : null;
               poseTrail.samples = advanceWeaponPoseTrail({
-                previous: poseTrail.samples, point: bladeHead, atMs: now,
+                previous: poseTrail.samples, point: bladeHead,
+                // Use attack *simulation* time, not slow wall-clock RAF time.
+                // SwiftShader may take >150ms per frame while the actual
+                // attack clock advances by only 50ms. Age/clear the ink in
+                // game-time so its geometry follows the same cached 3D pose.
+                atMs: p.weaponSwingProgress * Math.max(0.01,p.actionDuration) * 1000,
               });
               const fallbackMesh = computeWeaponSlashRibbon({
                 originX: p.x + Math.cos(p.slashAngle) * 13,
