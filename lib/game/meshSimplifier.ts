@@ -73,6 +73,37 @@ interface SkinnedBinHeader {
 
 const skinnedBinBufferCache = new Map<string, Promise<ArrayBuffer>>();
 const fbxTemplateCache = new Map<string, Promise<THREE.Group>>();
+
+// Keep large FBX downloads and CPU parses from exhausting the main thread/network.
+// Awaiting callers share the same cached promise for each asset.
+const MAX_CONCURRENT_FBX_LOADS = 3;
+const MAX_FBX_TEMPLATES_IN_MEMORY = 20;
+const MAX_LITE_BUFFERS_IN_MEMORY = 8;
+let activeFbxLoads = 0;
+const waitingFbxLoads: Array<() => void> = [];
+
+async function withFbxLoadSlot<T>(load: () => Promise<T>): Promise<T> {
+  if (activeFbxLoads < MAX_CONCURRENT_FBX_LOADS) {
+    activeFbxLoads += 1;
+  } else {
+    await new Promise<void>((resolve) => waitingFbxLoads.push(resolve));
+  }
+  try {
+    return await load();
+  } finally {
+    const next = waitingFbxLoads.shift();
+    if (next) next(); // Hand the occupied slot directly to the next waiter.
+    else activeFbxLoads -= 1;
+  }
+}
+
+function limitTemplateCache<K, V>(cache: Map<K, V>, maxEntries: number): void {
+  while (cache.size > maxEntries) {
+    const oldest = cache.keys().next().value;
+    if (oldest === undefined) break;
+    cache.delete(oldest);
+  }
+}
 const textEncoder = new TextEncoder();
 
 const IDB_DB_NAME = 'kaliyuga_mesh_bin_v1';
@@ -424,6 +455,13 @@ export async function loadFbxCached(url: string, _unusedShared = false): Promise
           return res.arrayBuffer();
         });
         skinnedBinBufferCache.set(liteBinUrl, bufPromise);
+        limitTemplateCache(skinnedBinBufferCache, MAX_LITE_BUFFERS_IN_MEMORY);
+        // A transient network error must not poison subsequent load attempts.
+        void bufPromise.catch(() => {
+          if (skinnedBinBufferCache.get(liteBinUrl) === bufPromise) {
+            skinnedBinBufferCache.delete(liteBinUrl);
+          }
+        });
       }
       const buf = await bufPromise;
       return buildGroupFromSkinnedBinBuffer(buf);
@@ -446,7 +484,7 @@ export async function loadFbxCached(url: string, _unusedShared = false): Promise
       }
 
       const loader = new FBXLoader();
-      const group = await new Promise<THREE.Group>((resolve, reject) => {
+      const group = await withFbxLoadSlot(() => new Promise<THREE.Group>((resolve, reject) => {
         loader.load(
           encodeURI(cacheKey),
           (loaded) => {
@@ -456,7 +494,7 @@ export async function loadFbxCached(url: string, _unusedShared = false): Promise
           undefined,
           reject
         );
-      });
+      }));
 
       const bin = serializeGroupToSkinnedBinBuffer(group);
       if (bin) {
@@ -465,6 +503,7 @@ export async function loadFbxCached(url: string, _unusedShared = false): Promise
       return group;
     })();
     fbxTemplateCache.set(cacheKey, templatePromise);
+    limitTemplateCache(fbxTemplateCache, MAX_FBX_TEMPLATES_IN_MEMORY);
     templatePromise.catch(() => {
       fbxTemplateCache.delete(cacheKey);
     });
