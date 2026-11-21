@@ -40,6 +40,12 @@ import {
 import { soundEngine } from '@/lib/game/audio';
 import { Act1FrameProfiler } from '@/lib/game/act1Performance';
 import { Act1CinematicCamera } from '@/lib/game/act1CinematicCamera';
+import {
+  DUNDUBHI_CHARGE_TRAVEL_SEC,
+  advanceDundubhiCharge,
+  findFirstDundubhiChargePillar,
+  stepPostureBreakDuringTuskLodge,
+} from '@/lib/game/act1BossCharge';
 import { canDispatchAct1GameplayKey } from '@/lib/game/act1InputGate';
 import { canFirePendingStrike, shouldCancelPendingStrike, type Act1StrikeAction } from '@/lib/game/act1ActionTimeline';
 import {
@@ -353,6 +359,14 @@ interface EnemyEntity {
   isBoss: boolean;
   armorCracked?: boolean;
   tuskLodgedTimer?: number;
+  // Staged world-space horn charge; optional because other enemies use the
+  // original instant attack state and need no extra simulation fields.
+  chargeStartX?: number;
+  chargeStartY?: number;
+  chargeEndX?: number;
+  chargeEndY?: number;
+  chargeElapsedSec?: number;
+  chargeImpactReady?: boolean;
   vacuumActiveTimer?: number;
   lodgedCasts?: number;
   activeBossMoveId?: BossMoveId;
@@ -8442,7 +8456,12 @@ export default function KaliyugaArena() {
           if (e.postureBrokenTimer > 0) {
             e.vx = 0;
             e.vy = 0;
-            e.postureBrokenTimer = Math.min(e.isBoss ? 3.2 : 2.5, e.postureBrokenTimer) - simDt;
+            e.postureBrokenTimer = stepPostureBreakDuringTuskLodge({
+              currentPostureBrokenSec: e.postureBrokenTimer,
+              tuskLodgedSec: e.type === 'dundubhi' ? (e.tuskLodgedTimer || 0) : 0,
+              isBoss: e.isBoss,
+              dt: simDt,
+            });
             if (e.postureBrokenTimer <= 0) {
               e.postureBrokenTimer = 0;
               e.posture = Math.round(e.maxPosture * 0.65);
@@ -8643,6 +8662,8 @@ export default function KaliyugaArena() {
               }
               e.aiState = 'windup';
               e.animTime = 0;
+              e.chargeElapsedSec = undefined;
+              e.chargeImpactReady = false;
               e.parryStanceTimer = 0;
               e.ironGuardWindupTimer = 0;
               e.attackPattern = (e.attackPattern + 1) % (e.isBoss ? 6 : 3);
@@ -8849,6 +8870,32 @@ export default function KaliyugaArena() {
             }
 
             if (e.aiTimer <= 0) {
+              if (e.type === 'dundubhi' && e.attackKind === 'corridor' && !e.chargeImpactReady) {
+                // The painted telegraph is now locked. Instead of teleporting
+                // straight to its far end, let the existing 3D 'charge' clip
+                // traverse the real corridor over 420ms. First pillar stops it.
+                e.chargeStartX = e.x;
+                e.chargeStartY = e.y;
+                const pillar = findFirstDundubhiChargePillar({
+                  startX: e.x, startY: e.y,
+                  endX: e.corridorEndX, endY: e.corridorEndY,
+                  pillars: sim.props,
+                });
+                e.chargeEndX = pillar ? pillar.x : e.corridorEndX;
+                e.chargeEndY = pillar ? pillar.y : e.corridorEndY;
+                e.corridorEndX = e.chargeEndX;
+                e.corridorEndY = e.chargeEndY;
+                e.chargeElapsedSec = 0;
+                e.aiState = 'attack';
+                e.animTime = 0;
+                e.aiTimer = DUNDUBHI_CHARGE_TRAVEL_SEC;
+                // The animation sees honest world-space velocity rather
+                // than a single enormous teleport delta.
+                e.vx = (e.chargeEndX - e.chargeStartX) / DUNDUBHI_CHARGE_TRAVEL_SEC;
+                e.vy = (e.chargeEndY - e.chargeStartY) / DUNDUBHI_CHARGE_TRAVEL_SEC;
+                continue;
+              }
+              e.chargeImpactReady = false;
               e.aiState = 'attack';
               e.animTime = 0;
               e.aiTimer = e.isBoss ? 0.36 : 0.30;
@@ -9524,8 +9571,43 @@ export default function KaliyugaArena() {
               }
             }
           } else if (e.aiState === 'attack') {
-            e.aiTimer -= simDt;
-            if (e.aiTimer <= 0) {
+            if (e.type === 'dundubhi' && e.attackKind === 'corridor' &&
+                e.chargeElapsedSec !== undefined) {
+              const frame = advanceDundubhiCharge({
+                startX: e.chargeStartX ?? e.x,
+                startY: e.chargeStartY ?? e.y,
+                endX: e.chargeEndX ?? e.corridorEndX,
+                endY: e.chargeEndY ?? e.corridorEndY,
+                elapsedSec: e.chargeElapsedSec,
+                durationSec: DUNDUBHI_CHARGE_TRAVEL_SEC,
+                dt: simDt,
+              });
+              e.x = Math.max(minX, Math.min(maxX, frame.x));
+              e.y = Math.max(minY, Math.min(maxY, frame.y));
+              e.vx = frame.vx;
+              e.vy = frame.vy;
+              e.chargeElapsedSec = frame.elapsedSec;
+              e.aiTimer = Math.max(0, DUNDUBHI_CHARGE_TRAVEL_SEC - frame.elapsedSec);
+              // Low-noise ground debris every ~100ms; no giant VFX that
+              // hides the player or the pillar target during the charge.
+              if (Math.floor(frame.elapsedSec / 0.10) >
+                  Math.floor((frame.elapsedSec - simDt) / 0.10)) {
+                spawnParticles(e.x, e.y - 8, 5, '#c5a782', 95, 2.8, 42);
+              }
+              if (frame.complete) {
+                // Return to the windup resolver for one simulation tick so
+                // the EXISTING hit/parry, pillar shatter and rage systems own
+                // exactly one impact. No duplicated boss-damage path.
+                e.chargeElapsedSec = undefined;
+                e.chargeImpactReady = true;
+                e.aiState = 'windup';
+                e.aiTimer = 0;
+                e.vx = 0;
+                e.vy = 0;
+              }
+            } else {
+              e.aiTimer -= simDt;
+              if (e.aiTimer <= 0) {
               // Boss & Elite Relentless Multi-Hit Combo Chain: only chain in place if Rudra is still in reach; otherwise immediately sprint to close the gap!
               const inComboReach =
                 e.type === 'ashen_oracle' ||
@@ -9560,6 +9642,7 @@ export default function KaliyugaArena() {
                     isBoss: e.isBoss,
                     phase: e.phase,
                   }) * 0.45;
+              }
               }
             }
           } else if (e.aiState === 'recover') {
