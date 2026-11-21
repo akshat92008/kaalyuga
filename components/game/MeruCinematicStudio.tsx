@@ -5,83 +5,18 @@
  * Live playback uses the EXISTING Boss3DRenderer; no fake placeholder rig.
  */
 import {useCallback,useEffect,useRef,useState} from 'react';
-import {Boss3DRenderer,type Boss3DUpdateParams} from '@/lib/game/boss3dRenderer';
+import {Boss3DRenderer} from '@/lib/game/boss3dRenderer';
 import {GAME_ASSETS} from '@/lib/game/assets';
 import {
   createDundubhiScene, MeruTimelinePlayer, sampleCinematic,
-  validateCinematic, type MeruCinematic, type CinematicFrame,
+  validateCinematic, type MeruCinematic,
 } from '@/engine/meru/cinematicTimeline';
 import {GRAPHICS_PRESETS,type GraphicsTier} from '@/engine/meru/adaptiveQuality';
+import {makeMeruBossParams,paintMeruFrame} from '@/engine/meru/cinematicVisuals';
 
 const W=960,H=540,KEY='meru.studio.cinematic.v1';
 function fmt(n:number){return Number.isFinite(n)?n.toFixed(2):'0.00';}
 function clamp(n:number,a:number,b:number){return Math.max(a,Math.min(b,n));}
-function defaultBossParams(t:CinematicFrame,dt:number):Boss3DUpdateParams{
-  return {
-    kind:'dundubhi',dt:clamp(dt,0.001,0.04),vx:0,vy:0,facing:-1,
-    aimAngle:Math.PI*0.1,aiState:t.actor.state,attackKind:'shockwave',attackPattern:4,
-    windupProgress:t.actor.state==='windup'?clamp((t.time-3.4)/1.6,0,1):0,
-    phase:1,armorCracked:false,isPostureBroken:false,isHitFlash:false,bypassSoftwareThrottle:false,
-  };
-}
-function paintVignette(ctx:CanvasRenderingContext2D,frame:CinematicFrame){
-  const {lighting}=frame;
-  ctx.save();
-  ctx.globalAlpha=clamp(lighting.vignette,0,1);
-  const g=ctx.createRadialGradient(W/2,H*0.49,130,W/2,H*0.49,590);
-  g.addColorStop(0,'rgba(0,0,0,0)');
-  g.addColorStop(1,'rgba(8,3,10,0.91)');
-  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
-  ctx.restore();
-  ctx.save();
-  ctx.globalCompositeOperation='screen';
-  ctx.fillStyle='rgba(236,103,34,'+clamp((lighting.warmth-0.5)*0.15,0,0.14)+')';
-  ctx.fillRect(0,0,W,H);
-  ctx.restore();
-}
-function paintAsh(ctx:CanvasRenderingContext2D,frame:CinematicFrame){
-  const {lighting,time}=frame;
-  for(let i=0;i<40;i++){
-    const x=((i*179.93+Math.sin(i*2.3+time*0.4)*13)%W+W)%W;
-    const y=((i*47.6-time*(8+i%6*3))%H+H)%H;
-    ctx.fillStyle='rgba(255,165,82,'+(0.05+0.30*lighting.ash*(i%5)/4)+')';
-    ctx.beginPath();ctx.arc(x,y,i%9===0?2:1,0,2*Math.PI);ctx.fill();
-  }
-}
-function paintFrame(ctx:CanvasRenderingContext2D,frame:CinematicFrame,boss:Boss3DRenderer|null,ready:boolean,portrait:HTMLImageElement|null){
-  ctx.clearRect(0,0,W,H);
-  const shake=frame.camera.shake;
-  const dx=Math.sin(frame.time*82)*shake*7;
-  const dy=Math.sin(frame.time*101)*shake*5;
-  ctx.save();
-  ctx.translate(W/2+frame.camera.x+dx,H/2+frame.camera.y+dy);
-  ctx.rotate(frame.camera.roll);
-  ctx.scale(frame.camera.zoom,frame.camera.zoom);
-  ctx.translate(-W/2,-H/2);
-  ctx.globalAlpha=frame.actor.opacity;
-  const bw=400*frame.actor.scale,bh=440*frame.actor.scale;
-  const x=W/2-bw/2+frame.actor.x;
-  const y=H-bh-52+frame.actor.y;
-  if(ready&&boss?.canvas.width){
-    ctx.drawImage(boss.canvas,x,y,bw,bh);
-  } else if(portrait?.complete&&portrait.naturalWidth>0){
-    ctx.drawImage(portrait,x+50,y+30,bw-100,bh-80);
-  }
-  ctx.restore();
-  paintAsh(ctx,frame);
-  paintVignette(ctx,frame);
-  // Authored cinematic-safe typography only near the end.
-  if(frame.time>=6.25){
-    const opacity=clamp((frame.time-6.25)/0.55,0,1);
-    ctx.save();ctx.globalAlpha=opacity;
-    ctx.textAlign='center';ctx.shadowBlur=12;ctx.shadowColor='#020101';
-    ctx.fillStyle='#ffe4ac';ctx.font='bold 50px Georgia,serif';
-    ctx.fillText('DUNDUBHI',W/2,H-115);
-    ctx.fillStyle='#e9ad79';ctx.font='17px Georgia,serif';
-    ctx.fillText('THE LIVING WAR-DRUM',W/2,H-85);
-    ctx.restore();
-  }
-}
 export default function MeruCinematicStudio(){
   const [scene,setScene]=useState<MeruCinematic>(()=>createDundubhiScene());
   const [time,setTime]=useState(0);
@@ -153,10 +88,10 @@ export default function MeruCinematicStudio(){
       const boss=bossRef.current;
       if(ctx){
         if(readyRef.current&&boss){
-          try{boss.updateAndRender(defaultBossParams(t,Math.max(0.015,dt)));}
+          try{boss.updateAndRender(makeMeruBossParams(t,Math.max(0.015,dt),sceneRef.current.boss));}
           catch{readyRef.current=false;setStatus('3D renderer failed: portrait fallback');}
         }
-        paintFrame(ctx,t,boss,readyRef.current,portraitRef.current);
+        paintMeruFrame(ctx,t,sceneRef.current,boss,readyRef.current,portraitRef.current);
       }
       rafRef.current=requestAnimationFrame(loop);
     };
