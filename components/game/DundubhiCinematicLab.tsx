@@ -184,7 +184,7 @@ export default function DundubhiCinematicLab() {
     }
 
     try {
-      const boss = new Boss3DRenderer(320);
+      const boss = new Boss3DRenderer(512);
       bossRef.current = boss;
       void boss.waitForBossReady('dundubhi', 20000)
         .then((ready) => {
@@ -251,7 +251,10 @@ export default function DundubhiCinematicLab() {
             }
           }
           if (modelReadyRef.current && boss.canvas.width > 0) {
-            ctx.drawImage(boss.canvas, 290, 40, 380, 410);
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            // Sharper 512px render, slightly enlarged on-screen instead of upscaling a 320px boss.
+            ctx.drawImage(boss.canvas, 265, 10, 430, 465);
           }
         }
         if (!modelReadyRef.current && portraitRef.current?.complete &&
