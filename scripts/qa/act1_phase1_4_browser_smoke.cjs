@@ -139,6 +139,57 @@ const base = process.env.GAME_URL || 'http://127.0.0.1:3100';
     report.checks.push('actual boss entrance camera runs and skips safely in live game');
     await capture('12-live-boss-after-skip');
 
+    // Three REAL in-arena execution paths, seeded through the strictly
+    // debug-only QA fixture. This never awards unlocks or alters normal play.
+    await page.goto(base + '/?debug=1&qaFixtures=1&chamber=1', {
+      waitUntil: 'domcontentloaded', timeout: 60000
+    });
+    await page.waitForFunction(() =>
+      window.__kaliyugaPhaseQA?.state === 'playing' &&
+      typeof window.__kaliyugaPhaseQAFixture?.prepareExecution === 'function',
+      null, { timeout: 35000 }
+    );
+    for (const variant of ['downward_crush', 'spin_360_cleave', 'impaling_lunge']) {
+      await page.evaluate((style) => window.__kaliyugaPhaseQAFixture.prepareExecution(style), variant);
+      const snapshot = await qa();
+      assert.equal(snapshot.action, 'idle', 'Fixture should clear prior animation before ' + variant);
+      await page.keyboard.press('f');
+      await page.waitForFunction((style) =>
+        window.__kaliyugaPhaseQA?.recentEvents.some(
+          e => e.name === 'execution-contact' && e.meta === style
+        ), variant, { timeout: 15000 }
+      );
+      const afterImpact = await qa();
+      assert.equal(
+        afterImpact.recentEvents.filter(e => e.name === 'execution-contact' && e.meta === variant).length,
+        1,
+        'Execution should commit damage exactly once: ' + variant
+      );
+      await capture('13-live-execution-' + variant);
+      await page.waitForFunction(() =>
+        window.__kaliyugaPhaseQA?.action === 'idle' &&
+        window.__kaliyugaPhaseQA?.cameraKind === null,
+        null, { timeout: 15000 }
+      );
+      report.checks.push('live execution contact and camera reset: ' + variant);
+    }
+
+    // Guardian is an elemental identity with its own heavy release; summon
+    // capture alone does not prove the follow-up empowered axe hit works.
+    await page.evaluate(() => window.__kaliyugaPhaseQAFixture.grantResources());
+    await page.keyboard.press('z');
+    await page.waitForFunction(() => window.__kaliyugaPhaseQA?.transformRemaining > 0,
+      null, { timeout: 10000 });
+    await page.waitForFunction(() => window.__kaliyugaPhaseQA?.action === 'idle',
+      null, { timeout: 12000 });
+    await page.keyboard.press('k');
+    await page.waitForFunction(() =>
+      window.__kaliyugaPhaseQA?.recentEvents.some(
+        e => e.name === 'heavy-contact' && e.meta === 'guardian'
+      ), null, { timeout: 12000 });
+    await capture('14-live-guardian-heavy-contact');
+    report.checks.push('empowered guardian heavy attack committed real weapon-contact VFX');
+
     await page.goto(base + '/cinematic-lab', { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.getByRole('button', { name: /Play cinematic/i }).waitFor({ timeout: 30000 });
     await capture('03-dundubhi-before-play');
