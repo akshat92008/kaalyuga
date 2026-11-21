@@ -6550,8 +6550,21 @@ export default function KaliyugaArena() {
         return;
       }
 
+      // Escape skips an active non-blocking cinematic *without* also
+      // opening the pause menu on the same key press. P always pauses.
+      // Real menus keep their existing Escape-close priority.
+      if (
+        e.code === 'Escape' && sim.state === 'playing' &&
+        !partyModalOpen && !shrineOpen && !storyOpen &&
+        activeHubDialogueNpc === null && !hubBoatDrawerOpen &&
+        !controlsOpen && !chamberLoadingLabel &&
+        act1CameraRef.current?.skip()
+      ) {
+        e.preventDefault();
+        return;
+      }
       if (e.code === 'Escape' || e.code === 'KeyP') {
-        act1CameraRef.current?.skip();
+        act1CameraRef.current?.cancel();
         e.preventDefault();
         if (partyModalOpen) {
           setPartyModalOpen(false);
