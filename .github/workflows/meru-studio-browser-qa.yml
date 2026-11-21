@@ -7,6 +7,8 @@ on:
       - 'scripts/meru/browser-qa.mjs'
       - '.github/workflows/meru-studio-browser-qa.yml'
       - 'components/game/MeruCinematicStudio.tsx'
+      - 'components/game/MeruCinematicPlayback.tsx'
+      - 'components/game/KaliyugaArena.tsx'
       - 'engine/meru/**'
       - 'app/meru-studio/**'
   workflow_dispatch:
