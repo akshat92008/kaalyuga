@@ -19,7 +19,15 @@ export function canFirePendingStrike(
 
 export function shouldCancelPendingStrike(
   expectedAction: Act1StrikeAction,
-  activeAction: string
+  activeAction: string,
+  expectedAttackSerial?: number,
+  activeAttackSerial?: number,
+  expectedChamber?: number,
+  activeChamber?: number
 ): boolean {
-  return expectedAction !== activeAction;
+  // Comparing the action name alone is not sufficient: a fresh light swing
+  // can have the same name as a cancelled, earlier light swing.
+  return expectedAction !== activeAction ||
+    (expectedAttackSerial !== undefined && expectedAttackSerial !== activeAttackSerial) ||
+    (expectedChamber !== undefined && expectedChamber !== activeChamber);
 }
