@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Act1CinematicCamera } from './act1CinematicCamera';
+import { Act1CinematicCamera, composeAct1CinematicZoom, getAct1FinisherCameraShot } from './act1CinematicCamera';
 test('phase camera softly returns to gameplay and never exceeds safe 2.5D zoom/weight', () => {
   const camera = new Act1CinematicCamera();
   assert.equal(camera.start({
@@ -29,4 +29,27 @@ test('blocks invalid camera cues and cancels on modal/pause interruption', () =>
   camera.start({kind: 'boss_entrance',focusX: 1,focusY: 2,durationSec: 1,focusWeight: 0.2,zoomBoost: 0.02});
   assert.equal(camera.step(0.1, true).active,false);
   assert.equal(camera.step(0.1).active,false);
+});
+
+test('Three executions receive distinctive cinematic framings without masking the wider spin', () => {
+ const down=getAct1FinisherCameraShot('downward_crush');
+ const lunge=getAct1FinisherCameraShot('impaling_lunge');
+ const spin=getAct1FinisherCameraShot('spin_360_cleave');
+ assert.ok(down.zoomBoost > lunge.zoomBoost && lunge.zoomBoost > spin.zoomBoost);
+ assert.ok(spin.zoomBoost <= 0.07);
+ assert.ok(down.durationSec < 0.7);
+ const camera=new Act1CinematicCamera();
+ assert.equal(camera.start({kind:'execution',focusX:600,focusY:380,...down}),true);
+ const shot=camera.step(0.16);
+ assert.ok(shot.zoomBoost > 0.125);
+ assert.ok(shot.focusWeight > 0.38);
+});
+
+test('Cinematic zoom composes the already eased cue; it is not attenuated by frame dt',()=>{
+ assert.equal(composeAct1CinematicZoom(0.90,0.14),1.04);
+ assert.equal(composeAct1CinematicZoom(0.90,0),0.90);
+ assert.equal(composeAct1CinematicZoom(0.80,-0.035),0.765);
+ assert.equal(composeAct1CinematicZoom(0.93,Number.NaN),0.93);
+ assert.equal(composeAct1CinematicZoom(1.10,0.3),1.20);
+ assert.equal(composeAct1CinematicZoom(0.70,-1),0.72);
 });
