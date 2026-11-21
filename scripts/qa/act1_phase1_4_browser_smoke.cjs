@@ -256,6 +256,14 @@ const base = process.env.GAME_URL || 'http://127.0.0.1:3100';
       return q?.sliceStage === 'combat_arena' &&
         q.cameraKind === 'boss' && q.cameraElapsedSec > 0.15;
     }, null, { timeout: 15000 });
+    // Let the spring camera travel to the authored boss focus. A running
+    // timeline alone previously passed while Dundubhi stood off-screen.
+    await page.waitForFunction(() => {
+      const shot = window.__kaliyugaPhaseQA?.bossScreen;
+      return shot && Number.isFinite(shot.x) && Number.isFinite(shot.y) &&
+        shot.x >= 80 && shot.x <= shot.width - 80 &&
+        shot.y >= 100 && shot.y <= shot.height - 55;
+    }, null, { timeout: 14000 });
     await capture('11-live-dundubhi-boss-entrance');
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => window.__kaliyugaPhaseQA?.cameraKind === null, null, { timeout: 10000 });
