@@ -413,6 +413,11 @@ export class Rudra3DRenderer {
           const tipMin = wepBox.min[dominantAxis];
           const tipMax = wepBox.max[dominantAxis];
           tipCenter[dominantAxis] = Math.abs(tipMax) >= Math.abs(tipMin) ? tipMax : tipMin;
+          // Box3.setFromObject returns WORLD-space bounds, whereas an object
+          // added to the imported FBX root needs the root's LOCAL coordinates.
+          // This conversion protects files with a baked FBX root transform.
+          weaponGroup.updateMatrixWorld(true);
+          weaponGroup.worldToLocal(tipCenter);
           const bladeHead = new THREE.Object3D();
           bladeHead.name = '__ACT1_PARASHU_BLADE_HEAD_QA';
           bladeHead.position.copy(tipCenter);
