@@ -13,13 +13,19 @@ test('First execution is directional ground impact, not double-elemental wheel',
  assert.ok(v.sparkCount<=18);
  assert.ok(v.flipbookSize<180);
 });
-test('Other established execution variants retain their existing set pieces',()=>{
+test('Sweeping and impaling executions have distinct silhouettes and VFX budgets',()=>{
  const spin=getAct1ExecutionVisualPlan('spin_360_cleave');
  const thrust=getAct1ExecutionVisualPlan('impaling_lunge');
  assert.equal(spin.useGroundedOverheadContact,false);
  assert.equal(thrust.useGroundedOverheadContact,false);
  assert.equal(spin.allowSpectralSkyBolts,true);
- assert.equal(thrust.allowSpectralSkyBolts,true);
+ assert.equal(thrust.allowSpectralSkyBolts,false);
+ assert.ok(spin.slashArcSpan>Math.PI);
+ assert.ok(thrust.slashArcSpan<1);
+ assert.ok(thrust.slashWidth<spin.slashWidth/2);
+ assert.ok(thrust.groundShockwaveRadius<spin.groundShockwaveRadius/2);
+ assert.ok(thrust.sparkCount<spin.sparkCount);
+ assert.ok(thrust.flipbookSize<spin.flipbookSize);
 });
 test('All finisher hit cues remain at the existing guaranteed single-contact frame',()=>{
  for(const variant of ['downward_crush','spin_360_cleave','impaling_lunge'] as const){
