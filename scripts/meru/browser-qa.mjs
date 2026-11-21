@@ -47,6 +47,29 @@ try{
     'Director camera cut must produce a discontinuous camera track');
   await page.screenshot({path:join(out,'meru-studio-choreography.png'),fullPage:true,animations:'disabled'});
   console.log('MERU_DIRECTOR_QA: editable rig joint keyframes, hard camera cut, export and roundtrip PASS');
+  await page.getByLabel('Retime entire scene').focus();
+  await page.keyboard.press('ArrowRight'); // 8.0s -> 8.5s
+  const retimeExportP=page.waitForEvent('download',{timeout:10000});
+  await page.getByRole('button',{name:'Export scene JSON'}).click();
+  const retimeDownload=await retimeExportP;
+  await retimeDownload.saveAs(join(out,'exported-dundubhi-retimed.meru.json'));
+  const retimed=JSON.parse(await readFile(join(out,'exported-dundubhi-retimed.meru.json'),'utf8'));
+  assert.equal(retimed.duration,8.5,'Director retiming control must affect scene duration');
+  assert.ok(Math.abs(retimed.cues.find(c=>c.id==='earth-impact').time-5.15*8.5/8)<0.000001);
+  assert.equal(retimed.pose.at(-1).time,8.5,'Final skeletal pose stays on new cutscene endpoint');
+  // An editor needs to remove accidental keyframes without invalidating t=0.
+  const middleCamera=retimed.camera[1].time.toFixed(2);
+  await page.locator('button[title="camera at '+middleCamera+'s"]').click();
+  await page.getByLabel('Track for keyframe deletion').selectOption('camera');
+  await page.getByRole('button',{name:'Delete keyframe at playhead'}).click();
+  const trimmedP=page.waitForEvent('download',{timeout:10000});
+  await page.getByRole('button',{name:'Export scene JSON'}).click();
+  const trimmedDownload=await trimmedP;
+  await trimmedDownload.saveAs(join(out,'exported-dundubhi-trimmed.meru.json'));
+  const trimmed=JSON.parse(await readFile(join(out,'exported-dundubhi-trimmed.meru.json'),'utf8'));
+  assert.equal(trimmed.camera.length,retimed.camera.length-1,'Removing a camera keyframe must persist');
+  console.log('MERU_DIRECTOR_QA: retimed all cues and pose, removed selected camera keyframe PASS');
+
 
   // Meru should use the same real, proxy-mapped MP4 and poster as the actual
   // boss chamber. This check catches silent black/blank backgrounds.
