@@ -549,7 +549,10 @@ export default function KaliyugaArena() {
     elapsedSec: number;
     track: CinematicCameraTrack;
   } | null>(null);
-  const qaRecentEventsRef = useRef<Array<{ name: string; frameTime: number; meta?: string }>>([]);
+  const qaRecentEventsRef = useRef<Array<{
+    name: string; frameTime: number; meta?: string; progress?: number;
+    contactX?: number; contactY?: number; playerX?: number; playerY?: number;
+  }>>([]);
   const bloodDemonArtsRef = useRef<BloodDemonArtPool>(createBloodDemonArtPool());
   const enemyVariantCounterRef = useRef<number>(0);
   const chamberLoadSeqRef = useRef<number>(0);
@@ -4959,7 +4962,11 @@ export default function KaliyugaArena() {
           element: heavyElement,
         });
         if (isDebugMode) {
-          qaRecentEventsRef.current.push({ name: 'heavy-contact', frameTime: performance.now(), meta: heavyElement });
+          qaRecentEventsRef.current.push({
+            name: 'heavy-contact', frameTime: performance.now(), meta: heavyElement,
+            progress: curP.weaponSwingProgress, contactX: syncImpactX,
+            contactY: syncImpactY, playerX: curP.x, playerY: curP.y,
+          });
           if (qaRecentEventsRef.current.length > 50) qaRecentEventsRef.current.shift();
         }
         const impactColor =
@@ -7409,7 +7416,10 @@ export default function KaliyugaArena() {
                 execution.fired = true;
                 pendingExecutionRef.current = null;
                 if (isDebugMode) {
-                  qaRecentEventsRef.current.push({ name: 'execution-contact', frameTime: performance.now(), meta: execution.variant });
+                  qaRecentEventsRef.current.push({
+                    name: 'execution-contact', frameTime: performance.now(),
+                    meta: execution.variant, progress,
+                  });
                   if (qaRecentEventsRef.current.length > 50) qaRecentEventsRef.current.shift();
                 }
                 execution.execute();
@@ -7435,6 +7445,7 @@ export default function KaliyugaArena() {
                   name: 'light-contact',
                   frameTime: performance.now(),
                   meta: p.stance,
+                  progress: curProgress,
                 });
                 if (qaRecentEventsRef.current.length > 50) qaRecentEventsRef.current.shift();
               }
