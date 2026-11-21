@@ -6929,6 +6929,29 @@ export default function KaliyugaArena() {
     const perfTelemetryEnabled = new URLSearchParams(window.location.search).get('perf') === '1';
     // Bounded, opt-in evidence of animation-cue dispatch. A fired cue does NOT
     // prove enemy contact or that the rendered blade visually touched a target.
+    const bossChargeTrace: Array<{
+      phase: 'launch' | 'step' | 'impact';
+      chamber: number;
+      x: number;
+      y: number;
+      progress: number;
+      contactPlayer: boolean;
+      atMs: number;
+    }> = [];
+    const traceBossCharge = (
+      phase: 'launch' | 'step' | 'impact',
+      enemy: EnemyEntity,
+      progress: number,
+      atMs: number
+    ) => {
+      if (!perfTelemetryEnabled) return;
+      bossChargeTrace.push({
+        phase, chamber: simRef.current.chamberIndex + 1,
+        x: enemy.x, y: enemy.y, progress,
+        contactPlayer: Boolean(enemy.chargeContactFound), atMs,
+      });
+      if (bossChargeTrace.length > 96) bossChargeTrace.shift();
+    };
     const strikeCueTrace: Array<{
       kind: 'fired' | 'cancelled';
       action: Act1StrikeAction;
@@ -6998,6 +7021,7 @@ export default function KaliyugaArena() {
             boss: sim.enemies.find((e) => e.isBoss && e.aiState !== 'ko')?.type ?? null,
             graphicsTier: sim.graphicsSettings.tier,
             strikeCues: strikeCueTrace.slice(),
+            bossChargeTrace: bossChargeTrace.slice(),
             // Production-safe opt-in read-only combat evidence for the real
             // browser QA runner. No gameplay mutation or per-frame allocations.
             combat: {
@@ -8896,7 +8920,11 @@ export default function KaliyugaArena() {
                 // than a single enormous teleport delta.
                 e.vx = (e.chargeEndX - e.chargeStartX) / DUNDUBHI_CHARGE_TRAVEL_SEC;
                 e.vy = (e.chargeEndY - e.chargeStartY) / DUNDUBHI_CHARGE_TRAVEL_SEC;
+                traceBossCharge('launch', e, 0, now);
                 continue;
+              }
+              if (e.type === 'dundubhi' && e.attackKind === 'corridor') {
+                traceBossCharge('impact', e, 1, now);
               }
               e.chargeImpactReady = false;
               e.aiState = 'attack';
@@ -9592,6 +9620,7 @@ export default function KaliyugaArena() {
               });
               e.x = Math.max(minX, Math.min(maxX, frame.x));
               e.y = Math.max(minY, Math.min(maxY, frame.y));
+              traceBossCharge('step', e, frame.progress, now);
               e.vx = frame.vx;
               e.vy = frame.vy;
               e.chargeElapsedSec = frame.elapsedSec;
