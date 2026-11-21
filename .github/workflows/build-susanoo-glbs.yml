@@ -23,7 +23,8 @@ jobs:
       - name: Install Blender
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y blender
+          # Ubuntu 26.04's Blender 5 package may omit NumPy though its FBX addon requires it.
+          sudo apt-get install -y blender python3-numpy
       - name: Convert both Susanoo FBX rigs to GLBs (preserving skeletons and clips)
         run: |
           blender -b --python scripts/build-optimized-glbs.py -- --contains Horned_Warlord_of_the_Abyss --strict
