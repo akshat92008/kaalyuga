@@ -5,7 +5,7 @@ import {
   computeSpatialAudioPanAndGain,
 } from './particleAndAudioEngine';
 
-class SoundEngine {
+export class SoundEngine {
   private ctx: AudioContext | null = null;
   private swingBuffers: { light: AudioBuffer | null; heavy: AudioBuffer | null } = {
     light: null,
