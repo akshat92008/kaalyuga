@@ -414,7 +414,7 @@ interface EnemySlotTemplate {
   generateFbxUrl: string;
   textureFbxUrl: string;
   diffuseUrl: string;
-  weaponKind: 'minotaur_axe' | 'trident_axe' | 'crescent_reaver' | 'none';
+  weaponKind: (typeof ENEMY_MODEL_SLOTS)[string]['weaponKind'];
   leftBucklerKind?: 'iron_buckler' | 'none';
   animUrls: Record<Enemy3DAnimState, string>;
   rimColor: number;
@@ -506,7 +506,7 @@ export class UnifiedWorld3DStage {
   private readonly enemyInstances = new Map<number, PooledEnemyInstance>();
   private readonly enemyProxies = new Map<number, THREE.Group>();
   private readonly sharedWeaponTemplates: Partial<
-    Record<'minotaur_axe' | 'trident_axe' | 'crescent_reaver', Promise<THREE.Group | null>>
+    Record<'minotaur_axe' | 'trident_axe' | 'crescent_reaver' | 'longbow' | 'dharma_chakram', Promise<THREE.Group | null>>
   > = {};
 
   // Live Bosses
@@ -836,9 +836,41 @@ export class UnifiedWorld3DStage {
   }
 
   private getSharedWeaponTemplate(
-    kind: 'minotaur_axe' | 'trident_axe' | 'crescent_reaver'
+    kind: 'minotaur_axe' | 'trident_axe' | 'crescent_reaver' | 'longbow' | 'dharma_chakram'
   ): Promise<THREE.Group | null> {
     if (this.sharedWeaponTemplates[kind]) return this.sharedWeaponTemplates[kind]!;
+    if (kind === 'longbow' || kind === 'dharma_chakram') {
+      // Extended enemy weapons need their own silhouette, never silently a trident.
+      // Geometry is deterministic and lightweight enough for the shared model cache.
+      const weapon = new THREE.Group();
+      if (kind === 'longbow') {
+        const limbs = new THREE.CatmullRomCurve3([
+          new THREE.Vector3(-0.16, -0.62, 0),
+          new THREE.Vector3(0.12, -0.37, 0),
+          new THREE.Vector3(0.22, 0, 0),
+          new THREE.Vector3(0.12, 0.37, 0),
+          new THREE.Vector3(-0.16, 0.62, 0),
+        ]);
+        weapon.add(new THREE.Mesh(new THREE.TubeGeometry(limbs, 24, 0.035, 6, false), new THREE.MeshStandardMaterial({ color: 0x8c4d2a, roughness: 0.78 })));
+        const string = new THREE.Line(
+          new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-0.16, -0.62, 0), new THREE.Vector3(-0.16, 0.62, 0)]),
+          new THREE.LineBasicMaterial({ color: 0xeed9b4 }),
+        );
+        weapon.add(string);
+      } else {
+        const bronze = new THREE.MeshStandardMaterial({ color: 0xdcae56, metalness: 0.62, roughness: 0.34 });
+        weapon.add(new THREE.Mesh(new THREE.TorusGeometry(0.46, 0.065, 9, 40), bronze));
+        for (let i = 0; i < 8; i++) {
+          const spoke = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.033, 0.055), bronze);
+          spoke.rotation.z = (i * Math.PI) / 8;
+          weapon.add(spoke);
+        }
+        weapon.add(new THREE.Mesh(new THREE.TorusGeometry(0.14, 0.035, 6, 20), bronze));
+      }
+      const built = Promise.resolve(weapon);
+      this.sharedWeaponTemplates[kind] = built;
+      return built;
+    }
     const fbxUrl =
       kind === 'minotaur_axe'
         ? MINOTAUR_AXE_FBX_URL

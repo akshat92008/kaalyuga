@@ -1,0 +1,56 @@
+name: "Act I - fast Phase 1-4 code and asset validation"
+
+on:
+  push:
+    branches:
+      - feature/phase1-4-cinematic-combat-20261121
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: act1-phase1-4-fast-check
+  cancel-in-progress: false
+
+jobs:
+  fast-validation:
+    name: "Sparse repo checkout, all Phase 1-4 tests and full TypeScript check"
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CI: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - name: Sparse checkout without multi-gigabyte media library
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /package.json
+            /tsconfig.json
+            /next-env.d.ts
+            /next.config.ts
+            /lib/
+            /components/
+            /app/
+            /hooks/
+            /engine/
+            /scripts/
+            /public/kaalyuga/anims/rudra/
+            /public/kaalyuga/rudra/rigged.fbx
+            /public/kaalyuga/parashu/weapon.fbx
+            /public/models/Meshy_AI_Ashen_Warborn_20261025_texture_fbx/Meshy_AI_Ashen_Warborn_20261025_texture.fbx
+            /public/models/Meshy_AI_Ashen_Warborn_20261025_texture_fbx/Meshy_AI_Ashen_Warborn_20261025_texture.png
+            /public/models/Meshy_AI_Bloodforged_Trident_A_1025041928_texture_fbx/Meshy_AI_Bloodforged_Trident_A_1025041928_texture.png
+            /public/animations/pro_melee_axe/
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps --no-audit --no-fund
+      - name: Run actual Phase 1-4 regressions
+        run: npm run test:phase1-4
+      - name: Full project TypeScript
+        run: npx tsc --noEmit

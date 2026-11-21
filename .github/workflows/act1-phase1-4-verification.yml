@@ -1,0 +1,116 @@
+name: "Act I - Phase 1-4 build, Blender and rendered gameplay verification"
+
+on:
+  push:
+    branches:
+      - feature/phase1-4-cinematic-combat-20261121
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: act1-phase1-4-verification
+  cancel-in-progress: false
+
+jobs:
+  game:
+    name: "TypeScript + tests + production game + Chromium screenshots"
+    # Pin to supported browser image; ubuntu-latest 26.04 breaks Playwright 1.58.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CI: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - name: Checkout Kaliyuga with game assets
+        uses: actions/checkout@v4
+      - name: Configure Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install repository dependencies (lockfile not present in this repo)
+        run: npm install --no-audit --no-fund --legacy-peer-deps
+      - name: Test cinematic camera, elemental attacks, timing and real asset paths
+        run: npm run test:phase1-4
+      - name: TypeScript full project verification
+        run: npx tsc --noEmit
+      - name: Build production game
+        run: npm run build
+      - name: Start actual production server
+        run: |
+          npm run start -- -p 3100 > /tmp/kaliyuga-next-server.log 2>&1 &
+          for n in $(seq 1 100); do
+            if curl -fsS http://127.0.0.1:3100/ -o /dev/null; then
+              echo "Production server healthy"
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/kaliyuga-next-server.log
+          exit 1
+      - name: Install isolated Playwright browser test dependency
+        run: npm install --no-save --ignore-scripts --no-audit --no-fund --legacy-peer-deps playwright@1.58.2
+      - name: Install Chromium with headless WebGL software driver
+        run: npx playwright install --with-deps chromium
+      - name: Run and capture live browser gameplay and cinematic
+        run: node scripts/qa/act1_phase1_4_browser_smoke.cjs
+      - name: Configure Python for rendered screenshot validation
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Pillow for deterministic image-pixel checks
+        run: python -m pip install --disable-pip-version-check "Pillow>=10,<14"
+      - name: Verify all elemental and execution VFX actually appear in rendered frames
+        run: python scripts/qa/verify_elemental_frames.py artifacts/act1-phase1-4
+      - name: Collect screenshots, logs and test reports even on failure
+        if: always()
+        run: |
+          mkdir -p artifacts/act1-phase1-4
+          if test -f /tmp/kaliyuga-next-server.log; then cp /tmp/kaliyuga-next-server.log artifacts/act1-phase1-4/server.log; fi
+      - name: Upload rendered browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: act1-phase1-4-browser-evidence
+          path: artifacts/act1-phase1-4
+          if-no-files-found: warn
+          retention-days: 7
+
+  blender:
+    name: "Blender FBX import + GLB animation export + CPU preview"
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Sparse checkout only real Rudra rig, animations and Blender QA scripts
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            cutscenes/scripts/process_rudra_animations.py
+            scripts/qa/verify_rudra_glb.py
+            public/kaalyuga/rudra/rigged.fbx
+            public/kaalyuga/rudra/diffuse.png
+            public/models/Meshy_AI_Ashen_Warborn_20261025_texture_fbx/Meshy_AI_Ashen_Warborn_20261025_texture.fbx
+            public/kaalyuga/anims/rudra
+      - name: Install real Blender on runner
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y blender python3-numpy
+          blender --version
+      - name: Import all ten FBX clips, validate bones, export GLB, render preview
+        run: |
+          blender -b -t 2 --python cutscenes/scripts/process_rudra_animations.py -- \
+            --model public/kaalyuga/rudra/rigged.fbx \
+            --clips public/kaalyuga/anims/rudra \
+            --output build/rudra_processed
+      - name: Verify GLB channels, skin, ten accepted animations and preview PNG
+        run: python3 scripts/qa/verify_rudra_glb.py --report build/rudra_processed/validation_report.json
+      - name: Upload Blender files and verification report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: act1-phase1-4-blender-evidence
+          path: build/rudra_processed
+          if-no-files-found: warn
+          retention-days: 7

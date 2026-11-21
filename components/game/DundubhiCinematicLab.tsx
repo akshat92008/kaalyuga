@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { GAME_ASSETS } from '@/lib/game/assets';
 import { Boss3DRenderer, type Boss3DUpdateParams } from '@/lib/game/boss3dRenderer';
+import { CinematicCameraTrack, sampleCinematicImpactImpulse, boundCinematicCameraToPaintedVideo } from '@/lib/game/cinematicCamera';
 
 const DURATION_SEC = 8.6;
 const W = 960;
@@ -76,6 +77,34 @@ function drawDust(ctx: CanvasRenderingContext2D, t: number) {
     ctx.fill();
   }
 }
+/** A restrained contact shadow and amber bounce light ground the FBX feet in
+ * the actual painted Mandapa rather than letting the sprite float over video. */
+function drawBossGrounding(ctx: CanvasRenderingContext2D, t: number) {
+  const emergence = smoothstep(0.9, 2.35, t);
+  if (emergence <= 0) return;
+  ctx.save();
+  ctx.translate(480, 441);
+  ctx.scale(1, 0.29);
+  const shadow = ctx.createRadialGradient(0, 0, 9, 0, 0, 132);
+  shadow.addColorStop(0, 'rgba(7, 3, 2, 0.72)');
+  shadow.addColorStop(0.57, 'rgba(14, 5, 4, 0.45)');
+  shadow.addColorStop(1, 'rgba(14, 5, 4, 0)');
+  ctx.fillStyle = shadow;
+  ctx.globalAlpha = emergence;
+  ctx.fillRect(-145, -145, 290, 290);
+  ctx.restore();
+
+  // A small lantern-colored pool of reflected light, especially on the roar.
+  const bounce = emergence * (0.10 + smoothstep(3.5, 5.3, t) * 0.10);
+  const glow = ctx.createRadialGradient(480, 426, 14, 480, 426, 127);
+  glow.addColorStop(0, 'rgba(241, 109, 37, ' + bounce.toFixed(3) + ')');
+  glow.addColorStop(1, 'rgba(241, 109, 37, 0)');
+  ctx.save();
+  ctx.fillStyle = glow;
+  ctx.fillRect(348, 295, 264, 264);
+  ctx.restore();
+}
+
 function drawShockwave(ctx: CanvasRenderingContext2D, t: number) {
   const pulse = smoothstep(5.13, 5.32, t) * (1 - smoothstep(5.32, 6.25, t));
   if (pulse <= 0) return;
@@ -118,9 +147,11 @@ function makeBossParams(t: number, dt: number): Boss3DUpdateParams {
 export default function DundubhiCinematicLab() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const arenaLayerRef = useRef<HTMLDivElement>(null);
   const bossRef = useRef<Boss3DRenderer | null>(null);
   const portraitRef = useRef<HTMLImageElement | null>(null);
   const playingRef = useRef(false);
+  const cameraTrackRef = useRef<CinematicCameraTrack | null>(null);
   const timeRef = useRef(0);
   const lastTimeRef = useRef(0);
   const audioRef = useRef<Record<string, HTMLAudioElement>>({});
@@ -158,6 +189,14 @@ export default function DundubhiCinematicLab() {
       return;
     }
 
+    cameraTrackRef.current = new CinematicCameraTrack([
+      { at: 1.4, focusX: 0.5, focusY: 0.62, zoom: 1.04 },
+      { at: 3.3, focusX: 0.48, focusY: 0.59, zoom: 1.12 },
+      { at: 4.9, focusX: 0.52, focusY: 0.61, zoom: 1.17 },
+      { at: 5.6, focusX: 0.5, focusY: 0.62, zoom: 1.10 },
+      { at: 7.1, focusX: 0.5, focusY: 0.65, zoom: 1.02 },
+    ], DURATION_SEC);
+
     const image = new Image();
     image.src = GAME_ASSETS.portraits.dundubhi;
     portraitRef.current = image;
@@ -174,7 +213,7 @@ export default function DundubhiCinematicLab() {
     }
 
     try {
-      const boss = new Boss3DRenderer(320);
+      const boss = new Boss3DRenderer(512);
       bossRef.current = boss;
       void boss.waitForBossReady('dundubhi', 20000)
         .then((ready) => {
@@ -218,17 +257,38 @@ export default function DundubhiCinematicLab() {
         // The HTML video and static fallback poster sit behind this alpha canvas.
         const boss = bossRef.current;
         const opacity = smoothstep(0.9, 2.35, t);
-        const zoom = 1.0 + smoothstep(1.5, 4.3, t) * 0.20 -
-          smoothstep(6.0, 8.4, t) * 0.11;
-        const shake = smoothstep(5.1, 5.25, t) * (1 - smoothstep(5.25, 5.65, t));
-        const shakeX = Math.sin(t * 103) * 6 * shake;
-        const shakeY = Math.cos(t * 121) * 5 * shake;
+        const cameraFrame = cameraTrackRef.current?.sample(t, W, H);
+        const impact = sampleCinematicImpactImpulse(t, 5.18, W, H);
+        // Clamp the composited pan AFTER adding impact shake, otherwise the
+        // video can move outside the matte while the boss still looks correct.
+        const safeShot = boundCinematicCameraToPaintedVideo({
+          zoom: cameraFrame?.zoom ?? 1,
+          offsetX: (cameraFrame?.offsetX ?? 0) + impact.x,
+          offsetY: (cameraFrame?.offsetY ?? 0) + impact.y,
+        }, W, H, 0.5, 305 / H);
+        const zoom = safeShot.zoom;
+
+        // The underlying painted MP4 and the animated boss MUST share the
+        // same framing. Moving only the FBX sprite creates a cardboard-cutout
+        // effect and breaks contact alignment with the arena.
+        const arenaLayer = arenaLayerRef.current;
+        if (arenaLayer) {
+          arenaLayer.style.transformOrigin = '50% 56.4815%'; // x=480, y=305
+          arenaLayer.style.transform =
+            'translate(' + (safeShot.offsetX / W * 100).toFixed(4) +
+            '%, ' + (safeShot.offsetY / H * 100).toFixed(4) +
+            '%) scale(' + zoom.toFixed(5) + ')';
+        }
 
         ctx.save();
-        ctx.translate(W / 2 + shakeX, 435 + shakeY);
+        // Dolly around Dundubhi's upper torso instead of the floor line.
+        // The old 435px pivot pushed his head above the matte at impact zoom.
+        ctx.translate(W / 2 + safeShot.offsetX,
+          305 + safeShot.offsetY);
         ctx.scale(zoom, zoom);
-        ctx.translate(-W / 2, -435);
+        ctx.translate(-W / 2, -305);
         ctx.globalAlpha = opacity;
+        drawBossGrounding(ctx, t);
         if (boss && modelReadyRef.current) {
           if (now - lastBossRender > 32) {
             lastBossRender = now;
@@ -240,16 +300,21 @@ export default function DundubhiCinematicLab() {
             }
           }
           if (modelReadyRef.current && boss.canvas.width > 0) {
-            ctx.drawImage(boss.canvas, 290, 40, 380, 410);
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            // Sharper 512px render, slightly enlarged on-screen instead of upscaling a 320px boss.
+            ctx.drawImage(boss.canvas, 290, 75, 380, 385);
           }
         }
         if (!modelReadyRef.current && portraitRef.current?.complete &&
             (portraitRef.current.naturalWidth || 0) > 0) {
-          ctx.drawImage(portraitRef.current, 330, 118, 300, 297);
+          ctx.drawImage(portraitRef.current, 330, 108, 300, 300);
         }
+        // Shockwave is anchored to Dundubhi's feet and moves with the same
+        // camera as the arena and animated body; screen overlays stay fixed.
+        drawShockwave(ctx, t);
         ctx.restore();
         drawDust(ctx, t);
-        drawShockwave(ctx, t);
         drawVignette(ctx, t);
         drawCinematicText(ctx, t);
         setSeconds(Math.floor(t * 10) / 10);
@@ -262,6 +327,8 @@ export default function DundubhiCinematicLab() {
       disposed = true;
       cancelAnimationFrame(rafId);
       playingRef.current = false;
+      cameraTrackRef.current?.interrupt();
+      cameraTrackRef.current = null;
       try { videoRef.current?.pause(); } catch { /* no-op */ }
       for (const audio of Object.values(audioRef.current)) {
         audio.pause();
@@ -273,6 +340,7 @@ export default function DundubhiCinematicLab() {
   }, [playCue]);
 
   const start = () => {
+    cameraTrackRef.current?.restart();
     timeRef.current = 0;
     firedRef.current = {};
     lastTimeRef.current = 0;
@@ -285,6 +353,16 @@ export default function DundubhiCinematicLab() {
         void video.play().catch(() => undefined);
       } catch { /* static background remains available */ }
     }
+  };
+
+  const skip = () => {
+    timeRef.current = DURATION_SEC;
+    playingRef.current = false;
+    cameraTrackRef.current?.skip();
+    setIsPlaying(false);
+    setSeconds(DURATION_SEC);
+    videoRef.current?.pause();
+    for (const audio of Object.values(audioRef.current)) audio.pause();
   };
 
   const toggleMute = () => {
@@ -315,20 +393,27 @@ export default function DundubhiCinematicLab() {
 
         <div className="relative aspect-video w-full overflow-hidden rounded-lg border border-[#563321] bg-[#110a0b] shadow-[0_18px_70px_rgba(0,0,0,0.75)]">
           <div
-            className="absolute inset-0 bg-cover bg-center"
-            style={{ backgroundImage: 'url(' + GAME_ASSETS.chambers.dundubhiMandapa + ')' }}
-          />
-          <video
-            ref={videoRef}
-            src={GAME_ASSETS.arenaVideos.dundubhiMandapa}
-            poster={GAME_ASSETS.chambers.dundubhiMandapa}
-            className="absolute inset-0 h-full w-full object-cover"
-            muted
-            loop
-            playsInline
-            preload="metadata"
-            aria-hidden="true"
-          />
+            ref={arenaLayerRef}
+            data-testid="dundubhi-camera-arena-layer"
+            className="pointer-events-none absolute inset-0"
+            style={{ transformOrigin: '50% 56.4815%' }}
+          >
+            <div
+              className="absolute inset-0 bg-cover bg-center"
+              style={{ backgroundImage: 'url(' + GAME_ASSETS.chambers.dundubhiMandapa + ')' }}
+            />
+            <video
+              ref={videoRef}
+              src={GAME_ASSETS.arenaVideos.dundubhiMandapa}
+              poster={GAME_ASSETS.chambers.dundubhiMandapa}
+              className="absolute inset-0 h-full w-full object-cover"
+              muted
+              loop
+              playsInline
+              preload="metadata"
+              aria-hidden="true"
+            />
+          </div>
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/40 via-[#120703]/20 to-black/50" />
           <canvas
             ref={canvasRef}
@@ -354,6 +439,14 @@ export default function DundubhiCinematicLab() {
             className="rounded-lg bg-[#a75e35] px-5 py-3 text-sm font-semibold text-white hover:bg-[#c77b44]"
           >
             {isPlaying ? 'Restart cinematic' : seconds > 0 ? 'Replay cinematic' : 'Play cinematic'}
+          </button>
+          <button
+            type="button"
+            disabled={!isPlaying}
+            onClick={skip}
+            className="rounded-lg border border-[#674937] px-4 py-3 text-sm hover:bg-[#271b16] disabled:opacity-40"
+          >
+            Skip cinematic
           </button>
           <button
             type="button"

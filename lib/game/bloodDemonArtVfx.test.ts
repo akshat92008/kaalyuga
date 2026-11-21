@@ -70,8 +70,8 @@ describe('Differentiated 2-Tier Blood Demon Art, 3D Pillars & Ground VFX', () =>
     const gruntArt = new GruntBloodArtPool(8, 6);
     const ink = new SumiInkSplashPool(6);
     const ground = new GroundFractureAndBouldersPool();
-    const heavy = new HeavyWaveVfx(scene);
-    const bloodArt = new DundubhiBloodDemonArtVfx(scene);
+    const heavy = new HeavyWaveVfx();
+    const bloodArt = new DundubhiBloodDemonArtVfx();
     scene.add(bossMandala.group, gruntArt.group, ink.group, ground.group);
     const camPos = new THREE.Vector3(0, 18, 18);
 

@@ -1,0 +1,43 @@
+name: Act I Phase 1-4 focused regressions (manual)
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  combat-unit-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Sparse-checkout test sources, not gigabytes of game assets
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /package.json
+            /tsconfig.json
+            /next-env.d.ts
+            /next.config.ts
+            /lib/
+            /components/
+            /app/
+            /hooks/
+            /engine/
+            /scripts/
+            /public/kaalyuga/anims/rudra/
+            /public/kaalyuga/rudra/rigged.fbx
+            /public/kaalyuga/parashu/weapon.fbx
+            /public/models/Meshy_AI_Ashen_Warborn_20261025_texture_fbx/Meshy_AI_Ashen_Warborn_20261025_texture.fbx
+            /public/models/Meshy_AI_Ashen_Warborn_20261025_texture_fbx/Meshy_AI_Ashen_Warborn_20261025_texture.png
+            /public/models/Meshy_AI_Bloodforged_Trident_A_1025041928_texture_fbx/Meshy_AI_Bloodforged_Trident_A_1025041928_texture.png
+            /public/animations/pro_melee_axe/
+          persist-credentials: false
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install project dependencies
+        run: npm install --legacy-peer-deps --no-audit --no-fund
+      - name: Validate choreography, animation timing, asset paths and elemental impact
+        run: npm run test:phase1-4
