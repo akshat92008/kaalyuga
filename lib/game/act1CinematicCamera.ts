@@ -55,7 +55,12 @@ export class Act1CinematicCamera {
       this.cancel();
       return NONE;
     }
-    const dt = Number.isFinite(rawDtSec) ? Math.min(0.2, Math.max(0, rawDtSec)) : 0;
+    // A suspended browser tab must never resume inside a stale execution shot.
+    if (!Number.isFinite(rawDtSec) || rawDtSec > 0.35) {
+      this.cancel();
+      return NONE;
+    }
+    const dt = Math.min(0.2, Math.max(0, rawDtSec));
     cue.elapsedSec += dt;
     const progress = Math.min(1, cue.elapsedSec / cue.durationSec);
     if (progress >= 1) {
