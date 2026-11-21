@@ -4257,6 +4257,7 @@ export default function KaliyugaArena() {
     sim.hitstopTimer = 0.07;
     sim.cameraShakeTrauma = Math.min(1, sim.cameraShakeTrauma + 0.58);
     soundEngine.playHit('execute');
+    soundEngine.playVoiceBark('rudra_execute', { priority: 'high', cooldownMs: 7000 });
     spawnShockwave(target.x, target.y, 145, '#ffd86b', 0.38);
     spawnParticles(target.x, target.y - 26, 28, '#ffb833', 220, 4.8, 90);
     spawnParticles(target.x, target.y - 26, 18, '#ff2a4b', 195, 4.4, 80);
@@ -4563,6 +4564,7 @@ export default function KaliyugaArena() {
     gainAstraEnergy(ASTRA_ENERGY_GAINS.EXECUTION);
 
     soundEngine.playHit('execute');
+    soundEngine.playVoiceBark('rudra_execute', { priority: 'high', cooldownMs: 7000 });
     spawnShockwave(brokenEnemy.x, brokenEnemy.y, 290, '#ff4d3b', 0.48);
     spawnSunHaloRing(bloodDemonArtsRef.current, {
       x: brokenEnemy.x,
@@ -5026,6 +5028,8 @@ export default function KaliyugaArena() {
     }
 
     soundEngine.playSwing('heavy', p.stance);
+    soundEngine.playParashuHeavy();
+    soundEngine.playVoiceBark('rudra_heavy', { cooldownMs: 8000 });
     soundEngine.playBreathingStyle(primaryHeavyPalette);
     let hitAny = false;
 
@@ -5101,6 +5105,7 @@ export default function KaliyugaArena() {
             e.vacuumActiveTimer = 0;
             e.activeBossMoveId = undefined;
             spawnShockwave(e.x, e.y, 155, '#ffd86b', 0.38);
+            soundEngine.playVoiceBark('vrikodara_stagger', { priority: 'high', cooldownMs: 6500 });
             spawnFloatingText(e.x, e.y - 96, interruptRes.calloutText, '#ffd86b', 1.18);
           }
         }
@@ -6066,6 +6071,7 @@ export default function KaliyugaArena() {
 
     // Split Dash into crisp distance (160ms duration) + strict i-frame window (130ms)
     p.action = 'dodge';
+    soundEngine.playVoiceBark('rudra_dash', { cooldownMs: 9500 });
     p.actionDuration = DASH_DURATION_SEC;
     p.actionTimer = DASH_DURATION_SEC;
     p.invulnTimer = Math.max(p.invulnTimer, DASH_IFRAME_SEC);
@@ -7965,6 +7971,8 @@ export default function KaliyugaArena() {
               recordQuestEvent('vanquish_wardens', 1);
             }
             soundEngine.playHit('heavy');
+            if (e.type === 'dundubhi') soundEngine.playVoiceBark('dundubhi_death', { priority: 'high' });
+            if (e.type === 'vrikodara') soundEngine.playVoiceBark('vrikodara_death', { priority: 'high' });
 
             // Trigger dramatic Hades Final-Blow Slow-Motion if Boss or last foe in chamber!
             const remainingAlive = sim.enemies.filter((foe) => foe.aiState !== 'ko' && foe.hp > 0).length;
@@ -8556,6 +8564,7 @@ export default function KaliyugaArena() {
 
                 // Step 24: Distinct audio telegraph cues for Vrikodara's 3 signature phase moves!
                 if (e.type === 'vrikodara') {
+                  if (sigMove.id === 'vaitarani_slag_eruption') soundEngine.playVoiceBark('vrikodara_slag', { cooldownMs: 9000 });
                   if (sigMove.id === 'agni_furnace_inhale') {
                     soundEngine.playVrikodaraVacuumTelegraph();
                   } else if (sigMove.id === 'vaitarani_slag_eruption') {
@@ -8564,6 +8573,7 @@ export default function KaliyugaArena() {
                     soundEngine.playVrikodaraEclipseSweepTelegraph();
                   }
                 } else {
+                  if (e.attackKind === 'corridor') soundEngine.playVoiceBark('dundubhi_charge', { cooldownMs: 7500 });
                   soundEngine.playTelegraph();
                 }
               }
