@@ -196,13 +196,38 @@ const base = process.env.GAME_URL || 'http://127.0.0.1:3100';
       null, { timeout: 16000 });
     report.checks.push('Escape skips execution camera while preserving once-only finisher damage and input recovery');
 
-    // A new direct boss room must start an actual game-world camera track.
-    await page.goto(base + '/?debug=1&chamber=4', { waitUntil: 'domcontentloaded', timeout: 60000 });
-    await page.waitForFunction(() => window.__kaliyugaPhaseQA?.cameraKind === 'boss', null, { timeout: 30000 });
+    // Run the ACTUAL pre-fight narrative overlay and enter combat through its
+    // visible ENGAGE DUNDUBHI button. A camera that expires behind dialogue
+    // makes the boss entrance invisible even though the timeline unit test passes.
+    await page.goto(base + '/?debug=1&qaFixtures=1&chamber=4', {
+      waitUntil: 'domcontentloaded', timeout: 60000
+    });
+    await page.waitForFunction(() =>
+      window.__kaliyugaPhaseQA?.state === 'playing' &&
+      typeof window.__kaliyugaPhaseQAFixture?.prepareBossDialogue === 'function',
+      null, { timeout: 30000 }
+    );
+    await page.waitForTimeout(1000); // let the loading overlay disappear
+    await page.evaluate(() => window.__kaliyugaPhaseQAFixture.prepareBossDialogue('dundubhi'));
+    await page.getByRole('button', { name: /ENGAGE DUNDUBHI/i }).waitFor({ timeout: 10000 });
+    const cameraBeforeDialogue = await qa();
+    assert.equal(cameraBeforeDialogue.cameraKind, 'boss');
+    await page.waitForTimeout(950);
+    const cameraDuringDialogue = await qa();
+    assert.ok(
+      Math.abs(cameraDuringDialogue.cameraElapsedSec - cameraBeforeDialogue.cameraElapsedSec) < 0.07,
+      'The boss entrance played invisibly behind narrative dialogue'
+    );
+    await page.getByRole('button', { name: /ENGAGE DUNDUBHI/i }).click();
+    await page.waitForFunction(() => {
+      const q = window.__kaliyugaPhaseQA;
+      return q?.sliceStage === 'combat_arena' &&
+        q.cameraKind === 'boss' && q.cameraElapsedSec > 0.15;
+    }, null, { timeout: 15000 });
     await capture('11-live-dundubhi-boss-entrance');
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => window.__kaliyugaPhaseQA?.cameraKind === null, null, { timeout: 10000 });
-    report.checks.push('actual boss entrance camera runs and skips safely in live game');
+    report.checks.push('Dundubhi entrance is paused behind real dialogue, plays after ENGAGE, and skips safely');
     await capture('12-live-boss-after-skip');
 
     await page.goto(base + '/cinematic-lab', { waitUntil: 'domcontentloaded', timeout: 60000 });
