@@ -133,7 +133,7 @@ export default function MeruCinematicPlayback({scene,onFinish,muted=false}:MeruC
           const bossDt=lastBoss?Math.max(0.015,Math.min(0.04,(now-lastBoss)/1000)):0.033;
           lastBoss=now;
           try{
-            const rendered=boss.updateAndRender(makeMeruBossParams(result.frame,bossDt,scene.boss));
+            const rendered=boss.updateAndRender(makeMeruBossParams(result.frame,bossDt,scene.boss,scene.bossPhase??1));
             if(!rendered)updateRigStatus(false);
           }catch{
             updateRigStatus(false);
