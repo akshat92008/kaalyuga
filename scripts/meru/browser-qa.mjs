@@ -75,6 +75,23 @@ try{
   const dialog=gamePage.getByTestId('meru-boss-cinematic');
   await dialog.waitFor({timeout:90000});
   await gamePage.getByRole('dialog',{name:'Dundubhi QA Authored Entrance cinematic'}).waitFor();
+  // Rendered screenshot must represent an actual animated boss, not an
+  // unnoticed portrait fallback or the initial black loading overlay.
+  const checkRigAndFrame=async(targetPage,label)=>{
+    const selector='[data-testid="meru-boss-cinematic"]';
+    await targetPage.waitForFunction(sel=>{
+      const node=document.querySelector(sel);
+      return node&&node.getAttribute('data-meru-rig-status')!=='loading';
+    },selector,{timeout:30000});
+    const rigStatus=await targetPage.getByTestId('meru-boss-cinematic').getAttribute('data-meru-rig-status');
+    console.log('MERU_RIG_QA: '+label+' real-rig state='+rigStatus);
+    assert.equal(rigStatus,'rigged',label+' failed to display a real 3D model');
+    await targetPage.waitForFunction(()=>{
+      const node=document.querySelector('[data-testid="meru-cinematic-clock"]');
+      return node&&Number.parseFloat(node.textContent||'0')>=2.5;
+    },null,{timeout:30000});
+  };
+  await checkRigAndFrame(gamePage,'dundubhi');
   await gamePage.screenshot({path:join(out,'meru-ingame-dundubhi-intro.png'),animations:'disabled'});
   await gamePage.getByRole('button',{name:'Skip boss cinematic and begin combat'}).click();
   await dialog.waitFor({state:'detached',timeout:15000});
@@ -117,6 +134,7 @@ try{
   });
   assert.equal(vGameResponse?.status(),200);
   await vrikodaraPage.getByRole('dialog',{name:'Vrikodara QA Authored Entrance cinematic'}).waitFor({timeout:90000});
+  await checkRigAndFrame(vrikodaraPage,'vrikodara');
   await vrikodaraPage.screenshot({path:join(out,'meru-ingame-vrikodara-intro.png'),animations:'disabled'});
   await vrikodaraPage.getByRole('button',{name:'Skip boss cinematic and begin combat'}).click();
   await vrikodaraPage.getByTestId('meru-boss-cinematic').waitFor({state:'detached',timeout:15000});
