@@ -52,7 +52,7 @@ export function getAct1ExecutionVisualPlan(variant:ParashuFinisherVariant):Act1E
   // screen-wide spinning finisher. Keep its original 0.35 active contact frame.
   return {
     variant,contactProgress:0.35,focusXOffset:30,focusYOffset:-24,
-    groundShockwaveRadius:66,slashRadius:50,
+    groundShockwaveRadius:42,slashRadius:50,
     slashWidth:24,slashArcSpan:0.72,
     impactBurstScale:0.73,sparkCount:14,flipbookSize:65,
     useGroundedOverheadContact:false,allowSpectralSkyBolts:false,
