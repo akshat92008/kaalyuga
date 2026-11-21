@@ -2701,9 +2701,12 @@ export class WebglDemonSlayerVfxOverlay {
     sr.coreMat.dispose();
   }
 
-  public dispose(): void {
-    if (this.disposed) return;
-    this.disposed = true;
+  /**
+   * Purge previous VFX between deterministic in-arena QA shots. Resource
+   * disposal is identical to shutdown, but shared geometry and the WebGL
+   * renderer remain alive so every next attack starts from a clean frame.
+   */
+  public clearActiveEffects(): void {
     while (this.ribbons.length) {
       const r = this.ribbons.pop();
       if (r) this.disposeRibbon(r);
@@ -2751,6 +2754,16 @@ export class WebglDemonSlayerVfxOverlay {
         s.mesh.material.dispose();
       }
     }
+    this.hasBloomFrame = false;
+    this.floorCtx?.clearRect(0, 0, this.floorCanvas.width, this.floorCanvas.height);
+    this.bloomCtx?.clearRect(0, 0, this.bloomCanvas.width, this.bloomCanvas.height);
+    this.renderer?.clear();
+  }
+
+  public dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.clearActiveEffects();
     this.sparkGeo.dispose();
     this.bloomPass?.dispose();
     this.bloomComposer?.dispose();
