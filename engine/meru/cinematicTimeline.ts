@@ -92,7 +92,7 @@ export function validateCinematic(input: unknown): MeruCinematic {
   if (value.boss !== 'dundubhi' && value.boss !== 'vrikodara') throw new Error('Unsupported boss rig');
   for (const k of ['backgroundUrl','posterUrl']) {
     const str = value[k];
-    if (typeof str !== 'string' || !/^\/(?:videos|kaalyuga\/arena|arenas|assets\\/aistudio)\/[a-zA-Z0-9_./%…-]+$/.test(str) || str.includes('..')) {
+    if (typeof str !== 'string' || !/^\/(?:videos|kaalyuga\/arena|arenas|assets\/aistudio)\/[a-zA-Z0-9_./%…-]+$/.test(str) || str.includes('..')) {
       throw new Error('Invalid local scene asset URL: ' + k);
     }
   }
