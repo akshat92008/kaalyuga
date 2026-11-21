@@ -161,11 +161,11 @@ export default function DundubhiCinematicLab() {
     }
 
     cameraTrackRef.current = new CinematicCameraTrack([
-      { at: 1.4, focusX: 0.5, focusY: 0.70, zoom: 1.08 },
-      { at: 3.3, focusX: 0.48, focusY: 0.65, zoom: 1.21 },
-      { at: 4.9, focusX: 0.52, focusY: 0.68, zoom: 1.26 },
-      { at: 5.6, focusX: 0.5, focusY: 0.70, zoom: 1.12 },
-      { at: 7.1, focusX: 0.5, focusY: 0.75, zoom: 1.04 },
+      { at: 1.4, focusX: 0.5, focusY: 0.62, zoom: 1.04 },
+      { at: 3.3, focusX: 0.48, focusY: 0.59, zoom: 1.12 },
+      { at: 4.9, focusX: 0.52, focusY: 0.61, zoom: 1.17 },
+      { at: 5.6, focusX: 0.5, focusY: 0.62, zoom: 1.10 },
+      { at: 7.1, focusX: 0.5, focusY: 0.65, zoom: 1.02 },
     ], DURATION_SEC);
 
     const image = new Image();
@@ -235,10 +235,12 @@ export default function DundubhiCinematicLab() {
         const shakeY = impact.y;
 
         ctx.save();
+        // Dolly around Dundubhi's upper torso instead of the floor line.
+        // The old 435px pivot pushed his head above the matte at impact zoom.
         ctx.translate(W / 2 + (cameraFrame?.offsetX ?? 0) + shakeX,
-          435 + (cameraFrame?.offsetY ?? 0) + shakeY);
+          305 + (cameraFrame?.offsetY ?? 0) + shakeY);
         ctx.scale(zoom, zoom);
-        ctx.translate(-W / 2, -435);
+        ctx.translate(-W / 2, -305);
         ctx.globalAlpha = opacity;
         if (boss && modelReadyRef.current) {
           if (now - lastBossRender > 32) {
@@ -254,12 +256,12 @@ export default function DundubhiCinematicLab() {
             ctx.imageSmoothingEnabled = true;
             ctx.imageSmoothingQuality = 'high';
             // Sharper 512px render, slightly enlarged on-screen instead of upscaling a 320px boss.
-            ctx.drawImage(boss.canvas, 265, 10, 430, 465);
+            ctx.drawImage(boss.canvas, 290, 75, 380, 385);
           }
         }
         if (!modelReadyRef.current && portraitRef.current?.complete &&
             (portraitRef.current.naturalWidth || 0) > 0) {
-          ctx.drawImage(portraitRef.current, 330, 118, 300, 297);
+          ctx.drawImage(portraitRef.current, 330, 108, 300, 300);
         }
         ctx.restore();
         drawDust(ctx, t);
