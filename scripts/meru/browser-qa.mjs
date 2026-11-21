@@ -58,6 +58,28 @@ try{
     }
   };
   await checkSceneAssets(data);
+  // Capture a combined actual arena MP4/poster + rigged-character PNG, not an
+  // image of only the transparent overlay. File integrity is verified.
+  const pngPromise=page.waitForEvent('download',{timeout:30000});
+  await page.getByRole('button',{name:'Capture current frame PNG'}).click();
+  const pngDownload=await pngPromise;
+  const pngPath=join(out,'meru-exported-composed-frame.png');
+  await pngDownload.saveAs(pngPath);
+  const pngBytes=await readFile(pngPath);
+  assert.ok(pngBytes.length>10000,'Composed cinematic PNG must contain rendered content');
+  assert.deepEqual([...pngBytes.subarray(0,8)],[137,80,78,71,13,10,26,10]);
+  // A reproducible local performance report helps the developer run QA on an
+  // actual Mac; CI only verifies output shape, not any hardware FPS threshold.
+  const perfPromise=page.waitForEvent('download',{timeout:15000});
+  await page.getByRole('button',{name:'Export local frame pacing report'}).click();
+  const perfDownload=await perfPromise;
+  const perfPath=join(out,'meru-browser-frame-pacing.json');
+  await perfDownload.saveAs(perfPath);
+  const perfData=JSON.parse(await readFile(perfPath,'utf8'));
+  assert.equal(perfData.format,'meru-frame-pacing-v1');
+  assert.ok(perfData.frames.sampleCount>0,'Browser frame-pacing report must have real RAF samples');
+  assert.ok(perfData.frames.p95Ms>=0);
+  console.log('MERU_CAPTURE_QA: composed PNG and local frame-pacing export valid');
   // Independently authored Phase II scene must not overwrite Vrikodara's
   // entrance and must reuse the actual blood-eclipse MP4/poster assets.
   await page.getByLabel('Select boss cinematic').selectOption('vrikodara-phase2');
