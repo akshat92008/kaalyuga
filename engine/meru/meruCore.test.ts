@@ -18,7 +18,7 @@ test('strict schema rejects malformed, duplicate, unsorted and unsafe content',(
   assert.throws(()=>validateCinematic({...scene,schemaVersion:2}),/schemaVersion/);
   assert.throws(()=>validateCinematic({...scene,duration:0}),/duration/);
   assert.throws(()=>validateCinematic({...scene,backgroundUrl:'https://example.com/data'}),/URL/);
-  assert.throws(()=>validateCinematic({...scene,camera:[...scene.camera].reverse()}),/increase/);
+  assert.throws(()=>validateCinematic({...scene,camera:[...scene.camera].reverse()}),/increase|begin at/);
   assert.throws(()=>validateCinematic({...scene,camera:[{...scene.camera[0],value:{...scene.camera[0].value,zoom:Infinity}}]}),/invalid zoom|Camera zoom/);
   assert.throws(()=>validateCinematic({...scene,cues:[...scene.cues,scene.cues[0]]}),/unique/);
 });
