@@ -52,5 +52,5 @@ test('execution impact director never emits non-finite weapon impact coordinates
 
 test('execution signature can be inspected without a WebGL device', () => {
   const spec = executionImpactSignature('impaling_lunge');
-  assert.equal(spawnExecutionImpactFx(null, 'impaling_lunge', 0, 0, 0), spec);
+  assert.deepEqual(spawnExecutionImpactFx(null, 'impaling_lunge', 0, 0, 0), spec);
 });
