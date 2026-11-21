@@ -197,7 +197,8 @@ import {
 } from '@/lib/game/act1WeaponPoseTrail';
 import { getAct1ExecutionVisualPlan } from '@/lib/game/act1ExecutionVisualPlan';
 import {
-  sampleAct1ExecutionVictimPose, resolveAct1FinisherContactAnchor,
+  sampleAct1ExecutionVictimPose, sampleAct1ExecutionHeroRoot,
+  resolveAct1FinisherContactAnchor,
   type Act1ExecutionChoreographyToken,
 } from '@/lib/game/act1ExecutionChoreography';
 import { shouldSpawnCombatCallout } from '@/lib/game/act1CombatCalloutPolicy';
@@ -4718,9 +4719,13 @@ export default function KaliyugaArena() {
     soundEngine.playHit('execute');
     soundEngine.playVoiceBark('rudra_execute', { priority: 'high', cooldownMs: 7000 });
     const executionVisual = getAct1ExecutionVisualPlan(finisherSpec.variant);
+    const visualRoot = sampleAct1ExecutionHeroRoot(finisherChoreographyRef.current, {
+      action:p.action, attackSerial:p.attackSerial, chamberIndex:sim.chamberIndex,
+      progress:p.weaponSwingProgress,
+    });
     const bladePoint = projectWeaponHeadToWorld({
       uv: rudra3dRef.current?.getProjectedParashuHead() ?? null,
-      actorX: p.x, actorY: p.y,
+      actorX: p.x + visualRoot.offsetX, actorY: p.y + visualRoot.offsetY,
       drawSize: HEROIC_DRAW_SIZES.rudra,
       footAnchorRatio: rudra3dRef.current?.footAnchorRatio ?? 0.8,
     });
@@ -7119,6 +7124,10 @@ export default function KaliyugaArena() {
       zoom: number; unboostedZoom: number; boost: number;
       focusWeight: number; atMs: number;
     }> = [];
+    const executionHeroTrace: Array<{
+      variant: ParashuFinisherVariant; attackSerial: number;
+      offsetX: number; offsetY: number; progress: number;
+    }> = [];
     const executionVictimTrace: Array<{
       enemyId: number; variant: ParashuFinisherVariant; attackSerial: number;
       forceHurt: boolean; offsetX: number; offsetY: number; progress: number;
@@ -7204,6 +7213,7 @@ export default function KaliyugaArena() {
             weaponPoseTrace: weaponPoseTrace.slice(),
             cameraShotTrace: cameraShotTrace.slice(),
             executionVictimTrace: executionVictimTrace.slice(),
+            executionHeroTrace: executionHeroTrace.slice(),
             // Production-safe opt-in read-only combat evidence for the real
             // browser QA runner. No gameplay mutation or per-frame allocations.
             combat: {
@@ -11862,6 +11872,27 @@ export default function KaliyugaArena() {
           if (victimMoving) ctx.restore();
         } else if (act.kind === 'player') {
           const p = sim.player;
+          const heroRoot = sampleAct1ExecutionHeroRoot(finisherChoreographyRef.current, {
+            action:p.action, attackSerial:p.attackSerial, chamberIndex:sim.chamberIndex,
+            progress:p.weaponSwingProgress,
+          });
+          const heroRootActive = Math.abs(heroRoot.offsetX)>0.01 ||
+            Math.abs(heroRoot.offsetY)>0.01;
+          if (heroRootActive) {
+            // Visual only: the existing player AI, collision, hitboxes, and
+            // simulation-facing coordinate remain authoritative.
+            ctx.save();
+            ctx.translate(heroRoot.offsetX, heroRoot.offsetY);
+            if (perfTelemetryEnabled && finisherChoreographyRef.current) {
+              const t=finisherChoreographyRef.current;
+              executionHeroTrace.push({
+                variant:t.variant,attackSerial:t.attackSerial,
+                offsetX:heroRoot.offsetX,offsetY:heroRoot.offsetY,
+                progress:p.weaponSwingProgress,
+              });
+              if(executionHeroTrace.length>80)executionHeroTrace.shift();
+            }
+          }
           const speedMag = Math.hypot(p.vx, p.vy);
           const isMoving = speedMag > 14;
           const stridePhase = p.walkDistance * 0.085;
@@ -12106,6 +12137,8 @@ export default function KaliyugaArena() {
               }
             }
           }
+          // All canvas visuals for this actor share the same tiny root step.
+          if (heroRootActive) ctx.restore();
           // Other elemental and boss effects remain in the layered WebGL pass.
         }
       });
