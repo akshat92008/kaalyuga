@@ -38,6 +38,7 @@ import {
   computeGodOfWarHeavyStyleSpec,
 } from '@/lib/game/rules';
 import { soundEngine } from '@/lib/game/audio';
+import { heavyElementFromStance, spawnHeavyElementalRelease } from '@/lib/game/elementalImpactDirector';
 import {
   loadAndProcessSprite,
   getProcessedSpriteSync,
@@ -4810,61 +4811,30 @@ export default function KaliyugaArena() {
 
         // Tier 2 Heavy Unleash: Explosive AAA Stance Spectacle + Heavy Iron Swing SFX
         soundEngine.playHeavyIronSwing();
-        if (heavyStyleId === 'pralaya_earth_shatter') {
-          webglDemonSlayerVfxRef.current?.spawnSolarFlameWheel({
-            x: syncImpactX,
-            y: syncImpactY - 20,
-            angle: heavySlashAngle,
-            radius: 215 + orbsUsed * 18,
-            palette: 'hinokami',
-            duration: 0.72,
-          });
-          webglDemonSlayerVfxRef.current?.spawnShockwaveRing({
-            x: syncImpactX,
-            y: syncImpactY,
-            radius: 195 + orbsUsed * 20,
-            palette: 'hinokami',
-            duration: 0.46,
-          });
-          webglDemonSlayerVfxRef.current?.spawnClashStarburst({
-            x: syncImpactX,
-            y: syncImpactY - 24,
-            scale: 1.55,
-            palette: 'hinokami',
-            duration: 0.4,
-          });
-          spawnShockwave(syncImpactX, syncImpactY, 165 + orbsUsed * 20, '#ff5418', 0.42);
-          spawnParticles(syncImpactX, syncImpactY - 18, 28, '#ff7b24', 285, 5.2, 110);
-          simRef.current.hitstopTimer = Math.max(simRef.current.hitstopTimer, 0.068);
-        } else if (heavyStyleId === 'sudarshana_vortex') {
-          webglDemonSlayerVfxRef.current?.spawnWindGaleCrescents({
-            x: curP.x,
-            y: curP.y - 20,
-            angle: heavySlashAngle,
-            radius: heavyCleaveRadius * 1.12,
-            duration: 0.62,
-          });
-          spawnShockwave(curP.x, curP.y, heavyCleaveRadius * 1.02, '#10b981', 0.36);
-        } else {
-          // Thrust Heavy: Rebuilt GLSL Plasma Thunderclap Bolt + crisp electric slash
-          webglDemonSlayerVfxRef.current?.spawnThunderZigzag({
-            x1: curP.x,
-            y1: curP.y - 22,
-            x2: syncImpactX + Math.cos(heavySlashAngle) * 195,
-            y2: syncImpactY - 22 + Math.sin(heavySlashAngle) * 140,
-            palette: 'thunder',
-            duration: 0.62,
-            width: 28,
-            withFloorRing: true,
-          });
-        }
-        webglDemonSlayerVfxRef.current?.spawnSparkBurst({
+        const heavyElement = curP.transformTimer > 0
+          ? 'guardian'
+          : heavyStyleId === 'sudarshana_vortex'
+          ? 'vayu'
+          : heavyElementFromStance(curP.stance);
+        // All five elements now share the physical active-contact point, but not generic geometry:
+        // Agni = flame wheel; Varuna = water serpent; Vayu = emerald gale;
+        // Vajra = branching bolt; Kala-Bhairava = crimson astral axe.
+        const heavyRelease = spawnHeavyElementalRelease(webglDemonSlayerVfxRef.current, {
           x: syncImpactX,
-          y: syncImpactY - 22,
-          count: 12 + orbsUsed * 2,
-          speed: 410,
-          palette: primaryHeavyPalette,
+          y: syncImpactY,
+          angle: heavySlashAngle,
+          radius: heavyCleaveRadius * 0.95,
+          energyOrbs: orbsUsed,
+          element: heavyElement,
         });
+        const impactColor =
+          heavyElement === 'vayu' ? '#10b981' :
+          heavyElement === 'vajra' ? '#fde047' :
+          heavyElement === 'varuna' ? '#38e8ff' :
+          heavyElement === 'guardian' ? '#ed334f' : '#ff5418';
+        spawnShockwave(syncImpactX, syncImpactY, heavyRelease.radius * 0.76, impactColor, 0.36);
+        spawnParticles(syncImpactX, syncImpactY - 18, 12 + orbsUsed * 2, impactColor, 280, 4.6, 95);
+        simRef.current.hitstopTimer = Math.max(simRef.current.hitstopTimer, 0.062);
       },
     };
 
