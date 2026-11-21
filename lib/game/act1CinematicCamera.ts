@@ -24,6 +24,18 @@ export function preserveAct1ExecutionContactZoom(currentZoom: number, baseZoom: 
   return Math.max(0.72, Math.min(1.20, Math.max(current, base + 0.055)));
 }
 
+/**
+ * Remove only the prior frame's *actual* cinematic overlay before advancing
+ * the underlying gameplay camera. Without this, the camera feeds its own zoom
+ * boost back into computeDynamicArenaCameraZoom and hits the clamp in 2 frames.
+ * Other gameplay camera impulses remain part of the underlying value.
+ */
+export function removePreviousAct1CinematicZoom(presentedZoom: number, previousBoost: number): number {
+  if (!Number.isFinite(presentedZoom)) return 0.94;
+  const safeBoost = Number.isFinite(previousBoost) ? Math.max(-0.06, Math.min(0.15, previousBoost)) : 0;
+  return Math.max(0.72, Math.min(1.20, presentedZoom - safeBoost));
+}
+
 /** The sample has its own eased fade envelope: never multiply it by dt again. */
 export function composeAct1CinematicZoom(baseZoom: number, cueZoomBoost: number): number {
   if (!Number.isFinite(baseZoom)) return 1;
