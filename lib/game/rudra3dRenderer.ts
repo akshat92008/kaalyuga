@@ -231,6 +231,11 @@ export class Rudra3DRenderer {
   private frameCache: Map<string, HTMLCanvasElement> = new Map();
   private celMaterials: THREE.Material[] = [];
   private parashuAuraMat: THREE.ShaderMaterial | null = null;
+  // Geometry-derived head marker is parented directly to the actual Parashu
+  // mesh, which in turn is parented to Rudra's skinned right-hand bone.
+  private parashuHeadMarker: THREE.Object3D | null = null;
+  private projectedParashuHead: { x: number; y: number } | null = null;
+  private readonly parashuHeadFrameCache = new Map<string, {x: number; y: number} | null>();
   private studioRimLight: THREE.DirectionalLight | null = null;
   private disposed = false;
   private prewarmQueue: Array<() => void> = [];
@@ -394,6 +399,25 @@ export class Rudra3DRenderer {
           const maxDim = Math.max(0.001, wepSize.x, wepSize.y, wepSize.z);
           const desiredWorldLen = 1.04;
           const localWepScale = desiredWorldLen / (maxDim * handScale);
+
+          // Marker is computed once from the *actual FBX geometry bounds*.
+          // The longest local axis is the handle/shaft. Its far end, not a
+          // hard-coded screen-space crescent, follows the animated right hand.
+          // This is the blade-head endpoint candidate; detailed edge/teeth
+          // calibration remains a Blender validation milestone.
+          const tipCenter = new THREE.Vector3();
+          wepBox.getCenter(tipCenter);
+          const dominantAxis = wepSize.x >= wepSize.y && wepSize.x >= wepSize.z
+            ? 'x'
+            : wepSize.y >= wepSize.z ? 'y' : 'z';
+          const tipMin = wepBox.min[dominantAxis];
+          const tipMax = wepBox.max[dominantAxis];
+          tipCenter[dominantAxis] = Math.abs(tipMax) >= Math.abs(tipMin) ? tipMax : tipMin;
+          const bladeHead = new THREE.Object3D();
+          bladeHead.name = '__ACT1_PARASHU_BLADE_HEAD_QA';
+          bladeHead.position.copy(tipCenter);
+          weaponGroup.add(bladeHead);
+          this.parashuHeadMarker = bladeHead;
 
           const weaponSocket = new THREE.Group();
           weaponGroup.scale.setScalar(localWepScale);
@@ -569,6 +593,11 @@ export class Rudra3DRenderer {
     this.enqueuePrewarmTasks(tasks);
   }
 
+  /** Normalized coordinates in the EXACT cached 3D sprite last drawn. */
+  public getProjectedParashuHead(): { x: number; y: number } | null {
+    return this.projectedParashuHead;
+  }
+
   public updateAndRender(input: RudraRenderInput): boolean {
     if (!this.isReady) return false;
     const stepDt = Math.max(0, Math.min(0.1, input.dt || 0.016));
@@ -622,7 +651,10 @@ export class Rudra3DRenderer {
     stance = 'smash',
     susanooActive = false
   ): HTMLCanvasElement | null {
-    if (!this.isReady || !this.model || !this.mixer) return null;
+    if (!this.isReady || !this.model || !this.mixer) {
+      this.projectedParashuHead = null;
+      return null;
+    }
 
     const isSoft = isSoftwareWebGLRenderer();
     const yawBuckets = isSoft ? 6 : 12;
@@ -670,6 +702,7 @@ export class Rudra3DRenderer {
       // Refresh frequently reused combat/idle frames rather than evicting hot animations.
       this.frameCache.delete(cacheKey);
       this.frameCache.set(cacheKey, cached);
+      this.projectedParashuHead = this.parashuHeadFrameCache.get(cacheKey) ?? null;
       return cached;
     }
 
@@ -742,6 +775,25 @@ export class Rudra3DRenderer {
     this.wrapper.rotation.y = Math.PI * 0.5 - quantizedYaw;
     this.wrapper.rotation.x = 0;
 
+    // Sample the weapon pose only after the same quantized animation clip and
+    // yaw used for the baked character have been applied. This avoids a
+    // detached trail when the 3D sprite frame is served from the hot cache.
+    this.projectedParashuHead = null;
+    if (this.parashuHeadMarker) {
+      this.wrapper.updateMatrixWorld(true);
+      this.camera.updateMatrixWorld(true);
+      const ndc = this.parashuHeadMarker.getWorldPosition(new THREE.Vector3()).project(this.camera);
+      if ([ndc.x, ndc.y, ndc.z].every(Number.isFinite) &&
+          ndc.z >= -1 && ndc.z <= 1 &&
+          ndc.x >= -1.04 && ndc.x <= 1.04 &&
+          ndc.y >= -1.04 && ndc.y <= 1.04) {
+        this.projectedParashuHead = {
+          x: (ndc.x + 1) * 0.5,
+          y: (1 - ndc.y) * 0.5,
+        };
+      }
+    }
+
     renderer.render(this.scene, this.camera);
 
     const rimRgba = susanooActive
@@ -769,8 +821,10 @@ export class Rudra3DRenderer {
       const oldest = this.frameCache.keys().next().value;
       if (!oldest) break;
       this.frameCache.delete(oldest);
+      this.parashuHeadFrameCache.delete(oldest);
     }
     this.frameCache.set(cacheKey, baked);
+    this.parashuHeadFrameCache.set(cacheKey, this.projectedParashuHead);
 
     return baked;
   }
@@ -783,6 +837,9 @@ export class Rudra3DRenderer {
       this.prewarmTimer = null;
     }
     this.frameCache.clear();
+    this.parashuHeadFrameCache.clear();
+    this.parashuHeadMarker = null;
+    this.projectedParashuHead = null;
   }
 }
 
