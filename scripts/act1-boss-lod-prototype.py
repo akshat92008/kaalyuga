@@ -69,6 +69,16 @@ def render_preview(target, input_meshes):
     scene.render.engine = "CYCLES"
     scene.cycles.device = "CPU"
     scene.cycles.samples = 8
+    # Ubuntu's Blender package was built without OpenImageDenoiser. Asking
+    # Cycles for OIDN makes the entire -b process exit nonzero after export.
+    # Diagnostic previews use raw 8-sample CPU renders instead.
+    if hasattr(scene.cycles, "use_denoising"):
+        scene.cycles.use_denoising = False
+    for layer in scene.view_layers:
+        if hasattr(layer, "cycles") and hasattr(layer.cycles, "use_denoising"):
+            layer.cycles.use_denoising = False
+    if hasattr(scene.render, "use_compositing"):
+        scene.render.use_compositing = False
     scene.render.resolution_x = 480
     scene.render.resolution_y = 480
     scene.render.resolution_percentage = 100
@@ -99,11 +109,17 @@ def render_preview(target, input_meshes):
     light_data.size = max(span * 2, 1)
     target.parent.mkdir(parents=True, exist_ok=True)
     scene.render.filepath = str(target.resolve())
-    bpy.ops.render.render(write_still=True)
-    # The extra camera/light must never become part of the released GLB.
-    bpy.data.objects.remove(cam, do_unlink=True)
-    bpy.data.objects.remove(light_obj, do_unlink=True)
-    return target.is_file() and target.stat().st_size > 1024
+    try:
+        bpy.ops.render.render(write_still=True)
+    finally:
+        # Even a render exception cannot contaminate the game-ready GLB with
+        # a diagnostic camera/light or leave the next preview misframed.
+        scene.camera = None
+        bpy.data.objects.remove(cam, do_unlink=True)
+        bpy.data.objects.remove(light_obj, do_unlink=True)
+    if not target.is_file() or target.stat().st_size <= 1024:
+        raise RuntimeError("Preview did not write a PNG")
+    return True
 
 
 def import_source(path):
