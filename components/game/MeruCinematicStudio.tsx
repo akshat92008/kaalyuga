@@ -37,6 +37,8 @@ export default function MeruCinematicStudio(){
   const readyRef=useRef(false);
   const rafRef=useRef(0);
   const lastRef=useRef(0);
+  const tierRef=useRef(tier);
+  tierRef.current=tier;
 
   const loadScene=useCallback((incoming:unknown)=>{
     try{
@@ -64,6 +66,8 @@ export default function MeruCinematicStudio(){
     let disposed=false;
     readyRef.current=false;
     lastRef.current=0;
+    let lastBossFrame=0;
+    let slowRigTimer:ReturnType<typeof setTimeout>|null=null;
     setStatus('Initializing original '+scene.boss+' rig…');
     const portrait=new Image();portrait.src=GAME_ASSETS.portraits[scene.boss];portraitRef.current=portrait;
     for(const [kind,url] of Object.entries({drum:GAME_ASSETS.sfx.warDrum,roar:GAME_ASSETS.sfx.bossRoarDeep,impact:GAME_ASSETS.sfx.weaponSmash})){
@@ -72,11 +76,22 @@ export default function MeruCinematicStudio(){
     try{
       const boss=new Boss3DRenderer(384);
       bossRef.current=boss;
-      void boss.waitForBossReady(scene.boss,12000).then(ok=>{
+      // A slow machine should not be permanently stuck on portrait mode just
+      // because FBX + PBR textures take more than twelve seconds to download.
+      slowRigTimer=window.setTimeout(()=>{
+        if(!disposed&&!readyRef.current)setStatus('Still loading original '+scene.boss+' 3D model…');
+      },12000);
+      void boss.ensureBossLoaded(scene.boss).then(async()=>{
+        const ok=await boss.waitForBossReady(scene.boss,0);
         if(disposed)return;
+        if(slowRigTimer!==null)window.clearTimeout(slowRigTimer);
         readyRef.current=ok;
         setStatus(ok?'Original '+scene.boss+' 3D rig loaded':'Rig unavailable: original portrait fallback');
-      }).catch(()=>{if(!disposed)setStatus('Rig loading failed: portrait fallback');});
+      }).catch(()=>{
+        if(disposed)return;
+        if(slowRigTimer!==null)window.clearTimeout(slowRigTimer);
+        setStatus('Rig loading failed: portrait fallback');
+      });
     }catch{
       setStatus('WebGL unavailable: portrait fallback');
     }
@@ -95,17 +110,20 @@ export default function MeruCinematicStudio(){
       const ctx=canvasRef.current?.getContext('2d');
       const boss=bossRef.current;
       if(ctx){
-        if(readyRef.current&&boss){
+        const budget=GRAPHICS_PRESETS[tierRef.current];
+        if(readyRef.current&&boss&&now-lastBossFrame>=1000/budget.maxCharacterRenderFps){
+          lastBossFrame=now;
           try{boss.updateAndRender(makeMeruBossParams(t,Math.max(0.015,dt),sceneRef.current.boss,sceneRef.current.bossPhase??1));}
           catch{readyRef.current=false;setStatus('3D renderer failed: portrait fallback');}
         }
-        paintMeruFrame(ctx,t,sceneRef.current,boss,readyRef.current,portraitRef.current);
+        paintMeruFrame(ctx,t,sceneRef.current,boss,readyRef.current,portraitRef.current,budget.particleMultiplier);
       }
       rafRef.current=requestAnimationFrame(loop);
     };
     rafRef.current=requestAnimationFrame(loop);
     return ()=>{
       disposed=true;cancelAnimationFrame(rafRef.current);
+      if(slowRigTimer!==null)window.clearTimeout(slowRigTimer);
       bossRef.current?.dispose();bossRef.current=null;
       for(const sound of Object.values(audioRef.current)){sound.pause();sound.src='';}
       audioRef.current={};
@@ -179,7 +197,7 @@ export default function MeruCinematicStudio(){
     catch(e){setError(e instanceof Error?e.message:'Invalid JSON');}
   };
   const selected=sampleCinematic(scene,time);
-  const resolution=GRAPHICS_PRESETS[tier].resolutionScale;
+  const previewBudget=GRAPHICS_PRESETS[tier];
 
   return <main className="min-h-screen bg-[#0b090e] text-[#f0dfc9] px-3 py-6 sm:px-8">
     <div className="mx-auto max-w-7xl space-y-5">
@@ -199,7 +217,7 @@ export default function MeruCinematicStudio(){
             <video ref={videoRef} className={'absolute inset-0 w-full h-full object-cover transition-opacity duration-700 '+(videoDecoded?'opacity-100':'opacity-0')} src={scene.backgroundUrl} poster={scene.posterUrl} muted loop playsInline preload="metadata" onLoadedData={()=>setVideoDecoded(true)} onError={()=>setVideoDecoded(false)} data-meru-video-status={videoDecoded?'decoded':'poster'} aria-label="Scene background video"/>
             <canvas ref={canvasRef} width={W} height={H} className="pointer-events-none absolute inset-0 w-full h-full" aria-label="Live cinematic character preview"/>
             <div className="absolute left-4 top-3 text-xs uppercase tracking-widest text-[#edc08d]">Camera A · {scene.title}</div>
-            <div className="absolute bottom-3 left-4 rounded bg-black/60 px-2 py-1 text-xs">Preview quality: {Math.round(resolution*100)}% budget</div>
+            <div className="absolute bottom-3 left-4 rounded bg-black/60 px-2 py-1 text-xs">Preview: {previewBudget.maxCharacterRenderFps} fps rig cap · {Math.round(previewBudget.particleMultiplier*100)}% ash budget</div>
           </div>
           <div className="flex items-center gap-3 flex-wrap">
             <button onClick={toggle} className="rounded bg-[#b86a39] px-5 py-2 text-sm font-semibold text-white">{playing?'Pause':'Play scene'}</button>
