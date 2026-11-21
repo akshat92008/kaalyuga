@@ -39,7 +39,7 @@ try {
     });
     page.on('requestfailed', request =>
       failuresDuringNavigation.push({url:request.url().slice(0,170),reason:request.failure()?.errorText}));
-    let ready=false, telemetry=null, state=null;
+    let ready=false, telemetry=null, state=null, inputGate=null;
     let start = Date.now();
     try {
       await page.goto(base+'/?autostart=1&chamber='+chamber+'&perf=1',
@@ -57,8 +57,40 @@ try {
         const qaButton = page.getByTestId('act1-quality-profile');
         const clicks = preset === 'performance' ? 1 : 2;
         for (let j=0;j<clicks;j++) await qaButton.click({timeout:20000});
-        await page.getByTestId('hud-controls-btn').click({timeout:20000});
       }
+      // This checks the *applied engine tier*, not merely the button caption.
+      await page.waitForFunction(
+        desired => window.__KALIYUGA_ACT1_PERF__?.graphicsTier === desired,
+        preset, {timeout:20000}
+      );
+      // Actual input-isolation check: the Controls popover pauses the game.
+      // With it open, J/K/Q MUST NOT change combat actions or spend Astra.
+      await page.waitForFunction(
+        () => window.__KALIYUGA_ACT1_PERF__?.combat?.modalPaused === true,
+        null, {timeout:20000}
+      );
+      const beforeMenu = await page.evaluate(() => window.__KALIYUGA_ACT1_PERF__.combat);
+      for (const key of ['j','k','q']) await page.keyboard.press(key);
+      await page.waitForTimeout(750);
+      const duringMenu = await page.evaluate(() => window.__KALIYUGA_ACT1_PERF__?.combat);
+      if (!duringMenu ||
+          beforeMenu.attackSerial !== duringMenu.attackSerial ||
+          beforeMenu.astraEnergy !== duringMenu.astraEnergy) {
+        throw new Error('Blocked menu leaked a combat key into Rudra state');
+      }
+      // Escape must close the overlay without pausing the game, then J must work.
+      await page.keyboard.press('Escape');
+      await page.waitForFunction(
+        () => window.__KALIYUGA_ACT1_PERF__?.combat?.modalPaused === false,
+        null, {timeout:20000}
+      );
+      await page.keyboard.press('j');
+      await page.waitForFunction(
+        previous => (window.__KALIYUGA_ACT1_PERF__?.combat?.attackSerial || 0) > previous,
+        beforeMenu.attackSerial, {timeout:20000}
+      );
+      inputGate={blockedKeysChecked:['j','k','q'], modalPaused:true,
+        escapeRestoredPlay:true, lightAttackAcceptedAfterClose:true};
       await page.keyboard.down('d');
       await page.waitForTimeout(300);
       await page.keyboard.up('d');
@@ -95,7 +127,7 @@ try {
       await page.screenshot({path:path.join(outDir,'act1-ch'+chamber+'.png'),
            animations:'disabled', timeout:45000});
     } catch (e) { errors.push('capture: '+String(e.message||e).slice(0,200)); }
-    const record={chamber,preset,ready,elapsedMs:Date.now()-start,telemetry,state,
+    const record={chamber,preset,ready,elapsedMs:Date.now()-start,telemetry,state,inputGate,
        pageErrors:errors.slice(0,30),
        httpErrors:misses.slice(0,50),
        networkFailures:failuresDuringNavigation.slice(0,40)};
