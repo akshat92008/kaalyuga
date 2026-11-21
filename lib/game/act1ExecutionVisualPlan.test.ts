@@ -38,6 +38,6 @@ test('All finisher hit cues remain at the existing guaranteed single-contact fra
 
 test('Contact starbursts no longer swallow Rudra at the real isometric camera scale', () => {
  for (const variant of ['downward_crush','spin_360_cleave','impaling_lunge'] as const) {
-   assert.ok(getAct1ExecutionVisualPlan(variant).impactBurstScale < 0.9);
+   assert.ok(getAct1ExecutionVisualPlan(variant).impactBurstScale <= 0.5);
  }
 });
