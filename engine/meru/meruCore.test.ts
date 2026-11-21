@@ -210,3 +210,41 @@ test('authored entrance impacts align with their visual beat and remain in camer
       scene.id+' only uses palette-authored, bounded ink impact effects');
   }
 });
+
+test('real rig pose tracks are time-interpolated on every shipped boss scene and backward compatible',()=>{
+  for(const boss of ['dundubhi','vrikodara'] as const){
+    for(const scene of [boss==='dundubhi'?createDundubhiScene():createVrikodaraScene(),createBossPhaseScene(boss,2),createBossPhaseScene(boss,3)]){
+      assert.ok(scene.pose && scene.pose.length>=4,scene.id+' needs an authored FBX pose track');
+      const sampled=sampleCinematic(scene,scene.pose![2].time);
+      assert.ok(sampled.pose,scene.id+' must sample a rig pose');
+      assert.ok(Math.abs(sampled.pose!.rightArmLift)>0.1,scene.id+' authored weapon lift should be non-neutral');
+      assert.ok(sampled.pose!.rightArmLift<=0.9&&sampled.pose!.rightArmLift>=-0.9);
+      for(let t=0;t<scene.duration;t+=0.037){
+        const frame=sampleCinematic(scene,t);
+        assert.ok(frame.pose);
+        for(const angle of Object.values(frame.pose!))assert.ok(Number.isFinite(angle));
+      }
+    }
+  }
+  const legacy=createDundubhiScene();
+  delete legacy.pose;
+  const roundtrip=validateCinematic(legacy);
+  assert.equal(roundtrip.pose,undefined);
+  assert.equal(sampleCinematic(roundtrip,2).pose,undefined);
+});
+test('out-of-range skeletal joints, malformed keys, and unsorted authored poses cannot enter game',()=>{
+  const original=createVrikodaraScene();
+  assert.throws(()=>validateCinematic({...original,pose:original.pose!.map((k,i)=>i===1?{...k,value:{...k.value,rightArmLift:1.9}}:k)}),/joint offset/);
+  assert.throws(()=>validateCinematic({...original,pose:[...original.pose!].reverse()}),/increase|begin at/);
+  assert.throws(()=>validateCinematic({...original,pose:[{time:0,value:{...original.pose![0].value,torsoLean:NaN}}]}),/invalid torsoLean/);
+  const out=validateCinematic(original);
+  out.pose![0].value.torsoYaw=0.4;
+  assert.equal(original.pose![0].value.torsoYaw,0,'validation must deep-clone the joint tracks');
+});
+test('step easing makes a direct movie-camera cut, not a false video parallax move',()=>{
+  const original=createDundubhiScene();
+  const start=original.camera[0],stop=original.camera[1];
+  const scene=validateCinematic({...original,camera:[{...start,ease:'step'},stop,...original.camera.slice(2)]});
+  assert.equal(sampleCinematic(scene,stop.time-0.001).camera.zoom,start.value.zoom);
+  assert.equal(sampleCinematic(scene,stop.time).camera.zoom,stop.value.zoom);
+});
