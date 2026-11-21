@@ -12522,6 +12522,7 @@ export default function KaliyugaArena() {
       <canvas
         ref={canvasRef}
         data-testid="kaliyuga-canvas"
+        data-chamber-id={hud.chamberId}
         onMouseMove={(e) => {
           const rect = e.currentTarget.getBoundingClientRect();
           const sx = e.clientX - rect.left;

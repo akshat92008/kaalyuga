@@ -19,8 +19,13 @@ async function main() {
   });
   try {
     const base = process.env.GAME_URL || 'http://127.0.0.1:3000';
-    for (const chamber of [1, 4, 8]) {
-      await page.goto(base + '/?chamber=' + chamber, { waitUntil: 'domcontentloaded' });
+    await page.goto(base + '/?chamber=1', { waitUntil: 'domcontentloaded' });
+    for (let chamber = 1; chamber <= 8; chamber++) {
+      if (chamber > 1) {
+        await page.getByTestId('hud-controls-btn').click();
+        await page.getByRole('button', { name: new RegExp('^CH ' + chamber + '(?: |$)') }).click();
+      }
+      await page.locator('[data-testid="kaliyuga-canvas"][data-chamber-id="' + chamber + '"]').waitFor({ timeout: 90000 });
       await page.getByTestId('hud-pause-btn').waitFor({ timeout: 90000 });
       await page.getByTestId('chamber-loader').waitFor({ state: 'hidden', timeout: 90000 });
       await page.keyboard.press('KeyJ');
@@ -37,9 +42,12 @@ async function main() {
       });
       if (timing.state !== 'playing') throw new Error('Room ' + chamber + ' ended in ' + timing.state);
       result.rooms.push({ chamber, ...timing });
+      console.log('Chamber', chamber, JSON.stringify(timing));
       await page.screenshot({ path: path.join(output, 'chamber-' + chamber + '.png') });
       await page.getByTestId('hud-pause-btn').click();
       await page.waitForFunction(() => document.body.dataset.state === 'paused');
+      await page.getByRole('button', { name: 'RESUME [ESC]' }).click();
+      await page.waitForFunction(() => document.body.dataset.state === 'playing');
     }
     if (result.errors.length) throw new Error(result.errors.join('\n'));
   } finally {

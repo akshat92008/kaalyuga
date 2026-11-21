@@ -36,7 +36,7 @@ jobs:
       - run: npm test
       - run: npm run typecheck
       - run: npm run build
-      - name: Smoke-test the first chamber and both boss rooms
+      - name: Exercise eight chamber transitions and pause controls
         run: |
           npm install --prefix "$RUNNER_TEMP/act1-browser" --no-audit --no-fund playwright-core@1.55.0
           npm start > "$RUNNER_TEMP/act1-server.log" 2>&1 &
