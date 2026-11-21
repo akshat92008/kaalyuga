@@ -4775,90 +4775,44 @@ export default function KaliyugaArena() {
         contactX, contactY, 0.026, '#ffb35e'
       );
     } else {
-      // The spinning execution keeps its broad legacy circular set piece.
-      // It still needs animation and screenshot review before release.
-    spawnShockwave(brokenEnemy.x, brokenEnemy.y, 290, '#ff4d3b', 0.48);
-    spawnSunHaloRing(bloodDemonArtsRef.current, {
-      x: brokenEnemy.x,
-      y: brokenEnemy.y - 22,
-      radius: 196,
-      palette: 'sun',
-    });
-    spawnHinokamiSlashArc(bloodDemonArtsRef.current, {
-      x: brokenEnemy.x,
-      y: brokenEnemy.y - 24,
-      angle: p.slashAngle,
-      arcSpan: 3.3,
-      radius: 198,
-      thickness: 38,
-      palette: 'sun',
-      direction: 1,
-    });
-    // Counter-rotating Ukiyo-e Water Dragon ribbon for the dual Fire + Water Hinokami Execution!
-    spawnHinokamiSlashArc(bloodDemonArtsRef.current, {
-      x: brokenEnemy.x,
-      y: brokenEnemy.y - 24,
-      angle: p.slashAngle + 0.35,
-      arcSpan: 2.95,
-      radius: 168,
-      thickness: 32,
-      palette: 'water',
-      direction: -1,
-    });
-    webglDemonSlayerVfxRef.current?.spawnSolarFlameWheel({
-      x: brokenEnemy.x,
-      y: brokenEnemy.y - 24,
-      angle: p.slashAngle,
-      radius: 218,
-      palette: 'hinokami',
-      duration: 0.60,
-    });
-    webglDemonSlayerVfxRef.current?.spawnWaterDragon({
-      x: brokenEnemy.x,
-      y: brokenEnemy.y - 24,
-      angle: p.slashAngle + 0.35,
-      radius: 175,
-      duration: 0.68,
-    });
-    webglDemonSlayerVfxRef.current?.spawnClashStarburst({
-      x: brokenEnemy.x,
-      y: brokenEnemy.y - 24,
-      scale: 1.75,
-      palette: 'sun',
-      duration: 0.32,
-    });
-    webglDemonSlayerVfxRef.current?.spawnSlashRibbon({
-      x: brokenEnemy.x,
-      y: brokenEnemy.y - 24,
-      angle: p.slashAngle,
-      radius: 235,
-      width: 82,
-      arcSpan: 3.25,
-      direction: 1,
-      palette: 'sun',
-      duration: 0.46,
-      tiltX: 0.58,
-    });
-    webglDemonSlayerVfxRef.current?.spawnSlashRibbon({
-      x: brokenEnemy.x,
-      y: brokenEnemy.y - 24,
-      angle: p.slashAngle + 0.35,
-      radius: 205,
-      width: 66,
-      arcSpan: 2.95,
-      direction: -1,
-      palette: 'water',
-      duration: 0.42,
-      tiltX: 0.48,
-    });
-    webglDemonSlayerVfxRef.current?.spawnSparkBurst({
-      x: brokenEnemy.x,
-      y: brokenEnemy.y - 24,
-      count: 28,
-      speed: 520,
-      palette: 'sun',
-    });
-    triggerImpactInversionFlash(bloodDemonArtsRef.current, brokenEnemy.x, brokenEnemy.y - 24, 0.068, '#ff4d3b');
+      // The 360 Parashu sweep is a *single* bronze-and-ember circular cut
+      // following Rudra's real spinning axe pose. No disconnected water
+      // dragon, giant fire wheel, additional slash rings, or sky bolt cage.
+      spawnShockwave(
+        brokenEnemy.x, brokenEnemy.y,
+        executionVisual.groundShockwaveRadius, '#e38c43', 0.35
+      );
+      spawnHinokamiSlashArc(bloodDemonArtsRef.current, {
+        x: brokenEnemy.x, y: brokenEnemy.y - 24,
+        angle: p.slashAngle,
+        arcSpan: executionVisual.slashArcSpan,
+        radius: executionVisual.slashRadius,
+        thickness: 26,
+        palette: 'sun', direction: 1,
+      });
+      webglDemonSlayerVfxRef.current?.spawnSlashRibbon({
+        x: brokenEnemy.x, y: brokenEnemy.y - 24,
+        angle: p.slashAngle,
+        radius: executionVisual.slashRadius,
+        width: executionVisual.slashWidth,
+        arcSpan: executionVisual.slashArcSpan,
+        direction: 1, palette: 'hinokami',
+        duration: 0.36, tiltX: 0.45,
+      });
+      webglDemonSlayerVfxRef.current?.spawnClashStarburst({
+        x: brokenEnemy.x, y: brokenEnemy.y - 24,
+        scale: executionVisual.impactBurstScale,
+        palette: 'sun', duration: 0.22,
+      });
+      webglDemonSlayerVfxRef.current?.spawnSparkBurst({
+        x: brokenEnemy.x, y: brokenEnemy.y - 24,
+        count: executionVisual.sparkCount,
+        speed: 410, palette: 'sun',
+      });
+      triggerImpactInversionFlash(
+        bloodDemonArtsRef.current,
+        brokenEnemy.x, brokenEnemy.y - 24, 0.036, '#e38c43'
+      );
     }
     const execSlashRow =
       finisherSpec.variant === 'spin_360_cleave'
