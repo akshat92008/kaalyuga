@@ -48,6 +48,7 @@ import {
 } from '@/lib/game/spriteProcessor';
 import { Rudra3DRenderer } from '@/lib/game/rudra3dRenderer';
 import { Boss3DRenderer } from '@/lib/game/boss3dRenderer';
+import { ACT1_GRAPHICS, isGraphicsQuality, type GraphicsQuality } from '@/lib/game/graphicsQuality';
 import { Susanoo3DRenderer } from '@/lib/game/susanoo3dRenderer';
 import CholaBrassHud from '@/components/game/CholaBrassHud';
 import {
@@ -303,6 +304,7 @@ import {
   getChamberGeometry,
   getOrStartArenaVideo,
   prewarmArenaVideo,
+  releaseArenaVideos,
   renderParallaxAbyss,
   renderIsometricChamberPlatform,
   updateAndRenderPressureTraps,
@@ -526,6 +528,8 @@ export default function KaliyugaArena() {
   const susanoo3dRef = useRef<Susanoo3DRenderer | null>(null);
   const webglDemonSlayerVfxRef = useRef<WebglDemonSlayerVfxOverlay | null>(null);
   const pendingStrikeVfxRef = useRef<{
+    action: string;
+    serial: number;
     fired: boolean;
     triggerThreshold: number;
     execute: () => void;
@@ -659,6 +663,7 @@ export default function KaliyugaArena() {
   );
   const [shrineOpen, setShrineOpen] = useState(false);
   const [storyOpen, setStoryOpen] = useState(false);
+  const [graphicsQuality, setGraphicsQuality] = useState<GraphicsQuality>('balanced');
   const [controlsOpen, setControlsOpen] = useState(false);
   const [boonModalOpen, setBoonModalOpen] = useState(false);
   const [boonChoices, setBoonChoices] = useState<CelestialBoonSpec[]>([]);
@@ -1025,7 +1030,7 @@ export default function KaliyugaArena() {
       rowIndex: 0,
     })),
     videoBgEnabled: false,
-    lowEndMode: false,
+    graphicsQuality: 'balanced' as GraphicsQuality,
     ambientMotes: Array.from({ length: MAX_AMBIENT_MOTES }, (_, idx) => ({
       x: (idx * 97) % 1440,
       y: (idx * 67) % 900,
@@ -1213,6 +1218,9 @@ export default function KaliyugaArena() {
     return () => {
       window.clearInterval(preloadTimer);
       if (storageSyncTimer !== null) window.clearTimeout(storageSyncTimer);
+      releaseArenaVideos();
+      susanoo3dRef.current?.dispose();
+      susanoo3dRef.current = null;
       rudra3dRef.current?.dispose();
       enemy3dRef.current?.dispose();
       boss3dRef.current?.dispose();
@@ -1287,7 +1295,7 @@ export default function KaliyugaArena() {
     ) => {
       const sim = simRef.current;
       const pool = sim.particles;
-      const effectiveCount = sim.lowEndMode ? Math.max(4, Math.ceil(count * 0.5)) : count;
+      const effectiveCount = Math.ceil(count * ACT1_GRAPHICS[sim.graphicsQuality].particleScale);
       const c = color.toLowerCase();
       let archetype: ParticleArchetype = 'ember_dust';
       if (
@@ -2062,6 +2070,7 @@ export default function KaliyugaArena() {
   const loadChamber = useCallback(
     (index: number, resetFullRun: boolean = false) => {
       const sim = simRef.current;
+      pendingStrikeVfxRef.current = null;
       const clampedIdx = Math.max(0, Math.min(CHAMBERS.length - 1, index));
       const spec = CHAMBERS[clampedIdx];
       const isTitleMode = sim.state === 'title';
@@ -2482,6 +2491,7 @@ export default function KaliyugaArena() {
 
   // Enter walkable Vaitarani Simple Ash Hub (spawns Rudra by Savitri's Boat with 3D Lotus_Empress Savitri & interactive stations)
   const enterVaitaraniHub = useCallback(() => {
+    pendingStrikeVfxRef.current = null;
     ensure3DRenderersBooted();
     const sim = simRef.current;
     sim.state = 'playing';
@@ -2782,14 +2792,14 @@ export default function KaliyugaArena() {
       if (initialChamber.phase2BackgroundUrl) {
         loadBgWithRetry(initialChamber.phase2BackgroundUrl);
       }
-      if (initialChamber.videoUrl) {
+      if (simRef.current.videoBgEnabled && initialChamber.videoUrl) {
         if (isDirectGameplay) {
           getOrStartArenaVideo(initialChamber.videoUrl, false);
         } else {
           prewarmArenaVideo(initialChamber.videoUrl);
         }
       }
-      if (initialChamber.phase2VideoUrl) {
+      if (simRef.current.videoBgEnabled && initialChamber.phase2VideoUrl) {
         prewarmArenaVideo(initialChamber.phase2VideoUrl);
       }
     }
@@ -4390,7 +4400,7 @@ export default function KaliyugaArena() {
   const triggerExecuteBrokenTarget = useCallback(() => {
     const sim = simRef.current;
     const p = sim.player;
-    if (sim.state !== 'playing') return;
+    if (sim.state !== 'playing' || sim.modalPaused || p.action === 'execute') return;
 
     const brokenEnemy = sim.enemies.find(
       (e) => e.aiState !== 'ko' && e.postureBrokenTimer > 0
@@ -4432,6 +4442,7 @@ export default function KaliyugaArena() {
     p.x = brokenEnemy.x - p.facing * 48;
     p.y = brokenEnemy.y + 6;
     p.action = 'execute';
+    p.attackSerial += 1;
     p.finisherVariant = finisherSpec.variant;
     p.actionTimer = finisherSpec.durationSec;
     p.actionDuration = finisherSpec.durationSec;
@@ -4443,249 +4454,258 @@ export default function KaliyugaArena() {
     p.slashArcAlpha = 1.0;
     p.weaponSwingProgress = 0.0;
 
-    const stats = computeDerivedPlayerStats(sim.ranks);
-    const execDmg = Math.round(
-      (brokenEnemy.isBoss ? 360 : 290) * stats.damageMultiplier * finisherSpec.damageMultiplier
-    );
-    const execHit = receiveHit(brokenEnemy, {
-      rawDamage: execDmg,
-      postureDamage: 0,
-      knockbackForcePx: brokenEnemy.isBoss ? 65 : 145,
-      knockbackAngleRad: p.slashAngle,
-      hitKind: 'finisher',
-      isFinisher: true,
-      currentCameraTrauma: sim.cameraShakeTrauma,
-    });
-    brokenEnemy.postureBrokenTimer = 0;
-    brokenEnemy.posture = brokenEnemy.maxPosture;
-    brokenEnemy.scaleX = 1.06;
-    brokenEnemy.scaleY = 0.94;
+    pendingStrikeVfxRef.current = {
+      action: p.action,
+      serial: p.attackSerial,
+      fired: false,
+      triggerThreshold: finisherSpec.contactProgress,
+      execute: () => {
+        if (!sim.enemies.includes(brokenEnemy) || brokenEnemy.hp <= 0 || brokenEnemy.aiState === 'ko') return;
+        const stats = computeDerivedPlayerStats(sim.ranks);
+        const execDmg = Math.round(
+          (brokenEnemy.isBoss ? 360 : 290) * stats.damageMultiplier * finisherSpec.damageMultiplier
+        );
+        const execHit = receiveHit(brokenEnemy, {
+          rawDamage: execDmg,
+          postureDamage: 0,
+          knockbackForcePx: brokenEnemy.isBoss ? 65 : 145,
+          knockbackAngleRad: p.slashAngle,
+          hitKind: 'finisher',
+          isFinisher: true,
+          currentCameraTrauma: sim.cameraShakeTrauma,
+        });
+        brokenEnemy.postureBrokenTimer = 0;
+        brokenEnemy.posture = brokenEnemy.maxPosture;
+        brokenEnemy.scaleX = 1.06;
+        brokenEnemy.scaleY = 0.94;
 
-    // Radial Prana Shockwave: staggers & knocks back all nearby enemies within 225px and vaporizes incoming projectiles!
-    sim.enemies.forEach((other) => {
-      if (other === brokenEnemy || other.aiState === 'ko') return;
-      const distToExec = Math.hypot(other.x - brokenEnemy.x, other.y - brokenEnemy.y);
-      if (distToExec <= 225) {
-        const pushAngle = Math.atan2(other.y - brokenEnemy.y, other.x - brokenEnemy.x);
-        const pushMag = other.isBoss ? 110 : 240;
-        other.vx += Math.cos(pushAngle) * pushMag;
-        other.vy += Math.sin(pushAngle) * pushMag;
-        other.hitFlashTimer = execHit.whiteHitFlashSec;
-        if (!other.isBoss) {
-          other.aiState = 'recover';
-          other.aiTimer = Math.max(other.aiTimer, 0.85);
+        // Radial Prana Shockwave: staggers & knocks back all nearby enemies within 225px and vaporizes incoming projectiles!
+        sim.enemies.forEach((other) => {
+          if (other === brokenEnemy || other.aiState === 'ko') return;
+          const distToExec = Math.hypot(other.x - brokenEnemy.x, other.y - brokenEnemy.y);
+          if (distToExec <= 225) {
+            const pushAngle = Math.atan2(other.y - brokenEnemy.y, other.x - brokenEnemy.x);
+            const pushMag = other.isBoss ? 110 : 240;
+            other.vx += Math.cos(pushAngle) * pushMag;
+            other.vy += Math.sin(pushAngle) * pushMag;
+            other.hitFlashTimer = execHit.whiteHitFlashSec;
+            if (!other.isBoss) {
+              other.aiState = 'recover';
+              other.aiTimer = Math.max(other.aiTimer, 0.85);
+            }
+          }
+        });
+        sim.projectiles.forEach((proj) => {
+          if (proj.active && Math.hypot(proj.x - brokenEnemy.x, proj.y - brokenEnemy.y) <= 230) {
+            proj.active = false;
+          }
+        });
+
+        sim.hitstopTimer = Math.max(sim.hitstopTimer, execHit.hitstopSec);
+        sim.cameraShakeTrauma = execHit.clampedCameraTrauma;
+        sim.cameraKickX += execHit.cameraKickX;
+        sim.cameraKickY += execHit.cameraKickY;
+        sim.cameraZoom = BASE_CAMERA_ZOOM + 0.055;
+        sim.screenFlashAlpha = 0.22;
+        sim.screenFlashColor = '#ff3824';
+        sim.comboCount += 3;
+        sim.comboResetTimer = 4.5;
+        sim.score += 450;
+
+        if (brokenEnemy.type === 'vrikodara' && p.consumedAbility) {
+          const furnaceRes = resolveConsumeFurnacePunish({
+            consumedAbility: p.consumedAbility,
+            attackKind: 'finisher',
+            furnaceExposed: true,
+          });
+          if (furnaceRes.freedAbility) {
+            p.consumedAbility = null;
+            p.consumedAbilityTimer = 0;
+            gainAstraEnergy(furnaceRes.pranaBurst);
+            spawnShockwave(brokenEnemy.x, brokenEnemy.y, 175, '#ffd86b', 0.42);
+            spawnFloatingText(brokenEnemy.x, brokenEnemy.y - 108, furnaceRes.calloutText, '#ffd86b', 1.18);
+          }
         }
-      }
-    });
-    sim.projectiles.forEach((proj) => {
-      if (proj.active && Math.hypot(proj.x - brokenEnemy.x, proj.y - brokenEnemy.y) <= 230) {
-        proj.active = false;
-      }
-    });
 
-    sim.hitstopTimer = Math.max(sim.hitstopTimer, execHit.hitstopSec);
-    sim.cameraShakeTrauma = execHit.clampedCameraTrauma;
-    sim.cameraKickX += execHit.cameraKickX;
-    sim.cameraKickY += execHit.cameraKickY;
-    sim.cameraZoom = BASE_CAMERA_ZOOM + 0.055;
-    sim.screenFlashAlpha = 0.22;
-    sim.screenFlashColor = '#ff3824';
-    sim.comboCount += 3;
-    sim.comboResetTimer = 4.5;
-    sim.score += 450;
+        sim.battleScars = spawnBattleScar(sim.battleScars, {
+          id: ++sim.nextScarId,
+          kind: 'blood_splatter',
+          x: brokenEnemy.x,
+          y: brokenEnemy.y + 4,
+          angle: p.slashAngle,
+          scale: 1.45,
+        });
+        sim.battleScars = spawnBattleScar(sim.battleScars, {
+          id: ++sim.nextScarId,
+          kind: 'shattered_armor',
+          x: brokenEnemy.x,
+          y: brokenEnemy.y + 6,
+          angle: p.slashAngle,
+          scale: 1.2,
+        });
 
-    if (brokenEnemy.type === 'vrikodara' && p.consumedAbility) {
-      const furnaceRes = resolveConsumeFurnacePunish({
-        consumedAbility: p.consumedAbility,
-        attackKind: 'finisher',
-        furnaceExposed: true,
-      });
-      if (furnaceRes.freedAbility) {
-        p.consumedAbility = null;
-        p.consumedAbilityTimer = 0;
-        gainAstraEnergy(furnaceRes.pranaBurst);
-        spawnShockwave(brokenEnemy.x, brokenEnemy.y, 175, '#ffd86b', 0.42);
-        spawnFloatingText(brokenEnemy.x, brokenEnemy.y - 108, furnaceRes.calloutText, '#ffd86b', 1.18);
-      }
-    }
+        // Grant +1 Focus Orb, +30 Astra Energy, Finisher Rage (if boon active), and heal 28 HP on Execute
+        const execBoonMods = computeBoonModifiers(sim.activeBoons);
+        if (execBoonMods.finisherRageDurationSec > 0) {
+          p.finisherRageTimer = Math.max(p.finisherRageTimer, execBoonMods.finisherRageDurationSec);
+        }
+        p.hp = Math.min(p.maxHp, p.hp + 28);
+        if (p.focusOrbs < 4) {
+          p.focusOrbs = Math.min(4, p.focusOrbs + 1);
+        }
+        gainAstraEnergy(ASTRA_ENERGY_GAINS.EXECUTION);
 
-    sim.battleScars = spawnBattleScar(sim.battleScars, {
-      id: ++sim.nextScarId,
-      kind: 'blood_splatter',
-      x: brokenEnemy.x,
-      y: brokenEnemy.y + 4,
-      angle: p.slashAngle,
-      scale: 1.45,
-    });
-    sim.battleScars = spawnBattleScar(sim.battleScars, {
-      id: ++sim.nextScarId,
-      kind: 'shattered_armor',
-      x: brokenEnemy.x,
-      y: brokenEnemy.y + 6,
-      angle: p.slashAngle,
-      scale: 1.2,
-    });
-
-    // Grant +1 Focus Orb, +30 Astra Energy, Finisher Rage (if boon active), and heal 28 HP on Execute
-    const execBoonMods = computeBoonModifiers(sim.activeBoons);
-    if (execBoonMods.finisherRageDurationSec > 0) {
-      p.finisherRageTimer = Math.max(p.finisherRageTimer, execBoonMods.finisherRageDurationSec);
-    }
-    p.hp = Math.min(p.maxHp, p.hp + 28);
-    if (p.focusOrbs < 4) {
-      p.focusOrbs = Math.min(4, p.focusOrbs + 1);
-    }
-    gainAstraEnergy(ASTRA_ENERGY_GAINS.EXECUTION);
-
-    soundEngine.playHit('execute');
-    spawnShockwave(brokenEnemy.x, brokenEnemy.y, 290, '#ff4d3b', 0.48);
-    spawnSunHaloRing(bloodDemonArtsRef.current, {
-      x: brokenEnemy.x,
-      y: brokenEnemy.y - 22,
-      radius: 196,
-      palette: 'sun',
-    });
-    spawnHinokamiSlashArc(bloodDemonArtsRef.current, {
-      x: brokenEnemy.x,
-      y: brokenEnemy.y - 24,
-      angle: p.slashAngle,
-      arcSpan: 3.3,
-      radius: 198,
-      thickness: 38,
-      palette: 'sun',
-      direction: 1,
-    });
-    // Counter-rotating Ukiyo-e Water Dragon ribbon for the dual Fire + Water Hinokami Execution!
-    spawnHinokamiSlashArc(bloodDemonArtsRef.current, {
-      x: brokenEnemy.x,
-      y: brokenEnemy.y - 24,
-      angle: p.slashAngle + 0.35,
-      arcSpan: 2.95,
-      radius: 168,
-      thickness: 32,
-      palette: 'water',
-      direction: -1,
-    });
-    webglDemonSlayerVfxRef.current?.spawnSolarFlameWheel({
-      x: brokenEnemy.x,
-      y: brokenEnemy.y - 24,
-      angle: p.slashAngle,
-      radius: 218,
-      palette: 'hinokami',
-      duration: 0.60,
-    });
-    webglDemonSlayerVfxRef.current?.spawnWaterDragon({
-      x: brokenEnemy.x,
-      y: brokenEnemy.y - 24,
-      angle: p.slashAngle + 0.35,
-      radius: 175,
-      duration: 0.68,
-    });
-    webglDemonSlayerVfxRef.current?.spawnClashStarburst({
-      x: brokenEnemy.x,
-      y: brokenEnemy.y - 24,
-      scale: 1.75,
-      palette: 'sun',
-      duration: 0.32,
-    });
-    webglDemonSlayerVfxRef.current?.spawnSlashRibbon({
-      x: brokenEnemy.x,
-      y: brokenEnemy.y - 24,
-      angle: p.slashAngle,
-      radius: 235,
-      width: 82,
-      arcSpan: 3.25,
-      direction: 1,
-      palette: 'sun',
-      duration: 0.46,
-      tiltX: 0.58,
-    });
-    webglDemonSlayerVfxRef.current?.spawnSlashRibbon({
-      x: brokenEnemy.x,
-      y: brokenEnemy.y - 24,
-      angle: p.slashAngle + 0.35,
-      radius: 205,
-      width: 66,
-      arcSpan: 2.95,
-      direction: -1,
-      palette: 'water',
-      duration: 0.42,
-      tiltX: 0.48,
-    });
-    webglDemonSlayerVfxRef.current?.spawnSparkBurst({
-      x: brokenEnemy.x,
-      y: brokenEnemy.y - 24,
-      count: 28,
-      speed: 520,
-      palette: 'sun',
-    });
-    triggerImpactInversionFlash(bloodDemonArtsRef.current, brokenEnemy.x, brokenEnemy.y - 24, 0.068, '#ff4d3b');
-    const execSlashRow =
-      finisherSpec.variant === 'spin_360_cleave'
-        ? PARASHU_FLIPBOOK_ROWS.SPIN_360_WHIRLWIND_RING
-        : PARASHU_FLIPBOOK_ROWS.DOWNWARD_CRUSH_FISSURE;
-    spawnFlipbookVfx(
-      PHASE2_VFX_SHEETS.parashuSlashes3x3.url,
-      brokenEnemy.x,
-      brokenEnemy.y - 22,
-      248,
-      0.34,
-      finisherSpec.variant === 'impaling_lunge' ? p.slashAngle : 0,
-      finisherSpec.variant === 'spin_360_cleave' ? 0.72 : 1,
-      'screen',
-      PHASE2_VFX_SHEETS.parashuSlashes3x3,
-      execSlashRow
-    );
-    spawnFlipbookVfx(
-      PHASE2_VFX_SHEETS.parryAndHitSparks4x2.url,
-      brokenEnemy.x,
-      brokenEnemy.y - 28,
-      142,
-      0.28,
-      execHit.spray.sprayAngleRad,
-      1,
-      'screen',
-      PHASE2_VFX_SHEETS.parryAndHitSparks4x2,
-      PARRY_SPARKS_FLIPBOOK_ROWS.DIRECTIONAL_HIT_SPLATTER
-    );
-    spawnParticles(
-      brokenEnemy.x + Math.cos(execHit.spray.sprayAngleRad) * 14,
-      brokenEnemy.y - 35,
-      execHit.spray.bloodCount,
-      execHit.spray.bloodColor,
-      execHit.spray.speed,
-      5.2,
-      160
-    );
-    spawnParticles(
-      brokenEnemy.x + Math.cos(execHit.spray.sprayAngleRad) * 10,
-      brokenEnemy.y - 35,
-      execHit.spray.sparkCount,
-      execHit.spray.sparkColor,
-      execHit.spray.speed * 0.9,
-      4.4,
-      100
-    );
-    // Call down Twin Cataclysmic Sky-Splitting Vajra Lightning Bolts on Execute!
-    for (let b = 0; b < 3; b++) {
-      sim.lightningArcs.push({
-        x1: brokenEnemy.x + (b - 1) * 110,
-        y1: brokenEnemy.y - 540,
-        x2: brokenEnemy.x + (b - 1) * 18,
-        y2: brokenEnemy.y - 12,
-        life: 0.38,
-        maxLife: 0.38,
-        color: b === 1 ? '#ffd86b' : '#ff4d3b',
-      });
-    }
-    spawnFloatingText(
-      brokenEnemy.x,
-      brokenEnemy.y - 96,
-      `${finisherSpec.title} -${execHit.hpLost} (+${ASTRA_ENERGY_GAINS.EXECUTION} ASTRA)`,
-      finisherSpec.accentColor,
-      1.25,
-      finisherSpec.subtitle
-    );
+        soundEngine.playHit('execute');
+        spawnShockwave(brokenEnemy.x, brokenEnemy.y, 290, '#ff4d3b', 0.48);
+        spawnSunHaloRing(bloodDemonArtsRef.current, {
+          x: brokenEnemy.x,
+          y: brokenEnemy.y - 22,
+          radius: 196,
+          palette: 'sun',
+        });
+        spawnHinokamiSlashArc(bloodDemonArtsRef.current, {
+          x: brokenEnemy.x,
+          y: brokenEnemy.y - 24,
+          angle: p.slashAngle,
+          arcSpan: 3.3,
+          radius: 198,
+          thickness: 38,
+          palette: 'sun',
+          direction: 1,
+        });
+        // Counter-rotating Ukiyo-e Water Dragon ribbon for the dual Fire + Water Hinokami Execution!
+        spawnHinokamiSlashArc(bloodDemonArtsRef.current, {
+          x: brokenEnemy.x,
+          y: brokenEnemy.y - 24,
+          angle: p.slashAngle + 0.35,
+          arcSpan: 2.95,
+          radius: 168,
+          thickness: 32,
+          palette: 'water',
+          direction: -1,
+        });
+        webglDemonSlayerVfxRef.current?.spawnSolarFlameWheel({
+          x: brokenEnemy.x,
+          y: brokenEnemy.y - 24,
+          angle: p.slashAngle,
+          radius: 218,
+          palette: 'hinokami',
+          duration: 0.60,
+        });
+        webglDemonSlayerVfxRef.current?.spawnWaterDragon({
+          x: brokenEnemy.x,
+          y: brokenEnemy.y - 24,
+          angle: p.slashAngle + 0.35,
+          radius: 175,
+          duration: 0.68,
+        });
+        webglDemonSlayerVfxRef.current?.spawnClashStarburst({
+          x: brokenEnemy.x,
+          y: brokenEnemy.y - 24,
+          scale: 1.75,
+          palette: 'sun',
+          duration: 0.32,
+        });
+        webglDemonSlayerVfxRef.current?.spawnSlashRibbon({
+          x: brokenEnemy.x,
+          y: brokenEnemy.y - 24,
+          angle: p.slashAngle,
+          radius: 235,
+          width: 82,
+          arcSpan: 3.25,
+          direction: 1,
+          palette: 'sun',
+          duration: 0.46,
+          tiltX: 0.58,
+        });
+        webglDemonSlayerVfxRef.current?.spawnSlashRibbon({
+          x: brokenEnemy.x,
+          y: brokenEnemy.y - 24,
+          angle: p.slashAngle + 0.35,
+          radius: 205,
+          width: 66,
+          arcSpan: 2.95,
+          direction: -1,
+          palette: 'water',
+          duration: 0.42,
+          tiltX: 0.48,
+        });
+        webglDemonSlayerVfxRef.current?.spawnSparkBurst({
+          x: brokenEnemy.x,
+          y: brokenEnemy.y - 24,
+          count: 28,
+          speed: 520,
+          palette: 'sun',
+        });
+        triggerImpactInversionFlash(bloodDemonArtsRef.current, brokenEnemy.x, brokenEnemy.y - 24, 0.068, '#ff4d3b');
+        const execSlashRow =
+          finisherSpec.variant === 'spin_360_cleave'
+            ? PARASHU_FLIPBOOK_ROWS.SPIN_360_WHIRLWIND_RING
+            : PARASHU_FLIPBOOK_ROWS.DOWNWARD_CRUSH_FISSURE;
+        spawnFlipbookVfx(
+          PHASE2_VFX_SHEETS.parashuSlashes3x3.url,
+          brokenEnemy.x,
+          brokenEnemy.y - 22,
+          248,
+          0.34,
+          finisherSpec.variant === 'impaling_lunge' ? p.slashAngle : 0,
+          finisherSpec.variant === 'spin_360_cleave' ? 0.72 : 1,
+          'screen',
+          PHASE2_VFX_SHEETS.parashuSlashes3x3,
+          execSlashRow
+        );
+        spawnFlipbookVfx(
+          PHASE2_VFX_SHEETS.parryAndHitSparks4x2.url,
+          brokenEnemy.x,
+          brokenEnemy.y - 28,
+          142,
+          0.28,
+          execHit.spray.sprayAngleRad,
+          1,
+          'screen',
+          PHASE2_VFX_SHEETS.parryAndHitSparks4x2,
+          PARRY_SPARKS_FLIPBOOK_ROWS.DIRECTIONAL_HIT_SPLATTER
+        );
+        spawnParticles(
+          brokenEnemy.x + Math.cos(execHit.spray.sprayAngleRad) * 14,
+          brokenEnemy.y - 35,
+          execHit.spray.bloodCount,
+          execHit.spray.bloodColor,
+          execHit.spray.speed,
+          5.2,
+          160
+        );
+        spawnParticles(
+          brokenEnemy.x + Math.cos(execHit.spray.sprayAngleRad) * 10,
+          brokenEnemy.y - 35,
+          execHit.spray.sparkCount,
+          execHit.spray.sparkColor,
+          execHit.spray.speed * 0.9,
+          4.4,
+          100
+        );
+        // Call down Twin Cataclysmic Sky-Splitting Vajra Lightning Bolts on Execute!
+        for (let b = 0; b < 3; b++) {
+          sim.lightningArcs.push({
+            x1: brokenEnemy.x + (b - 1) * 110,
+            y1: brokenEnemy.y - 540,
+            x2: brokenEnemy.x + (b - 1) * 18,
+            y2: brokenEnemy.y - 12,
+            life: 0.38,
+            maxLife: 0.38,
+            color: b === 1 ? '#ffd86b' : '#ff4d3b',
+          });
+        }
+        spawnFloatingText(
+          brokenEnemy.x,
+          brokenEnemy.y - 96,
+          `${finisherSpec.title} -${execHit.hpLost} (+${ASTRA_ENERGY_GAINS.EXECUTION} ASTRA)`,
+          finisherSpec.accentColor,
+          1.25,
+          finisherSpec.subtitle
+        );
+      },
+    };
   }, [gainAstraEnergy, recordQuestEvent, spawnAfterimage, spawnFlipbookVfx, spawnFloatingText, spawnParticles, spawnShockwave]);
 
   const triggerStanceHeavyUnleash = useCallback(() => {
@@ -4801,6 +4821,8 @@ export default function KaliyugaArena() {
     const heavyCleaveRadius = heavySpec.cleaveRadiusPx;
 
     pendingStrikeVfxRef.current = {
+      action: p.action,
+      serial: p.attackSerial,
       fired: false,
       triggerThreshold: 0.28,
       execute: () => {
@@ -5486,6 +5508,8 @@ export default function KaliyugaArena() {
     });
 
     pendingStrikeVfxRef.current = {
+      action: p.action,
+      serial: p.attackSerial,
       fired: false,
       triggerThreshold: isComboFinisher ? 0.28 : 0.25,
       execute: () => {
@@ -6732,7 +6756,7 @@ export default function KaliyugaArena() {
     const resizeCanvas = () => {
       const vw = window.innerWidth || 1440;
       const vh = window.innerHeight || 900;
-      const dpr = Math.min(window.devicePixelRatio || 1, 1.0);
+      const dpr = Math.min(window.devicePixelRatio || 1, ACT1_GRAPHICS[simRef.current.graphicsQuality].sceneScale);
       canvas.width = Math.round(vw * dpr);
       canvas.height = Math.round(vh * dpr);
       simRef.current.viewportW = vw;
@@ -6741,6 +6765,13 @@ export default function KaliyugaArena() {
       simRef.current.worldH = CANONICAL_WORLD_H;
       simRef.current.dpr = dpr;
     };
+    try {
+      const saved = window.localStorage.getItem('kaliyuga_graphics_quality');
+      if (isGraphicsQuality(saved)) {
+        simRef.current.graphicsQuality = saved;
+        setGraphicsQuality(saved);
+      }
+    } catch { /* Storage is optional. */ }
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
 
@@ -7267,6 +7298,10 @@ export default function KaliyugaArena() {
           e.displayHp += (e.hp - e.displayHp) * (1 - Math.exp(-5.5 * simDt));
         });
 
+        const queuedStrike = pendingStrikeVfxRef.current;
+        if (queuedStrike && (queuedStrike.action !== p.action || queuedStrike.serial !== p.attackSerial)) {
+          pendingStrikeVfxRef.current = null;
+        }
         if (p.action !== 'idle') {
           const prevAction = p.action;
           p.actionTimer -= simDt;
@@ -7283,8 +7318,8 @@ export default function KaliyugaArena() {
             });
             if (gate.shouldFireNow || p.actionTimer <= 0) {
               pendingStrike.fired = true;
-              pendingStrike.execute();
               pendingStrikeVfxRef.current = null;
+              pendingStrike.execute();
             }
           }
 
@@ -8013,6 +8048,7 @@ export default function KaliyugaArena() {
                 ? computeVrikodaraPhase(e.hp, e.maxHp)
                 : computeBossPhase(e.hp, e.maxHp);
             if (nextPhase > e.phase) {
+              const bossPhasePalette: DemonSlayerVfxPalette = e.type === 'vrikodara' ? 'magma' : 'bronze';
               e.phase = nextPhase;
               e.posture = e.maxPosture;
               e.immobilizedTimer = 0;
@@ -8736,7 +8772,7 @@ export default function KaliyugaArena() {
               const enemyTier = classifyEnemyVfxTier({
                 type: e.type,
                 isBoss: e.isBoss,
-                isSemiBoss: e.isSemiBoss,
+                isSemiBoss: e.type === 'semi_boss_bloodforge',
               });
               const enemyBudget = getEnemySlashVfxBudget(enemyTier, e.telegraphRadius, e.attackKind);
               const enemyVfxPal: DemonSlayerVfxPalette =
@@ -8797,56 +8833,48 @@ export default function KaliyugaArena() {
                 const originX = e.telegraphX;
                 const originY = e.telegraphY;
                 const halfW = e.isBoss ? 56 : 34;
+                const obstacle = e.type === 'dundubhi' ? findBaitablePillarOnTrajectory({
+                  bossX: originX, bossY: originY, aimAngle: e.aimAngle,
+                  endX: e.corridorEndX, endY: e.corridorEndY, pillars: sim.props,
+                }) : null;
+                const endX = obstacle?.willImpact ? obstacle.stopX : e.corridorEndX;
+                const endY = obstacle?.willImpact ? obstacle.stopY : e.corridorEndY;
                 playerHit = isPointInDashCorridor({
                   px: p.x,
                   py: p.y,
                   startX: originX,
                   startY: originY,
-                  endX: e.corridorEndX,
-                  endY: e.corridorEndY,
+                  endX,
+                  endY,
                   halfWidth: halfW,
                 });
-                e.x = Math.max(minX, Math.min(maxX, e.corridorEndX));
-                e.y = Math.max(minY, Math.min(maxY, e.corridorEndY));
+                e.x = Math.max(minX, Math.min(maxX, endX));
+                e.y = Math.max(minY, Math.min(maxY, endY));
 
-                // Step 23: Dundubhi Pillar-Baiting Horn-Charge Collision & 3-Stage Sandstone Degradation (Intact -> Cracked -> Shattered Stump)
                 if (e.type === 'dundubhi') {
-                  let hitPillar = false;
-                  for (const pr of sim.props) {
-                    if (!pr.destroyed && (pr.pillarStage ?? 0) < 2 && pr.type === 'kurukshetra_pillar') {
-                      const hitCorridor = isPointInDashCorridor({
-                        px: pr.x,
-                        py: pr.y,
-                        startX: originX,
-                        startY: originY,
-                        endX: e.x,
-                        endY: e.y,
-                        halfWidth: 82,
-                      });
-                      if (hitCorridor || Math.hypot(pr.x - e.x, pr.y - e.y) < 105) {
-                        const nextStage = Math.min(2, (pr.pillarStage ?? 0) + 1) as 1 | 2;
-                        pr.pillarStage = nextStage;
-                        pr.destroyed = nextStage >= 2;
-                        pr.hp = pr.destroyed ? 0 : Math.round(pr.maxHp * 0.5);
-                        pr.hitFlashTimer = 0.25;
-                        pr.shakeTimer = 0.35;
-                        hitPillar = true;
-                        spawnShockwave(pr.x, pr.y, 185, '#ffd86b', 0.45);
-                        spawnFlipbookVfx(
-                          PHASE2_VFX_SHEETS.dundubhiShockwaveAndShatter4x2.url,
-                          pr.x,
-                          pr.y - 22,
-                          178,
-                          0.36,
-                          0,
-                          1,
-                          'screen',
-                          PHASE2_VFX_SHEETS.dundubhiShockwaveAndShatter4x2,
-                          DUNDUBHI_FLIPBOOK_ROWS.PILLAR_SANDSTONE_SHATTER
-                        );
-                        spawnParticles(pr.x, pr.y - 36, 36, '#d4a548', 250, 5.5, 95);
-                      }
-                    }
+                  const pr = obstacle?.willImpact ? sim.props.find(prop => prop.id === obstacle.id) : undefined;
+                  const hitPillar = Boolean(pr);
+                  if (pr) {
+                    const nextStage = Math.min(2, (pr.pillarStage ?? 0) + 1) as 1 | 2;
+                    pr.pillarStage = nextStage;
+                    pr.destroyed = nextStage >= 2;
+                    pr.hp = pr.destroyed ? 0 : Math.round(pr.maxHp * 0.5);
+                    pr.hitFlashTimer = 0.25;
+                    pr.shakeTimer = 0.35;
+                    spawnShockwave(pr.x, pr.y, 185, '#ffd86b', 0.45);
+                    spawnFlipbookVfx(
+                      PHASE2_VFX_SHEETS.dundubhiShockwaveAndShatter4x2.url,
+                      pr.x,
+                      pr.y - 22,
+                      178,
+                      0.36,
+                      0,
+                      1,
+                      'screen',
+                      PHASE2_VFX_SHEETS.dundubhiShockwaveAndShatter4x2,
+                      DUNDUBHI_FLIPBOOK_ROWS.PILLAR_SANDSTONE_SHATTER
+                    );
+                    spawnParticles(pr.x, pr.y - 36, 36, '#d4a548', 250, 5.5, 95);
                   }
                   const intactPillarsLeft = sim.props.some(
                     (pr) => !pr.destroyed && (pr.pillarStage ?? 0) < 2 && pr.type === 'kurukshetra_pillar'
@@ -10013,9 +10041,11 @@ export default function KaliyugaArena() {
         activeBoss.aiState === 'windup' &&
         activeBoss.attackKind === 'corridor'
           ? findBaitablePillarOnTrajectory({
-              bossX: activeBoss.x,
-              bossY: activeBoss.y,
+              bossX: activeBoss.telegraphX,
+              bossY: activeBoss.telegraphY,
               aimAngle: activeBoss.aimAngle,
+              endX: activeBoss.corridorEndX,
+              endY: activeBoss.corridorEndY,
               pillars: sim.props,
             })
           : null;
@@ -10206,6 +10236,7 @@ export default function KaliyugaArena() {
       // Rendered BEFORE characters & bosses so Dundubhi, Vrikodara, and Rudra stand cleanly ON TOP of the glowing floor mandala!
       {
         const webglFloorVfx = webglDemonSlayerVfxRef.current;
+        webglFloorVfx?.setQuality(sim.graphicsQuality);
         if (webglFloorVfx && webglFloorVfx.updateAndRenderFloorPass(dt, sim.camX, sim.camY, 1, cw, ch)) {
           ctx.save();
           ctx.globalCompositeOperation = 'source-over';
@@ -11283,10 +11314,10 @@ export default function KaliyugaArena() {
           const rendered3D =
             rudra3d &&
             rudra3d.updateAndRender({
-              dt: simDt > 0 ? simDt : dt,
+              dt: isRenderHubMode ? dt : simDt,
               vx: p.vx,
               vy: p.vy,
-              facingX: p.lastMoveDirX || p.facing,
+              facingX: p.lastMoveDirX || (p.lastMoveDirY === 0 ? p.facing : 0),
               facingY: p.lastMoveDirY,
               slashAngle: p.slashAngle,
               isAttacking: coreLock.rudraIsAttacking,
@@ -11312,7 +11343,7 @@ export default function KaliyugaArena() {
           if (p.transformTimer > 0) {
             const susanoo3d = susanoo3dRef.current;
             const susanooCanvas = susanoo3d?.renderFrame({
-              facingX: p.lastMoveDirX || p.facing,
+              facingX: p.lastMoveDirX || (p.lastMoveDirY === 0 ? p.facing : 0),
               facingY: p.lastMoveDirY,
               slashAngle: p.slashAngle,
               weaponSwingProgress: p.weaponSwingProgress,
@@ -11322,7 +11353,7 @@ export default function KaliyugaArena() {
               comboStep: p.comboStep,
               transformTimer: p.transformTimer,
               nowMs: now,
-              dt: simDt > 0 ? simDt : dt,
+              dt: simDt,
               palette: 'crimson_gold',
             });
             if (susanooCanvas && susanoo3d) {
@@ -12074,7 +12105,7 @@ export default function KaliyugaArena() {
           playerX: p.x,
           playerY: p.y,
           videoBgEnabled: sim.videoBgEnabled,
-          lowEndMode: sim.lowEndMode,
+          lowEndMode: sim.graphicsQuality === 'performance',
           boss: bossEntity
             ? {
                 active: true,
@@ -12501,6 +12532,7 @@ export default function KaliyugaArena() {
       <canvas
         ref={canvasRef}
         data-testid="kaliyuga-canvas"
+        data-chamber-id={hud.chamberId}
         onMouseMove={(e) => {
           const rect = e.currentTarget.getBoundingClientRect();
           const sx = e.clientX - rect.left;
@@ -12933,19 +12965,26 @@ export default function KaliyugaArena() {
                   >
                     {(hud.videoBgEnabled ?? true) ? 'HD VIDEO BG: ON' : 'HD VIDEO BG: OFF'}
                   </button>
-                  {isDebugMode && (
-                    <button
-                      type="button"
-                      data-testid="toggle-low-spec-btn"
-                      onClick={() => {
-                        simRef.current.lowEndMode = !simRef.current.lowEndMode;
-                        setControlsOpen(false);
+                  <label className="text-xs text-[#d4a548]">
+                    Graphics
+                    <select
+                      aria-label="Graphics quality"
+                      value={graphicsQuality}
+                      onChange={(event) => {
+                        const quality = event.target.value;
+                        if (!isGraphicsQuality(quality)) return;
+                        simRef.current.graphicsQuality = quality;
+                        setGraphicsQuality(quality);
+                        try { window.localStorage.setItem('kaliyuga_graphics_quality', quality); } catch {}
+                        window.dispatchEvent(new Event('resize'));
                       }}
-                      className="flex-1 py-1.5 px-2 border border-[#d4a548]/45 text-[10px] font-mono-num text-[#d4a548] bg-[#141116] hover:border-[#f5ebd6] cursor-pointer"
+                      className="ml-2 bg-[#141116] text-[#f5ebd6]"
                     >
-                      {hud.lowEndMode ? 'PERF: LOW-SPEC 60FPS' : 'PERF: ULTRA HD'}
-                    </button>
-                  )}
+                      <option value="performance">Performance</option>
+                      <option value="balanced">Balanced</option>
+                      <option value="cinematic">Cinematic</option>
+                    </select>
+                  </label>
                 </div>
               </div>
             )}

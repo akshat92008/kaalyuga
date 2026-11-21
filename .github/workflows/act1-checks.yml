@@ -1,0 +1,54 @@
+name: Act I checks
+on:
+  pull_request:
+    paths:
+      - 'app/**'
+      - 'components/**'
+      - 'engine/**'
+      - 'hooks/**'
+      - 'lib/**'
+      - 'scripts/act1-browser-smoke.cjs'
+      - 'package.json'
+      - 'tsconfig.json'
+      - '.github/workflows/act1-checks.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            app
+            components
+            engine
+            hooks
+            scripts
+            lib
+            public/kaalyuga
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - run: npm test
+      - run: npm run typecheck
+      - run: npm run build
+      - name: Exercise eight chamber transitions and pause controls
+        run: |
+          npm install --prefix "$RUNNER_TEMP/act1-browser" --no-audit --no-fund playwright-core@1.55.0
+          npm start > "$RUNNER_TEMP/act1-server.log" 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" || true' EXIT
+          curl --retry 20 --retry-all-errors --retry-delay 1 -fsS http://127.0.0.1:3000/ -o /dev/null
+          NODE_PATH="$RUNNER_TEMP/act1-browser/node_modules" node scripts/act1-browser-smoke.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: act1-browser-captures
+          path: |
+            act1-captures
+            ${{ runner.temp }}/act1-server.log
+          if-no-files-found: ignore

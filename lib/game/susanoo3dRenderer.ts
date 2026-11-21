@@ -220,6 +220,8 @@ export class Susanoo3DRenderer {
   private attackAnimHoldSec = 0;
   private activeSwingIndex = 0;
 
+  private disposed = false;
+  private wasAttacking = false;
   private isLoaded = false;
   private isLoading = false;
   private loadFailed = false;
@@ -285,8 +287,8 @@ export class Susanoo3DRenderer {
     if (this.isLoading || this.isLoaded || this.loadFailed) return;
     this.isLoading = true;
     try {
-      const fbx = await loadFbxCached(SUSANOO_FBX_URL, false);
-      const clone = fbx.clone(true);
+      const clone = await loadFbxCached(SUSANOO_FBX_URL, false);
+      if (this.disposed) return;
 
       let foundBones = false;
       clone.traverse((child) => {
@@ -426,6 +428,9 @@ export class Susanoo3DRenderer {
 
     // Detect fresh Susanoo activation -> trigger Creature Pack summon roar!
     if (input.transformTimer > this.lastTransformTimer + 0.5 || !this.roarPlayedForSummon) {
+      this.wasAttacking = false;
+      this.lastAttackSerial = -1;
+      this.attackAnimHoldSec = 0;
       this.roarPlayedForSummon = true;
       if (this.actions.roar) {
         this.playClip('roar', 0.08, 1.15, true);
@@ -434,11 +439,13 @@ export class Susanoo3DRenderer {
     }
     this.lastTransformTimer = input.transformTimer;
 
-    const dt = Math.min(0.05, Math.max(0.008, input.dt ?? 0.016));
+    const dt = Math.min(0.05, Math.max(0, input.dt ?? 0.016));
 
     // Trigger Pro Melee Axe Pack heavy bare-arm swings whenever Rudra commands an attack inside Susanoo
     const attackSerial = input.attackSerial ?? -1;
-    if (input.isAttacking && (attackSerial !== this.lastAttackSerial || this.attackAnimHoldSec <= 0.05)) {
+    const newSwing = input.isAttacking && (!this.wasAttacking || attackSerial !== this.lastAttackSerial);
+    this.wasAttacking = input.isAttacking;
+    if (newSwing) {
       this.lastAttackSerial = attackSerial;
       this.activeSwingIndex = ((input.comboStep ?? this.activeSwingIndex + 1) % 3);
       const swingKey: SusanooClipKey =
@@ -525,6 +532,15 @@ export class Susanoo3DRenderer {
   }
 
   public dispose(): void {
+    this.disposed = true;
+    this.isLoaded = false;
+    if (this.mixer) {
+      this.mixer.stopAllAction();
+      this.mixer.uncacheRoot(this.mixer.getRoot());
+      this.mixer = null;
+    }
+    this.actions = {};
+    this.scene.clear();
     this.chakraMaterial.dispose();
     this.haloRing.geometry.dispose();
     (this.haloRing.material as THREE.Material).dispose();

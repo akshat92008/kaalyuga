@@ -116,3 +116,13 @@ test('findBaitablePillarOnTrajectory locks onto intact dragon pillars along Dund
   assert.equal(res.id, 1);
   assert.equal(res.willImpact, true);
 });
+
+test('a charge stops at the first intact pillar regardless of prop order', () => {
+  const params = {
+    bossX: 0, bossY: 0, aimAngle: 0, endX: 320, endY: 0,
+    pillars: [260, 150, 50].map(x => ({ id: x, x, y: 0, destroyed: x === 50, type: 'kurukshetra_pillar' })),
+  };
+  assert.equal(findBaitablePillarOnTrajectory(params)?.id, 150);
+  assert.equal(findBaitablePillarOnTrajectory(params)?.stopX, 68);
+  assert.equal(findBaitablePillarOnTrajectory({ ...params, endX: 60 })?.willImpact, false);
+});

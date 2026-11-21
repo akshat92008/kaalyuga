@@ -571,7 +571,7 @@ export class Rudra3DRenderer {
 
   public updateAndRender(input: RudraRenderInput): boolean {
     if (!this.isReady) return false;
-    const stepDt = Math.max(0, Math.min(0.1, input.dt || 0.016));
+    const stepDt = Math.max(0, Math.min(0.1, input.dt ?? 0.016));
     this.elapsedSec += stepDt;
 
     const nextState = resolveRudraDesiredState(input, this.actions);
@@ -597,7 +597,7 @@ export class Rudra3DRenderer {
     const facingAngle =
       input.isAttacking || input.isHeavyAttack
         ? input.slashAngle
-        : Math.atan2(input.facingY || 0, input.facingX || 1);
+        : Math.atan2(input.facingY, input.facingX);
 
     const baked = this.renderFrame(
       state,
@@ -647,14 +647,12 @@ export class Rudra3DRenderer {
     // Higher swing frame density (12 software / 24 GPU) + active cleave window [0.14..0.88] eliminates stalled axe swings
     const steps = isSoft ? (isAttack ? 12 : 8) : isAttack ? 24 : 14;
 
-    const effectiveNorm = isAttack
-      ? computeTrimmedCleaveClock(animTimeSec, 0.14, 0.88)
-      : Math.max(0, Math.min(0.999, animTimeSec));
+    const effectiveNorm = Math.max(0, Math.min(0.999, animTimeSec));
     const stepIndex = isAction
       ? Math.min(steps - 1, Math.floor(effectiveNorm * steps))
       : Math.floor(((Math.max(0, animTimeSec) % clipDur) / clipDur) * steps);
     const quantizedTime = isAttack
-      ? (0.14 + (stepIndex / Math.max(1, steps - 1)) * 0.74) * clipDur
+      ? computeTrimmedCleaveClock(stepIndex / (steps - 1)) * clipDur
       : (stepIndex / steps) * clipDur;
 
     const stanceTag = susanooActive

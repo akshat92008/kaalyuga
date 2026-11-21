@@ -25,6 +25,8 @@ import {
   bindTexturedGeometryToSkeleton,
   buildStabilizedInPlaceClip,
   createProceduralIronBucklerGroup,
+  createProceduralLongbowGroup,
+  createProceduralDharmaChakramGroup,
   ENEMY_MODEL_SLOTS,
   extractStandingHipY,
   selectSlotKeyFromInput,
@@ -414,7 +416,7 @@ interface EnemySlotTemplate {
   generateFbxUrl: string;
   textureFbxUrl: string;
   diffuseUrl: string;
-  weaponKind: 'minotaur_axe' | 'trident_axe' | 'crescent_reaver' | 'none';
+  weaponKind: (typeof ENEMY_MODEL_SLOTS)[string]['weaponKind'];
   leftBucklerKind?: 'iron_buckler' | 'none';
   animUrls: Record<Enemy3DAnimState, string>;
   rimColor: number;
@@ -933,30 +935,35 @@ export class UnifiedWorld3DStage {
       };
 
       if (slot.weaponKind !== 'none') {
-        const rightHand = findBone(['mixamorigRightHand', 'RightHand']);
-        const wepTemplate = await this.getSharedWeaponTemplate(slot.weaponKind);
-        if (rightHand && wepTemplate) {
+        const isBow = slot.weaponKind === 'longbow';
+        const hand = isBow ? findBone(['mixamorigLeftHand', 'LeftHand']) : findBone(['mixamorigRightHand', 'RightHand']);
+        const wepTemplate = slot.weaponKind === 'longbow' ? createProceduralLongbowGroup()
+          : slot.weaponKind === 'dharma_chakram' ? createProceduralDharmaChakramGroup()
+          : await this.getSharedWeaponTemplate(slot.weaponKind);
+        if (hand && wepTemplate) {
           const handScaleVec = new THREE.Vector3();
-          rightHand.getWorldScale(handScaleVec);
+          hand.getWorldScale(handScaleVec);
           const handScale = Math.max(1e-5, handScaleVec.x);
           const clonedWep = wepTemplate.clone(true);
           const wepBox = new THREE.Box3().setFromObject(clonedWep);
           const wepSize = new THREE.Vector3();
           wepBox.getSize(wepSize);
           const maxDim = Math.max(0.001, wepSize.x, wepSize.y, wepSize.z);
-          const desiredWorldLen = 1.24 * slot.scaleMultiplier;
+          const desiredWorldLen = (isBow ? 1.05 : slot.weaponKind === 'dharma_chakram' ? 0.72 : 1.24) * slot.scaleMultiplier;
           const localWepScale = desiredWorldLen / (maxDim * handScale);
 
           const weaponSocket = new THREE.Group();
           clonedWep.scale.setScalar(localWepScale);
-          if (slot.weaponKind === 'minotaur_axe') {
+          if (isBow) {
+            clonedWep.rotation.set(0, Math.PI * 0.5, 0);
+          } else if (slot.weaponKind === 'minotaur_axe' || slot.weaponKind === 'dharma_chakram') {
             clonedWep.rotation.set(0, 0, 0);
           } else {
             clonedWep.rotation.set(-Math.PI * 0.5, 0, -Math.PI * 0.5);
           }
-          clonedWep.position.set(0.26 * maxDim * localWepScale, 0, 0);
+          clonedWep.position.set(isBow ? 0 : 0.26 * maxDim * localWepScale, 0, 0);
           weaponSocket.add(clonedWep);
-          rightHand.add(weaponSocket);
+          hand.add(weaponSocket);
         }
       }
 

@@ -105,14 +105,14 @@ test('computeTrimmedCleaveClock trims idle wind-up and dead recovery frames clea
 test('soundEngine.resolveTrackForState maps all Act I states, 8 chambers, boss phases, and Susanoo surge', () => {
   assert.equal(soundEngine.resolveTrackForState('title', 1, false).url, '/audio/repo/the_bleeding_crown.mp3');
   assert.equal(soundEngine.resolveTrackForState('prologue', 1, false).url, '/assets/aistudio/Before_the_Iron_Gate.mp3');
-  assert.equal(soundEngine.resolveTrackForState('shrine', 1, false).url, '/audio/repo/mythic_sanctuary.mp3');
+  assert.equal(soundEngine.resolveTrackForState('shrine', 1, false).url, '/audio/repo/vaitarani_realm.mp3');
   assert.equal(soundEngine.resolveTrackForState('playing', 1, false).url, '/assets/aistudio/Iron_Chariots_of_the_Sun.mp3');
-  assert.equal(soundEngine.resolveTrackForState('playing', 2, false).url, '/assets/aistudio/Iron_Chariots_of_the_Sun.mp3');
+  assert.equal(soundEngine.resolveTrackForState('playing', 2, false).url, '/assets/aistudio/Judgment_at_the_Ruined_Gate.mp3');
   assert.equal(soundEngine.resolveTrackForState('playing', 3, false).url, '/audio/repo/mythic_battle_impact.mp3');
   assert.equal(soundEngine.resolveTrackForState('playing', 4, true).url, '/audio/repo/dundubhi_boss_theme.mp3');
   assert.equal(soundEngine.resolveTrackForState('playing', 5, false).url, '/audio/repo/dark_western_rpg.mp3');
   assert.equal(soundEngine.resolveTrackForState('playing', 6, true).url, '/audio/repo/demon_boss_battle.mp3');
-  assert.equal(soundEngine.resolveTrackForState('playing', 7, false).url, '/audio/repo/mythic_battle_chaos.mp3');
+  assert.equal(soundEngine.resolveTrackForState('playing', 7, false).url, '/assets/aistudio/The_Titan_s_Final_Stride.mp3');
   assert.equal(soundEngine.resolveTrackForState('playing', 8, true, 1, false).url, '/audio/repo/vrikodara_boss_theme.mp3');
   assert.equal(soundEngine.resolveTrackForState('playing', 8, true, 2, false).url, '/audio/repo/apocalyptic_climax.mp3');
   assert.equal(soundEngine.resolveTrackForState('playing', 4, true, 1, true).url, '/audio/repo/god_of_war_epic.mp3');

@@ -362,32 +362,47 @@ export function renderParallaxAbyss(
   ctx.restore();
 }
 
-// Singleton 60 FPS Arena Video Pool (Only 1 active GPU-accelerated decoder at a time, zero double-blit)
+// Keep the current backdrop and one upcoming backdrop. Detached video elements
+// can retain compressed buffers and decoder surfaces until their source is cleared.
 const arenaVideoPool = new Map<string, HTMLVideoElement>();
-let currentPlayingVideoUrl: string | null = null;
-const arenaVideoPlayPending = new Set<string>();
-let videoGestureUnlockBound = false;
+const playPending = new WeakSet<HTMLVideoElement>();
+let activeVideo: HTMLVideoElement | null = null;
+let fadeStart: number | null = null;
 
-function bindVideoGestureUnlock(): void {
-  if (videoGestureUnlockBound || typeof window === 'undefined') return;
-  videoGestureUnlockBound = true;
-  const resumeActiveVideo = () => {
-    if (!currentPlayingVideoUrl) return;
-    const active = arenaVideoPool.get(currentPlayingVideoUrl);
-    if (active && active.paused) {
-      active.play().catch(() => {});
-    }
-  };
-  window.addEventListener('pointerdown', resumeActiveVideo, { passive: true });
-  window.addEventListener('keydown', resumeActiveVideo, { passive: true });
+function playActiveVideo(): void {
+  const video = activeVideo;
+  if (!video || !video.paused || video.error || playPending.has(video)) return;
+  playPending.add(video);
+  void video.play().catch(() => {}).finally(() => playPending.delete(video));
+}
+
+function releaseVideo(video: HTMLVideoElement): void {
+  video.pause();
+  video.removeAttribute('src');
+  video.load();
+}
+
+export function releaseArenaVideos(): void {
+  activeVideo = null;
+  fadeStart = null;
+  for (const video of arenaVideoPool.values()) releaseVideo(video);
+  arenaVideoPool.clear();
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('pointerdown', playActiveVideo);
+    window.removeEventListener('keydown', playActiveVideo);
+  }
 }
 
 export function prewarmArenaVideo(videoUrl: string | undefined): void {
-  if (typeof window === 'undefined' || typeof document === 'undefined' || !videoUrl) {
-    return;
+  if (typeof document === 'undefined' || !videoUrl || arenaVideoPool.has(videoUrl)) return;
+  if (arenaVideoPool.size >= 2) {
+    for (const [url, video] of arenaVideoPool) {
+      if (video === activeVideo) continue;
+      arenaVideoPool.delete(url);
+      releaseVideo(video);
+      break;
+    }
   }
-  bindVideoGestureUnlock();
-  if (arenaVideoPool.has(videoUrl)) return;
   const video = document.createElement('video');
   video.muted = true;
   video.defaultMuted = true;
@@ -395,71 +410,28 @@ export function prewarmArenaVideo(videoUrl: string | undefined): void {
   video.playsInline = true;
   video.preload = 'auto';
   video.src = encodeURI(videoUrl);
-  const tryStart = () => {
-    if (currentPlayingVideoUrl === videoUrl && video.paused) {
-      video.play().catch(() => {});
-    }
-  };
-  video.addEventListener('loadeddata', tryStart);
-  video.addEventListener('canplay', tryStart);
-  video.load();
   arenaVideoPool.set(videoUrl, video);
+  video.load();
+  window.addEventListener('pointerdown', playActiveVideo, { passive: true });
+  window.addEventListener('keydown', playActiveVideo, { passive: true });
 }
 
-export function getOrStartArenaVideo(videoUrl: string | undefined, paused: boolean = false): HTMLVideoElement | null {
-  if (typeof window === 'undefined' || typeof document === 'undefined' || !videoUrl) {
-    return null;
+export function getOrStartArenaVideo(videoUrl: string | undefined, paused = false): HTMLVideoElement | null {
+  if (!videoUrl || typeof window === 'undefined') return null;
+  prewarmArenaVideo(videoUrl);
+  const video = arenaVideoPool.get(videoUrl);
+  if (!video) return null;
+  if (activeVideo !== video) {
+    activeVideo?.pause();
+    fadeStart = null;
   }
-  bindVideoGestureUnlock();
-  let video = arenaVideoPool.get(videoUrl);
-  if (!video) {
-    video = document.createElement('video');
-    video.muted = true;
-    video.defaultMuted = true;
-    video.loop = true;
-    video.playsInline = true;
-    video.preload = 'auto';
-    video.src = encodeURI(videoUrl);
-    const targetVid = video;
-    const tryStart = () => {
-      if (currentPlayingVideoUrl === videoUrl && targetVid.paused) {
-        targetVid.play().catch(() => {});
-      }
-    };
-    targetVid.addEventListener('loadeddata', tryStart);
-    targetVid.addEventListener('canplay', tryStart);
-    targetVid.load();
-    arenaVideoPool.set(videoUrl, video);
-  }
-
-  // Pause all other chamber videos so devices only decode 1 active arena MP4
-  if (currentPlayingVideoUrl !== videoUrl) {
-    arenaVideoPool.forEach((otherVid, url) => {
-      if (url !== videoUrl && !otherVid.paused) {
-        try {
-          otherVid.pause();
-        } catch {}
-      }
-    });
-    currentPlayingVideoUrl = videoUrl;
-  }
-
   if (paused) {
-    if (!video.paused) {
-      try {
-        video.pause();
-      } catch {}
-    }
-  } else if (video.paused && !arenaVideoPlayPending.has(videoUrl)) {
-    arenaVideoPlayPending.add(videoUrl);
-    video
-      .play()
-      .catch(() => {})
-      .finally(() => {
-        arenaVideoPlayPending.delete(videoUrl);
-      });
+    video.pause();
+    activeVideo = null;
+  } else {
+    activeVideo = video;
+    playActiveVideo();
   }
-
   return video;
 }
 
@@ -483,6 +455,7 @@ export function renderIsometricChamberPlatform(
   const geom = getChamberGeometry(chamberIndex);
   const biome = getChamberBiomeProfile(chamberIndex);
   const resolvedVideoUrl = !disableVideoBg ? activeVideoUrl : undefined;
+  if (!resolvedVideoUrl && arenaVideoPool.size) releaseArenaVideos();
   const activeVideo = resolvedVideoUrl ? getOrStartArenaVideo(resolvedVideoUrl, false) : null;
   // Render decoded MP4 frame 0 immediately instead of waiting for currentTime > 0.01
   const isVideoReady =
@@ -512,7 +485,11 @@ export function renderIsometricChamberPlatform(
   }
 
   if (isVideoReady && activeVideo) {
+    fadeStart ??= now;
+    ctx.save();
+    ctx.globalAlpha *= Math.min(1, Math.max(0, (now - fadeStart) / 400));
     ctx.drawImage(activeVideo, 0, 0, worldW, worldH);
+    ctx.restore();
   }
 
   if (!isBgImgReady && !isVideoReady) {

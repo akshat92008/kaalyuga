@@ -2,7 +2,6 @@ import fs from 'fs';
 import fsp from 'fs/promises';
 import path from 'path';
 import crypto from 'crypto';
-import { NextRequest, NextResponse } from 'next/server';
 
 export const GITHUB_RAW_BASE = 'https://raw.githubusercontent.com/akshat92008/kaalyuga/main';
 export const DISK_CACHE_DIR = '/tmp/kaliyuga_static_cache';
@@ -289,6 +288,10 @@ function putInCache(key: string, buf: Buffer): void {
     // Ignore disk cache write failures
   }
 
+  rememberBuffer(key, buf);
+}
+
+function rememberBuffer(key: string, buf: Buffer): void {
   if (buf.byteLength > MAX_MEMORY_ENTRY_BYTES) {
     return;
   }
@@ -437,9 +440,7 @@ export async function resolveStaticAssetBuffer(segments: string[]): Promise<Buff
       if (fs.existsSync(localPath) && fs.statSync(localPath).isFile()) {
         const localBuf = await fsp.readFile(localPath);
         if (localBuf.byteLength > 0) {
-          if (localBuf.byteLength <= MAX_MEMORY_ENTRY_BYTES) {
-            memoryCache.set(cacheKey, localBuf);
-          }
+          rememberBuffer(cacheKey, localBuf);
           return localBuf;
         }
       }
@@ -501,17 +502,17 @@ export async function resolveStaticAssetBuffer(segments: string[]): Promise<Buff
 }
 
 export async function serveStaticAssetFromProxy(
-  req: NextRequest,
+  req: Request,
   segments: string[],
   isHead = false
-): Promise<NextResponse> {
+): Promise<Response> {
   if (!segments || segments.length === 0) {
-    return new NextResponse(isHead ? null : 'Bad request', { status: 400 });
+    return new Response(isHead ? null : 'Bad request', { status: 400 });
   }
 
   const buffer = await resolveStaticAssetBuffer(segments);
   if (!buffer) {
-    return new NextResponse(isHead ? null : 'Asset not found', { status: 404 });
+    return new Response(isHead ? null : 'Asset not found', { status: 404 });
   }
 
   const fileSize = buffer.byteLength;
@@ -520,7 +521,7 @@ export async function serveStaticAssetFromProxy(
   const contentType = MIME_MAP[ext] || 'application/octet-stream';
 
   if (isHead) {
-    return new NextResponse(null, {
+    return new Response(null, {
       status: 200,
       headers: {
         'Accept-Ranges': 'bytes',
@@ -538,7 +539,7 @@ export async function serveStaticAssetFromProxy(
     const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
 
     if (Number.isNaN(start) || Number.isNaN(end) || start >= fileSize || end >= fileSize || start > end) {
-      return new NextResponse(null, {
+      return new Response(null, {
         status: 416,
         headers: {
           'Content-Range': `bytes */${fileSize}`,
@@ -547,7 +548,7 @@ export async function serveStaticAssetFromProxy(
     }
 
     const chunk = buffer.subarray(start, end + 1);
-    return new NextResponse(new Uint8Array(chunk), {
+    return new Response(new Uint8Array(chunk), {
       status: 206,
       headers: {
         'Content-Range': `bytes ${start}-${end}/${fileSize}`,
@@ -559,7 +560,7 @@ export async function serveStaticAssetFromProxy(
     });
   }
 
-  return new NextResponse(new Uint8Array(buffer), {
+  return new Response(new Uint8Array(buffer), {
     status: 200,
     headers: {
       'Accept-Ranges': 'bytes',
