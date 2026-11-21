@@ -534,6 +534,7 @@ export default function KaliyugaArena() {
   const bloodDemonArtsRef = useRef<BloodDemonArtPool>(createBloodDemonArtPool());
   const enemyVariantCounterRef = useRef<number>(0);
   const chamberLoadSeqRef = useRef<number>(0);
+  const lastRigChamberRef = useRef<number>(-1);
   const gamepadPrevButtonsRef = useRef<boolean[]>([]);
   const [preloadProgress, setPreloadProgress] = useState<number>(18);
   const [cameraPreset, setCameraPreset] = useState<HadesCameraPreset>('dynamic_action');
@@ -2123,7 +2124,7 @@ export default function KaliyugaArena() {
     if (results.every(Boolean)) {
       setChamberLoadingLabel(null);
       setChamberLoadError(null);
-      sim.modalPaused = false;
+      // React's modal-pausing effect owns the final pause state, including boss intro cutscenes.
     } else {
       setChamberLoadError('One or more chamber assets could not load. Retry to avoid invisible or placeholder enemies.');
     }
@@ -2136,6 +2137,15 @@ export default function KaliyugaArena() {
       const clampedIdx = Math.max(0, Math.min(CHAMBERS.length - 1, index));
       const spec = CHAMBERS[clampedIdx];
       const isTitleMode = sim.state === 'title';
+      // Release old chamber's live rigs before loading the next wave of distinct models.
+      // This prevents scenes from retaining every boss and enemy encountered in Act I.
+      if (!isTitleMode && lastRigChamberRef.current >= 0 && lastRigChamberRef.current !== clampedIdx) {
+        enemy3dRef.current?.dispose();
+        boss3dRef.current?.dispose();
+        enemy3dRef.current = new Enemy3DRenderer(256);
+        boss3dRef.current = new Boss3DRenderer(256);
+      }
+      if (!isTitleMode) lastRigChamberRef.current = clampedIdx;
       // Animated arena MP4 streaming is retired during gameplay. Static paintings stay stable.
       sim.videoBgEnabled = false;
       releaseArenaVideos();
