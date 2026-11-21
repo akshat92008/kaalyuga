@@ -12221,10 +12221,14 @@ export default function KaliyugaArena() {
                 ctx,poseTrail.samples,bladeVisual.alpha,stanceColors,bladeVisual.isHeavy
               );
               if(!painted && bladeHead){
-                renderParashuBladeTipGlint(ctx,bladeHead,bladeVisual.alpha,p.stance);
+                renderParashuBladeTipGlint(
+                  ctx,bladeHead,bladeVisual.alpha,p.stance,breathingElement
+                );
               }
             } else if (bladeFxMode === 'socket_tip' && bladeHead) {
-              renderParashuBladeTipGlint(ctx,bladeHead,bladeVisual.alpha,p.stance);
+              renderParashuBladeTipGlint(
+                  ctx,bladeHead,bladeVisual.alpha,p.stance,breathingElement
+                );
             } else if (bladeFxMode === 'fallback_2d') {
               // Unloaded 3D model only. Never replace a real missing socket
               // with a disconnected free-floating fantasy slash.
