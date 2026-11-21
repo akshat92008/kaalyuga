@@ -81,11 +81,15 @@ try{
     const selector='[data-testid="meru-boss-cinematic"]';
     await targetPage.waitForFunction(sel=>{
       const node=document.querySelector(sel);
-      return node&&node.getAttribute('data-meru-rig-status')!=='loading';
-    },selector,{timeout:30000});
+      return node?.getAttribute('data-meru-rig-status')==='rigged';
+    },selector,{timeout:28000}).catch(async e=>{
+      const node=targetPage.getByTestId('meru-boss-cinematic');
+      const detail=await node.getAttribute('data-meru-rig-detail').catch(()=>'(dialog missing)');
+      throw new Error(label+' did not load its real FBX model. Detail: '+detail+'; '+e.message);
+    });
     const rigStatus=await targetPage.getByTestId('meru-boss-cinematic').getAttribute('data-meru-rig-status');
-    console.log('MERU_RIG_QA: '+label+' real-rig state='+rigStatus);
-    assert.equal(rigStatus,'rigged',label+' failed to display a real 3D model');
+    const timeAtRig=await targetPage.getByTestId('meru-cinematic-clock').textContent();
+    console.log('MERU_RIG_QA: '+label+' real-rig state='+rigStatus+'; visible at '+timeAtRig);
     await targetPage.waitForFunction(()=>{
       const node=document.querySelector('[data-testid="meru-cinematic-clock"]');
       return node&&Number.parseFloat(node.textContent||'0')>=2.5;
