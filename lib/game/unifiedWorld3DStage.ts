@@ -414,7 +414,7 @@ interface EnemySlotTemplate {
   generateFbxUrl: string;
   textureFbxUrl: string;
   diffuseUrl: string;
-  weaponKind: 'minotaur_axe' | 'trident_axe' | 'crescent_reaver' | 'none';
+  weaponKind: 'minotaur_axe' | 'trident_axe' | 'crescent_reaver' | 'longbow' | 'dharma_chakram' | 'none';
   leftBucklerKind?: 'iron_buckler' | 'none';
   animUrls: Record<Enemy3DAnimState, string>;
   rimColor: number;
