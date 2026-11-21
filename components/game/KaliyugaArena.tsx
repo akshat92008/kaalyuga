@@ -160,6 +160,7 @@ import {
   renderBattleScarsOnFloor,
   renderWeaponBoneSlashRibbon,
   renderWeaponPoseTrail,
+  renderAct1HeavyParashuBreathing,
   renderParashuBladeTipGlint,
   renderWeaponTipStarburstGlint,
   spawnBattleScar,
@@ -197,6 +198,7 @@ import {
   type WeaponTrailSample,
 } from '@/lib/game/act1WeaponPoseTrail';
 import { getAct1ExecutionVisualPlan } from '@/lib/game/act1ExecutionVisualPlan';
+import { getAct1HeavyContactSpectacle } from '@/lib/game/act1HeavyBreathingFx';
 import {
   chooseAct1BladeFxMode, getAct1FallbackBladeRadius,
   getAct1ExecutionContactBudget, type Act1BladeFxMode,
@@ -578,6 +580,9 @@ export default function KaliyugaArena() {
     chamberIndex: number;
     samples: WeaponTrailSample[];
   }>({attackSerial: -1, chamberIndex: -1, samples: []});
+  const heavyBreathingFocusRef = useRef<{
+    attackSerial:number; chamberIndex:number; focus:number;
+  } | null>(null);
   const finisherChoreographyRef = useRef<Act1ExecutionChoreographyToken | null>(null);
   const pendingStrikeVfxRef = useRef<{
     fired: boolean;
@@ -2240,6 +2245,7 @@ export default function KaliyugaArena() {
       lastCinematicZoomOverlayRef.current = 0;
       pendingStrikeVfxRef.current = null;
       finisherChoreographyRef.current = null;
+      heavyBreathingFocusRef.current = null;
       pendingBossEntranceRef.current = null;
       // Release old chamber's live rigs before loading the next wave of distinct models.
       // This prevents scenes from retaining every boss and enemy encountered in Act I.
@@ -4883,6 +4889,9 @@ export default function KaliyugaArena() {
     p.scaleY = p.stance === 'thrust' ? 0.86 : 1.09;
     p.weaponSwingProgress = 0.0;
     p.attackSerial += 1;
+    heavyBreathingFocusRef.current = {
+      attackSerial:p.attackSerial, chamberIndex:sim.chamberIndex, focus:orbsUsed,
+    };
     p.elevationY = 0;
     p.invulnTimer = Math.max(p.invulnTimer, seeThroughRes.invulnDurationSec);
     addStylePoints(
@@ -7011,6 +7020,11 @@ export default function KaliyugaArena() {
       });
       if (bossChargeTrace.length > 96) bossChargeTrace.shift();
     };
+    const heavyBreathingTrace: Array<{
+      action:string; stance:'smash'|'pillar'|'thrust';
+      attackSerial:number; focus:number; sampleCount:number;
+      peakReach:number; atMs:number;
+    }> = [];
     const weaponPoseTrace: Array<{
       mode: Act1BladeFxMode;
       action: 'light_attack' | 'heavy_unleash' | 'execute';
@@ -7113,6 +7127,7 @@ export default function KaliyugaArena() {
               selected: qaForcedChargeSelected,
             },
             weaponPoseTrace: weaponPoseTrace.slice(),
+            heavyBreathingTrace: heavyBreathingTrace.slice(),
             cameraShotTrace: cameraShotTrace.slice(),
             executionVictimTrace: executionVictimTrace.slice(),
             executionHeroTrace: executionHeroTrace.slice(),
@@ -11878,6 +11893,62 @@ export default function KaliyugaArena() {
               susanooActive: coreLock.isSusanooActive,
             });
 
+          // Sample the exact 3D axe-head socket BEFORE rendering Rudra.
+          // The massive elemental veil is layered BEHIND his body so the
+          // face, arm position and weapon silhouette stay clear and readable.
+          const poseTrail=parashuPoseTrailRef.current;
+          const activeParashuAction=!coreLock.isSusanooActive &&
+            (p.action==='light_attack'||p.action==='heavy_unleash'||p.action==='execute');
+          const bladeVisual=computeParashuSwingVisual(p.action,p.weaponSwingProgress,p.comboStep);
+          const bladeHead=activeParashuAction && rendered3D && rudra3d
+            ? projectWeaponHeadToWorld({
+                uv:rudra3d.getProjectedParashuHead(),actorX:p.x,actorY:p.y,
+                drawSize:HEROIC_DRAW_SIZES.rudra,footAnchorRatio:rudra3d.footAnchorRatio,
+              })
+            : null;
+          if(!activeParashuAction)poseTrail.samples=[];
+          else{
+            if(poseTrail.attackSerial!==p.attackSerial||
+               poseTrail.chamberIndex!==sim.chamberIndex){
+              poseTrail.attackSerial=p.attackSerial;
+              poseTrail.chamberIndex=sim.chamberIndex;
+              poseTrail.samples=[];
+            }
+            if(bladeVisual.active){
+              poseTrail.samples=advanceWeaponPoseTrail({
+                previous:poseTrail.samples,point:bladeHead,
+                atMs:p.weaponSwingProgress*Math.max(0.01,p.actionDuration)*1000,
+              });
+            }
+          }
+          const bladeFxMode=chooseAct1BladeFxMode({
+            rendered3D:Boolean(rendered3D&&rudra3d),
+            hasProjectedHead:bladeHead!==null,
+            sampleCount:poseTrail.samples.length,
+          });
+          if(bladeVisual.active && bladeVisual.isHeavy &&
+             bladeFxMode==='socket_trail' &&
+             (p.action==='heavy_unleash'||p.action==='execute')){
+            const focusInfo=heavyBreathingFocusRef.current;
+            const consumedFocus=p.action==='heavy_unleash' &&
+              focusInfo?.attackSerial===p.attackSerial &&
+              focusInfo.chamberIndex===sim.chamberIndex
+              ? focusInfo.focus : 1;
+            const painted=renderAct1HeavyParashuBreathing(ctx,poseTrail.samples,{
+              stance:p.stance,focus:consumedFocus,alpha:bladeVisual.alpha,
+              action:p.action,
+            });
+            if(perfTelemetryEnabled && painted){
+              heavyBreathingTrace.push({
+                action:p.action,stance:p.stance,attackSerial:p.attackSerial,
+                focus:consumedFocus,sampleCount:poseTrail.samples.length,
+                peakReach:Math.min(145,58+Math.max(0,Math.min(4,consumedFocus))*18),
+                atMs:now,
+              });
+              if(heavyBreathingTrace.length>64)heavyBreathingTrace.shift();
+            }
+          }
+
           // Render True Animated 3D Kala-Bhairava Susanoo towering around Rudra (source-over + NDC edge fade = ZERO orange square clipping!)
           if (p.transformTimer > 0) {
             const susanoo3d = susanoo3dRef.current;
@@ -11965,96 +12036,47 @@ export default function KaliyugaArena() {
             );
           }
 
-          // Physically grounded, frame-driven Parashu breathing crescent:
-          // follow the head of the actual FBX weapon parented to the right
-          // hand and projected through the SAME camera/pose as the baked sprite.
-          const poseTrail = parashuPoseTrailRef.current;
-          const activeParashuAction =
-            !coreLock.isSusanooActive &&
-            (p.action === 'light_attack' || p.action === 'heavy_unleash' ||
-             p.action === 'execute');
-          if (!activeParashuAction) {
-            poseTrail.samples = [];
-          } else {
-            if (poseTrail.attackSerial !== p.attackSerial ||
-                poseTrail.chamberIndex !== sim.chamberIndex) {
-              poseTrail.attackSerial = p.attackSerial;
-              poseTrail.chamberIndex = sim.chamberIndex;
-              poseTrail.samples = [];
+          // Draw the NARROW white-hot blade stroke above Rudra, while large
+          // vibrant flames already appeared BEHIND his 3D silhouette.
+          // This is the same measured weapon-head path; no screen-space ring.
+          if (activeParashuAction && bladeVisual.active) {
+            if (bladeFxMode === 'socket_trail') {
+              const stanceColors = p.stance === 'thrust'
+                ? {coreColor:'#e9ffff',plasmaColor:'#50deed',outerGlowColor:'#0b5366'}
+                : p.stance === 'pillar'
+                ? {coreColor:'#fff9cf',plasmaColor:'#5eeeb0',outerGlowColor:'#17654a'}
+                : {coreColor:'#fff3c8',plasmaColor:'#ffa648',outerGlowColor:'#9e3019'};
+              const painted=renderWeaponPoseTrail(
+                ctx,poseTrail.samples,bladeVisual.alpha,stanceColors,bladeVisual.isHeavy
+              );
+              if(!painted && bladeHead){
+                renderParashuBladeTipGlint(ctx,bladeHead,bladeVisual.alpha,p.stance);
+              }
+            } else if (bladeFxMode === 'socket_tip' && bladeHead) {
+              renderParashuBladeTipGlint(ctx,bladeHead,bladeVisual.alpha,p.stance);
+            } else if (bladeFxMode === 'fallback_2d') {
+              // Unloaded 3D model only. Never replace a real missing socket
+              // with a disconnected free-floating fantasy slash.
+              const fallbackMesh=computeWeaponSlashRibbon({
+                originX:p.x+Math.cos(p.slashAngle)*13,
+                originY:p.y-28,aimAngle:p.slashAngle,
+                swingProgress:p.weaponSwingProgress,
+                radius:getAct1FallbackBladeRadius(bladeVisual.radius),
+                stance:p.stance,isHeavy:bladeVisual.isHeavy,
+                isRiposte:p.riposteWindowTimer>0,comboStep:bladeVisual.comboStep,
+              });
+              renderWeaponBoneSlashRibbon(ctx,fallbackMesh,bladeVisual.alpha*0.64);
             }
-            const bladeVisual = computeParashuSwingVisual(
-              p.action, p.weaponSwingProgress, p.comboStep
-            );
-            if (bladeVisual.active) {
-              const bladeHead = rendered3D && rudra3d
-                ? projectWeaponHeadToWorld({
-                    uv: rudra3d.getProjectedParashuHead(),
-                    actorX: p.x, actorY: p.y,
-                    drawSize: HEROIC_DRAW_SIZES.rudra,
-                    footAnchorRatio: rudra3d.footAnchorRatio,
-                  })
-                : null;
-              poseTrail.samples = advanceWeaponPoseTrail({
-                previous: poseTrail.samples, point: bladeHead,
-                // Use attack *simulation* time, not slow wall-clock RAF time.
-                // SwiftShader may take >150ms per frame while the actual
-                // attack clock advances by only 50ms. Age/clear the ink in
-                // game-time so its geometry follows the same cached 3D pose.
-                atMs: p.weaponSwingProgress * Math.max(0.01,p.actionDuration) * 1000,
+            if(perfTelemetryEnabled && bladeVisual.alpha>=0.6){
+              weaponPoseTrace.push({
+                mode:bladeFxMode,
+                action:p.action as 'light_attack'|'heavy_unleash'|'execute',
+                attackSerial:p.attackSerial,chamber:sim.chamberIndex+1,
+                sampleCount:poseTrail.samples.length,
+                headX:bladeHead?.x??null,headY:bladeHead?.y??null,
+                atMs:now,
               });
-              // A ready 3D actor with a valid head uses only its own baked
-              // weapon positions. One sample gets a close blade-tip glint.
-              // Missing data during animation crossfade suppresses the
-              // effect rather than inventing a distant 206px fire crescent.
-              const mode = chooseAct1BladeFxMode({
-                rendered3D: Boolean(rendered3D && rudra3d),
-                hasProjectedHead: bladeHead !== null,
-                sampleCount: poseTrail.samples.length,
-              });
-              if (mode === 'socket_trail') {
-                const stanceColors = p.stance === 'thrust'
-                  ? {coreColor:'#e9ffff',plasmaColor:'#50deed',outerGlowColor:'#0b5366'}
-                  : p.stance === 'pillar'
-                  ? {coreColor:'#fff9cf',plasmaColor:'#5eeeb0',outerGlowColor:'#17654a'}
-                  : {coreColor:'#fff3c8',plasmaColor:'#ffa648',outerGlowColor:'#9e3019'};
-                const painted = renderWeaponPoseTrail(
-                  ctx, poseTrail.samples, bladeVisual.alpha, stanceColors,
-                  bladeVisual.isHeavy
-                );
-                if (!painted && bladeHead) {
-                  renderParashuBladeTipGlint(ctx, bladeHead, bladeVisual.alpha, p.stance);
-                }
-              } else if (mode === 'socket_tip' && bladeHead) {
-                renderParashuBladeTipGlint(ctx, bladeHead, bladeVisual.alpha, p.stance);
-              } else if (mode === 'fallback_2d') {
-                // Before 3D assets have loaded, only a compact 2D hand-bound
-                // indication is allowed. Normal 3D play never shows this.
-                const fallbackMesh = computeWeaponSlashRibbon({
-                  originX: p.x + Math.cos(p.slashAngle) * 13,
-                  originY: p.y - 28, aimAngle: p.slashAngle,
-                  swingProgress: p.weaponSwingProgress,
-                  radius: getAct1FallbackBladeRadius(bladeVisual.radius),
-                  stance: p.stance, isHeavy: bladeVisual.isHeavy,
-                  isRiposte: p.riposteWindowTimer > 0,
-                  comboStep: bladeVisual.comboStep,
-                });
-                renderWeaponBoneSlashRibbon(ctx, fallbackMesh, bladeVisual.alpha * 0.64);
-              }
-              // QA only: capture the actual baked-frame projection versus
-              // fallback, so screenshots alone cannot conceal a missing rig.
-              if (perfTelemetryEnabled && bladeVisual.alpha >= 0.6) {
-                weaponPoseTrace.push({
-                  mode,
-                  action: p.action as 'light_attack' | 'heavy_unleash' | 'execute',
-                  attackSerial: p.attackSerial,
-                  chamber: sim.chamberIndex + 1,
-                  sampleCount: poseTrail.samples.length,
-                  headX: bladeHead?.x ?? null,
-                  headY: bladeHead?.y ?? null,
-                  atMs: now,
-                });
-                if (weaponPoseTrace.length > 64) weaponPoseTrace.shift();
-              }
+              if(weaponPoseTrace.length>64)weaponPoseTrace.shift();
             }
           }
           // All canvas visuals for this actor share the same tiny root step.
