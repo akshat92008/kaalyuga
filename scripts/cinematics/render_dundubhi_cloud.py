@@ -82,7 +82,9 @@ def material_for_model(imagepath):
     bsdf = next(n for n in tree.nodes if n.type == "BSDF_PRINCIPLED")
     bsdf.inputs["Metallic"].default_value = 0.28
     bsdf.inputs["Roughness"].default_value = 0.67
-    bsdf.inputs["Specular"].default_value = 0.28
+    spec = bsdf.inputs.get("Specular IOR Level") or bsdf.inputs.get("Specular")
+    if spec is not None:
+        spec.default_value = 0.28
     bsdf.inputs["Base Color"].default_value = (0.48, 0.27, 0.16, 1)
     if imagepath.exists():
         tex = tree.nodes.new("ShaderNodeTexImage")
