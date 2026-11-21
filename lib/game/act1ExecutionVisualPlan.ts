@@ -47,11 +47,13 @@ export function getAct1ExecutionVisualPlan(variant:ParashuFinisherVariant):Act1E
       useGroundedOverheadContact:false,allowSpectralSkyBolts:true,
     };
   }
+  // Impaling Lunge is a narrow, directed weapon contact, not a second
+  // screen-wide spinning finisher. Keep its original 0.35 active contact frame.
   return {
     variant,contactProgress:0.35,focusXOffset:30,focusYOffset:-24,
-    groundShockwaveRadius:290,slashRadius:235,
-    slashWidth:82,slashArcSpan:3.25,
-    impactBurstScale:1.75,sparkCount:28,flipbookSize:248,
-    useGroundedOverheadContact:false,allowSpectralSkyBolts:true,
+    groundShockwaveRadius:102,slashRadius:152,
+    slashWidth:29,slashArcSpan:0.72,
+    impactBurstScale:1.18,sparkCount:14,flipbookSize:150,
+    useGroundedOverheadContact:false,allowSpectralSkyBolts:false,
   };
 }
