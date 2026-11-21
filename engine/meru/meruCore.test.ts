@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {createDundubhiScene, createVrikodaraScene, createBossPhaseScene, validateCinematic, sampleCinematic, retimeCinematic, cuesBetween, MeruTimelinePlayer} from './cinematicTimeline';
 import {MeruAdaptiveQuality,GRAPHICS_PRESETS} from './adaptiveQuality';
 import {MeruFrameProbe} from './performanceProbe';
+import {measureSilhouetteCrop} from './silhouetteCrop';
 import {beginPortalTransition,advancePortalTransition,portalPalette} from './portalDirector';
 import {shouldStartDundubhiIntro,shouldStartBossIntro,shouldStartBossPhase,meruStorageKey,meruSceneStorageKey,defaultBossIntro} from './runtimePolicy';
 
@@ -280,4 +281,21 @@ test('retiming a cinematic rescales sound and visual beats together with charact
     assert.equal(validateCinematic(next).duration,12);
   }
   assert.throws(()=>retimeCinematic(createDundubhiScene(),-1),/duration/);
+});
+
+test('transparent rig alpha framing removes empty space while preserving limbs and foot anchor',()=>{
+  const width=128,height=128;
+  const rgba=new Uint8Array(width*height*4);
+  for(let y=15;y<=109;y++)for(let x=41;x<=86;x++)rgba[(y*width+x)*4+3]=255;
+  const crop=measureSilhouetteCrop(rgba,width,height);
+  assert.equal(crop.fitted,true);
+  assert.ok(crop.width<0.7&&crop.width>0.3);
+  assert.ok(crop.height>0.7&&crop.height<=1);
+  assert.ok(crop.x*width<=41&&crop.x*width>0);
+  assert.ok((crop.x+crop.width)*width>=86);
+  assert.ok(crop.footY>0.8&&crop.footY<=1);
+  const empty=measureSilhouetteCrop(new Uint8Array(width*height*4),width,height);
+  assert.equal(empty.fitted,false,'Missing rigs must preserve a safe full-frame fallback');
+  const invalid=measureSilhouetteCrop(rgba,width,200);
+  assert.equal(invalid.fitted,false,'Undersized RGBA data never crashes rendering');
 });
