@@ -12,6 +12,10 @@ on:
   push:
     branches:
       - "fix/act1-loading-susanoo-stability-20261121"
+concurrency:
+  group: act1-engine-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   engine-tests:
     runs-on: ubuntu-latest
