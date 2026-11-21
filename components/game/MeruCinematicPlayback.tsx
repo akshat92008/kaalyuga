@@ -64,24 +64,37 @@ export default function MeruCinematicPlayback({scene,onFinish,muted=false}:MeruC
         audio[key]=track;
       }catch{/* Audio is optional; never block gameplay. */}
     }
+    const updateRigStatus=(loaded:boolean)=>{
+      hasRig=loaded;
+      setStatus(loaded
+        ? 'Original '+scene.boss+' 3D rig active'
+        : 'Original '+scene.boss+' portrait fallback (3D rig unavailable)');
+    };
     const start=()=>{
       if(disposed||finishOnceRef.current||isReady)return;
       if(watchdogId!==null)clearTimeout(watchdogId);
       isReady=true;
       setReady(true);
-      setStatus(hasRig?'Original Dundubhi 3D rig active':'Using original character portrait fallback');
+      updateRigStatus(hasRig);
       timeline.play();
       const video=videoRef.current;
       if(video)void video.play().catch(()=>undefined);
     };
     try{
       boss=new Boss3DRenderer(384);
-      void boss.waitForBossReady(scene.boss,8000).then(ok=>{
-        if(disposed)return;
-        hasRig=ok;
+      void boss.waitForBossReady(scene.boss,10000).then(ok=>{
+        if(disposed||finishOnceRef.current)return;
+        // A watchdog may have started the portrait fallback earlier. Promote
+        // to the real rig as soon as its asynchronous load finishes.
+        updateRigStatus(ok);
         start();
-      }).catch(()=>{if(!disposed)start();});
+      }).catch(()=>{
+        if(disposed)return;
+        updateRigStatus(false);
+        start();
+      });
     }catch{
+      updateRigStatus(false);
       start();
     }
 
@@ -113,10 +126,11 @@ export default function MeruCinematicPlayback({scene,onFinish,muted=false}:MeruC
         if(isReady&&hasRig&&boss&&now-lastBoss>=1000/budget.maxCharacterRenderFps){
           const bossDt=lastBoss?Math.max(0.015,Math.min(0.04,(now-lastBoss)/1000)):0.033;
           lastBoss=now;
-          try{boss.updateAndRender(makeMeruBossParams(result.frame,bossDt,scene.boss));}
-          catch{
-            hasRig=false;
-            setStatus('Character renderer unavailable; portrait fallback active');
+          try{
+            const rendered=boss.updateAndRender(makeMeruBossParams(result.frame,bossDt,scene.boss));
+            if(!rendered)updateRigStatus(false);
+          }catch{
+            updateRigStatus(false);
           }
         }
         paintMeruFrame(ctx,result.frame,scene,boss,hasRig,portrait,budget.particleMultiplier);
@@ -165,6 +179,7 @@ export default function MeruCinematicPlayback({scene,onFinish,muted=false}:MeruC
       aria-label={scene.title+' cinematic'}
       data-testid="meru-boss-cinematic"
       data-meru-rig-status={!ready ? 'loading' : status.includes('3D rig active') ? 'rigged' : 'fallback'}
+      data-meru-rig-detail={status}
       className="fixed inset-0 z-[85] flex items-center justify-center bg-[#050407]/[0.98] p-2 sm:p-6"
     >
       <div className="relative w-full max-w-6xl">
