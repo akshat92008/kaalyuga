@@ -13,6 +13,7 @@
 import * as THREE from 'three';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { IS_SOFTWARE_WEBGL } from '../../engine/ue5GraphicsEngine';
 
@@ -112,7 +113,7 @@ async function loadOptimizedGlb(url: string): Promise<THREE.Group> {
   let pending = optimizedGlbTemplateCache.get(url);
   if (!pending) {
     pending = withFbxLoadSlot(() => new Promise<THREE.Group>((resolve, reject) => {
-      new GLTFLoader().load(encodeURI(url), (gltf) => {
+      new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).load(encodeURI(url), (gltf) => {
         const root = gltf.scene;
         root.animations = gltf.animations;
         resolve(root);
