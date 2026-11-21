@@ -64,7 +64,9 @@ export function paintMeruFrame(
   if(crop.fitted && boss?.canvas.width){
     // Remove transparent orthographic-camera padding, NOT limbs or weapons.
     // A centered 3D sprite should read as an imposing cinematic warrior.
-    bh=400*frame.actor.scale;
+    // Avoid enlarging low-resolution source FBX textures into soft, oversized
+    // characters. Keep enough negative space for the painted architecture.
+    bh=285*frame.actor.scale;
     const ratio=(crop.width*boss.canvas.width)/(crop.height*boss.canvas.height);
     bw=bh*ratio;
     if(bw>520*frame.actor.scale){bw=520*frame.actor.scale;bh=bw/ratio;}
@@ -243,13 +245,19 @@ export function paintMeruFrame(
   if(titleCue && titleCue.payload){
     const alpha=clamp((frame.time-titleCue.time)/0.55,0,1);
     const pieces=titleCue.payload.split('·',2).map(s=>s.trim());
-    ctx.save();ctx.globalAlpha=alpha;ctx.textAlign='center';
+    ctx.save();ctx.globalAlpha=alpha;ctx.textAlign='left';
+    // Boss names belong in an intentionally reserved lower-left title-safe
+    // zone, not stamped across the character's knees or weapon silhouette.
+    const titleVeil=ctx.createLinearGradient(0,H-155,W*0.62,H-155);
+    titleVeil.addColorStop(0,'rgba(8,4,8,0.62)');
+    titleVeil.addColorStop(1,'rgba(8,4,8,0)');
+    ctx.fillStyle=titleVeil;ctx.fillRect(0,H-174,W*0.62,152);
     ctx.shadowBlur=12;ctx.shadowColor='#020101';
-    ctx.fillStyle='#ffe4ac';ctx.font='bold 50px Georgia,serif';
-    ctx.fillText(pieces[0].slice(0,30),W/2,H-115);
+    ctx.fillStyle='#ffe4ac';ctx.font='bold 42px Georgia,serif';
+    ctx.fillText(pieces[0].slice(0,30),40,H-112);
     if(pieces[1]){
       ctx.fillStyle='#e9ad79';ctx.font='17px Georgia,serif';
-      ctx.fillText(pieces[1].slice(0,60),W/2,H-85);
+      ctx.fillText(pieces[1].slice(0,60),40,H-82);
     }
     ctx.restore();
   }
