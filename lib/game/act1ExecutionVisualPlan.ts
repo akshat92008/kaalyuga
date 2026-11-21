@@ -34,7 +34,7 @@ export function getAct1ExecutionVisualPlan(variant:ParashuFinisherVariant):Act1E
       variant, contactProgress:0.35, focusXOffset:30, focusYOffset:-24,
       groundShockwaveRadius:148, slashRadius:132,
       slashWidth:35, slashArcSpan:1.54,
-      impactBurstScale:1.14, sparkCount:16,
+      impactBurstScale:0.82, sparkCount:16,
       flipbookSize:164,
       useGroundedOverheadContact:true,allowSpectralSkyBolts:false,
     };
@@ -44,7 +44,7 @@ export function getAct1ExecutionVisualPlan(variant:ParashuFinisherVariant):Act1E
       variant,contactProgress:0.35,focusXOffset:0,focusYOffset:-24,
       groundShockwaveRadius:192,slashRadius:206,
       slashWidth:54,slashArcSpan:3.55,
-      impactBurstScale:1.36,sparkCount:22,flipbookSize:212,
+      impactBurstScale:0.78,sparkCount:22,flipbookSize:212,
       useGroundedOverheadContact:false,allowSpectralSkyBolts:false,
     };
   }
@@ -54,7 +54,7 @@ export function getAct1ExecutionVisualPlan(variant:ParashuFinisherVariant):Act1E
     variant,contactProgress:0.35,focusXOffset:30,focusYOffset:-24,
     groundShockwaveRadius:88,slashRadius:152,
     slashWidth:24,slashArcSpan:0.72,
-    impactBurstScale:1.18,sparkCount:14,flipbookSize:150,
+    impactBurstScale:0.73,sparkCount:14,flipbookSize:150,
     useGroundedOverheadContact:false,allowSpectralSkyBolts:false,
   };
 }
