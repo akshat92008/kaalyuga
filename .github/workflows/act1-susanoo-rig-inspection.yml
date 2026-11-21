@@ -1,0 +1,48 @@
+name: Act I Susanoo optimized GLB skeleton inspection
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/act1-susanoo-rig-inspection.yml"
+      - "lib/game/susanoo3dRenderer.ts"
+  workflow_dispatch:
+jobs:
+  inspect-glb:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Read actual optimized 3D Susanoo assets
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            public/optimized
+          sparse-checkout-cone-mode: false
+      - name: Audit mesh rig and animated hand bone directly from binary GLB JSON
+        run: |
+          python3 - <<'PY'
+          import glob,json,struct
+          for path in sorted(glob.glob('public/optimized/glb/*Horned_Warlord_of_the_Abyss*.glb')):
+              with open(path,'rb') as f:
+                  magic,ver,length=struct.unpack('<4sII',f.read(12))
+                  assert magic==b'glTF' and ver==2
+                  size,kind=struct.unpack('<I4s',f.read(8))
+                  assert kind==b'JSON'
+                  data=json.loads(f.read(size).decode())
+              nodes=data.get('nodes',[])
+              skins=data.get('skins',[])
+              names=[(i,n.get('name','')) for i,n in enumerate(nodes)]
+              found=[(i,name) for i,name in names if 'hand' in name.lower() or 'wrist' in name.lower()]
+              motions=[]
+              for anim in data.get('animations',[]):
+                  channels=anim.get('channels',[])
+                  motions.append({'name':anim.get('name'),'channels':len(channels),
+                     'targets':[nodes[c.get('target',{}).get('node',0)].get('name','')
+                         for c in channels[:6] if nodes]})
+              out={'path':path,'bytes':length,'mesh_count':len(data.get('meshes',[])),
+                   'skins':len(skins),'joint_counts':[len(s.get('joints',[])) for s in skins],
+                   'skin_joint_names':[[nodes[i].get('name','') for i in s.get('joints',[])[:65]]
+                      for s in skins],
+                   'hand_nodes':found,'animation_count':len(motions),
+                   'animations':motions[:6],
+                   'node_count':len(nodes)}
+              print('SUSANOO GLB RIG REPORT:',json.dumps(out))
+          PY
