@@ -58,10 +58,27 @@ export function advanceWeaponPoseTrail(params: {
  * Swept, tapered, camera-aligned ink polygon. Uses the actual path of the
  * visible weapon head rather than an unrelated radial swing approximation.
  */
-export function buildWeaponPoseTrailBands(samples: WeaponTrailSample[], widthPx: number): WeaponTrailBand[] {
+export function buildWeaponPoseTrailBands(
+  samples: WeaponTrailSample[], widthPx: number, smooth = false
+): WeaponTrailBand[] {
   if (samples.length < 2 || !Number.isFinite(widthPx) || widthPx <= 0) return [];
-  const points = samples.filter(p => Number.isFinite(p.x) && Number.isFinite(p.y));
-  if (points.length < 2) return [];
+  const valid = samples.filter(p => Number.isFinite(p.x) && Number.isFinite(p.y));
+  if (valid.length < 2) return [];
+  // One bounded corner-cutting pass rounds polygon kinks at 30–60 FPS.
+  // Every new point is a convex blend of two measured blade positions:
+  // no overshoot, imaginary orbital VFX or expensive per-frame splines.
+  // Keep the exact physical start and end of the motion.
+  const points: WeaponTrailSample[] = smooth && valid.length > 2
+    ? [valid[0], ...valid.slice(0, -1).flatMap((p, i) => {
+        const next = valid[i + 1];
+        const mix = (t: number): WeaponTrailSample => ({
+          x: p.x + (next.x - p.x) * t,
+          y: p.y + (next.y - p.y) * t,
+          atMs: p.atMs + (next.atMs - p.atMs) * t,
+        });
+        return [mix(0.25), mix(0.75)];
+      }), valid[valid.length - 1]]
+    : valid;
   const count = points.length;
   const safeWidth = Math.max(1, Math.min(28,widthPx));
   const result: WeaponTrailBand[] = [];
