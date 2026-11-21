@@ -2,7 +2,28 @@
  * Non-invasive 2.5D camera cues. The main game's existing view-clamp, input,
  * pause and camera-restoration pipeline remains authoritative.
  */
+import type { ParashuFinisherVariant } from './combatPipeline';
+
 export type Act1CameraCueKind = 'execution' | 'boss_phase' | 'boss_entrance';
+
+/** A safe short in-engine finisher shot, not a locked full-screen cinematic. */
+export function getAct1FinisherCameraShot(variant: ParashuFinisherVariant): Pick<
+  Act1CameraCueInput, 'durationSec' | 'focusWeight' | 'zoomBoost'
+> {
+  switch (variant) {
+    case 'downward_crush': return {durationSec:0.61,focusWeight:0.43,zoomBoost:0.14};
+    case 'impaling_lunge': return {durationSec:0.54,focusWeight:0.42,zoomBoost:0.115};
+    case 'spin_360_cleave': return {durationSec:0.60,focusWeight:0.40,zoomBoost:0.070};
+  }
+}
+
+/** The sample has its own eased fade envelope: never multiply it by dt again. */
+export function composeAct1CinematicZoom(baseZoom: number, cueZoomBoost: number): number {
+  if (!Number.isFinite(baseZoom)) return 1;
+  const safeBoost = Number.isFinite(cueZoomBoost)
+    ? Math.max(-0.06, Math.min(0.15, cueZoomBoost)) : 0;
+  return Math.max(0.72, Math.min(1.20, baseZoom + safeBoost));
+}
 export interface Act1CameraCueInput {
   kind: Act1CameraCueKind;
   focusX: number;
@@ -38,8 +59,8 @@ export class Act1CinematicCamera {
       focusX: input.focusX,
       focusY: input.focusY,
       durationSec: Math.max(0.12, Math.min(1.8, input.durationSec)),
-      focusWeight: Math.max(0, Math.min(0.35, input.focusWeight)),
-      zoomBoost: Math.max(-0.06, Math.min(0.07, input.zoomBoost)),
+      focusWeight: Math.max(0, Math.min(input.kind === 'execution' ? 0.45 : 0.35, input.focusWeight)),
+      zoomBoost: Math.max(-0.06, Math.min(input.kind === 'execution' ? 0.15 : 0.07, input.zoomBoost)),
       elapsedSec: 0,
     };
     return true;
