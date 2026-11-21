@@ -2708,6 +2708,7 @@ export default function KaliyugaArena() {
 
   const handleSelectBoon = useCallback(
     (boonId: CelestialBoonId) => {
+      if (meruTravelPendingRef.current) return;
       const sim = simRef.current;
       if (!sim.activeBoons.includes(boonId)) {
         sim.activeBoons.push(boonId);
@@ -9667,7 +9668,7 @@ export default function KaliyugaArena() {
                 });
                 setSliceStage('shard1_memory');
               }
-            } else if (enteredRightGate) {
+            } else if (enteredRightGate && !meruTravelPendingRef.current) {
               // Player chose Right Gate: Amrita Kalasha Max HP +30 & +95 Karma Cache!
               p.maxHp += 30;
               p.hp = Math.min(p.maxHp, p.hp + 90);
@@ -12740,6 +12741,7 @@ export default function KaliyugaArena() {
                     data-testid="exit-gate-right-btn"
                     onClick={(e) => {
                       e.currentTarget.blur();
+                      if (meruTravelPendingRef.current) return;
                       const sim = simRef.current;
                       const p = sim.player;
                       p.maxHp += 30;
