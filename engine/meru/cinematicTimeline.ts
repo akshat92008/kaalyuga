@@ -92,7 +92,7 @@ export function validateCinematic(input: unknown): MeruCinematic {
   if (value.boss !== 'dundubhi' && value.boss !== 'vrikodara') throw new Error('Unsupported boss rig');
   for (const k of ['backgroundUrl','posterUrl']) {
     const str = value[k];
-    if (typeof str !== 'string' || !/^\/(?:videos|kaalyuga\/arena|arenas)\/[a-zA-Z0-9_./%…-]+$/.test(str) || str.includes('..')) {
+    if (typeof str !== 'string' || !/^\/(?:videos|kaalyuga\/arena|arenas|assets\\/aistudio)\/[a-zA-Z0-9_./%…-]+$/.test(str) || str.includes('..')) {
       throw new Error('Invalid local scene asset URL: ' + k);
     }
   }
@@ -190,8 +190,9 @@ export function createDundubhiScene(): MeruCinematic {
   return validateCinematic({
     schemaVersion:1, id:'dundubhi-entrance', title:'Dundubhi — War-Drum Entrance', duration:8,
     boss:'dundubhi',
-    backgroundUrl:'/kaalyuga/arena/dundubhi_chamber.mp4',
-    posterUrl:'/kaalyuga/arena/dundubhi_mandapa.png',
+    // Match actual Kaliyuga Chamber IV assets instead of old placeholder URLs.
+    backgroundUrl:'/videos/Flames_flickering_around_stone_f_09be2052.mp4',
+    posterUrl:'/arenas/Gemini_Generated_Image_bc2kjfbc2kjfbc2k.png',
     camera:[
       {time:0,value:{x:0,y:-18,zoom:0.92,roll:0,shake:0}},
       {time:3,value:{x:0,y:0,zoom:1.12,roll:0,shake:0}},
@@ -217,6 +218,44 @@ export function createDundubhiScene(): MeruCinematic {
       {id:'boss-roar',time:3.8,kind:'roar'},
       {id:'earth-impact',time:5.15,kind:'impact'},
       {id:'reveal-title',time:6.25,kind:'subtitle',payload:'DUNDUBHI · THE LIVING WAR-DRUM'}
+    ]
+  });
+}
+
+/** Act I Chamber VIII: Vrikodara's existing game rig and Sanctum arena plates. */
+export function createVrikodaraScene(): MeruCinematic {
+  return validateCinematic({
+    schemaVersion:1, id:'vrikodara-entrance', title:'Vrikodara — Infernal Maw',
+    duration:8.5, boss:'vrikodara',
+    // Same assets as the CHAMBERS[7] playable Vrikodara encounter.
+    backgroundUrl:'/videos/Animate_mythological_game_enviro_f7acefd6_1080p.mp4',
+    posterUrl:'/assets/aistudio/Gemini_Generated_Image_plgsv7plgsv7plgs.png',
+    camera:[
+      {time:0,value:{x:18,y:-20,zoom:0.80,roll:-0.012,shake:0}},
+      {time:2.8,value:{x:0,y:-7,zoom:1.15,roll:0,shake:0}},
+      {time:4.65,value:{x:0,y:2,zoom:1.29,roll:0,shake:0.22}},
+      {time:6.65,value:{x:0,y:0,zoom:1.10,roll:0,shake:0.07}},
+      {time:8.5,value:{x:0,y:0,zoom:1,roll:0,shake:0}}
+    ],
+    actor:[
+      {time:0,value:{x:0,y:20,scale:0.90,opacity:0.15,state:'idle'}},
+      {time:2.5,value:{x:0,y:3,scale:1.04,opacity:1,state:'idle'}},
+      {time:3.6,value:{x:0,y:0,scale:1.10,opacity:1,state:'windup'}},
+      {time:4.8,value:{x:0,y:0,scale:1.14,opacity:1,state:'attack'}},
+      {time:6,value:{x:0,y:0,scale:1.10,opacity:1,state:'idle'}},
+      {time:8.5,value:{x:0,y:0,scale:1,opacity:1,state:'idle'}}
+    ],
+    lighting:[
+      {time:0,value:{warmth:0.15,exposure:0.68,vignette:0.94,ash:0.15}},
+      {time:2.9,value:{warmth:0.30,exposure:0.84,vignette:0.72,ash:0.35}},
+      {time:4.75,value:{warmth:1,exposure:1.14,vignette:0.55,ash:0.9}},
+      {time:8.5,value:{warmth:0.53,exposure:0.92,vignette:0.38,ash:0.45}}
+    ],
+    cues:[
+      {id:'maw-drum',time:0.75,kind:'drum'},
+      {id:'maw-roar',time:3.7,kind:'roar'},
+      {id:'maw-impact',time:4.72,kind:'impact'},
+      {id:'maw-title',time:6.2,kind:'subtitle',payload:'VRIKODARA · THE INFERNAL MAW'}
     ]
   });
 }
