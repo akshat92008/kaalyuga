@@ -236,6 +236,7 @@ export function createDundubhiScene(): MeruCinematic {
       {id:'drum-intro',time:0.65,kind:'drum'},
       {id:'boss-roar',time:3.8,kind:'roar'},
       {id:'earth-impact',time:5.15,kind:'impact'},
+      {id:'earth-sunder',time:5.15,kind:'vfx',payload:'earth-sunder'},
       {id:'reveal-title',time:6.25,kind:'subtitle',payload:'DUNDUBHI · THE LIVING WAR-DRUM'}
     ]
   });
@@ -274,6 +275,7 @@ export function createVrikodaraScene(): MeruCinematic {
       {id:'maw-drum',time:0.75,kind:'drum'},
       {id:'maw-roar',time:3.7,kind:'roar'},
       {id:'maw-impact',time:4.72,kind:'impact'},
+      {id:'blood-furnace',time:4.72,kind:'vfx',payload:'blood-furnace'},
       {id:'maw-title',time:6.2,kind:'subtitle',payload:'VRIKODARA · THE INFERNAL MAW'}
     ]
   });
@@ -325,7 +327,7 @@ export function createBossPhaseScene(boss: BossCharacter, phase: 2 | 3): MeruCin
       {id:'phase-omen',time:0.25,kind:'drum'},
       {id:'phase-wrath',time:1.65,kind:'roar'},
       {id:'phase-strike',time:2.32,kind:'impact'},
-      {id:'phase-vfx',time:2.35,kind:'vfx',payload:'ward-break'},
+      {id:'phase-vfx',time:2.35,kind:'vfx',payload:isVrikodara?'blood-furnace':'earth-sunder'},
       {id:'phase-title',time:2.85,kind:'subtitle',payload:
         isVrikodara
           ? (isFinal ? 'VRIKODARA · THE APOCALYPTIC MAW' : 'VRIKODARA · THE STARVED FURNACE')
