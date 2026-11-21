@@ -95,10 +95,16 @@ export function getOptimizedGlbUrl(
   originalUrl: string,
   manifest: Record<string, string>
 ): string | null {
-  const normalized = decodeURI(originalUrl).replace(/\\\\/g, '/');
+  const normalized = decodeURI(originalUrl).split('\\').join('/');
   const path = manifest[normalized] || manifest[encodeURI(normalized)];
   // Only serve local same-origin built artifacts, not arbitrary remote URLs.
-  return typeof path === 'string' && /^\\/optimized\\/[a-zA-Z0-9_\\/.-]+\\.glb$/.test(path) && !path.includes('..')
+  return typeof path === 'string' &&
+    path.startsWith('/optimized/') &&
+    path.endsWith('.glb') &&
+    !path.includes('..') &&
+    !path.includes('\\') &&
+    !path.includes('?') &&
+    !path.includes('#')
     ? path : null;
 }
 
