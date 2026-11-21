@@ -114,7 +114,7 @@ export function spawnHeavyElementalRelease(
         y2: y - 20 + Math.sin(angle) * reach * 0.68,
         width: 29, duration, palette, withFloorRing: true,
       });
-      fx.spawnClashStarburst({ x, y: y - 24, scale: 1.44, duration: 0.30, palette });
+      fx.spawnClashStarburst({ x, y: y - 24, scale: 1.10, duration: 0.30, palette });
       break;
     case 'guardian':
       fx.spawnSlashRibbon({
