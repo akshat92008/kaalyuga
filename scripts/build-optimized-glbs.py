@@ -87,7 +87,9 @@ def export_one(source, output, packer):
     for action in list(bpy.data.actions):
         if action.users == 0:
             bpy.data.actions.remove(action)
-    bpy.ops.import_scene.fbx(filepath=str(source), use_anim=True, ignore_leaf_bones=False)
+    # Blender 5.0 removed the legacy use_anim FBX-import option. Keep this
+    # script compatible with different runner/desktop Blender versions.
+    bpy.ops.import_scene.fbx(filepath=str(source), ignore_leaf_bones=False)
     if not bpy.context.scene.objects:
         raise ValueError("No objects imported from FBX")
     has_skin = any(obj.type == "MESH" and any(mod.type == "ARMATURE" for mod in obj.modifiers)
@@ -96,15 +98,17 @@ def export_one(source, output, packer):
                         for obj in bpy.context.scene.objects)
     output.parent.mkdir(parents=True, exist_ok=True)
     raw = output.with_suffix(".raw.glb") if packer else output
-    bpy.ops.export_scene.gltf(
-        filepath=str(raw),
-        export_format="GLB",
-        export_skins=True,
-        export_animations=True,
-        export_nla_strips=False,
-        export_image_format="AUTO",
-        use_selection=False
-    )
+    options = {
+        "filepath": str(raw),
+        "export_format": "GLB",
+        "export_skins": True,
+        "export_animations": True,
+        "export_nla_strips": False,
+        "export_image_format": "AUTO",
+        "use_selection": False,
+    }
+    available = {prop.identifier for prop in bpy.ops.export_scene.gltf.get_rna_type().properties}
+    bpy.ops.export_scene.gltf(**{key: value for key, value in options.items() if key in available})
     if packer:
         try:
             # -kn retains bone/node names used by the engine's clip retargeting.
