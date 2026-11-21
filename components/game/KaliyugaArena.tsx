@@ -276,6 +276,7 @@ import {
 import {
   DEFAULT_UE5_GRAPHICS_SETTINGS,
   IS_SOFTWARE_WEBGL,
+  displayMeruQualityTier,
   loadMeruGraphicsSettings,
   LumenLightEmitter,
   MeruGraphicsSettings,
@@ -1099,7 +1100,7 @@ export default function KaliyugaArena() {
 
   const cycleGraphicsTier = useCallback(() => {
     setGraphicsSettings((prev) => {
-      const order: MeruQualityTier[] = ['ultra', 'high', 'balanced'];
+      const order: MeruQualityTier[] = ['performance', 'balanced', 'ultra'];
       const nextTier = order[(order.indexOf(prev.tier) + 1) % order.length];
       const next = presetForQualityTier(nextTier);
       simRef.current.graphicsSettings = next;
@@ -13024,6 +13025,16 @@ export default function KaliyugaArena() {
                   >
                     PAINTED ARENAS · STABLE
                   </div>
+                  <button
+                    type="button"
+                    data-testid="act1-quality-profile"
+                    onClick={cycleGraphicsTier}
+                    className="flex-1 py-1.5 px-2 border border-[#d4a548]/45 text-[10px] font-mono-num text-[#f5ebd6] bg-[#141116] hover:border-[#d4a548] cursor-pointer"
+                    aria-label="Cycle graphics preset"
+                    title="Switch between Performance, Balanced and Cinematic (saved preferences preserved)"
+                  >
+                    VISUALS: {displayMeruQualityTier(graphicsSettings.tier)}
+                  </button>
                   {isDebugMode && (
                     <button
                       type="button"
