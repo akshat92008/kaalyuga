@@ -39,6 +39,7 @@ import {
 } from '@/lib/game/rules';
 import { soundEngine } from '@/lib/game/audio';
 import { heavyElementFromStance, spawnHeavyElementalRelease } from '@/lib/game/elementalImpactDirector';
+import { spawnExecutionImpactFx } from '@/lib/game/executionImpactDirector';
 import { CinematicCameraTrack } from '@/lib/game/cinematicCamera';
 import {
   createBossEntranceCameraTrack,
@@ -4700,88 +4701,42 @@ export default function KaliyugaArena() {
     gainAstraEnergy(ASTRA_ENERGY_GAINS.EXECUTION);
 
     soundEngine.playHit('execute');
-    spawnShockwave(brokenEnemy.x, brokenEnemy.y, 290, '#ff4d3b', 0.48);
-    spawnSunHaloRing(bloodDemonArtsRef.current, {
-      x: brokenEnemy.x,
-      y: brokenEnemy.y - 22,
-      radius: 196,
-      palette: 'sun',
-    });
-    spawnHinokamiSlashArc(bloodDemonArtsRef.current, {
-      x: brokenEnemy.x,
-      y: brokenEnemy.y - 24,
-      angle: p.slashAngle,
-      arcSpan: 3.3,
-      radius: 198,
-      thickness: 38,
-      palette: 'sun',
-      direction: 1,
-    });
-    // Counter-rotating Ukiyo-e Water Dragon ribbon for the dual Fire + Water Hinokami Execution!
-    spawnHinokamiSlashArc(bloodDemonArtsRef.current, {
-      x: brokenEnemy.x,
-      y: brokenEnemy.y - 24,
-      angle: p.slashAngle + 0.35,
-      arcSpan: 2.95,
-      radius: 168,
-      thickness: 32,
-      palette: 'water',
-      direction: -1,
-    });
-    webglDemonSlayerVfxRef.current?.spawnSolarFlameWheel({
-      x: brokenEnemy.x,
-      y: brokenEnemy.y - 24,
-      angle: p.slashAngle,
-      radius: 218,
-      palette: 'hinokami',
-      duration: 0.60,
-    });
-    webglDemonSlayerVfxRef.current?.spawnWaterDragon({
-      x: brokenEnemy.x,
-      y: brokenEnemy.y - 24,
-      angle: p.slashAngle + 0.35,
-      radius: 175,
-      duration: 0.68,
-    });
-    webglDemonSlayerVfxRef.current?.spawnClashStarburst({
-      x: brokenEnemy.x,
-      y: brokenEnemy.y - 24,
-      scale: 1.75,
-      palette: 'sun',
-      duration: 0.32,
-    });
-    webglDemonSlayerVfxRef.current?.spawnSlashRibbon({
-      x: brokenEnemy.x,
-      y: brokenEnemy.y - 24,
-      angle: p.slashAngle,
-      radius: 235,
-      width: 82,
-      arcSpan: 3.25,
-      direction: 1,
-      palette: 'sun',
-      duration: 0.46,
-      tiltX: 0.58,
-    });
-    webglDemonSlayerVfxRef.current?.spawnSlashRibbon({
-      x: brokenEnemy.x,
-      y: brokenEnemy.y - 24,
-      angle: p.slashAngle + 0.35,
-      radius: 205,
-      width: 66,
-      arcSpan: 2.95,
-      direction: -1,
-      palette: 'water',
-      duration: 0.42,
-      tiltX: 0.48,
-    });
-    webglDemonSlayerVfxRef.current?.spawnSparkBurst({
-      x: brokenEnemy.x,
-      y: brokenEnemy.y - 24,
-      count: 28,
-      speed: 520,
-      palette: 'sun',
-    });
-    triggerImpactInversionFlash(bloodDemonArtsRef.current, brokenEnemy.x, brokenEnemy.y - 24, 0.068, '#ff4d3b');
+    // FINISHER CONTACT: distinct primary visuals authored to the same impact
+    // marker as damage. No more identical nine-layer fire/water rings for
+    // overhead crush, 360 cleave and armor-piercing lunge.
+    const executionVfx = spawnExecutionImpactFx(
+      webglDemonSlayerVfxRef.current,
+      finisherSpec.variant,
+      brokenEnemy.x,
+      brokenEnemy.y,
+      p.slashAngle
+    );
+    const executionAccent =
+      executionVfx.palette === 'wind' ? '#42f3b5' :
+      executionVfx.palette === 'thunder' ? '#ffe87e' : '#ff5434';
+    spawnShockwave(
+      brokenEnemy.x, brokenEnemy.y,
+      executionVfx.strikeRadius * 0.87, executionAccent, 0.36
+    );
+    if (finisherSpec.variant === 'downward_crush') {
+      // Tight flame guillotine follows the blade down; the enemy remains visible.
+      spawnHinokamiSlashArc(bloodDemonArtsRef.current, {
+        x: brokenEnemy.x, y: brokenEnemy.y - 25,
+        angle: p.slashAngle, arcSpan: 1.52, radius: 145,
+        thickness: 28, palette: 'sun', direction: 1,
+      });
+    } else if (finisherSpec.variant === 'spin_360_cleave') {
+      // Readable counterclockwise whirlwind: not another fullscreen fire halo.
+      spawnHinokamiSlashArc(bloodDemonArtsRef.current, {
+        x: brokenEnemy.x, y: brokenEnemy.y - 22,
+        angle: p.slashAngle + 0.35, arcSpan: 3.3, radius: 162,
+        thickness: 27, palette: 'water', direction: -1,
+      });
+    }
+    triggerImpactInversionFlash(
+      bloodDemonArtsRef.current,
+      brokenEnemy.x, brokenEnemy.y - 24, 0.054, executionAccent
+    );
     const execSlashRow =
       finisherSpec.variant === 'spin_360_cleave'
         ? PARASHU_FLIPBOOK_ROWS.SPIN_360_WHIRLWIND_RING
