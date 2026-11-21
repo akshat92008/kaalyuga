@@ -5,11 +5,27 @@
  */
 import type { Boss3DRenderer, Boss3DUpdateParams } from '@/lib/game/boss3dRenderer';
 import type { CinematicFrame, MeruCinematic } from './cinematicTimeline';
+import {measureSilhouetteCrop,FULL_SILHOUETTE_CROP,type SilhouetteCrop} from './silhouetteCrop';
 
 export const MERU_FRAME_WIDTH = 960;
 export const MERU_FRAME_HEIGHT = 540;
 const W=MERU_FRAME_WIDTH,H=MERU_FRAME_HEIGHT;
 const clamp=(v:number,a:number,b:number)=>Math.max(a,Math.min(b,v));
+// Keep the first safe framing measurement for each authored scene. Recomputing
+// alpha bounds every animation frame visibly pumps the hero's scale.
+const sceneSilhouetteCrops=new Map<string,SilhouetteCrop>();
+function silhouetteCrop(sceneId:string,canvas:HTMLCanvasElement):SilhouetteCrop {
+  const cached=sceneSilhouetteCrops.get(sceneId);
+  if(cached)return cached;
+  try{
+    const ctx=canvas.getContext('2d',{willReadFrequently:true});
+    if(!ctx)return FULL_SILHOUETTE_CROP;
+    const rgba=ctx.getImageData(0,0,canvas.width,canvas.height).data;
+    const bounds=measureSilhouetteCrop(rgba,canvas.width,canvas.height);
+    if(bounds.fitted)sceneSilhouetteCrops.set(sceneId,bounds);
+    return bounds;
+  }catch{return FULL_SILHOUETTE_CROP;}
+}
 
 export function makeMeruBossParams(frame:CinematicFrame,dt:number,kind:'dundubhi'|'vrikodara',phase:1|2|3=1):Boss3DUpdateParams {
   return {
@@ -43,13 +59,23 @@ export function paintMeruFrame(
   ctx.globalAlpha=frame.actor.opacity;
   // More deliberate boss scale in a widescreen cinematic: the original 400x440
   // compositing box left these huge mythic opponents too small to read.
-  const bw=480*frame.actor.scale,bh=530*frame.actor.scale;
+  const crop=ready&&boss?.canvas.width ? silhouetteCrop(scene.id,boss.canvas) : FULL_SILHOUETTE_CROP;
+  let bw=480*frame.actor.scale,bh=530*frame.actor.scale;
+  if(crop.fitted && boss?.canvas.width){
+    // Remove transparent orthographic-camera padding, NOT limbs or weapons.
+    // A centered 3D sprite should read as an imposing cinematic warrior.
+    bh=400*frame.actor.scale;
+    const ratio=(crop.width*boss.canvas.width)/(crop.height*boss.canvas.height);
+    bw=bh*ratio;
+    if(bw>520*frame.actor.scale){bw=520*frame.actor.scale;bh=bw/ratio;}
+  }
+  const footY=H-52+frame.actor.y;
   const x=W/2-bw/2+frame.actor.x;
-  const y=H-bh-52+frame.actor.y;
+  const y=footY-bh*crop.footY;
   // Anchored ambient/contact shadows sell weight against a flat arena MP4
   // without inventing unsupported ground mesh, parallax or ray-traced light.
   ctx.save();
-  ctx.translate(x+bw*0.5,y+bh-3);
+  ctx.translate(x+bw*0.5,footY-3);
   ctx.scale(1,0.28);
   const contact=ctx.createRadialGradient(0,0,bw*0.03,0,0,bw*0.44);
   contact.addColorStop(0,'rgba(0,0,0,0.78)');
@@ -62,7 +88,10 @@ export function paintMeruFrame(
   ctx.fill();
   ctx.restore();
   if(ready && boss?.canvas.width){
-    ctx.drawImage(boss.canvas,x,y,bw,bh);
+    ctx.drawImage(boss.canvas,
+      crop.x*boss.canvas.width,crop.y*boss.canvas.height,
+      crop.width*boss.canvas.width,crop.height*boss.canvas.height,
+      x,y,bw,bh);
     // True weapon-socket registration: use the boss FBX animation's projected
     // sword/claw tip as the effect origin, not a guessed point on a sprite.
     // Ink arcs are deliberately transient and fully transparent outside strokes.
@@ -74,8 +103,8 @@ export function paintMeruFrame(
       const strength=diff<0?clamp(1+diff/0.3,0,1):clamp(1-diff/0.65,0,1);
       const hot=beat.payload==='blood-furnace';
       const color=hot?'255,111,43':beat.payload==='earth-sunder'?'252,81,101':'255,208,135';
-      const tx=x+weapon.x*bw;
-      const ty=y+weapon.y*bh;
+      const tx=x+(weapon.x-crop.x)/crop.width*bw;
+      const ty=y+(weapon.y-crop.y)/crop.height*bh;
       const radius=(55+85*(1-strength))*frame.actor.scale;
       ctx.save();
       ctx.globalCompositeOperation='screen';
