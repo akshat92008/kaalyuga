@@ -80,7 +80,7 @@ describe('Demon Slayer VFX, Cel Shading & Isometric Camera Sync', () => {
       rimStrength: 0.85,
     });
     assert.equal(styled.celMaterials.length, 1);
-    assert.ok((mesh.material as THREE.MeshToonMaterial).isMeshToonMaterial);
+    assert.ok((mesh.material as unknown as THREE.MeshToonMaterial).isMeshToonMaterial);
     assert.equal(styled.outlineMeshes.length, 1);
     assert.equal(styled.outlineMeshes[0].userData.isInkOutline, true);
     assert.equal((styled.outlineMeshes[0].material as THREE.Material).side, THREE.BackSide);
