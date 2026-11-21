@@ -534,6 +534,8 @@ export default function KaliyugaArena() {
   const pendingStrikeVfxRef = useRef<{
     fired: boolean;
     expectedAction: Act1StrikeAction;
+    attackSerial: number;
+    chamberIndex: number;
     triggerThreshold: number;
     execute: () => void;
   } | null>(null);
@@ -4519,6 +4521,7 @@ export default function KaliyugaArena() {
       focusWeight: 0.30, zoomBoost: 0.06,
     });
     p.action = 'execute';
+    p.attackSerial += 1;
     p.finisherVariant = finisherSpec.variant;
     p.actionTimer = finisherSpec.durationSec;
     p.actionDuration = finisherSpec.durationSec;
@@ -4785,6 +4788,7 @@ export default function KaliyugaArena() {
     };
     pendingStrikeVfxRef.current = {
       expectedAction: 'execute', fired: false,
+      attackSerial: p.attackSerial, chamberIndex: sim.chamberIndex,
       triggerThreshold: 0.35,
       execute: performExecutionContact,
     };
@@ -4905,6 +4909,8 @@ export default function KaliyugaArena() {
     pendingStrikeVfxRef.current = {
       fired: false,
       expectedAction: 'heavy_unleash',
+      attackSerial: p.attackSerial,
+      chamberIndex: sim.chamberIndex,
       triggerThreshold: 0.28,
       execute: () => {
         const curP = simRef.current.player;
@@ -5552,13 +5558,8 @@ export default function KaliyugaArena() {
         : p.comboStep === 3 || p.comboStep === 4
         ? 16
         : 0);
-    damagePropsNearPoint(
-      p.x + p.facing * 18,
-      p.y,
-      effectiveReach + 12,
-      activeFinisherSpec || p.comboStep === 4 || isDashStrike || isRiposteStrike ? 55 : 32
-    );
-
+    // Props and enemies receive contact only when the visible blade becomes active.
+    // The weapon's air-whoosh remains at startup as anticipation audio.
     soundEngine.playSwing(
       activeFinisherSpec || p.comboStep === 4 || isDashStrike || isRiposteStrike ? 'heavy' : 'light',
       p.stance
@@ -5594,6 +5595,8 @@ export default function KaliyugaArena() {
     pendingStrikeVfxRef.current = {
       fired: false,
       expectedAction: 'light_attack',
+      attackSerial: p.attackSerial,
+      chamberIndex: sim.chamberIndex,
       triggerThreshold: isComboFinisher ? 0.28 : 0.25,
       execute: () => {
         const curP = simRef.current.player;
@@ -5660,11 +5663,27 @@ export default function KaliyugaArena() {
             palette: lightSlashPalette,
           });
         }
+        resolveLightHitAtContact();
       },
     };
 
-    let hitAny = false;
-    sim.enemies.forEach((e) => {
+    // Contact is delayed, never damage-at-keypress. Keep the hit resolver
+    // owned by this specific swing: a cancelled or chamber-switched swing
+    // cannot damage an enemy after its animation has stopped.
+    const capturedLightSerial = p.attackSerial;
+    const capturedLightChamber = sim.chamberIndex;
+    const resolveLightHitAtContact = () => {
+      if (simRef.current !== sim || sim.state !== 'playing' ||
+          sim.chamberIndex !== capturedLightChamber ||
+          p.action !== 'light_attack' || p.attackSerial !== capturedLightSerial) return;
+      damagePropsNearPoint(
+        p.x + p.facing * 18,
+        p.y,
+        effectiveReach + 12,
+        activeFinisherSpec || capturedStep === 4 || isDashStrike || isRiposteStrike ? 55 : 32
+      );
+      let hitAny = false;
+      sim.enemies.forEach((e) => {
       if (e.aiState === 'ko') return;
       const d = Math.hypot(e.x - p.x, e.y - p.y);
       if (d <= effectiveReach + (e.isBoss ? 44 : 24)) {
@@ -6046,6 +6065,7 @@ export default function KaliyugaArena() {
     } else {
       addStylePoints(10);
     }
+    };
   }, [addStylePoints, damagePropsNearPoint, gainAstraEnergy, recordQuestEvent, spawnAfterimage, spawnFlipbookVfx, spawnFloatingText, spawnParticles, spawnShockwave]);
 
   const triggerCloudStepDodge = useCallback(() => {
@@ -7476,9 +7496,13 @@ export default function KaliyugaArena() {
           if (pendingStrike && !pendingStrike.fired) {
             const curProgress =
               1 - Math.max(0, p.actionTimer) / Math.max(0.05, p.actionDuration || 0.34);
-            if (shouldCancelPendingStrike(pendingStrike.expectedAction, prevAction)) {
+            if (shouldCancelPendingStrike(
+              pendingStrike.expectedAction, prevAction,
+              pendingStrike.attackSerial, p.attackSerial,
+              pendingStrike.chamberIndex, sim.chamberIndex
+            )) {
               traceStrikeCue('cancelled', pendingStrike.expectedAction, curProgress,
-                pendingStrike.triggerThreshold, p.attackSerial, now);
+                pendingStrike.triggerThreshold, pendingStrike.attackSerial, now);
               pendingStrikeVfxRef.current = null;
             } else if (canFirePendingStrike(
               pendingStrike.expectedAction, prevAction, curProgress,
@@ -7487,7 +7511,7 @@ export default function KaliyugaArena() {
               pendingStrike.fired = true;
               pendingStrikeVfxRef.current = null;
               traceStrikeCue('fired', pendingStrike.expectedAction, curProgress,
-                pendingStrike.triggerThreshold, p.attackSerial, now);
+                pendingStrike.triggerThreshold, pendingStrike.attackSerial, now);
               pendingStrike.execute();
             }
           }
