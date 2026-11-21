@@ -51,6 +51,7 @@ import { Boss3DRenderer } from '@/lib/game/boss3dRenderer';
 import MeruCinematicPlayback from '@/components/game/MeruCinematicPlayback';
 import type { MeruCinematic } from '@/engine/meru/cinematicTimeline';
 import { shouldStartDundubhiIntro, readDundubhiIntro } from '@/engine/meru/runtimePolicy';
+import { renderMeruPortal } from '@/engine/meru/portalDirector';
 import { Susanoo3DRenderer } from '@/lib/game/susanoo3dRenderer';
 import CholaBrassHud from '@/components/game/CholaBrassHud';
 import {
@@ -9990,6 +9991,19 @@ export default function KaliyugaArena() {
         const hubProx = findNearestHubStation(sim.player.x, sim.player.y);
         for (const st of VAITARANI_HUB_STATIONS) {
           const isNear = hubProx.station?.id === st.id;
+          // The hub's northern Charnel crossing is a unique teal Vaitarani
+          // passage, not a duplicate golden combat chamber doorway.
+          if (st.id === 'ferry_gate') {
+            renderMeruPortal(ctx, {
+              kind: 'vaitarani',
+              x: HUB_FERRY_GATE_POS.x,
+              y: HUB_FERRY_GATE_POS.y + 12,
+              size: 104,
+              unlocked: true,
+              timeMs: now,
+              intensity: isNear ? 1.12 : 0.78,
+            });
+          }
           const pulse = 0.72 + Math.sin(now * 0.005) * 0.18;
           ctx.save();
           ctx.translate(st.x, st.y);
