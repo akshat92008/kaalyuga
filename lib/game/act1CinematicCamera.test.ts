@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Act1CinematicCamera, composeAct1CinematicZoom, getAct1FinisherCameraShot } from './act1CinematicCamera';
+import { Act1CinematicCamera, composeAct1CinematicZoom, getAct1FinisherCameraShot, preserveAct1ExecutionContactZoom } from './act1CinematicCamera';
 test('phase camera softly returns to gameplay and never exceeds safe 2.5D zoom/weight', () => {
   const camera = new Act1CinematicCamera();
   assert.equal(camera.start({
@@ -52,4 +52,11 @@ test('Cinematic zoom composes the already eased cue; it is not attenuated by fra
  assert.equal(composeAct1CinematicZoom(0.93,Number.NaN),0.93);
  assert.equal(composeAct1CinematicZoom(1.10,0.3),1.20);
  assert.equal(composeAct1CinematicZoom(0.70,-1),0.72);
+});
+
+test('Execution contact cannot kick an already zoomed-in camera back to the wide shot',()=>{
+ assert.equal(preserveAct1ExecutionContactZoom(1.07,0.94),1.07);
+ assert.equal(preserveAct1ExecutionContactZoom(0.92,0.94),0.995);
+ assert.ok(preserveAct1ExecutionContactZoom(1.3,0.94)<=1.20);
+ assert.ok(Number.isFinite(preserveAct1ExecutionContactZoom(NaN,Infinity)));
 });
