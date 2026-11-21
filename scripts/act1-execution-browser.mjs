@@ -61,6 +61,15 @@ try{
     return (t.strikeCues||[]).some(e=>
       e.action==='execute'&&e.kind==='fired');
   },null,{timeout:110000,polling:250});
+  // Prove at least two real projected blade-head positions were rendered
+  // as a continuous luminous weapon trail. A successful damage roll alone
+  // must never be mistaken for a visually attached Parashu slash.
+  await page.waitForFunction(()=>{
+    const samples=window.__KALIYUGA_ACT1_PERF__?.weaponPoseTrace||[];
+    return samples.some(s=>s.action==='execute' &&
+      s.mode==='socket_trail' && s.sampleCount>=2 &&
+      Number.isFinite(s.headX) && Number.isFinite(s.headY));
+  },null,{timeout:50000,polling:250});
   // The rendered hero must travel toward the victim during this finisher
   // without modifying the simulation position or adding another damage event.
   await page.waitForFunction((requiredVariant)=>{
