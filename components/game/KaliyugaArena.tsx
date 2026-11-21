@@ -2108,11 +2108,17 @@ export default function KaliyugaArena() {
         });
       });
     }
+    let completed = 0;
     const results = await Promise.all(requirements.map(async (verify) => {
-      try { return await verify(); } catch { return false; }
+      let result = false;
+      try { result = await verify(); } catch { /* A missing asset must keep the gate closed. */ }
+      completed += 1;
+      if (seq === chamberLoadSeqRef.current) {
+        setChamberLoadPercent(Math.round((completed / Math.max(1, requirements.length)) * 100));
+      }
+      return result;
     }));
     if (seq !== chamberLoadSeqRef.current) return;
-    setChamberLoadPercent(100);
     if (results.every(Boolean)) {
       setChamberLoadingLabel(null);
       setChamberLoadError(null);
