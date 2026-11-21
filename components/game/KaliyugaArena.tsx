@@ -12095,6 +12095,9 @@ export default function KaliyugaArena() {
               const sDraw = HEROIC_DRAW_SIZES.susanoo;
               const spectralAction=(p.action==='light_attack'||p.action==='heavy_unleash');
               const spectralTrail=susanooFistTrailRef.current;
+              let actualStrikeAnchor: {
+                x:number;y:number;source:'bone'|'mesh_surface';
+              }|null=null;
               if(!spectralAction||!coreLock.susanooShouldSwing){
                 spectralTrail.samples=[];
               }else{
@@ -12104,7 +12107,7 @@ export default function KaliyugaArena() {
                   spectralTrail.chamberIndex=sim.chamberIndex;
                   spectralTrail.samples=[];
                 }
-                const actualStrikeAnchor=susanoo3d.getProjectedStrikeAnchor();
+                actualStrikeAnchor=susanoo3d.getProjectedStrikeAnchor();
                 const fist=projectWeaponHeadToWorld({
                   uv:actualStrikeAnchor,
                   actorX:p.x,actorY:p.y,drawSize:sDraw,
