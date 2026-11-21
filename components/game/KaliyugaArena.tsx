@@ -4604,6 +4604,10 @@ export default function KaliyugaArena() {
       isFinisher: true,
       currentCameraTrauma: sim.cameraShakeTrauma,
     });
+    // Previous execution code applied actual HP damage but omitted it from
+    // runDamageDealt, leaving post-run analytics and active-contact QA at zero.
+    // Recording the actual HP lost fixes stats without changing combat balance.
+    sim.runDamageDealt += execHit.hpLost;
     brokenEnemy.postureBrokenTimer = 0;
     brokenEnemy.posture = brokenEnemy.maxPosture;
     brokenEnemy.scaleX = 1.06;
