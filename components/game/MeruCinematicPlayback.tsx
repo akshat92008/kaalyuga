@@ -105,8 +105,11 @@ export default function MeruCinematicPlayback({scene,onFinish,muted=false}:MeruC
       start();
     }
 
-    // Always release control if a model is permanently unavailable.
-    watchdogId=setTimeout(start,12500);
+    // Do not trade the first-frame 3D boss reveal for a portrait merely because
+    // its FBX/PBR textures are still downloading on slow or software GPUs.
+    // A genuine loading failure still falls back via catch, and this bounded
+    // watchdog prevents permanently broken assets from trapping gameplay.
+    watchdogId=setTimeout(start,45000);
 
     const loop=(now:number)=>{
       if(disposed||finishOnceRef.current)return;
