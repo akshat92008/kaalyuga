@@ -1130,6 +1130,7 @@ export default function KaliyugaArena() {
           transformRemaining: sim.player.transformTimer,
           fps: sim.fps,
           cameraKind: liveCameraRef.current?.kind ?? null,
+          cameraElapsedSec: liveCameraRef.current?.elapsedSec ?? null,
           cameraZoom: sim.cameraZoom,
           rudra3dReady: rudra3dRef.current?.isReady ?? false,
           webglVfxReady: Boolean(webglDemonSlayerVfxRef.current),
@@ -6889,11 +6890,15 @@ export default function KaliyugaArena() {
         sim.fpsAccum = 0;
       }
 
-      // Run non-destructive cinematic camera in real time even while story input is paused.
-      // Auto-release always resets framing: no persistent zoom or stuck lock.
+      // Pause authored camera when narrative dialogue, loading or a menu owns
+      // the screen. Previously the boss entrance played BEHIND the pre-fight
+      // overlay, so it had already finished when the player clicked ENGAGE.
+      // Resume the same keyframed shot exactly when active combat returns.
       if (liveCameraRef.current) {
         const running = liveCameraRef.current;
-        running.elapsedSec += Math.min(0.05, Math.max(0, rawDt));
+        if (!sim.modalPaused && sim.state === 'playing') {
+          running.elapsedSec += Math.min(0.05, Math.max(0, rawDt));
+        }
         if (running.track.sample(running.elapsedSec, cw, ch).completed) {
           liveCameraRef.current = null;
         }
