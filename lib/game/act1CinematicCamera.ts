@@ -11,9 +11,9 @@ export function getAct1FinisherCameraShot(variant: ParashuFinisherVariant): Pick
   Act1CameraCueInput, 'durationSec' | 'focusWeight' | 'zoomBoost'
 > {
   switch (variant) {
-    case 'downward_crush': return {durationSec:0.61,focusWeight:0.43,zoomBoost:0.14};
-    case 'impaling_lunge': return {durationSec:0.54,focusWeight:0.42,zoomBoost:0.115};
-    case 'spin_360_cleave': return {durationSec:0.60,focusWeight:0.40,zoomBoost:0.070};
+    case 'downward_crush': return {durationSec:0.65,focusWeight:0.43,zoomBoost:0.27};
+    case 'impaling_lunge': return {durationSec:0.58,focusWeight:0.42,zoomBoost:0.23};
+    case 'spin_360_cleave': return {durationSec:0.63,focusWeight:0.40,zoomBoost:0.18};
   }
 }
 
@@ -21,7 +21,7 @@ export function getAct1FinisherCameraShot(variant: ParashuFinisherVariant): Pick
 export function preserveAct1ExecutionContactZoom(currentZoom: number, baseZoom: number): number {
   const current = Number.isFinite(currentZoom) ? currentZoom : 0.94;
   const base = Number.isFinite(baseZoom) ? baseZoom : 0.94;
-  return Math.max(0.72, Math.min(1.20, Math.max(current, base + 0.055)));
+  return Math.max(0.72, Math.min(1.36, Math.max(current, base + 0.055)));
 }
 
 /**
@@ -32,16 +32,16 @@ export function preserveAct1ExecutionContactZoom(currentZoom: number, baseZoom: 
  */
 export function removePreviousAct1CinematicZoom(presentedZoom: number, previousBoost: number): number {
   if (!Number.isFinite(presentedZoom)) return 0.94;
-  const safeBoost = Number.isFinite(previousBoost) ? Math.max(-0.06, Math.min(0.15, previousBoost)) : 0;
-  return Math.max(0.72, Math.min(1.20, presentedZoom - safeBoost));
+  const safeBoost = Number.isFinite(previousBoost) ? Math.max(-0.06, Math.min(0.28, previousBoost)) : 0;
+  return Math.max(0.72, Math.min(1.36, presentedZoom - safeBoost));
 }
 
 /** The sample has its own eased fade envelope: never multiply it by dt again. */
 export function composeAct1CinematicZoom(baseZoom: number, cueZoomBoost: number): number {
   if (!Number.isFinite(baseZoom)) return 1;
   const safeBoost = Number.isFinite(cueZoomBoost)
-    ? Math.max(-0.06, Math.min(0.15, cueZoomBoost)) : 0;
-  return Math.max(0.72, Math.min(1.20, baseZoom + safeBoost));
+    ? Math.max(-0.06, Math.min(0.28, cueZoomBoost)) : 0;
+  return Math.max(0.72, Math.min(1.36, baseZoom + safeBoost));
 }
 export interface Act1CameraCueInput {
   kind: Act1CameraCueKind;
@@ -79,7 +79,7 @@ export class Act1CinematicCamera {
       focusY: input.focusY,
       durationSec: Math.max(0.12, Math.min(1.8, input.durationSec)),
       focusWeight: Math.max(0, Math.min(input.kind === 'execution' ? 0.45 : 0.35, input.focusWeight)),
-      zoomBoost: Math.max(-0.06, Math.min(input.kind === 'execution' ? 0.15 : 0.07, input.zoomBoost)),
+      zoomBoost: Math.max(-0.06, Math.min(input.kind === 'execution' ? 0.28 : 0.07, input.zoomBoost)),
       elapsedSec: 0,
     };
     return true;
