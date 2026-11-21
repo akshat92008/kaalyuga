@@ -11,7 +11,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { GAME_ASSETS } from '@/lib/game/assets';
 import { Boss3DRenderer, type Boss3DUpdateParams } from '@/lib/game/boss3dRenderer';
-import { CinematicCameraTrack, sampleCinematicImpactImpulse } from '@/lib/game/cinematicCamera';
+import { CinematicCameraTrack, sampleCinematicImpactImpulse, boundCinematicCameraToPaintedVideo } from '@/lib/game/cinematicCamera';
 
 const DURATION_SEC = 8.6;
 const W = 960;
@@ -258,10 +258,15 @@ export default function DundubhiCinematicLab() {
         const boss = bossRef.current;
         const opacity = smoothstep(0.9, 2.35, t);
         const cameraFrame = cameraTrackRef.current?.sample(t, W, H);
-        const zoom = cameraFrame?.zoom ?? 1;
         const impact = sampleCinematicImpactImpulse(t, 5.18, W, H);
-        const shakeX = impact.x;
-        const shakeY = impact.y;
+        // Clamp the composited pan AFTER adding impact shake, otherwise the
+        // video can move outside the matte while the boss still looks correct.
+        const safeShot = boundCinematicCameraToPaintedVideo({
+          zoom: cameraFrame?.zoom ?? 1,
+          offsetX: (cameraFrame?.offsetX ?? 0) + impact.x,
+          offsetY: (cameraFrame?.offsetY ?? 0) + impact.y,
+        }, W, H, 0.5, 305 / H);
+        const zoom = safeShot.zoom;
 
         // The underlying painted MP4 and the animated boss MUST share the
         // same framing. Moving only the FBX sprite creates a cardboard-cutout
@@ -270,16 +275,16 @@ export default function DundubhiCinematicLab() {
         if (arenaLayer) {
           arenaLayer.style.transformOrigin = '50% 56.4815%'; // x=480, y=305
           arenaLayer.style.transform =
-            'translate(' + (((cameraFrame?.offsetX ?? 0) + shakeX) / W * 100).toFixed(4) +
-            '%, ' + (((cameraFrame?.offsetY ?? 0) + shakeY) / H * 100).toFixed(4) +
+            'translate(' + (safeShot.offsetX / W * 100).toFixed(4) +
+            '%, ' + (safeShot.offsetY / H * 100).toFixed(4) +
             '%) scale(' + zoom.toFixed(5) + ')';
         }
 
         ctx.save();
         // Dolly around Dundubhi's upper torso instead of the floor line.
         // The old 435px pivot pushed his head above the matte at impact zoom.
-        ctx.translate(W / 2 + (cameraFrame?.offsetX ?? 0) + shakeX,
-          305 + (cameraFrame?.offsetY ?? 0) + shakeY);
+        ctx.translate(W / 2 + safeShot.offsetX,
+          305 + safeShot.offsetY);
         ctx.scale(zoom, zoom);
         ctx.translate(-W / 2, -305);
         ctx.globalAlpha = opacity;
