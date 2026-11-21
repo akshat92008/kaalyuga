@@ -3,7 +3,7 @@
 
 Run with Blender (not ordinary Python):
  blender -b --python cutscenes/scripts/process_rudra_animations.py -- \
-   --model "public/new_3d_assets/Animations/Pro Melee Axe Pack/Meshy_AI_Ashen_Warborn_20261025_generate.fbx" \
+   --model "public/kaalyuga/rudra/rigged.fbx" \
    --clips public/kaalyuga/anims/rudra --output build/rudra_processed
 
 This script never edits the source FBXs. It rejects clips with missing bone names
@@ -158,7 +158,7 @@ def preview_model(bpy: Any, imported_model: list[Any], out: Path) -> None:
     light_data.size = max(2, distance * 0.4)
 
     scene = bpy.context.scene
-    scene.render.resolution_x = 960
+    scene.render.engine = "CYCLES"\n    scene.cycles.samples = 8\n    scene.render.resolution_x = 960
     scene.render.resolution_y = 540
     scene.render.resolution_percentage = 100
     scene.render.film_transparent = True
