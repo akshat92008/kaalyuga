@@ -695,7 +695,7 @@ export class Rudra3DRenderer {
           const ctx = target.getContext('2d');
           if (ctx) {
             ctx.clearRect(0, 0, this.size, this.size);
-            ctx.globalAlpha = 1;
+            ctx.globalAlpha = 1 - alpha;
             ctx.drawImage(this.poseBlendSource, 0, 0, this.size, this.size);
             ctx.globalAlpha = alpha;
             ctx.drawImage(baked, 0, 0, this.size, this.size);
