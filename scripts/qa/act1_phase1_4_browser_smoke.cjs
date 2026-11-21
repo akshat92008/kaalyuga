@@ -189,6 +189,12 @@ const base = process.env.GAME_URL || 'http://127.0.0.1:3100';
     await page.getByRole('button', { name: /Play cinematic/i }).waitFor({ timeout: 30000 });
     await capture('03-dundubhi-before-play');
     await page.getByRole('button', { name: /Play cinematic/i }).click();
+    // The FBX character and its MP4 arena must use an identical dolly.
+    // This catches the former cutout bug: boss zoomed, scenery stayed fixed.
+    await page.waitForFunction(() => {
+      const layer = document.querySelector('[data-testid="dundubhi-camera-arena-layer"]');
+      return layer && new DOMMatrixReadOnly(getComputedStyle(layer).transform).a > 1.035;
+    }, null, { timeout: 24000 });
     await page.waitForTimeout(3200);
     await capture('04-dundubhi-reveal');
     await page.waitForTimeout(2900);
@@ -202,6 +208,13 @@ const base = process.env.GAME_URL || 'http://127.0.0.1:3100';
     assert.equal(await skipButton.isEnabled(), true, 'Fresh cinematic must be skippable');
     await skipButton.click({ timeout: 10000 });
     assert.equal(await skipButton.isDisabled(), true, 'Skip must restore idle state');
+    await page.waitForFunction(() => {
+      const layer = document.querySelector('[data-testid="dundubhi-camera-arena-layer"]');
+      if (!layer) return false;
+      const m = new DOMMatrixReadOnly(getComputedStyle(layer).transform);
+      return Math.abs(m.a - 1) < 0.005 && Math.abs(m.e) < 2 && Math.abs(m.f) < 2;
+    }, null, { timeout: 16000 });
+    report.checks.push('Dundubhi arena and FBX share one dolly; skip restores unzoomed video');
     await capture('06-dundubhi-after-skip');
     await page.getByRole('button', { name: /Replay cinematic/i }).click();
     await page.waitForTimeout(350);
