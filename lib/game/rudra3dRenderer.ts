@@ -20,6 +20,7 @@ import {
   setCelUnderGlow,
 } from './demonSlayerShader';
 import { loadFbxCached, simplifyBufferGeometry } from './meshSimplifier';
+import { calibrateParashuBladeHead, type WeaponVertex3 } from './act1WeaponHeadCalibration';
 import {
   computeCameraFootAnchorRatio,
   computeTrimmedCleaveClock,
@@ -400,29 +401,39 @@ export class Rudra3DRenderer {
           const desiredWorldLen = 1.04;
           const localWepScale = desiredWorldLen / (maxDim * handScale);
 
-          // Marker is computed once from the *actual FBX geometry bounds*.
-          // The longest local axis is the handle/shaft. Its far end, not a
-          // hard-coded screen-space crescent, follows the animated right hand.
-          // This is the blade-head endpoint candidate; detailed edge/teeth
-          // calibration remains a Blender validation milestone.
-          const tipCenter = new THREE.Vector3();
-          wepBox.getCenter(tipCenter);
-          const dominantAxis = wepSize.x >= wepSize.y && wepSize.x >= wepSize.z
-            ? 'x'
-            : wepSize.y >= wepSize.z ? 'y' : 'z';
-          const tipMin = wepBox.min[dominantAxis];
-          const tipMax = wepBox.max[dominantAxis];
-          tipCenter[dominantAxis] = Math.abs(tipMax) >= Math.abs(tipMin) ? tipMax : tipMin;
-          // Box3.setFromObject returns WORLD-space bounds, whereas an object
-          // added to the imported FBX root needs the root's LOCAL coordinates.
-          // This conversion protects files with a baked FBX root transform.
+          // IMPORTANT: the farthest shaft end of the *real* original FBX
+          // is the pommel, not the blade (confirmed by Blender CPU render).
+          // Sample actual mesh vertices in weapon-group local space and
+          // select the WIDE cutting head, not an imagined Box3 corner.
           weaponGroup.updateMatrixWorld(true);
-          weaponGroup.worldToLocal(tipCenter);
-          const bladeHead = new THREE.Object3D();
-          bladeHead.name = '__ACT1_PARASHU_BLADE_HEAD_QA';
-          bladeHead.position.copy(tipCenter);
-          weaponGroup.add(bladeHead);
-          this.parashuHeadMarker = bladeHead;
+          const invWeaponRoot = new THREE.Matrix4().copy(weaponGroup.matrixWorld).invert();
+          const headSamples: WeaponVertex3[] = [];
+          const sampled = new THREE.Vector3();
+          const toWeaponSpace = new THREE.Matrix4();
+          weaponGroup.traverse((child) => {
+            if (!(child as THREE.Mesh).isMesh) return;
+            const mesh = child as THREE.Mesh;
+            const attr = mesh.geometry.getAttribute('position');
+            if (!attr || attr.count < 3) return;
+            toWeaponSpace.multiplyMatrices(invWeaponRoot, mesh.matrixWorld);
+            const stride = Math.max(1, Math.floor(attr.count / 18000));
+            for (let i=0;i<attr.count;i+=stride) {
+              sampled.fromBufferAttribute(attr, i).applyMatrix4(toWeaponSpace);
+              headSamples.push({x:sampled.x,y:sampled.y,z:sampled.z});
+            }
+          });
+          const bladeCalibration = calibrateParashuBladeHead(headSamples);
+          if (bladeCalibration) {
+            const bladeHead = new THREE.Object3D();
+            bladeHead.name = '__ACT1_PARASHU_CUTTING_EDGE_QA';
+            bladeHead.position.set(
+              bladeCalibration.point.x,
+              bladeCalibration.point.y,
+              bladeCalibration.point.z
+            );
+            weaponGroup.add(bladeHead);
+            this.parashuHeadMarker = bladeHead;
+          }
 
           const weaponSocket = new THREE.Group();
           weaponGroup.scale.setScalar(localWepScale);
