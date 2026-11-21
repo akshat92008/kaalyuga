@@ -12,6 +12,11 @@ import path from 'node:path';
 import {chromium} from 'playwright';
 
 const base=process.env.ACT1_QA_BASE || 'http://127.0.0.1:3000';
+const variant=process.env.ACT1_QA_FINISHER || 'downward_crush';
+if(!['downward_crush','spin_360_cleave','impaling_lunge'].includes(variant)){
+  throw new Error('Invalid ACT1_QA_FINISHER '+variant);
+}
+const imageLabel=variant.replaceAll('_','-');
 const out=path.resolve(process.env.ACT1_QA_OUTPUT || 'artifacts/act1-execution');
 await fs.mkdir(out,{recursive:true});
 const browser=await chromium.launch({headless:true,args:[
@@ -22,7 +27,7 @@ const page=await browser.newPage({viewport:{width:1280,height:720},deviceScaleFa
 const pageErrors=[];
 page.on('pageerror',e=>pageErrors.push(e.message));
 const report={
-  kind:'Act I Downward Crush production-renderer action',
+  kind:'Act I '+variant+' production-renderer action',
   qaMode:'existing enemy is staged into posture break; execution itself is unmodified',
   browserVersion:browser.version(),platform:process.platform,
   renderedOnSoftwareGpu:true,
@@ -30,7 +35,7 @@ const report={
   at:new Date().toISOString(),evidence:{},errors:[],
 };
 try{
-  await page.goto(base+'/?autostart=1&chamber=1&perf=1&qaExecution=1',
+  await page.goto(base+'/?autostart=1&chamber=1&perf=1&qaExecution=1&qaExecutionVariant='+variant,
     {waitUntil:'domcontentloaded',timeout:60000});
   // "playing" is set before the media-loading overlay has cleared.
   // Pressing [F] while modalPaused is true is correctly ignored by gameplay.
@@ -67,8 +72,8 @@ try{
   report.evidence.after=after;
   const cue=after.strikeCues?.find(e=>e.action==='execute'&&e.kind==='fired');
   if(!cue)throw new Error('No real execution active-frame cue');
-  if(cue.finisherVariant!=='downward_crush')
-    throw new Error('Wrong finisher used for grounded Downward Crush proof: '+JSON.stringify(cue));
+  if(cue.finisherVariant!==variant)
+    throw new Error('Wrong finisher used for '+variant+' proof: '+JSON.stringify(cue));
   if(cue.damageDelta<=0)throw new Error('Real execution contact did no damage: '+JSON.stringify(cue));
   if(cue.progress<cue.threshold || cue.progress>1.05)
     throw new Error('Execution hit fired outside active action: '+JSON.stringify(cue));
@@ -82,9 +87,9 @@ try{
     throw new Error('No exact in-game active-frame PNG from execution');
   const bytes=Buffer.from(dataUrl.slice('data:image/png;base64,'.length),'base64');
   if(bytes.length<10000)throw new Error('Execution PNG is unusually small');
-  await fs.writeFile(path.join(out,'downward-crush-contact.png'),bytes);
+  await fs.writeFile(path.join(out,imageLabel+'-contact.png'),bytes);
   report.evidence.contactImageBytes=bytes.length;
-  await page.screenshot({path:path.join(out,'downward-crush-recovery.png'),timeout:45000});
+  await page.screenshot({path:path.join(out,imageLabel+'-recovery.png'),timeout:45000});
   await page.waitForFunction(()=>{
     const t=window.__KALIYUGA_ACT1_PERF__||{};
     return t.gameState==='playing'&&t.combat?.action==='idle';
