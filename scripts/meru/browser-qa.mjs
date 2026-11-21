@@ -88,12 +88,16 @@ try{
       throw new Error(label+' did not load its real FBX model. Detail: '+detail+'; '+e.message);
     });
     const rigStatus=await targetPage.getByTestId('meru-boss-cinematic').getAttribute('data-meru-rig-status');
+    const startedWithRig=await targetPage.getByTestId('meru-boss-cinematic').getAttribute('data-meru-started-with-rig');
     const timeAtRig=await targetPage.getByTestId('meru-cinematic-clock').textContent();
-    console.log('MERU_RIG_QA: '+label+' real-rig state='+rigStatus+'; visible at '+timeAtRig);
+    console.log('MERU_RIG_QA: '+label+' real-rig state='+rigStatus+'; first frame was rigged='+startedWithRig+'; visible at '+timeAtRig);
+    assert.equal(startedWithRig,'yes',label+' started a cinematic before the 3D rig was ready');
     await targetPage.waitForFunction(()=>{
       const node=document.querySelector('[data-testid="meru-cinematic-clock"]');
       return node&&Number.parseFloat(node.textContent||'0')>=2.5;
     },null,{timeout:30000});
+    const actualAfterAnimation=await targetPage.getByTestId('meru-boss-cinematic').getAttribute('data-meru-rig-status');
+    assert.equal(actualAfterAnimation,'rigged',label+' lost its real 3D renderer after playback began');
   };
   await checkRigAndFrame(gamePage,'dundubhi');
   await gamePage.screenshot({path:join(out,'meru-ingame-dundubhi-intro.png'),animations:'disabled'});
