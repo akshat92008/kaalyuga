@@ -129,3 +129,34 @@ export function resolveAct1FinisherContactAnchor(input: {
   }
   return {x: ex, y: ey, source: 'target'};
 }
+
+/**
+ * Small visual root follow-through to make a Parashu execution *travel*.
+ * The actual player world position never changes (no extra hit, teleport,
+ * i-frame, collision or camera simulation displacement).
+ */
+export function sampleAct1ExecutionHeroRoot(
+  token: Act1ExecutionChoreographyToken | null,
+  params: {
+    action: string;
+    attackSerial: number;
+    chamberIndex: number;
+    progress: number;
+  }
+): {offsetX: number; offsetY: number} {
+  if (!token || params.action !== 'execute' ||
+      token.attackSerial !== params.attackSerial ||
+      token.chamberIndex !== params.chamberIndex ||
+      !Number.isFinite(params.progress)) return {offsetX:0,offsetY:0};
+  const p = params.progress;
+  const step = envelope(p, 0.07, 0.36, 0.83);
+  if (step <= 0) return {offsetX:0,offsetY:0};
+  switch(token.variant) {
+    case 'downward_crush':
+      return {offsetX:token.facing * 8 * step,offsetY:2.5 * step};
+    case 'spin_360_cleave':
+      return {offsetX:token.facing * 6 * step,offsetY:-2 * step};
+    case 'impaling_lunge':
+      return {offsetX:token.facing * 18 * step,offsetY:0};
+  }
+}
