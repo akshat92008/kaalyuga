@@ -1,0 +1,48 @@
+name: Build Susanoo optimized GLBs
+on:
+  push:
+    branches:
+      - fix/act1-loading-susanoo-stability-20261121
+    paths:
+      - ".github/workflows/build-susanoo-glbs.yml"
+  workflow_dispatch:
+
+jobs:
+  convert-susanoo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout Susanoo FBX and converter without full 4GB project
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            scripts
+            public/optimized
+            new 3D assets and animations/3D Models/Horned_Warlord_of_the_Abyss
+          sparse-checkout-cone-mode: false
+      - name: Install Blender
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y blender
+      - name: Convert both Susanoo FBX rigs to GLBs (preserving skeletons and clips)
+        run: |
+          blender -b --python scripts/build-optimized-glbs.py -- --contains Horned_Warlord_of_the_Abyss --strict
+      - name: Confirm two GLBs were produced and indexed
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          m=json.loads(Path("public/optimized/asset-manifest.json").read_text())
+          source=[k for k in m if "Horned_Warlord_of_the_Abyss" in k]
+          assert len(source) >= 2, m
+          for k in source:
+              f=Path("public")/m[k].lstrip("/")
+              assert f.exists() and f.stat().st_size > 1024, k
+          print("Validated Susanoo GLB files:", len(source))
+          PY
+      - name: Upload optimized models and URL mapping
+        uses: actions/upload-artifact@v4
+        with:
+          name: susanoo-glbs-and-manifest
+          path: public/optimized/
+          retention-days: 7
