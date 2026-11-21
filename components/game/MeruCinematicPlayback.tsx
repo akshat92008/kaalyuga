@@ -29,6 +29,7 @@ export default function MeruCinematicPlayback({scene,onFinish,muted=false}:MeruC
   const [status,setStatus]=useState('Summoning the Warden…');
   const [seconds,setSeconds]=useState(0);
   const [ready,setReady]=useState(false);
+  const [startedWithRig,setStartedWithRig]=useState<boolean|null>(null);
 
   const finish=(reason:MeruCinematicEndReason)=>{
     if(finishOnceRef.current)return;
@@ -75,6 +76,7 @@ export default function MeruCinematicPlayback({scene,onFinish,muted=false}:MeruC
       if(watchdogId!==null)clearTimeout(watchdogId);
       isReady=true;
       setReady(true);
+      setStartedWithRig(hasRig);
       updateRigStatus(hasRig);
       timeline.play();
       const video=videoRef.current;
@@ -82,14 +84,17 @@ export default function MeruCinematicPlayback({scene,onFinish,muted=false}:MeruC
     };
     try{
       boss=new Boss3DRenderer(384);
-      void boss.waitForBossReady(scene.boss,10000).then(ok=>{
+      // Wait for the actual FBX rig and primary animation to finish loading
+      // BEFORE moving the camera; a short watchdog used to show a portrait
+      // for the opening half of the cinematic on slower systems.
+      void boss.ensureBossLoaded(scene.boss).then(async()=>{
         if(disposed||finishOnceRef.current)return;
-        // A watchdog may have started the portrait fallback earlier. Promote
-        // to the real rig as soon as its asynchronous load finishes.
-        updateRigStatus(ok);
+        const loaded=await boss!.waitForBossReady(scene.boss,0);
+        if(disposed||finishOnceRef.current)return;
+        updateRigStatus(loaded);
         start();
       }).catch(()=>{
-        if(disposed)return;
+        if(disposed||finishOnceRef.current)return;
         updateRigStatus(false);
         start();
       });
@@ -98,9 +103,8 @@ export default function MeruCinematicPlayback({scene,onFinish,muted=false}:MeruC
       start();
     }
 
-    // Never let a slow/missing rig indefinitely lock the arena in cinematic mode.
-    // Start with the original portrait fallback if loading does not settle promptly.
-    watchdogId=setTimeout(start,6500);
+    // Always release control if a model is permanently unavailable.
+    watchdogId=setTimeout(start,12500);
 
     const loop=(now:number)=>{
       if(disposed||finishOnceRef.current)return;
@@ -180,6 +184,7 @@ export default function MeruCinematicPlayback({scene,onFinish,muted=false}:MeruC
       data-testid="meru-boss-cinematic"
       data-meru-rig-status={!ready ? 'loading' : status.includes('3D rig active') ? 'rigged' : 'fallback'}
       data-meru-rig-detail={status}
+      data-meru-started-with-rig={startedWithRig===null?'pending':startedWithRig?'yes':'no'}
       className="fixed inset-0 z-[85] flex items-center justify-center bg-[#050407]/[0.98] p-2 sm:p-6"
     >
       <div className="relative w-full max-w-6xl">
