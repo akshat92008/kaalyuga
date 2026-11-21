@@ -1,0 +1,40 @@
+name: Act I Phase 1-4 verified checks
+on:
+  push:
+    branches:
+      - feature/phase1-4-cinematic-combat-20261121
+  pull_request:
+    paths:
+      - 'lib/game/**'
+      - 'components/game/**'
+      - 'scripts/qa/**'
+      - 'package.json'
+      - '.github/workflows/phase1-4-verify.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  combat-unit-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Sparse-checkout test sources, not gigabytes of game assets
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            lib
+            components
+            package.json
+            tsconfig.json
+          sparse-checkout-cone-mode: true
+          persist-credentials: false
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install project dependencies
+        run: npm install --no-audit --no-fund
+      - name: Validate choreography, animation timing, asset paths and elemental impact
+        run: npm run test:phase1-4
