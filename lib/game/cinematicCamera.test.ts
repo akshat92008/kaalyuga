@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   CinematicCameraTrack,
   sampleCinematicImpactImpulse,
+  boundCinematicCameraToPaintedVideo,
 } from './cinematicCamera';
 
 const frames = [
@@ -54,4 +55,39 @@ test('impact impulses are local, deterministic and stop after recovery', () => {
   assert.ok(Math.abs(a.x) <= 6 && Math.abs(a.y) <= 5);
   assert.deepEqual(a, sampleCinematicImpactImpulse(1.08, 1, 960, 540));
   assert.deepEqual(sampleCinematicImpactImpulse(1.39, 1, 960, 540), { x: 0, y: 0 });
+});
+
+test('painted MP4 close-ups cannot expose a video edge, including impact shake', () => {
+  const w = 960, h = 540;
+  const pivotX = 0.5, pivotY = 305 / 540;
+  for (const shot of [
+    { zoom: 1, offsetX: 500, offsetY: -500 },
+    { zoom: 1.025, offsetX: 0, offsetY: 90 },
+    { zoom: 1.12, offsetX: -220, offsetY: 100 },
+    { zoom: 1.25, offsetX: 180, offsetY: -180 },
+    { zoom: 0.7, offsetX: 200, offsetY: 200 },
+    { zoom: NaN, offsetX: Infinity, offsetY: NaN },
+  ]) {
+    const out = boundCinematicCameraToPaintedVideo(shot, w, h, pivotX, pivotY);
+    assert.ok(out.zoom >= 1 && out.zoom <= 1.28);
+    // Untransformed video coordinates [0,w] x [0,h] still cover every
+    // viewport edge after scaling around the off-center camera pivot.
+    const minX = pivotX * w * (1 - out.zoom) + out.offsetX;
+    const maxX = minX + w * out.zoom;
+    const minY = pivotY * h * (1 - out.zoom) + out.offsetY;
+    const maxY = minY + h * out.zoom;
+    assert.ok(minX <= 0.01 && minY <= 0.01, 'video reveals left/top edge');
+    assert.ok(maxX >= w - 0.01 && maxY >= h - 0.01, 'video reveals right/bottom edge');
+  }
+});
+
+test('MP4 camera rest is exactly identity and keeps non-finite transforms safe', () => {
+  assert.deepEqual(
+    boundCinematicCameraToPaintedVideo({ zoom: 1, offsetX: 200, offsetY: -200 }, 960, 540),
+    { zoom: 1, offsetX: 0, offsetY: 0 }
+  );
+  const result = boundCinematicCameraToPaintedVideo(
+    { zoom: NaN, offsetX: NaN, offsetY: -Infinity }, NaN, NaN
+  );
+  assert.deepEqual(result, { zoom: 1, offsetX: 0, offsetY: 0 });
 });
