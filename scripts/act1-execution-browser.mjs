@@ -32,15 +32,23 @@ const report={
 try{
   await page.goto(base+'/?autostart=1&chamber=1&perf=1&qaExecution=1',
     {waitUntil:'domcontentloaded',timeout:60000});
-  await page.waitForFunction(()=>document.body.dataset.state==='playing'&&
-    (window.__KALIYUGA_ACT1_PERF__?.samples||0)>=7,
-    null,{timeout:90000,polling:200});
+  // "playing" is set before the media-loading overlay has cleared.
+  // Pressing [F] while modalPaused is true is correctly ignored by gameplay.
+  // Wait for the actual interactive window instead of losing the only input
+  // and letting the idle player die during a four-minute CI timeout.
+  await page.waitForFunction(()=>{
+    const t=window.__KALIYUGA_ACT1_PERF__||{};
+    return document.body.dataset.state==='playing'&&
+      (t.samples||0)>=7&&t.combat?.modalPaused===false;
+  },null,{timeout:150000,polling:200});
   const before=await page.evaluate(()=>{
     const p=window.__KALIYUGA_ACT1_PERF__||{};
     return {gameState:p.gameState,combat:p.combat,frameSamples:p.samples};
   });
   report.evidence.before=before;
   if(before.gameState!=='playing')throw new Error('Game did not enter playing state');
+  if(before.combat?.modalPaused)
+    throw new Error('Execution rehearsal attempted before chamber loading finished');
   // Real keyboard input and canonical F execution, no JS calls to combat.
   await page.keyboard.press('f',{delay:72});
   await page.waitForFunction(()=>{
