@@ -39,6 +39,19 @@ try{
     }
   };
   await checkSceneAssets(data);
+  // Independently authored Phase II scene must not overwrite Vrikodara's
+  // entrance and must reuse the actual blood-eclipse MP4/poster assets.
+  await page.getByLabel('Select boss cinematic').selectOption('vrikodara-phase2');
+  await page.getByText('Camera A · Vrikodara — The Second Awakening').waitFor();
+  const phaseExportP=page.waitForEvent('download',{timeout:10000});
+  await page.getByRole('button',{name:'Export scene JSON'}).click();
+  const phaseExport=await phaseExportP;
+  await phaseExport.saveAs(join(out,'exported-vrikodara-phase2.meru.json'));
+  const phaseData=JSON.parse(await readFile(join(out,'exported-vrikodara-phase2.meru.json'),'utf8'));
+  assert.equal(phaseData.bossPhase,2);
+  assert.equal(phaseData.boss,'vrikodara');
+  await checkSceneAssets(phaseData);
+  await page.screenshot({path:join(out,'meru-vrikodara-phase2-editor.png'),fullPage:true,animations:'disabled'});
   await page.getByLabel('Select boss cinematic').selectOption('vrikodara');
   await page.getByText('Camera A · Vrikodara — Infernal Maw').waitFor();
   const vDownloadP=page.waitForEvent('download',{timeout:10000});
