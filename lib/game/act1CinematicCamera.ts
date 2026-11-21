@@ -46,7 +46,12 @@ export class Act1CinematicCamera {
   }
 
   cancel(): void { this.cue = null; }
-  skip(): void { this.cancel(); }
+  /** Return true only when Escape actually consumed a live cinematic shot. */
+  skip(): boolean {
+    if (!this.cue) return false;
+    this.cancel();
+    return true;
+  }
 
   step(rawDtSec: number, blocked = false): Act1CameraCueSample {
     const cue = this.cue;
