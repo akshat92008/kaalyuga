@@ -67,7 +67,7 @@ export default function MeruCinematicStudio(){
     readyRef.current=false;
     lastRef.current=0;
     let lastBossFrame=0;
-    let slowRigTimer:ReturnType<typeof setTimeout>|null=null;
+    let slowRigTimer:number|null=null;
     setStatus('Initializing original '+scene.boss+' rig…');
     const portrait=new Image();portrait.src=GAME_ASSETS.portraits[scene.boss];portraitRef.current=portrait;
     for(const [kind,url] of Object.entries({drum:GAME_ASSETS.sfx.warDrum,roar:GAME_ASSETS.sfx.bossRoarDeep,impact:GAME_ASSETS.sfx.weaponSmash})){
