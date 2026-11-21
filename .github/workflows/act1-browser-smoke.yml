@@ -53,7 +53,9 @@ jobs:
           exit 1
       - name: Capture gameplay screens, missing media, JS errors and raw-frame stats
         env:
-          ACT1_SMOKE_CHAMBERS: 1,4,8
+          ACT1_SMOKE_CHAMBERS: 1,2,3,4,5,6,7,8
+          ACT1_SMOKE_PRESET: performance
+          ACT1_SMOKE_COMBAT: '1'
           ACT1_SMOKE_TIMEOUT: 85000
         run: node scripts/act1-browser-smoke.mjs
       - name: Preserve recordings and full JSON audit even if game fails
