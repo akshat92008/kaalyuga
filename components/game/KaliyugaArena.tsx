@@ -4788,18 +4788,10 @@ export default function KaliyugaArena() {
       4.4,
       100
     );
-    // Call down Twin Cataclysmic Sky-Splitting Vajra Lightning Bolts on Execute!
-    for (let b = 0; b < 3; b++) {
-      sim.lightningArcs.push({
-        x1: brokenEnemy.x + (b - 1) * 110,
-        y1: brokenEnemy.y - 540,
-        x2: brokenEnemy.x + (b - 1) * 18,
-        y2: brokenEnemy.y - 12,
-        life: 0.38,
-        maxLife: 0.38,
-        color: b === 1 ? '#ffd86b' : '#ff4d3b',
-      });
-    }
+    // Keep the three execution silhouettes coherent: the old unconditional
+    // triple SKY LIGHTNING stack polluted the fire crush and wind cleave,
+    // filled the entire camera, and obscured weapon contact in real QA shots.
+    // Impaling Lunge already has its own bounded directional Vajra effect.
     spawnFloatingText(
       brokenEnemy.x,
       brokenEnemy.y - 96,
