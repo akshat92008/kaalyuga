@@ -26,7 +26,8 @@ jobs:
         with:
           sparse-checkout: |
             scripts/cinematics/render_dundubhi_cloud.py
-            public/kaalyuga/dundubhi/
+            new 3D assets and animations/Animations/Creature Pack (4)/Meshy_AI_Bellhorn_Warlord_20261114_generate.fbx
+            new 3D assets and animations/3D Models/Bellhorn_Warlord/Meshy_AI_Bellhorn_Warlord_20261114_texture_fbx/Meshy_AI_Bellhorn_Warlord_20261114_texture.png
             public/kaalyuga/anims/dundubhi/
             public/kaalyuga/arena/dundubhi_chamber.mp4
             public/kaalyuga/audio/drum.wav
@@ -41,8 +42,8 @@ jobs:
       - name: Validate scene script and source assets
         run: |
           python3 -m py_compile scripts/cinematics/render_dundubhi_cloud.py
-          test -s public/kaalyuga/dundubhi/model.fbx
-          test -s public/kaalyuga/dundubhi/diffuse.png
+          test -s "new 3D assets and animations/Animations/Creature Pack (4)/Meshy_AI_Bellhorn_Warlord_20261114_generate.fbx"
+          test -s "new 3D assets and animations/3D Models/Bellhorn_Warlord/Meshy_AI_Bellhorn_Warlord_20261114_texture_fbx/Meshy_AI_Bellhorn_Warlord_20261114_texture.png"
           test -s public/kaalyuga/anims/dundubhi/idle.fbx
           test -s public/kaalyuga/anims/dundubhi/roar.fbx
           test -s public/kaalyuga/arena/dundubhi_chamber.mp4
