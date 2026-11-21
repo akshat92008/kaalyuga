@@ -28,7 +28,30 @@ try{
   assert.equal(data.boss,'dundubhi');
   assert.ok(data.camera.length>=3);
   await page.screenshot({path:join(out,'meru-studio.png'),fullPage:true,animations:'disabled'});
-  console.log('MERU_BROWSER_QA: HTTP=200; play/pause/restart=OK; inspector=OK; export JSON=OK; screenshot=OK');
+
+  // Meru should use the same real, proxy-mapped MP4 and poster as the actual
+  // boss chamber. This check catches silent black/blank backgrounds.
+  const checkSceneAssets=async(scene)=>{
+    for(const asset of [scene.backgroundUrl,scene.posterUrl]){
+      const assetResp=await page.request.head('http://127.0.0.1:3000'+asset,{timeout:60000});
+      assert.ok(assetResp.status()===200||assetResp.status()===206,
+        'Scene asset missing '+asset+' (HTTP '+assetResp.status()+')');
+    }
+  };
+  await checkSceneAssets(data);
+  await page.getByLabel('Select boss cinematic').selectOption('vrikodara');
+  await page.getByText('Camera A · Vrikodara — Infernal Maw').waitFor();
+  const vDownloadP=page.waitForEvent('download',{timeout:10000});
+  await page.getByRole('button',{name:'Export scene JSON'}).click();
+  const vDownload=await vDownloadP;
+  await vDownload.saveAs(join(out,'exported-vrikodara.meru.json'));
+  const vData=JSON.parse(await readFile(join(out,'exported-vrikodara.meru.json'),'utf8'));
+  assert.equal(vData.boss,'vrikodara');
+  assert.equal(vData.id,'vrikodara-entrance');
+  await checkSceneAssets(vData);
+  await page.screenshot({path:join(out,'meru-studio-vrikodara.png'),fullPage:true,animations:'disabled'});
+  console.log('MERU_BROWSER_QA: Both bosses selectable; editor exports valid scenes; real MP4/poster assets resolve');
+    console.log('MERU_BROWSER_QA: HTTP=200; play/pause/restart=OK; inspector=OK; export JSON=OK; screenshot=OK');
   console.log('MERU_BROWSER_QA: page errors:',errors.length, errors.slice(0,4));
   if(errors.length)throw new Error('Unhandled browser exceptions: '+errors.join(' | ').slice(0,1000));
   // Real project round trip: a validated Studio-authored scene must be loaded
@@ -78,5 +101,27 @@ try{
   console.log('MERU_GAMEPLAY_QA: natural completion releases cinematic and gameplay; authored Studio scene loaded');
   assert.equal(gameErrors.length,0,'Game QA should not throw unhandled browser errors');
   await naturalPage.close();
+
+  // Same gameplay contract for the Act I final boss: an authored Vrikodara
+  // scene must play in Chamber VIII and be skippable without combat errors.
+  vData.title='Vrikodara QA Authored Entrance';
+  vData.duration=30;
+  await page.evaluate(serialized=>{
+    window.localStorage.setItem('meru.studio.cinematic.vrikodara.v1',serialized);
+  },JSON.stringify(vData));
+  const vrikodaraPage=await context.newPage();
+  const vrikodaraErrors=[];
+  vrikodaraPage.on('pageerror',e=>vrikodaraErrors.push(e.message));
+  const vGameResponse=await vrikodaraPage.goto('http://127.0.0.1:3000/?chamber=8&cinematic=1',{
+    waitUntil:'domcontentloaded',timeout:120000,
+  });
+  assert.equal(vGameResponse?.status(),200);
+  await vrikodaraPage.getByRole('dialog',{name:'Vrikodara QA Authored Entrance cinematic'}).waitFor({timeout:90000});
+  await vrikodaraPage.screenshot({path:join(out,'meru-ingame-vrikodara-intro.png'),animations:'disabled'});
+  await vrikodaraPage.getByRole('button',{name:'Skip boss cinematic and begin combat'}).click();
+  await vrikodaraPage.getByTestId('meru-boss-cinematic').waitFor({state:'detached',timeout:15000});
+  assert.equal(vrikodaraErrors.length,0,'Vrikodara game encounter should not throw');
+  console.log('MERU_GAMEPLAY_QA: Chamber VIII loads authored Vrikodara cinematic; Skip releases combat; browser errors=0');
+  await vrikodaraPage.close();
 
 }finally{await browser.close();}
