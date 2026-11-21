@@ -6881,6 +6881,28 @@ export default function KaliyugaArena() {
     let hudSyncAccum = 0;
     let telemetryLastMs = 0;
     const perfTelemetryEnabled = new URLSearchParams(window.location.search).get('perf') === '1';
+    // Bounded, opt-in evidence of animation-cue dispatch. A fired cue does NOT
+    // prove enemy contact or that the rendered blade visually touched a target.
+    const strikeCueTrace: Array<{
+      kind: 'fired' | 'cancelled';
+      action: Act1StrikeAction;
+      attackSerial: number;
+      progress: number;
+      threshold: number;
+      atMs: number;
+    }> = [];
+    const traceStrikeCue = (
+      kind: 'fired' | 'cancelled',
+      action: Act1StrikeAction,
+      progress: number,
+      threshold: number,
+      attackSerial: number,
+      atMs: number
+    ) => {
+      if (!perfTelemetryEnabled) return;
+      strikeCueTrace.push({ kind, action, attackSerial, progress, threshold, atMs });
+      if (strikeCueTrace.length > 24) strikeCueTrace.shift();
+    };
 
     const afterDraw = (cb: FrameRequestCallback) => {
       if (isSoftwareWebGLRenderer()) {
@@ -6927,6 +6949,7 @@ export default function KaliyugaArena() {
             gameState: sim.state,
             boss: sim.enemies.find((e) => e.isBoss && e.aiState !== 'ko')?.type ?? null,
             graphicsTier: sim.graphicsSettings.tier,
+            strikeCues: strikeCueTrace.slice(),
             // Production-safe opt-in read-only combat evidence for the real
             // browser QA runner. No gameplay mutation or per-frame allocations.
             combat: {
@@ -7452,6 +7475,8 @@ export default function KaliyugaArena() {
             const curProgress =
               1 - Math.max(0, p.actionTimer) / Math.max(0.05, p.actionDuration || 0.34);
             if (shouldCancelPendingStrike(pendingStrike.expectedAction, prevAction)) {
+              traceStrikeCue('cancelled', pendingStrike.expectedAction, curProgress,
+                pendingStrike.triggerThreshold, p.attackSerial, now);
               pendingStrikeVfxRef.current = null;
             } else if (canFirePendingStrike(
               pendingStrike.expectedAction, prevAction, curProgress,
@@ -7459,6 +7484,8 @@ export default function KaliyugaArena() {
             ) || p.actionTimer <= 0) {
               pendingStrike.fired = true;
               pendingStrikeVfxRef.current = null;
+              traceStrikeCue('fired', pendingStrike.expectedAction, curProgress,
+                pendingStrike.triggerThreshold, p.attackSerial, now);
               pendingStrike.execute();
             }
           }
