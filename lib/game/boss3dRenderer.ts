@@ -1805,6 +1805,10 @@ export class Boss3DRenderer {
           fCtx.fillStyle = 'rgba(255, 184, 71, 0.34)';
           fCtx.fillRect(0, 0, flashCanvas.width, flashCanvas.height);
           fCtx.globalCompositeOperation = 'source-over';
+          if (this.frameCache.size >= 48) {
+            const stale = this.frameCache.keys().next().value;
+            if (stale) this.frameCache.delete(stale);
+          }
           this.frameCache.set(frameKey, flashCanvas);
           this.canvas = flashCanvas;
           rig.mixer.update(dt);
@@ -1962,7 +1966,7 @@ export class Boss3DRenderer {
       cacheFrame: false,
     });
     this.canvas = baked;
-    if (this.frameCache.size > 96) {
+    if (this.frameCache.size >= 48) {
       const oldest = this.frameCache.keys().next().value;
       if (oldest) this.frameCache.delete(oldest);
     }
@@ -2080,8 +2084,20 @@ export class Boss3DRenderer {
 
   public dispose(): void {
     this.disposed = true;
+    this.frameCache.clear();
+    this.prewarmedKinds.clear();
+    for (const rig of Object.values(this.rigs)) {
+      if (!rig) continue;
+      rig.mixer.stopAllAction();
+      rig.root.removeFromParent();
+      rig.root.clear();
+    }
+    this.rigs = {};
+    this.loadingByKind = {};
+    this.trailSamples.length = 0;
+    this.scene.clear();
     this.trailGeometry.dispose();
     this.trailMaterial.dispose();
-    this.renderer = null;
+    this.renderer = null; // shared WebGL context remains owned by the sprite baker
   }
 }
