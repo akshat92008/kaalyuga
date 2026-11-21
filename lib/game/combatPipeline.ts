@@ -419,6 +419,7 @@ export type ParashuFinisherVariant =
 export interface ParashuFinisherSpec {
   variant: ParashuFinisherVariant;
   rudraAnimState: 'heavy' | 'cast' | 'attack3';
+  contactProgress: number;
   calloutTitle: string;
   calloutSubtitle: string;
   title: string;
@@ -481,6 +482,7 @@ export function selectParashuFinisherVariant(
       subtitle,
       accentColor: '#ff7a33',
       durationSec: 0.48,
+      contactProgress: 0.266,
       damageMultiplier: isExecution ? 2.45 : targetIsStaggered ? 1.65 : 1.28,
       postureMultiplier: 1.45,
       cleaveRadiusPx: 148,
@@ -510,6 +512,7 @@ export function selectParashuFinisherVariant(
       subtitle,
       accentColor: '#3ee0a8',
       durationSec: 0.46,
+      contactProgress: 0.322,
       damageMultiplier: isExecution ? 2.55 : targetIsStaggered ? 1.72 : 1.32,
       postureMultiplier: 1.5,
       cleaveRadiusPx: 128,
@@ -538,6 +541,7 @@ export function selectParashuFinisherVariant(
     subtitle,
     accentColor: '#ff3848',
     durationSec: 0.5,
+    contactProgress: 0.308,
     damageMultiplier: isExecution ? 2.65 : targetIsStaggered ? 1.8 : 1.38,
     postureMultiplier: 1.6,
     cleaveRadiusPx: 136,
