@@ -1069,7 +1069,7 @@ export class WebglDemonSlayerVfxOverlay {
     this.act1Quality = tier;
     const budget = resolveAct1VfxQualityBudget(tier);
     if (this.renderer) {
-      const pr = this.isSoftwareGl ? Math.min(0.65, budget.pixelRatio) :
+      const pr = this.isSoftwareGl ? Math.min(0.65, budget.pixelRatio * 0.75) :
         Math.min(window.devicePixelRatio || 1, budget.pixelRatio);
       this.renderer.setPixelRatio(pr);
       this.renderer.setSize(this.width, this.height, false);
@@ -1093,7 +1093,7 @@ export class WebglDemonSlayerVfxOverlay {
 
     if (this.renderer) {
       const budget = resolveAct1VfxQualityBudget(this.act1Quality);
-      const pr = this.isSoftwareGl ? Math.min(0.65, budget.pixelRatio) :
+      const pr = this.isSoftwareGl ? Math.min(0.65, budget.pixelRatio * 0.75) :
         Math.min(window.devicePixelRatio || 1, budget.pixelRatio);
       this.renderer.setPixelRatio(pr);
       this.renderer.setSize(safeW, safeH, false);
