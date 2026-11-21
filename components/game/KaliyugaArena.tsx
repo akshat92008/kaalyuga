@@ -6960,6 +6960,8 @@ export default function KaliyugaArena() {
               damageDealt: sim.runDamageDealt,
               enemiesAlive: sim.enemies.filter((e) => e.aiState !== 'ko').length,
               modalPaused: sim.modalPaused,
+              heldKeys: sim.input.keysHeld.size,
+              bufferedAction: sim.input.bufferedAction,
             },
             recordedAtMs: now,
           };
@@ -12356,7 +12358,7 @@ export default function KaliyugaArena() {
 
   // Sync modalPaused ref so opening Shrine, Story Codex, Boon Altar, Party Command Hub, Controls popover, or blocking Narrative overlays freezes active combat while keeping walkable Vaitarani Hub interactive
   useEffect(() => {
-    simRef.current.modalPaused =
+    const blockGameplay =
       shrineOpen ||
       storyOpen ||
       controlsOpen ||
@@ -12368,6 +12370,15 @@ export default function KaliyugaArena() {
       (sliceStage !== 'combat_arena' &&
         sliceStage !== 'vaitarani_hub' &&
         sliceStage !== 'opening_wake');
+    simRef.current.modalPaused = blockGameplay;
+    if (blockGameplay) {
+      // A held movement/attack key must not survive an open/close cycle even
+      // if keyup is lost when browser focus shifts to an interactive control.
+      simRef.current.input.keysHeld.clear();
+      simRef.current.input.justPressed.clear();
+      simRef.current.input.bufferedAction = null;
+      simRef.current.input.bufferTimer = 0;
+    }
   }, [
     shrineOpen,
     storyOpen,
