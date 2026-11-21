@@ -31,6 +31,9 @@ def validate(report_path: Path) -> dict:
     assert animation_count >= 8, f"Exported only {animation_count} animation clips"
     assert root.get("skins"), "Exported GLB does not contain a skeleton skin"
     assert root.get("meshes"), "Exported GLB does not contain a mesh"
+    assert root.get("images") and root.get("textures"), "GLB missing original painted Rudra texture"
+    assert root.get("materials"), "GLB missing material assignment"
+    assert report.get("painted_material_mesh_count", 0) > 0, "Model was exported without painted diffuse"
     for anim in root["animations"]:
         assert anim.get("channels") and anim.get("samplers"), "Empty animation channel"
 
