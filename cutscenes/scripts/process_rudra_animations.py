@@ -35,12 +35,22 @@ def get_args() -> argparse.Namespace:
     return parser.parse_args(blender_argv())
 
 
+def iter_action_curves(action: Any) -> list[Any]:
+    """Handle legacy fcurves and Blender 4.4+/5 slotted Action channelbags."""
+    curves = []
+    legacy = getattr(action, 'fcurves', None)
+    if legacy is not None:
+        curves.extend(legacy)
+    for layer in getattr(action, 'layers', []):
+        for strip in getattr(layer, 'strips', []):
+            for bag in getattr(strip, 'channelbags', []):
+                curves.extend(getattr(bag, 'fcurves', []))
+    return curves
+
+
 def action_bones(action: Any) -> set[str]:
-    tracks = getattr(action, "fcurves", None)
-    if tracks is None:
-        return set()
     used = set()
-    for curve in tracks:
+    for curve in iter_action_curves(action):
         match = re.search(r'pose\.bones\["([^"]+)"\]', curve.data_path)
         if match:
             used.add(match.group(1))
@@ -52,11 +62,11 @@ def validate_action(action: Any, target_bones: set[str]) -> tuple[list[str], lis
     notes: list[str] = []
     used = action_bones(action)
     if not used:
-        errors.append("No readable pose-bone fcurves (possible unsupported slotted action)")
+        errors.append("No readable pose-bone fcurves (FBX may contain no supported bone animation)")
     missing = sorted(used - target_bones)
     if missing:
         errors.append("Bone paths absent from canonical rig: " + ", ".join(missing[:24]))
-    for curve in (getattr(action, "fcurves", None) or []):
+    for curve in iter_action_curves(action):
         for key in curve.keyframe_points:
             if any(not math.isfinite(float(v)) for v in (*key.co, *key.handle_left, *key.handle_right)):
                 errors.append("Non-finite keyframe values")
@@ -71,7 +81,11 @@ def validate_action(action: Any, target_bones: set[str]) -> tuple[list[str], lis
 
 def import_fbx(bpy: Any, filename: Path) -> list[Any]:
     before = set(bpy.data.objects)
-    bpy.ops.import_scene.fbx(filepath=str(filename))
+    # Blender 5 native importer works on GitHub's Ubuntu runner; legacy addon can fail.
+    if hasattr(bpy.ops.wm, 'fbx_import'):
+        bpy.ops.wm.fbx_import(filepath=str(filename))
+    else:
+        bpy.ops.import_scene.fbx(filepath=str(filename))
     return [obj for obj in bpy.data.objects if obj not in before]
 
 
