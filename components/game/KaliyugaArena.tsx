@@ -8053,6 +8053,7 @@ export default function KaliyugaArena() {
               }
               spawnShockwave(e.x, e.y, 240, '#a855f7', 0.48);
               triggerImpactInversionFlash(bloodDemonArtsRef.current, e.x, e.y - 38, 0.06, '#c026d3');
+              const bossPhasePalette: DemonSlayerVfxPalette = e.type === 'vrikodara' ? 'void' : 'bronze';
               // Purple-Crimson Blood Demon Art Cage + Thorny Floor Vines (no cyan Akaza compass on Dundubhi!)
               webglDemonSlayerVfxRef.current?.spawnBloodThreadCage({
                 x: e.x,
@@ -8761,7 +8762,7 @@ export default function KaliyugaArena() {
               const enemyTier = classifyEnemyVfxTier({
                 type: e.type,
                 isBoss: e.isBoss,
-                isSemiBoss: e.isSemiBoss,
+                isSemiBoss: e.type === 'semi_boss_bloodforge',
               });
               const enemyBudget = getEnemySlashVfxBudget(enemyTier, e.telegraphRadius, e.attackKind);
               const enemyVfxPal: DemonSlayerVfxPalette =
