@@ -33,7 +33,6 @@ jobs:
             components
             app
             lib
-            public
             engine/ue5GraphicsEngine.ts
             engine/lanternShaderEngine.ts
             engine/v7StoryEngine.ts
