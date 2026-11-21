@@ -59,6 +59,8 @@ try{
   report.evidence.after=after;
   const cue=after.strikeCues?.find(e=>e.action==='execute'&&e.kind==='fired');
   if(!cue)throw new Error('No real execution active-frame cue');
+  if(cue.finisherVariant!=='downward_crush')
+    throw new Error('Wrong finisher used for grounded Downward Crush proof: '+JSON.stringify(cue));
   if(cue.damageDelta<=0)throw new Error('Real execution contact did no damage: '+JSON.stringify(cue));
   if(cue.progress<cue.threshold || cue.progress>1.05)
     throw new Error('Execution hit fired outside active action: '+JSON.stringify(cue));
