@@ -13,7 +13,7 @@ import type { StaffStance } from './rules';
 import { buildWeaponPoseTrailBands, type WeaponTrailSample } from './act1WeaponPoseTrail';
 import {
   act1HeavyBreathingPalette, buildAct1HeavyBladeFlames,
-  type Act1HeavyBreathingStance,
+  type Act1HeavyBreathingStance, type Act1BreathingElement,
 } from './act1HeavyBreathingFx';
 import {
   drawAdditiveFlipbookCell,
@@ -581,12 +581,13 @@ export function renderAct1HeavyParashuBreathing(
     stance:Act1HeavyBreathingStance;
     focus:number;
     alpha:number;
-    action:'heavy_unleash'|'execute';
+    action:'light_attack'|'heavy_unleash'|'execute';
+    element?:Act1BreathingElement;
   }
 ):boolean {
   const tongues=buildAct1HeavyBladeFlames(samples,params);
   if(!tongues.length)return false;
-  const colors=act1HeavyBreathingPalette(params.stance);
+  const colors=act1HeavyBreathingPalette(params.stance,params.element);
   ctx.save();
   ctx.globalCompositeOperation='source-over';
   ctx.lineJoin='round';
