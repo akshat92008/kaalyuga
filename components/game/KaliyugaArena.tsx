@@ -7137,6 +7137,7 @@ export default function KaliyugaArena() {
     const susanooFistTrace: Array<{
       attackSerial:number;sampleCount:number;
       x:number;y:number;action:string;
+      source:'bone'|'mesh_surface';
     }> = [];
     const heavyBreathingTrace: Array<{
       action:string; stance:'smash'|'pillar'|'thrust'; element:Act1BreathingElement;
@@ -12103,8 +12104,9 @@ export default function KaliyugaArena() {
                   spectralTrail.chamberIndex=sim.chamberIndex;
                   spectralTrail.samples=[];
                 }
+                const actualStrikeAnchor=susanoo3d.getProjectedStrikeAnchor();
                 const fist=projectWeaponHeadToWorld({
-                  uv:susanoo3d.getProjectedStrikeHand(),
+                  uv:actualStrikeAnchor,
                   actorX:p.x,actorY:p.y,drawSize:sDraw,
                   footAnchorRatio:susanoo3d.footAnchorRatio,
                 });
@@ -12146,6 +12148,7 @@ export default function KaliyugaArena() {
                   susanooFistTrace.push({
                     attackSerial:p.attackSerial,sampleCount:spectralTrail.samples.length,
                     x:top.x,y:top.y,action:p.action,
+                    source:actualStrikeAnchor?.source??'mesh_surface',
                   });
                   if(susanooFistTrace.length>64)susanooFistTrace.shift();
                 }
