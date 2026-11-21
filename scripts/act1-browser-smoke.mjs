@@ -40,6 +40,7 @@ try {
     page.on('requestfailed', request =>
       failuresDuringNavigation.push({url:request.url().slice(0,170),reason:request.failure()?.errorText}));
     let ready=false, telemetry=null, state=null, inputGate=null;
+    const strikeEvidence=[];
     let start = Date.now();
     try {
       await page.goto(base+'/?autostart=1&chamber='+chamber+'&perf=1',
@@ -118,8 +119,40 @@ try {
           ['agneyastra', 'q', 310],
         ];
         for (const [action, key, pauseMs] of combos) {
-          await page.waitForTimeout(650);
+          // Ensure the previous swing has recovered before the next scripted
+          // action. Slow software WebGL can take seconds per 0.44s game action.
+          if (action === 'light' || action === 'heavy') {
+            await page.waitForFunction(
+              () => window.__KALIYUGA_ACT1_PERF__?.combat?.action === 'idle',
+              null, {timeout:30000}
+            );
+          }
+          await page.waitForTimeout(400);
+          const beforeSerial = await page.evaluate(() =>
+            window.__KALIYUGA_ACT1_PERF__?.combat?.attackSerial || 0
+          );
           await page.keyboard.press(key);
+          if (action === 'light' || action === 'heavy') {
+            const expectedAction = action === 'light' ? 'light_attack' : 'heavy_unleash';
+            await page.waitForFunction(
+              ({expectedAction, beforeSerial}) =>
+                (window.__KALIYUGA_ACT1_PERF__?.strikeCues || []).some(
+                  c => c.kind === 'fired' && c.action === expectedAction &&
+                    c.attackSerial > beforeSerial
+                ),
+              {expectedAction,beforeSerial}, {timeout:30000}
+            );
+            const cue = await page.evaluate(({expectedAction,beforeSerial}) =>
+              [...(window.__KALIYUGA_ACT1_PERF__?.strikeCues || [])].reverse().find(
+                c => c.kind === 'fired' && c.action === expectedAction &&
+                  c.attackSerial > beforeSerial
+              ), {expectedAction,beforeSerial});
+            if (!cue || cue.progress + 0.00001 < cue.threshold ||
+                !Number.isFinite(cue.damageDelta) || cue.damageDelta < 0) {
+              throw new Error(action+' active-frame contact trace invalid: '+JSON.stringify(cue));
+            }
+            strikeEvidence.push({action,cue});
+          }
           await page.waitForTimeout(pauseMs);
           await page.screenshot({
             path:path.join(outDir,'act1-ch'+chamber+'-'+action+'.png'),
@@ -141,7 +174,7 @@ try {
       await page.screenshot({path:path.join(outDir,'act1-ch'+chamber+'.png'),
            animations:'disabled', timeout:45000});
     } catch (e) { errors.push('capture: '+String(e.message||e).slice(0,200)); }
-    const record={chamber,preset,ready,elapsedMs:Date.now()-start,telemetry,state,inputGate,
+    const record={chamber,preset,ready,elapsedMs:Date.now()-start,telemetry,state,inputGate,strikeEvidence,
        pageErrors:errors.slice(0,30),
        httpErrors:misses.slice(0,50),
        networkFailures:failuresDuringNavigation.slice(0,40)};
