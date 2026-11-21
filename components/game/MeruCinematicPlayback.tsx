@@ -51,7 +51,7 @@ export default function MeruCinematicPlayback({scene,onFinish,muted=false}:MeruC
     timelineRef.current=timeline;
     let boss:Boss3DRenderer|null=null;
     const portrait=new Image();
-    portrait.src=GAME_ASSETS.portraits.dundubhi;
+    portrait.src=GAME_ASSETS.portraits[scene.boss];
     const audioSources={
       drum:GAME_ASSETS.sfx.warDrum,
       roar:GAME_ASSETS.sfx.bossRoarDeep,
