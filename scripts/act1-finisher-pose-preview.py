@@ -111,7 +111,10 @@ def candidate_action(raw, source_armature, target_armature, label):
         tgt_b = target_armature.data.bones[tgt_name]
         angle = src_b.matrix_local.to_quaternion().rotation_difference(
             tgt_b.matrix_local.to_quaternion()).angle
-        rest_deviation.append((src_name, math.degrees(angle)))
+        # Quaternion q and -q encode the same orientation; report the
+        # shortest angle rather than alarming 355-degree false positives.
+        degrees = math.degrees(angle)
+        rest_deviation.append((src_name, min(degrees, abs(360 - degrees))))
     worst = sorted(rest_deviation, key=lambda pair: pair[1], reverse=True)[:10]
     return copy, {
         "source_action": raw.name, "candidate_action": copy.name,
@@ -120,23 +123,40 @@ def candidate_action(raw, source_armature, target_armature, label):
         "mapped_curves": copied,
         "rest_rotation_deg_max": round(max((v for _, v in rest_deviation), default=180), 3),
         "rest_rotation_deg_worst": [{"bone": n, "degrees": round(v, 2)} for n, v in worst],
+        "rest_orientation_conflicts_gt_35deg": sum(v > 35 for _, v in rest_deviation),
         "direct_release_approved": False,
-        "limitation": "Only contact-pose reference. Bone rest, foot sliding, axe socket, enemy reaction and exports still require visual and runtime validation."
+        "limitation": "Only pose references. Significant rest-orientation differences, foot sliding, axe socket, enemy reaction and exports require director and runtime validation."
     }
 
 
-def render_pose(target, action, out_path: Path):
+def render_pose(target, action, out_path: Path, gameplay_progress: float):
     scene = bpy.context.scene
     target.animation_data_create()
     target.animation_data.action = action
     first, last = (float(x) for x in action.frame_range)
-    contact = first + (last - first) * 0.35
+    # Match the runtime's trimmed Parashu attack clip, not an arbitrary
+    # fraction of the imported FBX. Active contact is at gameplay 0.35.
+    clip_progress = 0.14 + gameplay_progress * 0.74
+    contact = first + (last - first) * clip_progress
     scene.frame_set(int(contact), subframe=contact % 1)
     bpy.context.view_layer.update()
 
     meshes = [obj for obj in target.children_recursive if obj.type == "MESH"]
     if not meshes:
         raise RuntimeError("Runtime FBX has no mesh under target armature")
+    # Uniform non-emissive clay: texture maps or default imported materials
+    # should never make the diagnostic silhouette all white and unreadable.
+    clay = bpy.data.materials.get("QA_NONRELEASE_CLAY")
+    if clay is None:
+        clay = bpy.data.materials.new("QA_NONRELEASE_CLAY")
+        clay.use_nodes = True
+        shader = clay.node_tree.nodes.get("Principled BSDF")
+        shader.inputs["Base Color"].default_value = (.28, .20, .16, 1)
+        shader.inputs["Metallic"].default_value = 0.0
+        shader.inputs["Roughness"].default_value = .87
+    for obj in meshes:
+        obj.data.materials.clear()
+        obj.data.materials.append(clay)
     bounds = [obj.matrix_world @ Vector(c) for obj in meshes for c in obj.bound_box]
     lo = Vector([min(x[i] for x in bounds) for i in range(3)])
     hi = Vector([max(x[i] for x in bounds) for i in range(3)])
@@ -155,7 +175,7 @@ def render_pose(target, action, out_path: Path):
     scene.collection.objects.link(light)
     light.location = center + Vector((1.1, -1.2, 2.1)).normalized() * size
     light.rotation_euler = (center - light.location).to_track_quat("-Z", "Y").to_euler()
-    light_data.energy = 1300
+    light_data.energy = 430
     light_data.size = size * 0.8
     scene.render.engine = "CYCLES"
     scene.cycles.device = "CPU"
@@ -173,7 +193,8 @@ def render_pose(target, action, out_path: Path):
     bpy.ops.render.render(write_still=True)
     bpy.data.objects.remove(light, do_unlink=True)
     bpy.data.objects.remove(cam, do_unlink=True)
-    return {"contact_frame": round(contact, 3), "png": out_path.name}
+    return {"frame": round(contact, 3), "clip_normalized_progress": round(clip_progress, 4),
+            "png": out_path.name}
 
 
 def main():
@@ -206,8 +227,14 @@ def main():
         # Prevent source armature/mesh appearing in the rendered image.
         for obj in objects:
             obj.hide_render = True
-        pose = render_pose(target, action, a.output / (variant + "-contact.png"))
-        info.update(pose)
+        poses = {}
+        for name, progress in (
+            ("anticipation", 0.15), ("contact", 0.35), ("recovery", 0.75)
+        ):
+            poses[name] = render_pose(
+                target, action, a.output / (variant + "-" + name + ".png"),
+                progress)
+        info["pose_frames"] = poses
         info["source_file"] = str(source_file)
         report["variants"][variant] = info
         for obj in objects:
