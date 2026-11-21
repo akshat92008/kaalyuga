@@ -11121,6 +11121,7 @@ export default function KaliyugaArena() {
                   aiState: e.aiState,
                   attackKind: e.attackKind,
                   attackPattern: e.attackPattern,
+                  chargeImpactReady: Boolean(e.chargeImpactReady),
                   windupProgress:
                     e.aiState === 'windup'
                       ? Math.min(1, Math.max(0, 1 - e.aiTimer / Math.max(0.01, e.windupDuration)))
