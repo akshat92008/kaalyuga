@@ -68,22 +68,33 @@ def main():
     center = (low+high)*0.5
     dims = high-low
     long_axis = max(range(3), key=lambda d:dims[d])
-    long_positive = abs(high[long_axis]) >= abs(low[long_axis])
-    long_sign = 1 if long_positive else -1
-    axial_end = high[long_axis] if long_positive else low[long_axis]
+    # The original Bloodforged Trident Axe's LONGEST shaft endpoint is its
+    # decorative bottom pommel. Inspect transverse widths near BOTH ends.
     axis_span = max(1e-6,float(dims[long_axis]))
-    near_head = [v for v in verts if (axial_end-v[long_axis])*long_sign < axis_span*0.17]
-    if not near_head:
-        raise RuntimeError("Cannot sample any vertices in expected Parashu head region")
-
     other_axes = [a for a in range(3) if a != long_axis]
-    # Approximate cutting-edge candidate from real surface vertices near
-    # the distal end; select the farthest perpendicular protrusion (axe
-    # blade) rather than the center of a bounding rectangle.
-    point = max(near_head, key=lambda v: sum(
-        ((v[a]-center[a])/max(.0001,dims[a]))**2 for a in other_axes
+    pos_cap = [v for v in verts if v[long_axis] >= high[long_axis] - axis_span*0.28]
+    neg_cap = [v for v in verts if v[long_axis] <= low[long_axis] + axis_span*0.28]
+    if not pos_cap or not neg_cap:
+        raise RuntimeError("Cannot find Parashu vertices at both shaft ends")
+    def transverse_width(points):
+        return max(
+          max(v[axis] for v in points)-min(v[axis] for v in points)
+          for axis in other_axes
+        )
+    pos_width=transverse_width(pos_cap)
+    neg_width=transverse_width(neg_cap)
+    long_positive=pos_width>=neg_width
+    near_head=pos_cap if long_positive else neg_cap
+    near_grip=neg_cap if long_positive else pos_cap
+    base=[sum(v[a] for v in near_grip)/len(near_grip) for a in other_axes]
+    # Actual cutting edge surface vertex (not an empty bounding-box corner).
+    point=max(near_head,key=lambda v:sum(
+       (v[a]-base[i])**2 for i,a in enumerate(other_axes)
     ))
-    pct_from_end = abs(float(axial_end-point[long_axis]))/axis_span
+    axial_end=high[long_axis] if long_positive else low[long_axis]
+    pct_from_end=abs(float(axial_end-point[long_axis]))/axis_span
+    head_width=max(pos_width,neg_width)
+    pommel_width=min(pos_width,neg_width)
 
     errors = []
     if tri_count <= 0:
@@ -104,6 +115,8 @@ def main():
       "dimensions":[round(float(v),5) for v in dims],
       "dominant_axis":"XYZ"[long_axis],
       "head_end":"positive" if long_positive else "negative",
+      "head_width":round(float(head_width),5),
+      "pommel_width":round(float(pommel_width),5),
       "suggested_blade_surface_vertex_blender_world":[round(float(v),5) for v in point],
       "candidate_head_end_offset_ratio":round(float(pct_from_end),4),
       "errors":errors,
