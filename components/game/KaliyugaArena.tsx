@@ -585,6 +585,9 @@ export default function KaliyugaArena() {
     chamberIndex: number;
     samples: WeaponTrailSample[];
   }>({attackSerial: -1, chamberIndex: -1, samples: []});
+  const susanooFistTrailRef = useRef<{
+    attackSerial:number;chamberIndex:number;samples:WeaponTrailSample[];
+  }>({attackSerial:-1,chamberIndex:-1,samples:[]});
   const heavyBreathingFocusRef = useRef<{
     attackSerial:number; chamberIndex:number; focus:number;
   } | null>(null);
@@ -2255,6 +2258,9 @@ export default function KaliyugaArena() {
       pendingStrikeVfxRef.current = null;
       finisherChoreographyRef.current = null;
       heavyBreathingFocusRef.current = null;
+      susanooFistTrailRef.current={
+        attackSerial:-1,chamberIndex:-1,samples:[],
+      };
       waterBladeUntilMsRef.current = 0;
       pendingBossEntranceRef.current = null;
       // Release old chamber's live rigs before loading the next wave of distinct models.
@@ -7086,6 +7092,10 @@ export default function KaliyugaArena() {
       });
       if (bossChargeTrace.length > 96) bossChargeTrace.shift();
     };
+    const susanooFistTrace: Array<{
+      attackSerial:number;sampleCount:number;
+      x:number;y:number;action:string;
+    }> = [];
     const heavyBreathingTrace: Array<{
       action:string; stance:'smash'|'pillar'|'thrust'; element:Act1BreathingElement;
       attackSerial:number; focus:number; sampleCount:number;
@@ -7194,6 +7204,7 @@ export default function KaliyugaArena() {
             },
             weaponPoseTrace: weaponPoseTrace.slice(),
             heavyBreathingTrace: heavyBreathingTrace.slice(),
+            susanooFistTrace: susanooFistTrace.slice(),
             cameraShotTrace: cameraShotTrace.slice(),
             executionVictimTrace: executionVictimTrace.slice(),
             executionHeroTrace: executionHeroTrace.slice(),
@@ -12039,6 +12050,38 @@ export default function KaliyugaArena() {
             });
             if (susanooCanvas && susanoo3d) {
               const sDraw = HEROIC_DRAW_SIZES.susanoo;
+              const spectralAction=(p.action==='light_attack'||p.action==='heavy_unleash');
+              const spectralTrail=susanooFistTrailRef.current;
+              if(!spectralAction||!coreLock.susanooShouldSwing){
+                spectralTrail.samples=[];
+              }else{
+                if(spectralTrail.attackSerial!==p.attackSerial||
+                    spectralTrail.chamberIndex!==sim.chamberIndex){
+                  spectralTrail.attackSerial=p.attackSerial;
+                  spectralTrail.chamberIndex=sim.chamberIndex;
+                  spectralTrail.samples=[];
+                }
+                const fist=projectWeaponHeadToWorld({
+                  uv:susanoo3d.getProjectedStrikeHand(),
+                  actorX:p.x,actorY:p.y,drawSize:sDraw,
+                  footAnchorRatio:susanoo3d.footAnchorRatio,
+                });
+                if(fist&&bladeVisual.active){
+                  spectralTrail.samples=advanceWeaponPoseTrail({
+                    previous:spectralTrail.samples,point:fist,
+                    atMs:p.weaponSwingProgress*Math.max(0.01,p.actionDuration)*1000,
+                  });
+                }
+              }
+              // Layer the colossal violet/gold spectral cleave behind
+              // the genuine rigged guardian; its huge brush-fire tongue
+              // is born at the tracked hand, not a fabricated screen ring.
+              if(spectralAction&&bladeVisual.active&&spectralTrail.samples.length>=2){
+                renderAct1HeavyParashuBreathing(ctx,spectralTrail.samples,{
+                  stance:p.stance,focus:p.action==='heavy_unleash'?4:2,
+                  alpha:bladeVisual.alpha,element:'susanoo',action:p.action,
+                });
+              }
               ctx.save();
               ctx.translate(p.x, p.y);
               ctx.globalCompositeOperation = 'source-over';
@@ -12050,6 +12093,20 @@ export default function KaliyugaArena() {
                 sDraw
               );
               ctx.restore();
+              if(spectralAction&&bladeVisual.active&&spectralTrail.samples.length>=2){
+                renderWeaponPoseTrail(ctx,spectralTrail.samples,bladeVisual.alpha,{
+                  coreColor:'#fff3d6',plasmaColor:'#cb71ff',
+                  outerGlowColor:'#792ee0',
+                },p.action==='heavy_unleash');
+                if(perfTelemetryEnabled){
+                  const top=spectralTrail.samples[spectralTrail.samples.length-1];
+                  susanooFistTrace.push({
+                    attackSerial:p.attackSerial,sampleCount:spectralTrail.samples.length,
+                    x:top.x,y:top.y,action:p.action,
+                  });
+                  if(susanooFistTrace.length>64)susanooFistTrace.shift();
+                }
+              }
             } else {
               // Brief fallback only while Horned_Warlord_of_the_Abyss FBX finishes streaming
               renderKalaBhairavaSusanooAvatar(ctx, {
