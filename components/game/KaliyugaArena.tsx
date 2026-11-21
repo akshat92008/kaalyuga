@@ -167,6 +167,7 @@ import {
 import {
   BossCounterplayKind,
   BossMoveId,
+  BOSS_SIGNATURE_MOVES,
   ConsumableAbilitySlot,
   DUNDUBHI_PILLAR_PUNISH_WINDOW_SEC,
   SEMI_BOSS_GUARD_BREAK_PUNISH_SEC,
@@ -6976,7 +6977,14 @@ export default function KaliyugaArena() {
     let lastTime = performance.now();
     let hudSyncAccum = 0;
     let telemetryLastMs = 0;
-    const perfTelemetryEnabled = new URLSearchParams(window.location.search).get('perf') === '1';
+    const qaParams = new URLSearchParams(window.location.search);
+    const perfTelemetryEnabled = qaParams.get('perf') === '1';
+    // Production-browser probe only: force the FIRST canonical Dundubhi horn
+    // move through ordinary AI windup/travel/collision logic. Natural gameplay
+    // and natural move-selection unit tests remain unchanged. The QA report
+    // must say this was a forced encounter *selection*, not natural AI proof.
+    const qaForceFirstCharge = perfTelemetryEnabled && qaParams.get('qaBossCharge') === '1';
+    let qaForcedChargeSelected = false;
     // Capture ONE actual rendered active frame per action for QA. Browser
     // screenshots issued *after* an async Playwright cue can miss the entire
     // 0.3-second attack on slow software WebGL. Disabled for regular players.
@@ -7086,6 +7094,10 @@ export default function KaliyugaArena() {
             graphicsTier: sim.graphicsSettings.tier,
             strikeCues: strikeCueTrace.slice(),
             bossChargeTrace: bossChargeTrace.slice(),
+            bossChargeQa: {
+              selectionMode: qaForceFirstCharge ? 'forced-first-signature' : 'natural-ai',
+              selected: qaForcedChargeSelected,
+            },
             weaponPoseTrace: weaponPoseTrace.slice(),
             // Production-safe opt-in read-only combat evidence for the real
             // browser QA runner. No gameplay mutation or per-frame allocations.
@@ -8860,13 +8872,21 @@ export default function KaliyugaArena() {
                 const hasIntactPillars = sim.props.some(
                   (pr) => !pr.destroyed && pr.type === 'kurukshetra_pillar'
                 );
-                const sigMove = selectBossSignatureMove({
+                const naturalSigMove = selectBossSignatureMove({
                   bossType: e.type === 'vrikodara' ? 'vrikodara' : 'dundubhi',
                   phase: e.phase,
                   attackPatternIndex: e.attackPattern,
                   distanceToPlayerPx: dist,
                   hasIntactPillars,
                 });
+                const selectProbeCharge = qaForceFirstCharge &&
+                  !qaForcedChargeSelected && e.type === 'dundubhi' &&
+                  e.phase === 1;
+                const sigMove = selectProbeCharge
+                  ? (BOSS_SIGNATURE_MOVES.dundubhi.find(m =>
+                      m.id === 'brahmadanda_horn_gore') || naturalSigMove)
+                  : naturalSigMove;
+                if (selectProbeCharge) qaForcedChargeSelected = true;
                 e.activeBossMoveId = sigMove.id;
                 e.signatureMoveTitle = sigMove.title;
                 e.signatureCounterplayHint = sigMove.counterplayHint;
