@@ -1135,6 +1135,23 @@ export default function KaliyugaArena() {
           cameraKind: liveCameraRef.current?.kind ?? null,
           cameraElapsedSec: liveCameraRef.current?.elapsedSec ?? null,
           cameraZoom: sim.cameraZoom,
+          // Real projected boss position; a valid entrance must include the
+          // boss on screen, not just a running camera animation and boss HUD.
+          bossScreen: (() => {
+            const boss = sim.enemies.find(e => e.isBoss && e.hp > 0 && e.aiState !== 'ko');
+            if (!boss) return null;
+            const width = sim.viewportW || 960;
+            const height = sim.viewportH || 540;
+            const shot = liveCameraRef.current?.track.sample(
+              liveCameraRef.current.elapsedSec, width, height
+            );
+            const zoom = sim.cameraZoom * (shot?.zoom ?? 1);
+            return {
+              x: width * 0.5 + ((boss.x - sim.camX - width * 0.5) + (shot?.offsetX ?? 0)) * zoom,
+              y: height * 0.5 + ((boss.y - sim.camY - height * 0.5) + (shot?.offsetY ?? 0)) * zoom,
+              width, height,
+            };
+          })(),
           rudra3dReady: rudra3dRef.current?.isReady ?? false,
           webglVfxReady: Boolean(webglDemonSlayerVfxRef.current),
           recentEvents: qaRecentEventsRef.current.slice(-36),
@@ -6994,8 +7011,12 @@ export default function KaliyugaArena() {
       let focusX = sim.player.x + lookAheadX;
       let focusY = sim.player.y - 18 + lookAheadY;
       if (activeBoss && Math.hypot(activeBoss.x - sim.player.x, activeBoss.y - sim.player.y) < 1100) {
-        focusX = focusX * 0.78 + activeBoss.x * 0.22;
-        focusY = focusY * 0.78 + activeBoss.y * 0.22;
+        // During a boss entrance the enemy MUST actually be in the shot.
+        // Normal combat keeps Rudra dominant; the authored entrance instead
+        // frames both combatants, then restores the original player bias.
+        const bossWeight = liveCameraRef.current?.kind === 'boss' ? 0.62 : 0.22;
+        focusX = focusX * (1 - bossWeight) + activeBoss.x * bossWeight;
+        focusY = focusY * (1 - bossWeight) + activeBoss.y * bossWeight;
       }
 
       // Clamp camera strictly inside [0, worldW] x [0, worldH] accounting for current zoom
