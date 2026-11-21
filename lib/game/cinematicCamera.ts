@@ -111,6 +111,44 @@ export class CinematicCameraTrack {
   }
 }
 
+/**
+ * Keep an actual full-bleed MP4/poster covering the viewport while moving
+ * through an authored 2D cinematic shot.
+ *
+ * The canvas can safely pan within the bigger world (KaliyugaArena), but a
+ * standalone full-viewport MP4 has no hidden scenery beyond its borders.
+ * Apply this SAME transform to the MP4 and the animated character, not only
+ * the foreground, or the boss will appear pasted onto stationary scenery.
+ */
+export function boundCinematicCameraToPaintedVideo(
+  shot: Pick<CinematicCameraFrame, 'zoom' | 'offsetX' | 'offsetY'>,
+  viewportWidth: number,
+  viewportHeight: number,
+  pivotX = 0.5,
+  pivotY = 305 / 540,
+  safetyPx = 6
+): { zoom: number; offsetX: number; offsetY: number } {
+  const w = Math.max(1, Number.isFinite(viewportWidth) ? viewportWidth : 1);
+  const h = Math.max(1, Number.isFinite(viewportHeight) ? viewportHeight : 1);
+  const px = clamp(pivotX, 0.1, 0.9);
+  const py = clamp(pivotY, 0.1, 0.9);
+  const zoom = clamp(shot.zoom, 1, 1.28);
+  const margin = clamp(safetyPx, 0, 24);
+
+  // For a zoom around arbitrary pivot (px,py), positive translation reveals
+  // the left/top edge, negative reveals the right/bottom edge. Their coverage
+  // margins are NOT symmetric unless pivot=(0.5,0.5).
+  const canPanRight = Math.max(0, px * w * (zoom - 1) - margin);
+  const canPanLeft = Math.max(0, (1 - px) * w * (zoom - 1) - margin);
+  const canPanDown = Math.max(0, py * h * (zoom - 1) - margin);
+  const canPanUp = Math.max(0, (1 - py) * h * (zoom - 1) - margin);
+  return {
+    zoom,
+    offsetX: clamp(shot.offsetX, -canPanLeft, canPanRight),
+    offsetY: clamp(shot.offsetY, -canPanUp, canPanDown),
+  };
+}
+
 /** Deterministic, rapidly decaying impact impulse: no camera noise between impacts. */
 export function sampleCinematicImpactImpulse(
   timeSec: number,
