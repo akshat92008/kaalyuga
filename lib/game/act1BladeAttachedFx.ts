@@ -39,7 +39,7 @@ export function getAct1ExecutionContactBudget(variant: string): {
 } {
   switch (variant) {
     case 'spin_360_cleave': return {groundRadius:94,impactFlipbookSize:76,contactSparkSize:84};
-    case 'impaling_lunge': return {groundRadius:66,impactFlipbookSize:65,contactSparkSize:70};
+    case 'impaling_lunge': return {groundRadius:42,impactFlipbookSize:65,contactSparkSize:70};
     default: return {groundRadius:84,impactFlipbookSize:72,contactSparkSize:78};
   }
 }
