@@ -28,9 +28,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: npm
-      - name: Install locked dependencies
-        run: npm ci
+      - name: Install repository dependencies (lockfile not present in this repo)
+        run: npm install --no-audit --no-fund --legacy-peer-deps
       - name: Test cinematic camera, elemental attacks, timing and real asset paths
         run: npm run test:phase1-4
       - name: TypeScript full project verification
@@ -50,7 +49,7 @@ jobs:
           cat /tmp/kaliyuga-next-server.log
           exit 1
       - name: Install isolated Playwright browser test dependency
-        run: npm install --no-save --ignore-scripts playwright@1.58.2
+        run: npm install --no-save --ignore-scripts --no-audit --no-fund --legacy-peer-deps playwright@1.58.2
       - name: Install Chromium with headless WebGL software driver
         run: npx playwright install --with-deps chromium
       - name: Run and capture live browser gameplay and cinematic
