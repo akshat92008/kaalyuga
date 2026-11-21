@@ -1987,6 +1987,23 @@ export class Boss3DRenderer {
 
   /** Small joint offsets in rig-local axes after each FBX mixer update. Joint
    * rotation is recomputed from the mixer each frame, so scrubbing is safe. */
+  /**
+   * Authoritative projected weapon point from the original animated FBX socket.
+   * Normalized to the baked sprite frame, for cue-locked ink effects that
+   * FOLLOW the weapon rather than hover at an unrelated screen coordinate.
+   * Read-only: does not alter the playable combat rig.
+   */
+  public getCinematicWeaponAnchor(): {x:number;y:number}|null {
+    const rig=this.activeKind?this.rigs[this.activeKind]:null;
+    if(!rig?.rightWeaponSocket)return null;
+    rig.root.updateMatrixWorld(true);
+    rig.weaponTipNode.getWorldPosition(this.scratchTipWorld);
+    const p=this.scratchTipWorld.clone().project(this.camera);
+    if(!Number.isFinite(p.x)||!Number.isFinite(p.y)||
+       Math.abs(p.x)>1.7||Math.abs(p.y)>1.7)return null;
+    return {x:(p.x+1)*0.5,y:(1-p.y)*0.5};
+  }
+
   private applyCinematicBossPose(bones: BossUpperBodyBones, pose: BossCinematicPose): void {
     const rotate=(joint:THREE.Object3D|null,x:number,y:number,z:number)=>{
       if(!joint)return;
