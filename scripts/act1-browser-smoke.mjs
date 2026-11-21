@@ -63,6 +63,24 @@ try {
       await page.waitForTimeout(300);
       await page.keyboard.up('d');
       await page.waitForTimeout(1200);
+      // A/B director checkpoints taken at the actual gameplay camera.
+      // Does not claim these shots prove animations are frame-perfect.
+      if (process.env.ACT1_SMOKE_COMBAT !== '0') {
+        const combos = [
+          ['light', 'j', 160],
+          ['heavy', 'k', 230],
+          ['agneyastra', 'q', 310],
+        ];
+        for (const [action, key, pauseMs] of combos) {
+          await page.waitForTimeout(650);
+          await page.keyboard.press(key);
+          await page.waitForTimeout(pauseMs);
+          await page.screenshot({
+            path:path.join(outDir,'act1-ch'+chamber+'-'+action+'.png'),
+            animations:'disabled',timeout:45000,
+          });
+        }
+      }
     } catch (error) {
       errors.push('smoke-readiness: '+String(error.message||error).slice(0,240));
     }
