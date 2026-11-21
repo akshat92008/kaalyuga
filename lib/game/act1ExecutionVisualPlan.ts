@@ -4,7 +4,8 @@
  * Data only: preserve existing damage, rewards, i-frames, and animation clip
  * selection. The first premium execution is an OVERHEAD Parashu impact.
  * It must not fire an unrelated full-circle fire wheel, a water dragon, and
- * three sky lightning columns simultaneously at contact.
+ * three sky lightning columns simultaneously at contact. Each finisher now
+ * has its own silhouette: vertical crush, circular cleave, linear lunge.
  */
 import type { ParashuFinisherVariant } from './combatPipeline';
 
@@ -20,8 +21,8 @@ export interface Act1ExecutionVisualPlan {
   impactBurstScale: number;
   sparkCount: number;
   flipbookSize: number;
-  // The spin and thrust variants preserve their existing bespoke set pieces;
-  // this first milestone redesigns only the overhead execution.
+  // The aim is one credible physical strike, not stacked unrelated elemental
+  // set pieces. Attack damage and contact frame remain controlled elsewhere.
   useGroundedOverheadContact: boolean;
   allowSpectralSkyBolts: boolean;
 }
@@ -41,10 +42,10 @@ export function getAct1ExecutionVisualPlan(variant:ParashuFinisherVariant):Act1E
   if (variant === 'spin_360_cleave') {
     return {
       variant,contactProgress:0.35,focusXOffset:0,focusYOffset:-24,
-      groundShockwaveRadius:290,slashRadius:235,
-      slashWidth:82,slashArcSpan:3.25,
-      impactBurstScale:1.75,sparkCount:28,flipbookSize:248,
-      useGroundedOverheadContact:false,allowSpectralSkyBolts:true,
+      groundShockwaveRadius:192,slashRadius:206,
+      slashWidth:54,slashArcSpan:3.55,
+      impactBurstScale:1.36,sparkCount:22,flipbookSize:212,
+      useGroundedOverheadContact:false,allowSpectralSkyBolts:false,
     };
   }
   // Impaling Lunge is a narrow, directed weapon contact, not a second
