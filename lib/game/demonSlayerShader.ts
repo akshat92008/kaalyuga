@@ -456,6 +456,8 @@ export interface HierarchyCelStyleOptions {
   brightnessLift?: number;
   saturationBoost?: number;
   useDemonContrastRamp?: boolean;
+  shadowTintHex?: number;
+  shadowTintStrength?: number;
 }
 
 /**
@@ -487,6 +489,8 @@ export function applyDemonSlayerCelShadingToHierarchy(
       rimStrength: opts.rimStrength ?? 0.34,
       rimPower: opts.rimPower ?? 3.0,
       useDemonContrastRamp: opts.useDemonContrastRamp ?? false,
+      shadowTintHex: opts.shadowTintHex,
+      shadowTintStrength: opts.shadowTintStrength,
     });
     mesh.material = celMat;
     mesh.frustumCulled = false;
