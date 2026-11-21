@@ -31,8 +31,24 @@ const base = process.env.GAME_URL || 'http://127.0.0.1:3100';
       report.screenshots.push(file);
       return true;
     } catch (error) {
-      report.screenshotFailures.push(name + ': ' + String(error.message || error).slice(0, 240));
-      return false;
+      // A transient PNG/WebGL readback stall should not erase VFX evidence.
+      // Retry once using lower-cost JPEG encoding, while preserving the PNG
+      // error when both readbacks fail so CI can reject incomplete coverage.
+      const jpeg = name + '.jpg';
+      try {
+        await page.screenshot({
+          path: path.join(OUTPUT, jpeg), type: 'jpeg', quality: 84,
+          fullPage: false, timeout: 22000, animations: 'disabled',
+        });
+        report.screenshots.push(jpeg);
+        return true;
+      } catch (fallbackError) {
+        report.screenshotFailures.push(
+          name + ': PNG ' + String(error.message || error).slice(0, 120) +
+          '; JPEG ' + String(fallbackError.message || fallbackError).slice(0, 120)
+        );
+        return false;
+      }
     }
   };
   try {
@@ -195,10 +211,10 @@ const base = process.env.GAME_URL || 'http://127.0.0.1:3100';
 
     assert.equal(report.errors.length, 0, 'Uncaught page errors: ' + report.errors.join(' | '));
     report.visualCoverageComplete = report.screenshotFailures.length === 0;
-    report.passed = true;
     if (!report.visualCoverageComplete) {
-      report.visualLimitation = 'Functional checks passed, but missing screenshot(s) still require rendered visual QA';
+      throw new Error('Visual QA incomplete: ' + report.screenshotFailures.join(' | '));
     }
+    report.passed = true;
   } catch (error) {
     report.passed = false;
     report.fatal = String(error.stack || error);
