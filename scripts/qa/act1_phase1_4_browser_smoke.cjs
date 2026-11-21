@@ -114,13 +114,21 @@ const base = process.env.GAME_URL || 'http://127.0.0.1:3100';
     await capture('04-dundubhi-reveal');
     await page.waitForTimeout(2900);
     await capture('05-dundubhi-impact');
-    await page.getByRole('button', { name: 'Skip cinematic' }).click();
-    assert.equal(await page.getByRole('button', { name: 'Skip cinematic' }).isDisabled(), true, 'Skip must restore idle state');
+    // Screenshot and software-rendered FBX processing can take longer than the
+    // 8.6s cinematic. Never treat an already-completed timeline as a skip bug.
+    // Restart explicitly, then exercise skip while the timeline is RUNNING.
+    await page.getByRole('button', { name: /Restart cinematic|Replay cinematic/i }).click();
+    const skipButton = page.getByRole('button', { name: 'Skip cinematic' });
+    await skipButton.waitFor({ state: 'visible' });
+    assert.equal(await skipButton.isEnabled(), true, 'Fresh cinematic must be skippable');
+    await skipButton.click({ timeout: 10000 });
+    assert.equal(await skipButton.isDisabled(), true, 'Skip must restore idle state');
     await capture('06-dundubhi-after-skip');
     await page.getByRole('button', { name: /Replay cinematic/i }).click();
-    await page.waitForTimeout(1200);
+    await page.waitForTimeout(350);
+    assert.equal(await skipButton.isEnabled(), true, 'Replay must restore an active, skippable cinematic');
     await capture('07-dundubhi-restart');
-    report.checks.push('Dundubhi cinematic play, impact, skip and replay');
+    report.checks.push('Dundubhi cinematic play, impact, in-progress skip and replay');
 
     assert.equal(report.errors.length, 0, 'Uncaught page errors: ' + report.errors.join(' | '));
     report.passed = true;
