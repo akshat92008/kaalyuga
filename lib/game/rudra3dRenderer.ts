@@ -20,6 +20,8 @@ import {
   setCelUnderGlow,
 } from './demonSlayerShader';
 import { loadFbxCached, simplifyBufferGeometry } from './meshSimplifier';
+import { calibrateParashuBladeHead, type WeaponVertex3 } from './act1WeaponHeadCalibration';
+import { rudraPoseBlendAlpha, rudraPoseTransitionDurationSec } from './act1RudraTransition';
 import {
   computeCameraFootAnchorRatio,
   computeTrimmedCleaveClock,
@@ -227,10 +229,23 @@ export class Rudra3DRenderer {
   private elapsedSec = 0;
   private stateElapsedSec = 0;
   private lastAnimState: RudraAnimState = 'idle';
+  // Two 256px canvases, allocated lazily. Crossfade baked poses, never GPU
+  // meshes or skeletons. A captured source is needed if a dash/parry interrupts
+  // an unfinished transition; otherwise the source canvas mutates underneath.
+  private poseBlendSource: HTMLCanvasElement | null = null;
+  private poseBlendTarget: HTMLCanvasElement | null = null;
+  private lastDisplayedFrame: HTMLCanvasElement | null = null;
+  private poseBlendDurationSec = 0;
+  private poseBlendElapsedSec = 0;
   private lastAttackSerial = -1;
   private frameCache: Map<string, HTMLCanvasElement> = new Map();
   private celMaterials: THREE.Material[] = [];
   private parashuAuraMat: THREE.ShaderMaterial | null = null;
+  // Geometry-derived head marker is parented directly to the actual Parashu
+  // mesh, which in turn is parented to Rudra's skinned right-hand bone.
+  private parashuHeadMarker: THREE.Object3D | null = null;
+  private projectedParashuHead: { x: number; y: number } | null = null;
+  private readonly parashuHeadFrameCache = new Map<string, {x: number; y: number} | null>();
   private studioRimLight: THREE.DirectionalLight | null = null;
   private disposed = false;
   private prewarmQueue: Array<() => void> = [];
@@ -394,6 +409,40 @@ export class Rudra3DRenderer {
           const maxDim = Math.max(0.001, wepSize.x, wepSize.y, wepSize.z);
           const desiredWorldLen = 1.04;
           const localWepScale = desiredWorldLen / (maxDim * handScale);
+
+          // IMPORTANT: the farthest shaft end of the *real* original FBX
+          // is the pommel, not the blade (confirmed by Blender CPU render).
+          // Sample actual mesh vertices in weapon-group local space and
+          // select the WIDE cutting head, not an imagined Box3 corner.
+          weaponGroup.updateMatrixWorld(true);
+          const invWeaponRoot = new THREE.Matrix4().copy(weaponGroup.matrixWorld).invert();
+          const headSamples: WeaponVertex3[] = [];
+          const sampled = new THREE.Vector3();
+          const toWeaponSpace = new THREE.Matrix4();
+          weaponGroup.traverse((child) => {
+            if (!(child as THREE.Mesh).isMesh) return;
+            const mesh = child as THREE.Mesh;
+            const attr = mesh.geometry.getAttribute('position');
+            if (!attr || attr.count < 3) return;
+            toWeaponSpace.multiplyMatrices(invWeaponRoot, mesh.matrixWorld);
+            const stride = Math.max(1, Math.floor(attr.count / 18000));
+            for (let i=0;i<attr.count;i+=stride) {
+              sampled.fromBufferAttribute(attr, i).applyMatrix4(toWeaponSpace);
+              headSamples.push({x:sampled.x,y:sampled.y,z:sampled.z});
+            }
+          });
+          const bladeCalibration = calibrateParashuBladeHead(headSamples);
+          if (bladeCalibration) {
+            const bladeHead = new THREE.Object3D();
+            bladeHead.name = '__ACT1_PARASHU_CUTTING_EDGE_QA';
+            bladeHead.position.set(
+              bladeCalibration.point.x,
+              bladeCalibration.point.y,
+              bladeCalibration.point.z
+            );
+            weaponGroup.add(bladeHead);
+            this.parashuHeadMarker = bladeHead;
+          }
 
           const weaponSocket = new THREE.Group();
           weaponGroup.scale.setScalar(localWepScale);
@@ -569,6 +618,11 @@ export class Rudra3DRenderer {
     this.enqueuePrewarmTasks(tasks);
   }
 
+  /** Normalized coordinates in the EXACT cached 3D sprite last drawn. */
+  public getProjectedParashuHead(): { x: number; y: number } | null {
+    return this.projectedParashuHead;
+  }
+
   public updateAndRender(input: RudraRenderInput): boolean {
     if (!this.isReady) return false;
     const stepDt = Math.max(0, Math.min(0.1, input.dt || 0.016));
@@ -578,6 +632,26 @@ export class Rudra3DRenderer {
     const serialChanged =
       typeof input.attackSerial === 'number' && input.attackSerial !== this.lastAttackSerial;
     if (nextState !== this.lastAnimState || serialChanged) {
+      const duration = rudraPoseTransitionDurationSec(this.lastAnimState, nextState);
+      // Only true animation state changes blend; replaying the same state
+      // after a new attack serial must start at frame zero without a ghost.
+      this.poseBlendDurationSec = nextState !== this.lastAnimState ? duration : 0;
+      this.poseBlendElapsedSec = 0;
+      if (this.poseBlendDurationSec > 0 && this.lastDisplayedFrame &&
+          typeof document !== 'undefined') {
+        const source = this.poseBlendSource || document.createElement('canvas');
+        source.width = this.size; source.height = this.size;
+        const ctx = source.getContext('2d');
+        if (ctx) {
+          ctx.clearRect(0, 0, this.size, this.size);
+          ctx.drawImage(this.lastDisplayedFrame, 0, 0, this.size, this.size);
+          this.poseBlendSource = source;
+        } else {
+          this.poseBlendDurationSec = 0;
+        }
+      } else {
+        this.poseBlendDurationSec = 0;
+      }
       this.stateElapsedSec = 0;
       this.lastAnimState = nextState;
       if (typeof input.attackSerial === 'number') {
@@ -608,7 +682,37 @@ export class Rudra3DRenderer {
       Boolean(input.susanooActive)
     );
     if (baked) {
+      if (this.poseBlendDurationSec > 0 && this.poseBlendSource &&
+          typeof document !== 'undefined') {
+        this.poseBlendElapsedSec += stepDt;
+        const alpha = rudraPoseBlendAlpha(
+          this.poseBlendElapsedSec, this.poseBlendDurationSec
+        );
+        if (alpha < 1) {
+          const target = this.poseBlendTarget || document.createElement('canvas');
+          if (target.width !== this.size) target.width = this.size;
+          if (target.height !== this.size) target.height = this.size;
+          const ctx = target.getContext('2d');
+          if (ctx) {
+            ctx.clearRect(0, 0, this.size, this.size);
+            ctx.globalAlpha = 1 - alpha;
+            ctx.drawImage(this.poseBlendSource, 0, 0, this.size, this.size);
+            ctx.globalAlpha = alpha;
+            ctx.drawImage(baked, 0, 0, this.size, this.size);
+            ctx.globalAlpha = 1;
+            this.poseBlendTarget = target;
+            this.canvas = target;
+            this.lastDisplayedFrame = target;
+            // A partially blended blade has no single physically valid
+            // socket. Resume measured trails after the new pose dominates.
+            if (alpha < 0.8) this.projectedParashuHead = null;
+            return true;
+          }
+        }
+        this.poseBlendDurationSec = 0;
+      }
       this.canvas = baked;
+      this.lastDisplayedFrame = baked;
       return true;
     }
     return false;
@@ -622,7 +726,10 @@ export class Rudra3DRenderer {
     stance = 'smash',
     susanooActive = false
   ): HTMLCanvasElement | null {
-    if (!this.isReady || !this.model || !this.mixer) return null;
+    if (!this.isReady || !this.model || !this.mixer) {
+      this.projectedParashuHead = null;
+      return null;
+    }
 
     const isSoft = isSoftwareWebGLRenderer();
     const yawBuckets = isSoft ? 6 : 12;
@@ -670,6 +777,7 @@ export class Rudra3DRenderer {
       // Refresh frequently reused combat/idle frames rather than evicting hot animations.
       this.frameCache.delete(cacheKey);
       this.frameCache.set(cacheKey, cached);
+      this.projectedParashuHead = this.parashuHeadFrameCache.get(cacheKey) ?? null;
       return cached;
     }
 
@@ -742,6 +850,25 @@ export class Rudra3DRenderer {
     this.wrapper.rotation.y = Math.PI * 0.5 - quantizedYaw;
     this.wrapper.rotation.x = 0;
 
+    // Sample the weapon pose only after the same quantized animation clip and
+    // yaw used for the baked character have been applied. This avoids a
+    // detached trail when the 3D sprite frame is served from the hot cache.
+    this.projectedParashuHead = null;
+    if (this.parashuHeadMarker) {
+      this.wrapper.updateMatrixWorld(true);
+      this.camera.updateMatrixWorld(true);
+      const ndc = this.parashuHeadMarker.getWorldPosition(new THREE.Vector3()).project(this.camera);
+      if ([ndc.x, ndc.y, ndc.z].every(Number.isFinite) &&
+          ndc.z >= -1 && ndc.z <= 1 &&
+          ndc.x >= -1.04 && ndc.x <= 1.04 &&
+          ndc.y >= -1.04 && ndc.y <= 1.04) {
+        this.projectedParashuHead = {
+          x: (ndc.x + 1) * 0.5,
+          y: (1 - ndc.y) * 0.5,
+        };
+      }
+    }
+
     renderer.render(this.scene, this.camera);
 
     const rimRgba = susanooActive
@@ -769,8 +896,10 @@ export class Rudra3DRenderer {
       const oldest = this.frameCache.keys().next().value;
       if (!oldest) break;
       this.frameCache.delete(oldest);
+      this.parashuHeadFrameCache.delete(oldest);
     }
     this.frameCache.set(cacheKey, baked);
+    this.parashuHeadFrameCache.set(cacheKey, this.projectedParashuHead);
 
     return baked;
   }
@@ -783,6 +912,13 @@ export class Rudra3DRenderer {
       this.prewarmTimer = null;
     }
     this.frameCache.clear();
+    this.parashuHeadFrameCache.clear();
+    this.parashuHeadMarker = null;
+    this.projectedParashuHead = null;
+    this.lastDisplayedFrame = null;
+    this.poseBlendSource = null;
+    this.poseBlendTarget = null;
+    this.poseBlendDurationSec = 0;
   }
 }
 

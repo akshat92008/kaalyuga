@@ -1,0 +1,74 @@
+name: Act I Dundubhi charge — production-browser movement proof
+on:
+  pull_request:
+    paths:
+      - "scripts/act1-dundubhi-browser.mjs"
+      - ".github/workflows/act1-dundubhi-browser.yml"
+      - "lib/game/act1BossCharge.ts"
+      - "components/game/KaliyugaArena.tsx"
+      - "lib/game/boss3dRenderer.ts"
+  workflow_dispatch:
+concurrency:
+  group: act1-dundubhi-browser-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  real-boss-charge:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout actual Act I application and game media
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            .github
+            app
+            components
+            lib
+            engine
+            hooks
+            scripts
+            public
+            new 3D assets and animations
+            cutscenes/assets
+            audio and sound effects
+            soundtracks
+            package.json
+            tsconfig.json
+            next-env.d.ts
+            next.config.ts
+            postcss.config.mjs
+            eslint.config.mjs
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install application and Playwright Chromium
+        run: |
+          npm install --ignore-scripts --no-fund --no-audit
+          npm install --no-save playwright@1.56.1 --ignore-scripts --no-fund --no-audit
+          npx playwright install --with-deps chromium
+      - name: Build and start real production app
+        run: |
+          npm run build
+          nohup npm run start > /tmp/act1-dundubhi-next.log 2>&1 &
+          for i in $(seq 1 45); do
+            curl -fsS http://127.0.0.1:3000 >/dev/null && exit 0
+            sleep 2
+          done
+          tail -n 120 /tmp/act1-dundubhi-next.log
+          exit 1
+      - name: Verify actual three-dimensional staged charge motion
+        env:
+          ACT1_QA_TIMEOUT_MS: 240000
+        run: node scripts/act1-dundubhi-browser.mjs
+      - name: Preserve full event trace and browser screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: act1-dundubhi-browser-charge-evidence
+          path: artifacts/act1-dundubhi/
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Preserve server log for failed game loads
+        if: always()
+        run: tail -n 150 /tmp/act1-dundubhi-next.log 2>/dev/null || true

@@ -1,0 +1,108 @@
+name: Act I canonical rig preflight
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/act1-rig-preflight.yml"
+      - "scripts/act1-rig-audit.py"
+  workflow_dispatch:
+concurrency:
+  group: act1-blender-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  inspect-rudra-rig:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            scripts/act1-rig-audit.py
+            public/models/Meshy_AI_Ashen_Warborn_biped
+            public/kaalyuga/anims/rudra
+            public/animations/lite_magic
+            new 3D assets and animations/Animations/Creature Pack (4)
+            new 3D assets and animations/Animations/Pro Melee Axe Pack
+            new 3D assets and animations/Animations/Pro Melee Axe Pack (5)
+            new 3D assets and animations/Animations/Pro Magic Pack
+          sparse-checkout-cone-mode: false
+      - name: Install Blender and NumPy for FBX support
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y blender python3-numpy
+      - name: Inspect canonical Rudra and a reference animation without modifying sources
+        run: |
+          blender -b --python scripts/act1-rig-audit.py -- \
+            --rig "public/models/Meshy_AI_Ashen_Warborn_biped/Meshy_AI_Ashen_Warborn_biped_Meshy_Merged_Animations.fbx" \
+            --clip "public/animations/lite_magic/Standing 1H Magic Attack 01.fbx" \
+            --output "artifacts/act1-rudra-rig-audit.json"
+          # The runtime loads this DIFFERENT Ashen Warborn FBX: audit the
+          # exact on-screen armature before transferring any finisher curves.
+          blender -b --python scripts/act1-rig-audit.py -- \
+            --rig "new 3D assets and animations/Animations/Pro Melee Axe Pack/Meshy_AI_Ashen_Warborn_20261025_generate.fbx" \
+            --clip "public/kaalyuga/anims/rudra/heavy.fbx" \
+            --clip "public/kaalyuga/anims/rudra/cast.fbx" \
+            --clip "public/kaalyuga/anims/rudra/attack3.fbx" \
+            --output "artifacts/act1-rudra-runtime-finisher-rig-audit.json"
+          # Actual local runtime clips, not generic external example animations.
+          # Full inventory is report-only: incompatible clip bone names must be
+          # fixed deliberately, not blindly retargeted or silently discarded.
+          blender -b --python scripts/act1-rig-audit.py -- \
+            --rig "public/models/Meshy_AI_Ashen_Warborn_biped/Meshy_AI_Ashen_Warborn_biped_Meshy_Merged_Animations.fbx" \
+            --clip "public/kaalyuga/anims/rudra/idle.fbx" \
+            --clip "public/kaalyuga/anims/rudra/run.fbx" \
+            --clip "public/kaalyuga/anims/rudra/dodge.fbx" \
+            --clip "public/kaalyuga/anims/rudra/attack1.fbx" \
+            --clip "public/kaalyuga/anims/rudra/attack2.fbx" \
+            --clip "public/kaalyuga/anims/rudra/attack3.fbx" \
+            --clip "public/kaalyuga/anims/rudra/heavy.fbx" \
+            --clip "public/kaalyuga/anims/rudra/block.fbx" \
+            --clip "public/kaalyuga/anims/rudra/cast.fbx" \
+            --clip "public/kaalyuga/anims/rudra/hurt.fbx" \
+            --output "artifacts/act1-rudra-local-clip-audit.json"
+          blender -b --python scripts/act1-rig-audit.py -- \
+            --rig "new 3D assets and animations/Animations/Creature Pack (4)/Meshy_AI_Bellhorn_Warlord_20261114_generate.fbx" \
+            --clip "new 3D assets and animations/Animations/Creature Pack (4)/mutant run.fbx" \
+            --clip "new 3D assets and animations/Animations/Creature Pack (4)/mutant swiping.fbx" \
+            --clip "new 3D assets and animations/Animations/Creature Pack (4)/mutant dying.fbx" \
+            --output "artifacts/act1-dundubhi-rig-audit.json"
+          blender -b --python scripts/act1-rig-audit.py -- \
+            --rig "new 3D assets and animations/Animations/Pro Melee Axe Pack (5)/Meshy_AI_Crimson_Skull_Warlord_20261030_generate.fbx" \
+            --clip "new 3D assets and animations/Animations/Pro Melee Axe Pack (5)/standing melee attack downward.fbx" \
+            --clip "new 3D assets and animations/Animations/Pro Melee Axe Pack (5)/standing melee attack 360 high.fbx" \
+            --clip "new 3D assets and animations/Animations/Pro Magic Pack/Standing React Death Backward.fbx" \
+            --output "artifacts/act1-vrikodara-rig-audit.json"
+          python3 - <<'PY'
+          import json
+          for actor in ("rudra","dundubhi","vrikodara"):
+              r=json.load(open(f"artifacts/act1-{actor}-rig-audit.json"))
+              assert r["canonical"]["mesh_count"] > 0,actor
+              assert r["canonical"]["bone_count"] > 0,actor
+              print(actor,"bones:",r["canonical"]["bone_count"],"clips:",len(r["clips"]),
+                    "exact_bindable:",[c["compatible_for_direct_binding"] for c in r["clips"]])
+          PY
+          python3 - <<'PY'
+          import json
+          r=json.load(open("artifacts/act1-rudra-local-clip-audit.json"))
+          runtime=json.load(open("artifacts/act1-rudra-runtime-finisher-rig-audit.json"))
+          assert runtime["canonical"]["bone_count"]>0, "Runtime Rudra armature missing"
+          assert runtime["canonical"]["skinned_meshes"]>0, "Runtime Rudra model is not skinned"
+          assert len(runtime["clips"])==3, "Missing three runtime finisher source clips"
+          print("Runtime Rudra bindable:",[c["compatible_for_direct_binding"] for c in runtime["clips"]])
+          assert len(r["clips"])==10, "Expected all ten local Rudra FBX clips"
+          print("Rudra local animation coverage:")
+          for c in r["clips"]:
+              print(c["file"].split("/")[-1],
+                "direct_bindable=",c["compatible_for_direct_binding"],
+                "action_count=",len(c["actions"]),
+                "unmatched_bones=",len(c["unmatched_normalized_bones"]))
+          PY
+      - name: Preserve rig/clip metadata for Blender director review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: act1-rudra-rig-preflight
+          path: |
+            artifacts/act1-*-rig-audit.json
+            artifacts/act1-rudra-local-clip-audit.json
+          if-no-files-found: warn
+          retention-days: 14

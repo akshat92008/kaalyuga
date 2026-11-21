@@ -9,7 +9,15 @@
 
 import type { LanternLightState } from './v7StoryEngine';
 
-export type MeruQualityTier = 'ultra' | 'high' | 'balanced';
+// Preserve old stored 'high' and 'ultra' settings; add a lightweight profile
+// for 8 GB unified-memory machines without disabling character meshes.
+export type MeruQualityTier = 'ultra' | 'high' | 'balanced' | 'performance';
+export function displayMeruQualityTier(tier: MeruQualityTier): string {
+  if (tier === 'ultra') return 'CINEMATIC';
+  if (tier === 'performance') return 'PERFORMANCE';
+  if (tier === 'high') return 'HIGH (LEGACY)';
+  return 'BALANCED';
+}
 
 export interface MeruGraphicsSettings {
   tier: MeruQualityTier;
@@ -103,6 +111,18 @@ export function presetForQualityTier(tier: MeruQualityTier): MeruGraphicsSetting
       filmGrain: false,
       iblEnvironmentReflections: true,
       dynamicShadows: true,
+    };
+  }
+  if (tier === 'performance') {
+    return {
+      tier: 'performance',
+      lumenGiBounce: false,
+      hdrBloom: false,
+      volumetricFog: false,
+      impactChromaticAberration: false,
+      filmGrain: false,
+      iblEnvironmentReflections: false,
+      dynamicShadows: false,
     };
   }
   return {

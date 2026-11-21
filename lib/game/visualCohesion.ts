@@ -10,6 +10,11 @@
 // ============================================================================
 
 import type { StaffStance } from './rules';
+import { buildWeaponPoseTrailBands, type WeaponTrailSample } from './act1WeaponPoseTrail';
+import {
+  act1HeavyBreathingPalette, buildAct1HeavyBladeFlames,
+  type Act1HeavyBreathingStance, type Act1BreathingElement,
+} from './act1HeavyBreathingFx';
 import {
   drawAdditiveFlipbookCell,
   PHASE2_VFX_SHEETS,
@@ -283,16 +288,17 @@ export function computeWeaponSlashRibbon(params: {
 }): WeaponSlashRibbonMesh {
   const segments = 14;
   const rawProg = Math.max(0, Math.min(1, params.swingProgress));
-  // Smooth S-curve swing progression so the Parashu crescent ribbon tracks the exact active attack frame
+  // The blade sweeps from startup to release; the luminous crescent is the
+  // RECENT TRAIL BEHIND the moving axe, not a complete stationary ring.
   const prog =
     rawProg < 0.5
       ? 2 * rawProg * rawProg
       : 1 - Math.pow(-2 * rawProg + 2, 2) / 2;
-  const arcSpan = params.isHeavy ? Math.PI * 1.32 : Math.PI * 1.02;
+  const arcSpan = params.isHeavy ? Math.PI * 0.96 : Math.PI * 0.78;
   const reverseDir = !params.isHeavy && params.comboStep === 2 ? -1 : 1;
-
-  const startAngle = params.aimAngle - reverseDir * (arcSpan * 0.52);
-  const activeSweep = arcSpan * (0.28 + prog * 0.72);
+  const bladeAngle = params.aimAngle - reverseDir * arcSpan * 0.52 + reverseDir * arcSpan * prog;
+  const recentSweep = arcSpan * (0.24 + 0.16 * Math.sin(prog * Math.PI));
+  const startAngle = bladeAngle - reverseDir * recentSweep;
 
   let coreColor = '#fff9e6';
   let plasmaColor = '#ff9d2e';
@@ -312,13 +318,13 @@ export function computeWeaponSlashRibbon(params: {
     outerGlowColor = '#14b8a6';
   }
 
-  const maxThickness = params.isHeavy ? params.radius * 0.38 : params.radius * 0.28;
+  const maxThickness = params.isHeavy ? params.radius * 0.24 : params.radius * 0.18;
   const isoSquashY = 0.66;
   const nodes: SlashRibbonNode[] = [];
 
   for (let i = 0; i <= segments; i++) {
     const t = i / segments;
-    const theta = startAngle + reverseDir * activeSweep * t;
+    const theta = startAngle + reverseDir * recentSweep * t;
     // Taper profile: sharp tail (t=0), wide belly (t=0.68), razor tip (t=1.0)
     const taper = Math.sin(Math.pow(t, 0.72) * Math.PI);
     const thickness = maxThickness * taper;
@@ -562,29 +568,298 @@ export function drawGrounded3DContactShadow(
   ctx.restore();
 }
 
+/**
+ * The theatrical layer BEHIND Rudra during Smash/Pillar/Thrust heavy attacks.
+ * Unlike an orbiting billboard, every sweeping fire/tide/lightning tongue is
+ * rooted at a measured 3D blade-head sample (the same pose as the hero).
+ * The brightest narrow blade core is rendered above the player separately.
+ */
+export function renderAct1HeavyParashuBreathing(
+  ctx:CanvasRenderingContext2D,
+  samples:WeaponTrailSample[],
+  params:{
+    stance:Act1HeavyBreathingStance;
+    focus:number;
+    alpha:number;
+    action:'light_attack'|'heavy_unleash'|'execute';
+    element?:Act1BreathingElement;
+  }
+):boolean {
+  const tongues=buildAct1HeavyBladeFlames(samples,params);
+  if(!tongues.length)return false;
+  const colors=act1HeavyBreathingPalette(params.stance,params.element);
+  const element=params.element??(params.stance==='thrust'?'thunder':
+    params.stance==='pillar'?'wind':'fire');
+  ctx.save();
+  ctx.globalCompositeOperation='source-over';
+  ctx.lineJoin='round';
+  // From outer ink to oversaturated pigment to near-white cutting-edge;
+  // each body tapers all the way to an individually measured-path-rooted tip.
+  for(const flame of tongues) {
+    const {root,tip,bendOut,bendIn,leftBase,rightBase,opacity}=flame;
+    const paintPath=()=>{
+      ctx.beginPath();
+      ctx.moveTo(leftBase.x,leftBase.y);
+      if(element==='water'){
+        // Hokusai curl: a slow broad flowing crest folding toward the root,
+        // plus a narrow white foam tip along the *actual* weapon trajectory.
+        ctx.bezierCurveTo(bendOut.x,bendOut.y,
+          tip.x+(bendOut.x-root.x)*0.22,tip.y+(bendOut.y-root.y)*0.22,
+          tip.x,tip.y);
+        ctx.quadraticCurveTo(bendIn.x,bendIn.y,rightBase.x,rightBase.y);
+      }else if(element==='thunder'){
+        // Zigzag, faceted lightning, never the same rounded fire tongue.
+        ctx.lineTo(bendOut.x,bendOut.y);
+        ctx.lineTo(tip.x,tip.y);
+        ctx.lineTo(bendIn.x,bendIn.y);
+        ctx.lineTo(rightBase.x,rightBase.y);
+      }else if(element==='susanoo'){
+        // Monumental sharp-edged spectral rib/petal, bronze-white core.
+        ctx.lineTo(bendOut.x,bendOut.y);
+        ctx.quadraticCurveTo(tip.x,tip.y,tip.x,tip.y);
+        ctx.lineTo(bendIn.x,bendIn.y);
+        ctx.lineTo(rightBase.x,rightBase.y);
+      }else{
+        // Fire rises as a broad fang; jade wind curls into lotus leaves.
+        ctx.quadraticCurveTo(bendOut.x,bendOut.y,tip.x,tip.y);
+        ctx.quadraticCurveTo(bendIn.x,bendIn.y,rightBase.x,rightBase.y);
+      }
+      ctx.quadraticCurveTo(root.x,root.y,leftBase.x,leftBase.y);
+      ctx.closePath();
+    };
+    paintPath();
+    ctx.globalAlpha=opacity*0.82;
+    ctx.lineWidth=3;
+    ctx.strokeStyle=colors.soot;
+    ctx.stroke();
+
+    // One restrained gradient per flame, with a vivid electric/orange center
+    // and ink-suppressed edges. No full-screen blur canvas or unbounded pool.
+    const g=ctx.createLinearGradient(root.x,root.y,tip.x,tip.y);
+    g.addColorStop(0,colors.hot);
+    g.addColorStop(0.19,colors.pigment);
+    g.addColorStop(0.62,colors.ember);
+    g.addColorStop(1,colors.ember+'00');
+    ctx.globalAlpha=opacity;
+    ctx.fillStyle=g;
+    ctx.fill();
+
+    ctx.globalAlpha=opacity*0.92;
+    ctx.strokeStyle=colors.rim;
+    ctx.lineWidth=1.5;
+    ctx.beginPath();
+    ctx.moveTo(root.x,root.y);
+    if(element==='water'){
+      ctx.bezierCurveTo(bendOut.x,bendOut.y,bendIn.x,bendIn.y,tip.x,tip.y);
+    }else if(element==='thunder'||element==='susanoo'){
+      ctx.lineTo(bendOut.x,bendOut.y);ctx.lineTo(tip.x,tip.y);
+    }else ctx.quadraticCurveTo(bendOut.x,bendOut.y,tip.x,tip.y);
+    ctx.stroke();
+
+    // Hand-inked hot vein, not random sprites floating in the arena.
+    ctx.globalAlpha=opacity*0.66;
+    ctx.strokeStyle=colors.hot;
+    ctx.lineWidth=0.95;
+    ctx.beginPath();
+    ctx.moveTo(root.x,root.y);
+    if(element==='thunder'){
+      ctx.lineTo(bendIn.x,bendIn.y);ctx.lineTo(tip.x,tip.y);
+    }else if(element==='water'){
+      ctx.bezierCurveTo(bendIn.x,bendIn.y,bendOut.x,bendOut.y,tip.x,tip.y);
+    }else ctx.quadraticCurveTo(bendIn.x,bendIn.y,tip.x,tip.y);
+    ctx.stroke();
+  }
+  ctx.restore();
+  return true;
+}
+
+/**
+ * Three.js head-socket path renderer. These are the very same XY positions
+ * projected from the cached Parashu frame baked for Rudra's game sprite;
+ * no unrelated screen-space circle, GPU readback, or copied texture needed.
+ */
+export function renderWeaponPoseTrail(
+  ctx: CanvasRenderingContext2D,
+  samples: WeaponTrailSample[],
+  alpha: number,
+  colors: { coreColor: string; plasmaColor: string; outerGlowColor: string },
+  isHeavy: boolean
+): boolean {
+  // Round abrupt sampled corners while retaining the true blade endpoints.
+  const bands = buildWeaponPoseTrailBands(samples, isHeavy ? 21 : 14, true);
+  if (bands.length < 2 || alpha <= 0.01) return false;
+  ctx.save();
+  ctx.globalCompositeOperation = 'source-over';
+  const clampedAlpha = Math.max(0, Math.min(1, alpha));
+  const fillBand = (scale: number, color: string, opacity: number) => {
+    ctx.globalAlpha = clampedAlpha * opacity;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    for (let i = 0; i < bands.length; i++) {
+      const b = bands[i];
+      const x = b.x + (b.leftX-b.x)*scale;
+      const y = b.y + (b.leftY-b.y)*scale;
+      if (i === 0) ctx.moveTo(x,y);
+      else ctx.lineTo(x,y);
+    }
+    for (let i = bands.length-1; i >= 0; i--) {
+      const b = bands[i];
+      ctx.lineTo(b.x+(b.rightX-b.x)*scale,b.y+(b.rightY-b.y)*scale);
+    }
+    ctx.closePath();
+    ctx.fill();
+  };
+  // Ink > vivid pigment > amber-white core, without bloom on the actor's face.
+  fillBand(1.26, '#13070d', 0.89);
+  fillBand(1.0, colors.outerGlowColor, 0.85);
+  fillBand(0.68, colors.plasmaColor, 0.94);
+  fillBand(0.24, colors.coreColor, 0.98);
+
+  // Three brush-fire filaments hug the ACTUAL Parashu path. Every vertex
+  // lies within six pixels of a sampled cutting edge; no free-floating
+  // orbital slash, fixed screen arc or random GPU particle emitter.
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  const filaments = [
+    {normal: -0.20, width: 1.65, opacity: 0.85, color: colors.coreColor},
+    {normal:  0.32, width: 1.35, opacity: 0.64, color: colors.plasmaColor},
+    {normal:  0.38, width: 0.90, opacity: 0.46, color: colors.coreColor},
+  ];
+  for (const filament of filaments) {
+    ctx.beginPath();
+    let started = false;
+    for (let i = Math.max(0, bands.length - 8); i < bands.length; i++) {
+      const b = bands[i];
+      const x = b.x + (b.leftX - b.x) * filament.normal;
+      const y = b.y + (b.leftY - b.y) * filament.normal;
+      if (!started) { ctx.moveTo(x, y); started = true; }
+      else ctx.lineTo(x, y);
+    }
+    ctx.globalAlpha = clampedAlpha * filament.opacity;
+    ctx.strokeStyle = filament.color;
+    ctx.lineWidth = filament.width;
+    ctx.stroke();
+  }
+  ctx.restore();
+  return true;
+}
+
+/**
+ * During a baked-pose transition a single valid socket point may be all we
+ * have. Keep the hot edge on that actual point; never hallucinate a wide
+ * crescent while 3D source animation has not advanced to a second sample.
+ */
+export function renderParashuBladeTipGlint(
+  ctx:CanvasRenderingContext2D,
+  point:{x:number;y:number},
+  alpha:number,
+  stance:Act1HeavyBreathingStance,
+  element?:Act1BreathingElement
+):boolean {
+  if(![point.x,point.y,alpha].every(Number.isFinite)||alpha<=0.01)return false;
+  const opacity=Math.max(0,Math.min(1,alpha));
+  const ink=act1HeavyBreathingPalette(stance,element);
+  ctx.save();
+  ctx.globalCompositeOperation='source-over';
+  // The 145ms light attack may sample only ONE genuine FBX blade pose on
+  // software GPUs. Rather than invent a ghost trajectory, paint a visible
+  // 23px blade-tip ignition exactly on that physical cached mesh position.
+  const radius=23;
+  const aura=ctx.createRadialGradient(point.x,point.y,1,point.x,point.y,radius);
+  aura.addColorStop(0,ink.hot);
+  aura.addColorStop(0.23,ink.pigment);
+  aura.addColorStop(0.55,ink.ember+'a8');
+  aura.addColorStop(1,ink.ember+'00');
+  ctx.globalAlpha=opacity*0.72;
+  ctx.fillStyle=aura;
+  ctx.beginPath();
+  ctx.arc(point.x,point.y,radius,0,Math.PI*2);
+  ctx.fill();
+  // Narrow splintered hot-core cross, unique palette for water / jade /
+  // lightning / fire rather than yet another arena-size circle.
+  ctx.lineCap='round';
+  const strokes=[
+    {a:[-9,2],b:[11,-4],width:3.2,ink:'#15070d',opacity:0.86},
+    {a:[-9,2],b:[11,-4],width:2.1,ink:ink.pigment,opacity:0.94},
+    {a:[-2,-9],b:[3,10],width:1.8,ink:ink.hot,opacity:0.90},
+    {a:[-5,-5],b:[5,5],width:0.8,ink:ink.hot,opacity:0.62},
+  ];
+  for(const stroke of strokes){
+    ctx.strokeStyle=stroke.ink;ctx.lineWidth=stroke.width;
+    ctx.globalAlpha=opacity*stroke.opacity;
+    ctx.beginPath();
+    ctx.moveTo(point.x+stroke.a[0],point.y+stroke.a[1]);
+    ctx.lineTo(point.x+stroke.b[0],point.y+stroke.b[1]);
+    ctx.stroke();
+  }
+  ctx.restore();
+  return true;
+}
+
 export function renderWeaponBoneSlashRibbon(
   ctx: CanvasRenderingContext2D,
   mesh: WeaponSlashRibbonMesh,
   alpha: number
 ): void {
   if (mesh.nodes.length < 2 || alpha <= 0.01) return;
-  const midNode = mesh.nodes[Math.floor(mesh.nodes.length * 0.5)];
-  const first = mesh.nodes[0];
-  const last = mesh.nodes[mesh.nodes.length - 1];
-  const slashAngle = Math.atan2(last.spineY - first.spineY, last.spineX - first.spineX);
-  const frameCol = Math.min(2, Math.floor(alpha * 2.99));
 
-  drawAdditiveFlipbookCell(ctx, {
-    sheetSpec: PHASE2_VFX_SHEETS.parashuSlashes3x3,
-    col: frameCol,
-    row: PARASHU_FLIPBOOK_ROWS.LIGHT_CRESCENT_SWEEPS,
-    x: midNode.spineX,
-    y: midNode.spineY,
-    width: 118,
-    height: 118,
-    rotationRad: slashAngle,
-    alpha: Math.min(0.92, alpha),
-  });
+  // Layer the physical crescent entirely in the player's world-space camera
+  // pass. Unlike a free-floating WebGL wheel this moves with Rudra every
+  // frame. Hand-painted ink border > saturated breathing energy > narrow
+  // rice-paper-hot spine. Avoid large radial bloom and rectangle clipping.
+  ctx.save();
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  const visible = Math.max(0, Math.min(1, alpha));
+
+  const drawTaperedBand = (innerBlend: number, outerBlend: number, color: string, opacity: number) => {
+    const nodes = mesh.nodes;
+    const mix = (a: number, b: number, t: number) => a + (b - a) * t;
+    ctx.beginPath();
+    for (let i = 0; i < nodes.length; i++) {
+      const n = nodes[i];
+      const x = mix(n.spineX, n.outerX, outerBlend);
+      const y = mix(n.spineY, n.outerY, outerBlend);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    for (let i = nodes.length - 1; i >= 0; i--) {
+      const n = nodes[i];
+      ctx.lineTo(mix(n.spineX, n.innerX, innerBlend), mix(n.spineY, n.innerY, innerBlend));
+    }
+    ctx.closePath();
+    ctx.globalAlpha = visible * opacity;
+    ctx.fillStyle = color;
+    ctx.fill();
+  };
+
+  // Outer sumi ink is essential against warm fire-lit temple floors.
+  drawTaperedBand(1.16, 1.16, '#12080c', 0.92);
+  drawTaperedBand(0.90, 0.86, mesh.outerGlowColor, 0.82);
+  drawTaperedBand(0.58, 0.58, mesh.plasmaColor, 0.96);
+  drawTaperedBand(0.16, 0.16, mesh.coreColor, 0.98);
+
+  const nodes = mesh.nodes;
+  ctx.beginPath();
+  for (let i = 0; i < nodes.length; i++) {
+    if (i === 0) ctx.moveTo(nodes[i].spineX, nodes[i].spineY);
+    else ctx.lineTo(nodes[i].spineX, nodes[i].spineY);
+  }
+  ctx.globalAlpha = visible * 0.96;
+  ctx.strokeStyle = mesh.coreColor;
+  ctx.lineWidth = 1.7;
+  ctx.stroke();
+
+  // The hot tip visually points in the attack direction and quickly vanishes
+  // with the trail; it is not an independent screen-wide particle burst.
+  const tip = nodes[nodes.length - 1];
+  ctx.globalAlpha = visible * 0.84;
+  ctx.fillStyle = mesh.coreColor;
+  ctx.beginPath();
+  ctx.arc(tip.spineX, tip.spineY, 2.8, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
 }
 
 export function renderWeaponTipStarburstGlint(

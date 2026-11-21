@@ -1,0 +1,74 @@
+name: Act I real-browser screenshot smoke
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/act1-browser-smoke.yml"
+      - "scripts/act1-browser-smoke.mjs"
+  workflow_dispatch:
+concurrency:
+  group: act1-browser-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  gameplay-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - name: Sparse checkout application and real game assets
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            .github
+            app
+            components
+            lib
+            engine
+            hooks
+            scripts
+            public
+            new 3D assets and animations
+            cutscenes/assets
+            audio and sound effects
+            soundtracks
+            package.json
+            tsconfig.json
+            next-env.d.ts
+            next.config.ts
+            postcss.config.mjs
+            eslint.config.mjs
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install application and headless browser
+        run: |
+          npm install --ignore-scripts --no-fund --no-audit
+          npm install --no-save playwright@1.56.1 --ignore-scripts --no-fund --no-audit
+          npx playwright install --with-deps chromium
+      - name: Build and serve actual production app
+        run: |
+          npm run build
+          nohup npm run start > /tmp/act1-next.log 2>&1 &
+          for i in $(seq 1 45); do
+            curl -fsS http://127.0.0.1:3000 >/dev/null && exit 0
+            sleep 2
+          done
+          cat /tmp/act1-next.log
+          exit 1
+      - name: Capture gameplay screens, missing media, JS errors and raw-frame stats
+        env:
+          ACT1_SMOKE_CHAMBERS: 1,2,3,4,5,6,7,8
+          ACT1_SMOKE_PRESET: performance
+          ACT1_SMOKE_COMBAT: '1'
+          ACT1_SMOKE_TIMEOUT: 85000
+        run: node scripts/act1-browser-smoke.mjs
+      - name: Preserve recordings and full JSON audit even if game fails
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: act1-real-browser-smoke
+          path: artifacts/act1-browser/
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Preserve server errors
+        if: always()
+        run: tail -n 150 /tmp/act1-next.log 2>/dev/null || true

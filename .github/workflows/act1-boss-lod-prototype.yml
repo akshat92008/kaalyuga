@@ -1,0 +1,56 @@
+name: Act I Dundubhi skinned LOD prototype (no runtime replacement)
+on:
+  pull_request:
+    paths:
+      - "scripts/act1-boss-lod-prototype.py"
+      - ".github/workflows/act1-boss-lod-prototype.yml"
+  workflow_dispatch:
+concurrency:
+  group: act1-lod-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  dundubhi-lod:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout Blender QA script and canonical boss source only
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            scripts/act1-boss-lod-prototype.py
+            new 3D assets and animations/Animations/Creature Pack (4)/Meshy_AI_Bellhorn_Warlord_20261114_generate.fbx
+          sparse-checkout-cone-mode: false
+      - name: Install Blender CPU export toolchain
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y blender python3-numpy
+      - name: Compile and run non-destructive GLB prototype
+        run: |
+          python3 -m py_compile scripts/act1-boss-lod-prototype.py
+          blender -b --python scripts/act1-boss-lod-prototype.py -- \
+            --input "new 3D assets and animations/Animations/Creature Pack (4)/Meshy_AI_Bellhorn_Warlord_20261114_generate.fbx" \
+            --output "artifacts/act1-lod/dundubhi-prototype.glb" \
+            --ratio 0.62 --render-previews
+      - name: Validate exported report and preserve original-asset invariants
+        run: |
+          python3 - <<'PY'
+          import json
+          p = "artifacts/act1-lod/dundubhi-prototype.report.json"
+          x = json.load(open(p))
+          assert x["status"] == "prototype_not_runtime_approved"
+          assert x["actual_triangle_reduction_pct"] > 25, x
+          assert x["before"]["armature_bones"] == x["after"]["armature_bones"]
+          assert x["before"]["skinned_meshes"] == x["after"]["skinned_meshes"]
+          assert x["after"]["uv_meshes"] >= x["before"]["uv_meshes"]
+          assert x["glb_skins"] and max(x["glb_skin_joint_counts"]) >= 20
+          print("PASS: Dundubhi prototype only", x["before"]["triangles"],
+                "->", x["after"]["triangles"], "triangles")
+          PY
+      - name: Preserve diagnostic previews, JSON and prototype GLB
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: act1-dundubhi-lod-prototype-not-approved
+          path: artifacts/act1-lod/
+          if-no-files-found: warn
+          retention-days: 14

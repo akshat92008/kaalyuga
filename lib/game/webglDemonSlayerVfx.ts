@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import type { MeruQualityTier } from '../../engine/ue5GraphicsEngine';
+import { resolveAct1VfxQualityBudget } from './act1QualityBudget';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -1001,6 +1003,7 @@ export class WebglDemonSlayerVfxOverlay {
   private height = 900;
   private isSoftwareGl = false;
   private disposed = false;
+  private act1Quality: MeruQualityTier = 'ultra';
 
   constructor() {
     this.canvas = document.createElement('canvas');
@@ -1060,6 +1063,20 @@ export class WebglDemonSlayerVfxOverlay {
     }
   }
 
+  /** Render at lower VFX pixel density on 8GB systems; mandatory attack arcs remain. */
+  public setQualityProfile(tier: MeruQualityTier): void {
+    if (this.act1Quality === tier) return;
+    this.act1Quality = tier;
+    const budget = resolveAct1VfxQualityBudget(tier);
+    if (this.renderer) {
+      const pr = this.isSoftwareGl ? Math.min(0.65, budget.pixelRatio * 0.75) :
+        Math.min(window.devicePixelRatio || 1, budget.pixelRatio);
+      this.renderer.setPixelRatio(pr);
+      this.renderer.setSize(this.width, this.height, false);
+    }
+    if (this.bloomPass) this.bloomPass.strength = budget.bloomStrength;
+  }
+
   public resize(vw: number, vh: number): void {
     const safeW = Math.max(320, Math.round(vw));
     const safeH = Math.max(240, Math.round(vh));
@@ -1075,7 +1092,9 @@ export class WebglDemonSlayerVfxOverlay {
     this.camera.updateProjectionMatrix();
 
     if (this.renderer) {
-      const pr = this.isSoftwareGl ? 0.65 : Math.min(window.devicePixelRatio || 1, 1.35);
+      const budget = resolveAct1VfxQualityBudget(this.act1Quality);
+      const pr = this.isSoftwareGl ? Math.min(0.65, budget.pixelRatio * 0.75) :
+        Math.min(window.devicePixelRatio || 1, budget.pixelRatio);
       this.renderer.setPixelRatio(pr);
       this.renderer.setSize(safeW, safeH, false);
     }
@@ -2173,9 +2192,10 @@ export class WebglDemonSlayerVfxOverlay {
   }): void {
     if (!this.renderer || this.disposed) return;
     const pal = RIBBON_PALETTES[opts.palette ?? 'hinokami'];
-    const count = Math.min(28, opts.count ?? 14);
+    const budget = resolveAct1VfxQualityBudget(this.act1Quality);
+    const count = Math.min(28, Math.max(1, Math.round((opts.count ?? 14) * budget.sparkMultiplier)));
     for (let i = 0; i < count; i++) {
-      if (this.sparks.length >= 110) {
+      if (this.sparks.length >= budget.maxLiveSparks) {
         const oldest = this.sparks.shift();
         if (oldest) {
           this.scene.remove(oldest.mesh);
@@ -2564,7 +2584,8 @@ export class WebglDemonSlayerVfxOverlay {
     }
 
     // Pass A (GPU-only): Selective HDR UnrealBloomPass into offscreen additive bloomCanvas
-    if (!this.isSoftwareGl && this.bloomComposer && this.bloomCtx) {
+    if (!this.isSoftwareGl && resolveAct1VfxQualityBudget(this.act1Quality).bloomEnabled &&
+        this.bloomComposer && this.bloomCtx) {
       this.renderer.setClearColor(0x000000, 1);
       this.bloomComposer.render();
       this.bloomCtx.clearRect(0, 0, this.bloomCanvas.width, this.bloomCanvas.height);
