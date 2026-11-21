@@ -31,6 +31,7 @@ def get_args() -> argparse.Namespace:
     parser.add_argument("--model", required=True, type=Path)
     parser.add_argument("--clips", required=True, type=Path)
     parser.add_argument("--diffuse", default=Path("public/kaalyuga/rudra/diffuse.png"), type=Path)
+    parser.add_argument("--textured-model", default=Path("public/models/Meshy_AI_Ashen_Warborn_20261025_texture_fbx/Meshy_AI_Ashen_Warborn_20261025_texture.fbx"), type=Path)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--no-preview", action="store_true")
     return parser.parse_args(blender_argv())
@@ -141,10 +142,56 @@ def export_glb(bpy: Any, dest: Path) -> None:
         raise RuntimeError("GLB output missing or suspiciously small")
 
 
-def apply_character_diffuse(bpy: Any, imported_model: list[Any], texture_path: Path) -> int:
-    """Use the exact painted albedo on the UVs of the validated skinned FBX."""
-    if not texture_path.is_file():
-        raise FileNotFoundError("Hero diffuse map missing: " + str(texture_path))
+def transfer_missing_uvs(bpy: Any, target: Any, source: Any) -> str:
+    """Mirror the runtime textured-FBX binding: preserve the skinned target and copy its original UVs."""
+    if target.data.uv_layers:
+        return 'existing'
+    if not source.data.uv_layers:
+        raise RuntimeError("Source textured FBX is missing native UV coordinates")
+    source_uv = source.data.uv_layers.active
+    # Exact topology: preserve Meshy painted UV seams without approximation.
+    if len(target.data.loops) == len(source.data.loops) and len(target.data.vertices) == len(source.data.vertices):
+        uv = target.data.uv_layers.new(name='Kaliyuga_PaintedUV')
+        for i in range(len(target.data.loops)):
+            uv.data[i].uv = source_uv.data[i].uv
+        return 'exact_topology'
+    # Different triangulation/decimation: nearest-face interpolated UVs on the
+    # skinned mesh, keeping its 57-bone vertex groups and action tracks untouched.
+    bpy.ops.object.select_all(action='DESELECT')
+    target.select_set(True)
+    bpy.context.view_layer.objects.active = target
+    modifier = target.modifiers.new('Kaliyuga_PaintedUV_Transfer', 'DATA_TRANSFER')
+    modifier.object = source
+    modifier.use_loop_data = True
+    modifier.data_types_loops = {'UV'}
+    modifier.loop_mapping = 'POLYINTERP_NEAREST'
+    bpy.ops.object.modifier_apply(modifier=modifier.name)
+    if not target.data.uv_layers:
+        raise RuntimeError("Spatial UV transfer from textured character mesh failed")
+    return 'spatial_nearest_face'
+
+
+def apply_character_diffuse(bpy: Any, imported_model: list[Any], texture_path: Path, textured_fbx: Path) -> tuple[int, str]:
+    """Bind original painted albedo from the model FBX to canonical skinned geometry."""
+    if not texture_path.is_file() or not textured_fbx.is_file():
+        raise FileNotFoundError("Missing source character paint or textured FBX: " + str((texture_path, textured_fbx)))
+    meshes = [obj for obj in imported_model if obj.type == 'MESH']
+    source_models = []
+    uv_methods = []
+    try:
+        if any(not obj.data.uv_layers for obj in meshes):
+            source_models = import_fbx(bpy, textured_fbx)
+            source_meshes = [obj for obj in source_models if obj.type == 'MESH' and obj.data.uv_layers]
+            if not source_meshes:
+                raise RuntimeError("Textured FBX imported without any UV-mapped meshes")
+            source_mesh = max(source_meshes, key=lambda obj: len(obj.data.polygons))
+            for target in meshes:
+                uv_methods.append(transfer_missing_uvs(bpy, target, source_mesh))
+        else:
+            uv_methods = ['existing' for _ in meshes]
+    finally:
+        for obj in source_models:
+            bpy.data.objects.remove(obj, do_unlink=True)
     image = bpy.data.images.load(str(texture_path.resolve()), check_existing=True)
     image.colorspace_settings.name = 'sRGB'
     mat = bpy.data.materials.new("Kaliyuga_Rudra_PaintedAlbedo")
@@ -153,24 +200,17 @@ def apply_character_diffuse(bpy: Any, imported_model: list[Any], texture_path: P
     bsdf = nodes.get('Principled BSDF')
     if bsdf is None:
         raise RuntimeError("Blender Principled BSDF node not found")
-    diffuse = nodes.new('ShaderNodeTexImage')
-    diffuse.image = image
-    mat.node_tree.links.new(diffuse.outputs['Color'], bsdf.inputs['Base Color'])
+    tex = nodes.new('ShaderNodeTexImage')
+    tex.image = image
+    mat.node_tree.links.new(tex.outputs['Color'], bsdf.inputs['Base Color'])
     bsdf.inputs['Metallic'].default_value = 0.08
     bsdf.inputs['Roughness'].default_value = 0.84
-    textured = 0
-    for obj in imported_model:
-        if obj.type != 'MESH':
-            continue
+    for obj in meshes:
         if not obj.data.uv_layers:
-            raise RuntimeError("Rigged mesh missing UVs; cannot validate painted material")
+            raise RuntimeError("Textured model UV bind left a mesh without coordinates")
         obj.data.materials.clear()
         obj.data.materials.append(mat)
-        textured += 1
-    if textured == 0:
-        raise RuntimeError("No mesh was available for painted material")
-    return textured
-
+    return len(meshes), ','.join(uv_methods)
 
 def set_idle_preview_pose(bpy: Any, imported_model: list[Any]) -> None:
     armature = find_armature(imported_model)
@@ -255,8 +295,9 @@ def main() -> int:
         bone_names = set(b.name for b in armature.data.bones)
         report["canonical_bone_count"] = len(bone_names)
         report["mesh_count"] = sum(obj.type == "MESH" for obj in base)
-        report["painted_material_mesh_count"] = apply_character_diffuse(bpy, base, args.diffuse)
+        report["painted_material_mesh_count"], report["uv_binding"] = apply_character_diffuse(bpy, base, args.diffuse, args.textured_model)
         report["diffuse_texture"] = str(args.diffuse)
+        report["textured_mesh_source"] = str(args.textured_model)
         if not bone_names or not report["mesh_count"]:
             raise RuntimeError("Canonical FBX missing armature bones or skinned geometry")
 
