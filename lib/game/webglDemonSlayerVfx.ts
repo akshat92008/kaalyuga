@@ -872,6 +872,32 @@ function buildCurvedRibbonGeometry(
   return geo;
 }
 
+/** Painterly flame tongues taper to a fine, curling point rather than another glowing circle. */
+function buildTaperedFlameTongueGeometry(length: number, width: number, segments = 11): THREE.BufferGeometry {
+  const positions: number[] = [];
+  const uvs: number[] = [];
+  const indices: number[] = [];
+  for (let i = 0; i <= segments; i++) {
+    const t = i / segments;
+    const halfWidth = width * Math.pow(1 - t, 0.68) * (0.5 + 0.55 * Math.sin(t * Math.PI));
+    const curveY = Math.sin(t * Math.PI * 1.35) * length * 0.12 + t * t * length * 0.11;
+    const lift = Math.sin(t * Math.PI) * length * 0.10;
+    positions.push(t * length, curveY - halfWidth, lift);
+    positions.push(t * length, curveY + halfWidth, lift + 0.3);
+    uvs.push(t, 0, t, 1);
+    if (i < segments) {
+      const b = i * 2;
+      indices.push(b, b + 1, b + 2, b + 1, b + 3, b + 2);
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
 /**
  * Builds a variable-radius tapered serpentine Eastern Dragon body mesh (whip tail -> muscular torso -> neck!)
  */
@@ -1209,16 +1235,29 @@ export class WebglDemonSlayerVfxOverlay {
       mats.push(inkMat, flameMat, glowMat);
     }
 
-    // Detached ink-outlined cel flame tongues floating around the wheel (Rengoku reference!)
-    const dropletGeo = buildCurvedRibbonGeometry(radius * 1.18, 22, 0.42, 1, 8);
-    geos.push(dropletGeo);
-    const dropMat = createRibbonMaterial(pal, 0, 0.96, true, THREE.NormalBlending, 2.0);
-    mats.push(dropMat);
-    for (let d = 0; d < 6; d++) {
-      const dm = new THREE.Mesh(dropletGeo, dropMat);
-      dm.rotation.set(0.62, (d % 2 === 0 ? -0.2 : 0.2), (d / 6) * Math.PI * 2);
-      dm.position.z = 6;
-      group.add(dm);
+    // Nine tapered, curling, ink-outlined tongues break the generic neon-ring silhouette.
+    // Shared geometry/materials avoid unbounded GPU cost on the M3 Air.
+    const tongueGeo = buildTaperedFlameTongueGeometry(radius * 0.40, radius * 0.105, 11);
+    geos.push(tongueGeo);
+    const tongueInk = createRibbonMaterial(pal, 0, 0.74, true, THREE.NormalBlending, 0.80);
+    tongueInk.uniforms.uCoreColor.value.copy(pal.ink);
+    tongueInk.uniforms.uMidColor.value.copy(pal.ink);
+    tongueInk.uniforms.uEdgeColor.value.copy(pal.ink);
+    const tongueFire = createRibbonMaterial(pal, 0, 0.95, true, THREE.NormalBlending, 1.45);
+    mats.push(tongueInk, tongueFire);
+    for (let d = 0; d < 9; d++) {
+      const a = (d / 9) * Math.PI * 2 + (d % 2) * 0.11;
+      const orbit = radius * (0.83 + (d % 3) * 0.035);
+      const tongue = new THREE.Group();
+      tongue.position.set(Math.cos(a) * orbit, Math.sin(a) * orbit * 0.86, 8 + (d % 2) * 3);
+      tongue.rotation.z = a + ((d % 3) - 1) * 0.15;
+      const ink = new THREE.Mesh(tongueGeo, tongueInk);
+      ink.position.z = -1.5;
+      ink.scale.set(1.06, 1.25, 1);
+      const core = new THREE.Mesh(tongueGeo, tongueFire);
+      core.scale.set(0.94 + (d % 3) * 0.09, 0.90, 1);
+      tongue.add(ink, core);
+      group.add(tongue);
     }
 
     this.scene.add(group);
@@ -1763,29 +1802,30 @@ export class WebglDemonSlayerVfxOverlay {
       ribbonMats.push(mat, glowMat);
     }
 
-    // Flying pitch-black Sumi-e torn ink debris shards (Sanemi Wind Breathing signature!)
+    // Subtle brush-ink wisps support the green blades without opaque black triangles
+    // obscuring Rudra, weapon contact, or enemies.
     const shardGeo = new THREE.BufferGeometry();
     shardGeo.setAttribute(
       'position',
-      new THREE.Float32BufferAttribute([0, 24, 0, -15, -12, 0, 21, -6, 0], 3)
+      new THREE.Float32BufferAttribute([0, 13, 0, -4.5, -9, 0, 7, -4, 0], 3)
     );
     geos.push(shardGeo);
     const inkShardMat = new THREE.MeshBasicMaterial({
-      color: 0x050908,
+      color: 0x10271f,
       transparent: true,
-      opacity: 0.96,
+      opacity: 0.66,
       side: THREE.DoubleSide,
       depthWrite: false,
     });
     shardMats.push(inkShardMat);
 
-    for (let s = 0; s < 14; s++) {
-      const a = -opts.angle + (s / 14) * Math.PI * 2;
+    for (let s = 0; s < 9; s++) {
+      const a = -opts.angle + (s / 9) * Math.PI * 2;
       const dist = radius * (0.35 + (s % 4) * 0.18);
       const mesh = new THREE.Mesh(shardGeo, inkShardMat);
       mesh.position.set(Math.cos(a) * dist, Math.sin(a) * dist * 0.7, 18);
-      const sc = 0.85 + (s % 3) * 0.42;
-      mesh.scale.set(sc * 1.35, sc, 1);
+      const sc = 0.48 + (s % 3) * 0.16;
+      mesh.scale.set(sc * 1.12, sc, 1);
       mesh.rotation.z = a;
       group.add(mesh);
       shardMeshes.push({
