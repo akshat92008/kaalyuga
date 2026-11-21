@@ -45,6 +45,67 @@ const base = process.env.GAME_URL || 'http://127.0.0.1:3100';
     await capture('02-live-game-after-start');
     report.checks.push('live-game start click and render');
 
+    // Real combat, not the isolated cinematic-lab. Use the game's existing direct
+    // chamber debug route and assert the production WebGL director fired each element.
+    await page.goto(base + '/?debug=1&chamber=1', { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await page.waitForFunction(() => {
+      const qa = window.__kaliyugaPhaseQA;
+      return qa && qa.state === 'playing' && qa.chamber === 1;
+    }, null, { timeout: 35000 });
+    await page.waitForTimeout(2600);
+    await capture('08-live-combat-entry');
+    report.checks.push('real combat arena loaded with debug QA snapshot');
+    const qa = () => page.evaluate(() => window.__kaliyugaPhaseQA);
+    const awaitIdle = async () => {
+      await page.waitForFunction(() => {
+        const snap = window.__kaliyugaPhaseQA;
+        return snap && snap.action === 'idle';
+      }, null, { timeout: 12000 });
+      await page.waitForTimeout(90);
+    };
+    for (const attack of [
+      { key: '1', name: 'agni-smash', element: 'agni' },
+      { key: '2', name: 'vayu-green-gale', element: 'vayu' },
+      { key: '3', name: 'vajra-thunder', element: 'vajra' },
+    ]) {
+      await awaitIdle();
+      await page.keyboard.press(attack.key);
+      await page.waitForTimeout(100);
+      const pre = await qa();
+      assert.equal(pre.stance, attack.key === '1' ? 'smash' : attack.key === '2' ? 'pillar' : 'thrust');
+      const previous = pre.recentEvents.filter(e => e.name === 'heavy-contact').length;
+      await page.keyboard.press('k');
+      await page.waitForFunction(({ element, previous }) => {
+        const q = window.__kaliyugaPhaseQA;
+        return q && q.recentEvents.filter(e => e.name === 'heavy-contact').length > previous &&
+          q.recentEvents.some(e => e.name === 'heavy-contact' && e.meta === element);
+      }, { element: attack.element, previous }, { timeout: 12000 });
+      await capture('09-' + attack.name + '-heavy-contact');
+      report.checks.push('actual ' + attack.element + ' heavy contact event observed');
+    }
+    for (const attack of [
+      { key: 'j', name: 'light-parashu' },
+      { key: 'q', name: 'agneyastra-fire' },
+      { key: 'e', name: 'vayavyastra-wind' },
+      { key: 'r', name: 'vajrastra-thunder' },
+      { key: '4', name: 'varuna-water-dragon' },
+      { key: 'z', name: 'guardian-summon' },
+    ]) {
+      await awaitIdle();
+      await page.keyboard.press(attack.key);
+      await page.waitForTimeout(110);
+      await capture('10-' + attack.name);
+      report.checks.push('visual capture during ' + attack.name);
+    }
+    // A new direct boss room must start an actual game-world camera track.
+    await page.goto(base + '/?debug=1&chamber=4', { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await page.waitForFunction(() => window.__kaliyugaPhaseQA?.cameraKind === 'boss', null, { timeout: 30000 });
+    await capture('11-live-dundubhi-boss-entrance');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => window.__kaliyugaPhaseQA?.cameraKind === null, null, { timeout: 10000 });
+    report.checks.push('actual boss entrance camera runs and skips safely in live game');
+    await capture('12-live-boss-after-skip');
+
     await page.goto(base + '/cinematic-lab', { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.getByRole('button', { name: /Play cinematic/i }).waitFor({ timeout: 30000 });
     await capture('03-dundubhi-before-play');
