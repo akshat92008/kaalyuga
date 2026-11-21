@@ -605,6 +605,32 @@ export function renderWeaponPoseTrail(
   fillBand(1.0, colors.outerGlowColor, 0.85);
   fillBand(0.68, colors.plasmaColor, 0.94);
   fillBand(0.24, colors.coreColor, 0.98);
+
+  // Three brush-fire filaments hug the ACTUAL Parashu path. Every vertex
+  // lies within six pixels of a sampled cutting edge; no free-floating
+  // orbital slash, fixed screen arc or random GPU particle emitter.
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  const filaments = [
+    {normal: -0.20, width: 1.65, opacity: 0.85, color: colors.coreColor},
+    {normal:  0.32, width: 1.35, opacity: 0.64, color: colors.plasmaColor},
+    {normal:  0.78, width: 0.90, opacity: 0.46, color: colors.coreColor},
+  ];
+  for (const filament of filaments) {
+    ctx.beginPath();
+    let started = false;
+    for (let i = Math.max(0, bands.length - 8); i < bands.length; i++) {
+      const b = bands[i];
+      const x = b.x + (b.leftX - b.x) * filament.normal;
+      const y = b.y + (b.leftY - b.y) * filament.normal;
+      if (!started) { ctx.moveTo(x, y); started = true; }
+      else ctx.lineTo(x, y);
+    }
+    ctx.globalAlpha = clampedAlpha * filament.opacity;
+    ctx.strokeStyle = filament.color;
+    ctx.lineWidth = filament.width;
+    ctx.stroke();
+  }
   ctx.restore();
   return true;
 }
