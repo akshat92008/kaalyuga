@@ -30,6 +30,8 @@ export interface MeruCinematic {
   title: string;
   duration: number;
   boss: BossCharacter;
+  /** An intro omits this legacy-compatible field; phase scenes use 2 or 3. */
+  bossPhase?: 1 | 2 | 3;
   backgroundUrl: string;
   posterUrl: string;
   camera: Keyframe<CinematicCamera>[];
@@ -90,6 +92,9 @@ export function validateCinematic(input: unknown): MeruCinematic {
   if (typeof value.title !== 'string' || !value.title.trim() || value.title.length > 140) throw new Error('Invalid scene title');
   if (!finite(value.duration) || value.duration <= 0 || value.duration > 120) throw new Error('Scene duration must be 0-120 seconds');
   if (value.boss !== 'dundubhi' && value.boss !== 'vrikodara') throw new Error('Unsupported boss rig');
+  if (value.bossPhase !== undefined && value.bossPhase !== 1 &&
+      value.bossPhase !== 2 && value.bossPhase !== 3)
+    throw new Error('Unsupported boss phase');
   for (const k of ['backgroundUrl','posterUrl']) {
     const str = value[k];
     if (typeof str !== 'string' || !/^\/(?:videos|kaalyuga\/arena|arenas|assets\/aistudio)\/[a-zA-Z0-9_./%…-]+$/.test(str) || str.includes('..')) {
@@ -271,5 +276,61 @@ export function createVrikodaraScene(): MeruCinematic {
       {id:'maw-impact',time:4.72,kind:'impact'},
       {id:'maw-title',time:6.2,kind:'subtitle',payload:'VRIKODARA · THE INFERNAL MAW'}
     ]
+  });
+}
+
+/**
+ * Short real-rig Act I phase reveals, distinct from the first-encounter
+ * introductions. No new FBX, guessed skeleton, or full-3D arena is required.
+ * Stage phase values are passed to the existing Boss3DRenderer, which handles
+ * the approved in-game boss scale and material changes.
+ */
+export function createBossPhaseScene(boss: BossCharacter, phase: 2 | 3): MeruCinematic {
+  const intro = boss === 'dundubhi' ? createDundubhiScene() : createVrikodaraScene();
+  const isVrikodara = boss === 'vrikodara';
+  const duration = 4.2;
+  const isFinal = phase === 3;
+  return validateCinematic({
+    schemaVersion: 1,
+    id: boss + '-phase-' + phase,
+    title: (isVrikodara ? 'Vrikodara' : 'Dundubhi') +
+      (isFinal ? ' — Cataclysm Unbound' : ' — The Second Awakening'),
+    duration, boss, bossPhase: phase,
+    backgroundUrl: isVrikodara
+      ? '/videos/Furnaces_spewing_flames_and_slag_baeefd93_1080p.mp4'
+      : intro.backgroundUrl,
+    posterUrl: isVrikodara
+      ? '/arenas/Gemini_Generated_Image_3ay6rk3ay6rk3ay6.png'
+      : intro.posterUrl,
+    camera: [
+      {time:0,value:{x:0,y:-20,zoom:0.86,roll:0,shake:0}},
+      {time:1.5,value:{x:0,y:6,zoom:1.12,roll:-0.02,shake:0.07}},
+      {time:2.35,value:{x:0,y:-4,zoom:1.32,roll:0.018,shake:0.65}},
+      {time:duration,value:{x:0,y:0,zoom:1,roll:0,shake:0}},
+    ],
+    actor: [
+      {time:0,value:{x:0,y:13,scale:1.0,opacity:0.78,state:'idle'}},
+      {time:0.8,value:{x:0,y:6,scale:1.04,opacity:1,state:'windup'}},
+      {time:2.1,value:{x:0,y:0,scale:1.16,opacity:1,state:'attack'}},
+      {time:3.1,value:{x:0,y:0,scale:1.11,opacity:1,state:'idle'}},
+      {time:duration,value:{x:0,y:0,scale:1,opacity:1,state:'idle'}},
+    ],
+    lighting: [
+      {time:0,value:{warmth:0.45,exposure:0.65,vignette:0.85,ash:0.25}},
+      {time:1.7,value:{warmth:0.9,exposure:0.92,vignette:0.68,ash:0.55}},
+      {time:2.35,value:{warmth:1,exposure:1.35,vignette:0.4,ash:0.95}},
+      {time:duration,value:{warmth:0.63,exposure:0.92,vignette:0.32,ash:0.38}},
+    ],
+    cues: [
+      {id:'phase-omen',time:0.25,kind:'drum'},
+      {id:'phase-wrath',time:1.65,kind:'roar'},
+      {id:'phase-strike',time:2.32,kind:'impact'},
+      {id:'phase-vfx',time:2.35,kind:'vfx',payload:'ward-break'},
+      {id:'phase-title',time:2.85,kind:'subtitle',payload:
+        isVrikodara
+          ? (isFinal ? 'VRIKODARA · THE APOCALYPTIC MAW' : 'VRIKODARA · THE STARVED FURNACE')
+          : (isFinal ? 'DUNDUBHI · CATASTROPHIC STAMPEDE' : 'DUNDUBHI · THE BLOOD-DRUM'),
+      },
+    ],
   });
 }
