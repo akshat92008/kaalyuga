@@ -16,7 +16,7 @@ test('Parashu breathing ribbon is silent during startup and after swing', () => 
   assert.ok(contact.radius<=72);
 });
 test('Parashu trail cannot appear during dodge, parry, idle or astras', () => {
-  for (const action of ['idle','dodge','parry','astra','execute']) {
+  for (const action of ['idle','dodge','parry','astra']) {
     assert.equal(computeParashuSwingVisual(action,0.44).active,false);
   }
 });
@@ -44,4 +44,16 @@ test('VFX parameters clamp invalid focus and attack progress', () => {
   assert.deepEqual(getSmashHeavyVfxPresentation(-3),getSmashHeavyVfxPresentation(0));
   assert.deepEqual(getSmashHeavyVfxPresentation(100),getSmashHeavyVfxPresentation(4));
   assert.equal(computeParashuSwingVisual('heavy_unleash',Infinity).active,false);
+});
+
+test('Execute also uses the measured Parashu weapon-head silhouette during active frames', () => {
+ const pre=computeParashuSwingVisual('execute',0.13);
+ const contact=computeParashuSwingVisual('execute',0.35);
+ const after=computeParashuSwingVisual('execute',0.95);
+ assert.equal(pre.active,false);
+ assert.equal(contact.active,true);
+ assert.ok(contact.alpha>0.9);
+ assert.equal(contact.isHeavy,true);
+ assert.ok(contact.radius<100);
+ assert.equal(after.active,false);
 });
