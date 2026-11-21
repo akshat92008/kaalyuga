@@ -1,37 +1,57 @@
 /**
- * Pure policy for introducing a boss with the Meru cinematic player.
- * Every transition (including direct debug chamber loads) follows the same rule.
+ * Safe policy for introducing both major Act I bosses with real authored scenes.
+ * No title, hub, phase2, cleared, or non-boss encounter may trigger a cinematic.
  */
-import {createDundubhiScene, validateCinematic, type MeruCinematic} from './cinematicTimeline';
+import {
+  createDundubhiScene, createVrikodaraScene, validateCinematic,
+  type BossCharacter, type MeruCinematic,
+} from './cinematicTimeline';
+
 export const MERU_STUDIO_STORAGE_KEY='meru.studio.cinematic.v1';
+export const MERU_VRIKODARA_STORAGE_KEY='meru.studio.cinematic.vrikodara.v1';
+
+export const meruStorageKey=(kind:BossCharacter)=>
+  kind==='vrikodara'?MERU_VRIKODARA_STORAGE_KEY:MERU_STUDIO_STORAGE_KEY;
+
+export const defaultBossIntro=(kind:BossCharacter):MeruCinematic=>
+  kind==='vrikodara'?createVrikodaraScene():createDundubhiScene();
 
 export interface BossIntroContext {
   chamberIndex:number;
   stage:'playing'|'title'|'gameover'|string;
-  hasDundubhi:boolean;
+  hasDundubhi?:boolean;
+  hasBoss?:boolean;
+  boss?:BossCharacter;
   query?:string;
 }
-export function shouldStartDundubhiIntro(ctx:BossIntroContext):boolean {
-  if(ctx.stage!=='playing'||ctx.chamberIndex!==3||!ctx.hasDundubhi)return false;
+export function shouldStartBossIntro(ctx:BossIntroContext):boolean {
+  const boss=ctx.boss??'dundubhi';
+  const expectedChamber=boss==='dundubhi'?3:7;
+  if(ctx.stage!=='playing'||ctx.chamberIndex!==expectedChamber||
+    !(ctx.hasBoss??ctx.hasDundubhi??false))return false;
   const params=new URLSearchParams(ctx.query??'');
   if(params.get('cinematic')==='0')return false;
   if(params.get('cleared')==='1'||params.get('phase')==='2'||params.get('wave')==='2')return false;
   return true;
 }
+export function shouldStartDundubhiIntro(ctx:BossIntroContext):boolean {
+  return shouldStartBossIntro({...ctx,boss:'dundubhi'});
+}
 /**
- * Saved studio scenes can be used by the actual encounter. Incorrect versions,
- * mismatched bosses and inaccessible browser storage gracefully use the built-in scene.
+ * Local Studio scenes are read ONLY after version/boss/ID/asset validation.
+ * Corrupt or foreign scenes always fall back to the correct built-in sequence.
  */
-export function readDundubhiIntro():MeruCinematic {
-  const fallback=createDundubhiScene();
+export function readBossIntro(kind:BossCharacter):MeruCinematic {
+  const fallback=defaultBossIntro(kind);
   if(typeof localStorage==='undefined')return fallback;
   try{
-    const raw=localStorage.getItem(MERU_STUDIO_STORAGE_KEY);
+    const raw=localStorage.getItem(meruStorageKey(kind));
     if(!raw||raw.length>400_000)return fallback;
     const parsed=validateCinematic(JSON.parse(raw));
-    if(parsed.boss!=='dundubhi'||parsed.id!==fallback.id)return fallback;
+    if(parsed.boss!==kind||parsed.id!==fallback.id)return fallback;
     return parsed;
-  }catch{
-    return fallback;
-  }
+  }catch{return fallback;}
+}
+export function readDundubhiIntro():MeruCinematic {
+  return readBossIntro('dundubhi');
 }
