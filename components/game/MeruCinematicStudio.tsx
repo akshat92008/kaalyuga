@@ -163,7 +163,7 @@ export default function MeruCinematicStudio(){
     setTime(time);
   };
 
-  const addCue=(kind:'drum'|'roar'|'impact'|'subtitle')=>{
+  const addCue=(kind:'drum'|'roar'|'impact'|'vfx'|'subtitle')=>{
     const current=sceneRef.current;
     const at=Number(time.toFixed(2));
     let ordinal=current.cues.length+1;
@@ -172,11 +172,20 @@ export default function MeruCinematicStudio(){
       id:'cue-'+ordinal,
       time:at,
       kind,
-      ...(kind==='subtitle'?{payload:'NEW CINEMATIC TITLE · Edit the exported scene JSON'}:{})
+      ...(kind==='subtitle'?{payload:'NEW CINEMATIC TITLE · Edit below'}:
+         kind==='vfx'?{payload:current.boss==='vrikodara'?'blood-furnace':'earth-sunder'}:{})
     }];
     loadScene({...current,cues});
     timelineRef.current.seek(at);
     setTime(at);
+  };
+  const updateCuePayload=(id:string,payload:string)=>{
+    if(payload.length>180)return;
+    const current=sceneRef.current;
+    const savedTime=time;
+    loadScene({...current,cues:current.cues.map(c=>c.id===id?{...c,payload}:c)});
+    timelineRef.current.seek(savedTime);
+    setTime(savedTime);
   };
   const removeCue=(id:string)=>{
     const current=sceneRef.current;
@@ -285,17 +294,27 @@ export default function MeruCinematicStudio(){
             <h2 className="font-semibold">Sound and title cues</h2>
             <p className="text-xs text-[#a69081]">Place a cue at the playhead; click an existing cue to jump to it.</p>
             <div className="grid grid-cols-2 gap-2">
-              {(['drum','roar','impact','subtitle'] as const).map(kind=>
+              {(['drum','roar','impact','vfx','subtitle'] as const).map(kind=>
                 <button key={kind} onClick={()=>addCue(kind)}
                   className="rounded border border-[#6c533e] px-2 py-2 text-xs capitalize hover:bg-[#3d271c]">
                   + {kind}
                 </button>)}
             </div>
             <div className="max-h-36 space-y-1 overflow-y-auto">
-              {scene.cues.map(cue=><div key={cue.id} className="flex items-center gap-2 rounded bg-[#30252b] px-2 py-1 text-xs">
+              {scene.cues.map(cue=><div key={cue.id} className="flex flex-wrap items-center gap-2 rounded bg-[#30252b] px-2 py-1 text-xs">
                 <button onClick={()=>seek(cue.time)} className="min-w-0 flex-1 truncate text-left">
                   {fmt(cue.time)}s · {cue.kind}
                 </button>
+                {cue.kind==='subtitle'&&<input aria-label={'Cue text '+cue.id} value={cue.payload??''} maxLength={180}
+                  onChange={e=>updateCuePayload(cue.id,e.target.value)}
+                  className="w-full rounded bg-[#20171b] px-2 py-1 text-xs text-[#f4d6bc]"/>}
+                {cue.kind==='vfx'&&<select aria-label={'Cue visual '+cue.id} value={cue.payload??'ward-break'}
+                  onChange={e=>updateCuePayload(cue.id,e.target.value)}
+                  className="w-full rounded bg-[#20171b] px-2 py-1 text-xs text-[#f4d6bc]">
+                    <option value="earth-sunder">Earth-sunder ink impact</option>
+                    <option value="blood-furnace">Blood-furnace ember impact</option>
+                    <option value="ward-break">Ancient ward-break impact</option>
+                  </select>}
                 <button aria-label={'Delete cue '+cue.id} title="Remove cue" onClick={()=>removeCue(cue.id)}
                   className="rounded px-2 py-1 text-[#efb7a1] hover:bg-[#67322c]">×</button>
               </div>)}
