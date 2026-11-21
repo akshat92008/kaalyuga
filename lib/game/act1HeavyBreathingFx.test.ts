@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {act1HeavyBreathingPalette,buildAct1HeavyBladeFlames,getAct1HeavyContactSpectacle} from './act1HeavyBreathingFx';
+import {act1HeavyBreathingPalette,buildAct1HeavyBladeFlames,getAct1HeavyContactSpectacle,resolveAct1BreathingElement} from './act1HeavyBreathingFx';
 const samples=[
   {x:200,y:300,atMs:0},{x:219,y:287,atMs:20},
   {x:248,y:278,atMs:40},{x:270,y:259,atMs:60},
@@ -52,4 +52,37 @@ test('Heavy impact is large, stance-colored and controlled by actual consumed ch
   assert.equal(getAct1HeavyContactSpectacle('pillar',3).palette,'wind');
   assert.equal(getAct1HeavyContactSpectacle('thrust',3).palette,'thunder');
   assert.deepEqual(getAct1HeavyContactSpectacle('smash',Number.NaN),getAct1HeavyContactSpectacle('smash',0));
+});
+
+test('Fire, water, green wind, blue thunder and Susanoo remain distinct palettes',()=>{
+  assert.equal(resolveAct1BreathingElement('smash'), 'fire');
+  assert.equal(resolveAct1BreathingElement('pillar'), 'wind');
+  assert.equal(resolveAct1BreathingElement('thrust'), 'thunder');
+  assert.equal(resolveAct1BreathingElement('smash',true), 'water');
+  assert.equal(resolveAct1BreathingElement('thrust',true,true), 'susanoo');
+  const colors=new Set();
+  for(const element of ['fire','wind','thunder','water','susanoo'] as const) {
+    const p=act1HeavyBreathingPalette('smash',element);
+    assert.match(p.pigment,/^#[0-9a-f]{6}$/);
+    colors.add(p.pigment);
+    const flames=buildAct1HeavyBladeFlames(samples,{
+      stance:'smash',element,alpha:0.9,focus:3,action:'heavy_unleash',
+    });
+    assert.ok(flames.length>=4);
+    assert.ok(flames.every(f=>samples.some(p=>p.x===f.root.x&&p.y===f.root.y)));
+  }
+  assert.equal(colors.size,5);
+});
+test('Light attacks retain the same elemental language without overwhelming the hero',()=>{
+  for(const element of ['fire','wind','thunder','water','susanoo'] as const){
+    const heavy=buildAct1HeavyBladeFlames(samples,{
+      stance:'pillar',element,alpha:1,focus:3,action:'heavy_unleash',
+    });
+    const light=buildAct1HeavyBladeFlames(samples,{
+      stance:'pillar',element,alpha:1,focus:3,action:'light_attack',
+    });
+    assert.ok(light.length>=2&&light.length<=4);
+    assert.ok(Math.max(...light.map(x=>x.reach))<0.5*Math.max(...heavy.map(x=>x.reach)));
+    assert.ok(light.every(l=>l.opacity<0.5));
+  }
 });
