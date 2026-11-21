@@ -71,7 +71,9 @@ export function paintMeruFrame(
     bw=bh*ratio;
     if(bw>520*frame.actor.scale){bw=520*frame.actor.scale;bh=bw/ratio;}
   }
-  const footY=H-52+frame.actor.y;
+  // Keep large horned Dundubhi's animated legs in the frame. Vrikodara's
+  // weapon stance also gets a modest bottom-safe margin.
+  const footY=H-(scene.boss==='dundubhi'?94:72)+frame.actor.y;
   const x=W/2-bw/2+frame.actor.x;
   const y=footY-bh*crop.footY;
   // Anchored ambient/contact shadows sell weight against a flat arena MP4
@@ -145,7 +147,7 @@ export function paintMeruFrame(
     const sunder=cue.payload==='earth-sunder';
     const color=furnace?'255,96,43':sunder?'252,81,101':'250,195,118';
     const worldX=W/2+frame.actor.x;
-    const worldY=H-52+frame.actor.y;
+    const worldY=footY;
     const bloom=frame.actor.scale;
     ctx.save();
     ctx.translate(W/2+frame.camera.x+dx,H/2+frame.camera.y+dy);
