@@ -92,6 +92,25 @@ const base = process.env.GAME_URL || 'http://127.0.0.1:3100';
           arr.some(e => e.name === name && e.meta === meta);
       }, { name, meta, before }, { timeout: 16000 });
     };
+    // Active-frame QA is independent of artistic screenshot inspection.
+    // Record the LIVE gameplay clock and impact anchor for each weapon event.
+    const assertContactAnchor = async (name, meta, minProgress, maxReach = null) => {
+      const q = await qa();
+      const ev = q.recentEvents.filter(e => e.name === name && e.meta === meta).at(-1);
+      assert.ok(ev, 'Missing contact event: ' + name + ' ' + meta);
+      assert.ok(Number.isFinite(ev.progress) && ev.progress >= minProgress - 0.025 &&
+        ev.progress <= 1.0001,
+        'Weapon hit happened outside active frames: ' + name + ' ' + meta +
+        ' (progress=' + ev.progress + ', threshold=' + minProgress + ')');
+      if (maxReach !== null) {
+        for (const key of ['contactX', 'contactY', 'playerX', 'playerY']) {
+          assert.ok(Number.isFinite(ev[key]), 'Missing weapon contact anchor ' + key);
+        }
+        const distance = Math.hypot(ev.contactX - ev.playerX, ev.contactY - ev.playerY);
+        assert.ok(distance <= maxReach,
+          'Detached weapon VFX from fighter (' + meta + ' distance=' + distance + 'px)');
+      }
+    };
     await fixture();
     await page.waitForTimeout(1200);
     await capture('08-live-combat-entry');
@@ -109,6 +128,7 @@ const base = process.env.GAME_URL || 'http://127.0.0.1:3100';
       const before = await countEvent('heavy-contact');
       await page.keyboard.press('k');
       await assertEvent('heavy-contact', attack.element, before);
+      await assertContactAnchor('heavy-contact', attack.element, 0.28, 110);
       await capture('09-' + attack.name + '-heavy-contact');
       report.checks.push('real ' + attack.element + ' heavy: stance, animation contact and screenshot');
     }
@@ -125,6 +145,7 @@ const base = process.env.GAME_URL || 'http://127.0.0.1:3100';
       const lightBefore = await countEvent('light-contact');
       await page.keyboard.press('j');
       await assertEvent('light-contact', light.stance, lightBefore);
+      await assertContactAnchor('light-contact', light.stance, 0.0);
       await capture(light.screenshot);
       report.checks.push('real ' + light.stance + ' light Parashu active-frame contact and screenshot');
     }
@@ -171,6 +192,8 @@ const base = process.env.GAME_URL || 'http://127.0.0.1:3100';
       const before = await countEvent('execution-contact');
       await page.keyboard.press('f');
       await assertEvent('execution-contact', variant, before);
+      const executionThresholds = { downward_crush: 0.51, spin_360_cleave: 0.47, impaling_lunge: 0.42 };
+      await assertContactAnchor('execution-contact', variant, executionThresholds[variant]);
       await capture('13-execution-' + variant);
       await page.waitForFunction(() =>
         window.__kaliyugaPhaseQA?.action === 'idle' &&
