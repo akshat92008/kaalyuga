@@ -1,0 +1,58 @@
+name: Meru production core — tests and TypeScript gate
+on:
+  push:
+    branches:
+      - feature/meru-cinematic-production-core-20261121
+    paths:
+      - 'engine/meru/**'
+      - 'components/game/MeruCinematicStudio.tsx'
+      - 'app/meru-studio/**'
+      - 'lib/game/chamberGeometry.ts'
+      - '.github/workflows/meru-production-core.yml'
+  pull_request:
+    paths:
+      - 'engine/meru/**'
+      - 'components/game/MeruCinematicStudio.tsx'
+      - 'app/meru-studio/**'
+      - 'lib/game/chamberGeometry.ts'
+      - '.github/workflows/meru-production-core.yml'
+permissions:
+  contents: read
+concurrency:
+  group: meru-production-core-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  meru:
+    runs-on: ubuntu-latest
+    timeout-minutes: 24
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            engine/meru
+            components
+            app
+            lib
+            public
+            engine/ue5GraphicsEngine.ts
+            engine/lanternShaderEngine.ts
+            engine/v7StoryEngine.ts
+            package.json
+            tsconfig.json
+            next.config.ts
+            next-env.d.ts
+            postcss.config.mjs
+            .eslintrc.json
+            tailwind.config.ts
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund --ignore-scripts
+      - name: Run cinematic, quality, and portal regression tests
+        run: npx tsx --test engine/meru/meruCore.test.ts
+      - name: Type-check Meru and game integration
+        run: npx tsc --noEmit --pretty false
+      - name: Production build smoke check
+        run: npm run build
