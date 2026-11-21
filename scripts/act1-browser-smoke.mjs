@@ -41,6 +41,7 @@ try {
       failuresDuringNavigation.push({url:request.url().slice(0,170),reason:request.failure()?.errorText}));
     let ready=false, telemetry=null, state=null, inputGate=null;
     const strikeEvidence=[];
+    let weaponPoseEvidence=[];
     let start = Date.now();
     try {
       await page.goto(base+'/?autostart=1&chamber='+chamber+'&perf=1',
@@ -114,9 +115,11 @@ try {
       // Does not claim these shots prove animations are frame-perfect.
       if (process.env.ACT1_SMOKE_COMBAT !== '0') {
         const combos = [
-          ['light', 'j', 160],
-          ['heavy', 'k', 230],
-          ['agneyastra', 'q', 310],
+          // Capture just after the active strike event, not after the entire
+          // short 0.3-0.44s animation has faded away.
+          ['light', 'j', 40],
+          ['heavy', 'k', 55],
+          ['agneyastra', 'q', 130],
         ];
         for (const [action, key, pauseMs] of combos) {
           // Ensure the previous swing has recovered before the next scripted
@@ -165,6 +168,9 @@ try {
     }
     try {
       telemetry=await page.evaluate(()=>window.__KALIYUGA_ACT1_PERF__ || null);
+      weaponPoseEvidence=(telemetry?.weaponPoseTrace || []).filter(
+        e=>e.chamber===chamber && Number.isInteger(e.attackSerial)
+      ).slice(-32);
       state=await page.evaluate(()=>({
         bodyState:document.body.dataset.state,
         canvases:document.querySelectorAll('canvas').length,
@@ -174,7 +180,7 @@ try {
       await page.screenshot({path:path.join(outDir,'act1-ch'+chamber+'.png'),
            animations:'disabled', timeout:45000});
     } catch (e) { errors.push('capture: '+String(e.message||e).slice(0,200)); }
-    const record={chamber,preset,ready,elapsedMs:Date.now()-start,telemetry,state,inputGate,strikeEvidence,
+    const record={chamber,preset,ready,elapsedMs:Date.now()-start,telemetry,state,inputGate,strikeEvidence,weaponPoseEvidence,
        pageErrors:errors.slice(0,30),
        httpErrors:misses.slice(0,50),
        networkFailures:failuresDuringNavigation.slice(0,40)};
