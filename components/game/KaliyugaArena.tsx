@@ -13152,6 +13152,7 @@ export default function KaliyugaArena() {
         <MeruCinematicPlayback
           key={activeMeruScene.id}
           scene={activeMeruScene}
+          muted={muted}
           onFinish={(reason) => {
             const sim = simRef.current;
             sim.input.keysHeld.clear();
