@@ -5716,6 +5716,8 @@ export default function KaliyugaArena() {
       p.stance
     );
     const lightSlashPalette: DemonSlayerVfxPalette =
+      performance.now()<waterBladeUntilMsRef.current ? 'water' :
+      p.transformTimer>0 ? 'void' :
       p.stance === 'pillar'
         ? 'wind'
         : p.stance === 'thrust'
@@ -5736,12 +5738,17 @@ export default function KaliyugaArena() {
 
     // Startup Windup (0% -> 26%): subtle blade-edge glint on Rudra's Parashu axe head only!
     // Slash VFX fires at the exact Active Axe-Cleave Frame (~26% progress) so visuals never precede the axe.
-    webglDemonSlayerVfxRef.current?.spawnBladeGlint({
-      x: p.x + Math.cos(capturedAngle) * 18,
-      y: p.y - 36,
-      palette: lightSlashPalette,
-      scale: isComboFinisher ? 0.78 : 0.56,
+    const lightWindupTip=projectWeaponHeadToWorld({
+      uv:rudra3dRef.current?.getProjectedParashuHead()??null,
+      actorX:p.x,actorY:p.y,drawSize:HEROIC_DRAW_SIZES.rudra,
+      footAnchorRatio:rudra3dRef.current?.footAnchorRatio??0.8,
     });
+    if(lightWindupTip){
+      webglDemonSlayerVfxRef.current?.spawnBladeGlint({
+        x:lightWindupTip.x,y:lightWindupTip.y,
+        palette:lightSlashPalette,scale:isComboFinisher?0.78:0.56,
+      });
+    }
 
     pendingStrikeVfxRef.current = {
       fired: false,
@@ -5754,54 +5761,60 @@ export default function KaliyugaArena() {
         const originX = curP.x + curP.facing * 14;
         const originY = curP.y - 24;
 
+        const actualTip=projectWeaponHeadToWorld({
+          uv:rudra3dRef.current?.getProjectedParashuHead()??null,
+          actorX:curP.x,actorY:curP.y,
+          drawSize:HEROIC_DRAW_SIZES.rudra,
+          footAnchorRatio:rudra3dRef.current?.footAnchorRatio??0.8,
+        });
+        // Strike particles come from the visible blade rather than an
+        // invented arc 210px away. Susanoo uses its own skinned fist trail.
+        const lightHitX=actualTip?.x??originX+Math.cos(capturedAngle)*34;
+        const lightHitY=actualTip?.y??originY+Math.sin(capturedAngle)*23;
         if (!isComboFinisher) {
-          // The primary three-band breathing trail is now swept from Rudra's
-          // active weapon pose in the world-space render, not an extra static
-          // WebGL crescent spawned once at impact.
           webglDemonSlayerVfxRef.current?.spawnSparkBurst({
-            x: originX + Math.cos(capturedAngle) * 44,
-            y: originY + Math.sin(capturedAngle) * 28,
-            count: 6,
-            speed: 310,
-            palette: lightSlashPalette,
+            x:lightHitX,y:lightHitY,count:6,speed:310,
+            palette:lightSlashPalette,
           });
         } else {
-          // Tier 2 Combo-4 Finisher: ONE focused signature breathing flourish (no stacked duplicates!)
-          if (capturedStance === 'pillar') {
-            webglDemonSlayerVfxRef.current?.spawnWindGaleCrescents({
-              x: originX,
-              y: originY + 4,
-              angle: capturedAngle,
-              radius: 152,
-              duration: 0.52,
+          // Combo 4 earns a large beautiful ELEMENTAL impact, but the
+          // spectacular sweeping ink is driven only by real blade poses.
+          // Water remains available from Varuna's existing [4] ability.
+          if(lightSlashPalette==='water'){
+            webglDemonSlayerVfxRef.current?.spawnCycloneVortex({
+              x:lightHitX,y:lightHitY,radius:116,
+              palette:'water',duration:0.35,ringCount:3,
             });
-          } else if (capturedStance === 'thrust') {
-            webglDemonSlayerVfxRef.current?.spawnThunderZigzag({
-              x1: curP.x,
-              y1: originY,
-              x2: curP.x + Math.cos(capturedAngle) * 210,
-              y2: originY + Math.sin(capturedAngle) * 150,
-              palette: 'thunder',
-              duration: 0.52,
-              width: 24,
-              withFloorRing: true,
+          }else if(capturedStance==='pillar'){
+            webglDemonSlayerVfxRef.current?.spawnCycloneVortex({
+              x:lightHitX,y:lightHitY,radius:125,
+              palette:'wind',duration:0.36,ringCount:3,
             });
-          } else {
+          }else if(capturedStance==='thrust'){
+            for(let fork=0;fork<3;fork++){
+              const theta=capturedAngle+(fork-1)*0.40;
+              webglDemonSlayerVfxRef.current?.spawnThunderZigzag({
+                x1:lightHitX,y1:lightHitY,
+                x2:lightHitX+Math.cos(theta)*90,
+                y2:lightHitY+Math.sin(theta)*70,
+                palette:'thunder',duration:0.30,
+                width:12,withFloorRing:false,
+              });
+            }
+          }else if(curP.transformTimer>0){
+            webglDemonSlayerVfxRef.current?.spawnShockwaveRing({
+              x:lightHitX,y:lightHitY,radius:110,
+              palette:'void',duration:0.30,
+            });
+          }else{
             webglDemonSlayerVfxRef.current?.spawnSolarFlameWheel({
-              x: originX,
-              y: originY + 2,
-              angle: capturedAngle,
-              radius: 148,
-              palette: 'hinokami',
-              duration: 0.48,
+              x:lightHitX,y:lightHitY,angle:capturedAngle,
+              radius:90,palette:'hinokami',duration:0.30,
             });
           }
           webglDemonSlayerVfxRef.current?.spawnSparkBurst({
-            x: originX + Math.cos(capturedAngle) * 52,
-            y: originY + Math.sin(capturedAngle) * 34,
-            count: 10,
-            speed: 370,
-            palette: lightSlashPalette,
+            x:lightHitX,y:lightHitY,count:13,speed:390,
+            palette:lightSlashPalette,
           });
         }
         resolveLightHitAtContact();
