@@ -6,6 +6,7 @@
 import {useEffect,useRef,useState} from 'react';
 import {Boss3DRenderer} from '@/lib/game/boss3dRenderer';
 import {GAME_ASSETS} from '@/lib/game/assets';
+import {isSoftwareWebGLRenderer} from '@/lib/game/hadesSpriteBaker';
 import {MeruTimelinePlayer,type MeruCinematic} from '@/engine/meru/cinematicTimeline';
 import {MeruAdaptiveQuality} from '@/engine/meru/adaptiveQuality';
 import {makeMeruBossParams,paintMeruFrame,MERU_FRAME_WIDTH,MERU_FRAME_HEIGHT} from '@/engine/meru/cinematicVisuals';
@@ -85,7 +86,9 @@ export default function MeruCinematicPlayback({scene,onFinish,muted=false}:MeruC
       if(video)void video.play().catch(()=>undefined);
     };
     try{
-      boss=new Boss3DRenderer(384);
+      // Sharpen silhouettes on real GPUs while preserving the 384px low-load
+      // software fallback used by CI and machines without hardware WebGL.
+      boss=new Boss3DRenderer(isSoftwareWebGLRenderer()?384:512);
       // Wait for the actual FBX rig and primary animation to finish loading
       // BEFORE moving the camera; a short watchdog used to show a portrait
       // for the opening half of the cinematic on slower systems.
