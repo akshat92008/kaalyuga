@@ -38,3 +38,22 @@ test('Direction derives from actual weapon positions; taper remains bounded',()=
  assert.ok(Math.hypot(bands[0].leftX-bands[0].rightX,bands[0].leftY-bands[0].rightY)<maxThickness);
  assert.deepEqual(buildWeaponPoseTrailBands([],20),[]);
 });
+
+test('Curved ink trail smooths physical blade samples without overshooting the measured path',()=>{
+ const positions=[
+   {x:20,y:45,atMs:0},{x:43,y:18,atMs:20},
+   {x:69,y:21,atMs:40},{x:84,y:48,atMs:60}
+ ];
+ const raw=buildWeaponPoseTrailBands(positions,18);
+ const smooth=buildWeaponPoseTrailBands(positions,18,true);
+ assert.ok(smooth.length>raw.length);
+ assert.deepEqual({x:smooth[0].x,y:smooth[0].y},{x:positions[0].x,y:positions[0].y});
+ const last=smooth[smooth.length-1];
+ assert.deepEqual({x:last.x,y:last.y},{x:positions[3].x,y:positions[3].y});
+ for(const node of smooth){
+   assert.ok(node.x>=20&&node.x<=84);
+   assert.ok(node.y>=18&&node.y<=48);
+   assert.ok(Math.hypot(node.leftX-node.rightX,node.leftY-node.rightY)<=18.00001);
+ }
+ assert.deepEqual(buildWeaponPoseTrailBands(positions,18,false),raw);
+});
