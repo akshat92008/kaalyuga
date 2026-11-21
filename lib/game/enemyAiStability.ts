@@ -353,8 +353,10 @@ export const HEROIC_DRAW_SIZES = {
   regularMin: 122,
   regularMax: 146,
   semiBoss: 224,
-  dundubhi: 274,
-  vrikodara: 294,
+  // Gameplay-camera 720p A/B revealed boss silhouettes smaller than intended;
+  // raise visual draw scale only (no collision radius, damage or health changes).
+  dundubhi: 324,
+  vrikodara: 360,
   savitriHub: 148,
   lohakaraHub: 172,
 } as const;
