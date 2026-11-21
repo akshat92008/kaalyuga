@@ -1,0 +1,45 @@
+name: Act I canonical rig preflight
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/act1-rig-preflight.yml"
+      - "scripts/act1-rig-audit.py"
+  workflow_dispatch:
+jobs:
+  inspect-rudra-rig:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            scripts/act1-rig-audit.py
+            public/models/Meshy_AI_Ashen_Warborn_biped
+            public/animations/lite_magic
+          sparse-checkout-cone-mode: false
+      - name: Install Blender and NumPy for FBX support
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y blender python3-numpy
+      - name: Inspect canonical Rudra and a reference animation without modifying sources
+        run: |
+          blender -b --python scripts/act1-rig-audit.py -- \
+            --rig "public/models/Meshy_AI_Ashen_Warborn_biped/Meshy_AI_Ashen_Warborn_biped_Meshy_Merged_Animations.fbx" \
+            --clip "public/animations/lite_magic/Standing 1H Magic Attack 01.fbx" \
+            --output "artifacts/act1-rudra-rig-audit.json"
+          python3 - <<'PY'
+          import json
+          r=json.load(open("artifacts/act1-rudra-rig-audit.json"))
+          assert r["canonical"]["mesh_count"] > 0
+          assert r["canonical"]["bone_count"] > 0
+          assert len(r["clips"]) == 1
+          print("Rig inspection complete; clip compatibility =",r["clips"][0]["compatible_for_direct_binding"])
+          PY
+      - name: Preserve rig/clip metadata for Blender director review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: act1-rudra-rig-preflight
+          path: artifacts/act1-rudra-rig-audit.json
+          if-no-files-found: warn
+          retention-days: 14
