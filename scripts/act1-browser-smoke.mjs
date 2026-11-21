@@ -89,8 +89,17 @@ try {
         previous => (window.__KALIYUGA_ACT1_PERF__?.combat?.attackSerial || 0) > previous,
         beforeMenu.attackSerial, {timeout:20000}
       );
+      // A key handler accepting J alone is not proof of an animation cue.
+      // Wait for the deferred light-attack event to actually dispatch in RAF.
+      await page.waitForFunction(
+        previous => (window.__KALIYUGA_ACT1_PERF__?.strikeCues || []).some(
+          cue => cue.kind === 'fired' && cue.action === 'light_attack' && cue.attackSerial > previous
+        ),
+        beforeMenu.attackSerial, {timeout:20000}
+      );
       inputGate={blockedKeysChecked:['j','k','q'], modalPaused:true,
-        escapeRestoredPlay:true, lightAttackAcceptedAfterClose:true};
+        escapeRestoredPlay:true, lightAttackAcceptedAfterClose:true,
+        delayedSlashCueFired:true};
       await page.keyboard.down('d');
       await page.waitForTimeout(300);
       await page.keyboard.up('d');
