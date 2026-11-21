@@ -32,19 +32,19 @@ export function getAct1ExecutionVisualPlan(variant:ParashuFinisherVariant):Act1E
   if (variant === 'downward_crush') {
     return {
       variant, contactProgress:0.35, focusXOffset:30, focusYOffset:-24,
-      groundShockwaveRadius:148, slashRadius:132,
+      groundShockwaveRadius:84, slashRadius:52,
       slashWidth:35, slashArcSpan:1.54,
       impactBurstScale:0.82, sparkCount:16,
-      flipbookSize:164,
+      flipbookSize:72,
       useGroundedOverheadContact:true,allowSpectralSkyBolts:false,
     };
   }
   if (variant === 'spin_360_cleave') {
     return {
       variant,contactProgress:0.35,focusXOffset:0,focusYOffset:-24,
-      groundShockwaveRadius:192,slashRadius:206,
+      groundShockwaveRadius:94,slashRadius:66,
       slashWidth:54,slashArcSpan:3.55,
-      impactBurstScale:0.78,sparkCount:22,flipbookSize:212,
+      impactBurstScale:0.78,sparkCount:22,flipbookSize:76,
       useGroundedOverheadContact:false,allowSpectralSkyBolts:false,
     };
   }
@@ -52,9 +52,9 @@ export function getAct1ExecutionVisualPlan(variant:ParashuFinisherVariant):Act1E
   // screen-wide spinning finisher. Keep its original 0.35 active contact frame.
   return {
     variant,contactProgress:0.35,focusXOffset:30,focusYOffset:-24,
-    groundShockwaveRadius:88,slashRadius:152,
+    groundShockwaveRadius:66,slashRadius:50,
     slashWidth:24,slashArcSpan:0.72,
-    impactBurstScale:0.73,sparkCount:14,flipbookSize:150,
+    impactBurstScale:0.73,sparkCount:14,flipbookSize:65,
     useGroundedOverheadContact:false,allowSpectralSkyBolts:false,
   };
 }
