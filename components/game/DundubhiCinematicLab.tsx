@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { GAME_ASSETS } from '@/lib/game/assets';
 import { Boss3DRenderer, type Boss3DUpdateParams } from '@/lib/game/boss3dRenderer';
+import { CinematicCameraTrack, sampleCinematicImpactImpulse } from '@/lib/game/cinematicCamera';
 
 const DURATION_SEC = 8.6;
 const W = 960;
@@ -121,6 +122,7 @@ export default function DundubhiCinematicLab() {
   const bossRef = useRef<Boss3DRenderer | null>(null);
   const portraitRef = useRef<HTMLImageElement | null>(null);
   const playingRef = useRef(false);
+  const cameraTrackRef = useRef<CinematicCameraTrack | null>(null);
   const timeRef = useRef(0);
   const lastTimeRef = useRef(0);
   const audioRef = useRef<Record<string, HTMLAudioElement>>({});
@@ -157,6 +159,14 @@ export default function DundubhiCinematicLab() {
       setModelStatus('Canvas 2D is unavailable in this browser.');
       return;
     }
+
+    cameraTrackRef.current = new CinematicCameraTrack([
+      { at: 1.4, focusX: 0.5, focusY: 0.70, zoom: 1.08 },
+      { at: 3.3, focusX: 0.48, focusY: 0.65, zoom: 1.21 },
+      { at: 4.9, focusX: 0.52, focusY: 0.68, zoom: 1.26 },
+      { at: 5.6, focusX: 0.5, focusY: 0.70, zoom: 1.12 },
+      { at: 7.1, focusX: 0.5, focusY: 0.75, zoom: 1.04 },
+    ], DURATION_SEC);
 
     const image = new Image();
     image.src = GAME_ASSETS.portraits.dundubhi;
@@ -218,14 +228,15 @@ export default function DundubhiCinematicLab() {
         // The HTML video and static fallback poster sit behind this alpha canvas.
         const boss = bossRef.current;
         const opacity = smoothstep(0.9, 2.35, t);
-        const zoom = 1.0 + smoothstep(1.5, 4.3, t) * 0.20 -
-          smoothstep(6.0, 8.4, t) * 0.11;
-        const shake = smoothstep(5.1, 5.25, t) * (1 - smoothstep(5.25, 5.65, t));
-        const shakeX = Math.sin(t * 103) * 6 * shake;
-        const shakeY = Math.cos(t * 121) * 5 * shake;
+        const cameraFrame = cameraTrackRef.current?.sample(t, W, H);
+        const zoom = cameraFrame?.zoom ?? 1;
+        const impact = sampleCinematicImpactImpulse(t, 5.18, W, H);
+        const shakeX = impact.x;
+        const shakeY = impact.y;
 
         ctx.save();
-        ctx.translate(W / 2 + shakeX, 435 + shakeY);
+        ctx.translate(W / 2 + (cameraFrame?.offsetX ?? 0) + shakeX,
+          435 + (cameraFrame?.offsetY ?? 0) + shakeY);
         ctx.scale(zoom, zoom);
         ctx.translate(-W / 2, -435);
         ctx.globalAlpha = opacity;
@@ -262,6 +273,8 @@ export default function DundubhiCinematicLab() {
       disposed = true;
       cancelAnimationFrame(rafId);
       playingRef.current = false;
+      cameraTrackRef.current?.interrupt();
+      cameraTrackRef.current = null;
       try { videoRef.current?.pause(); } catch { /* no-op */ }
       for (const audio of Object.values(audioRef.current)) {
         audio.pause();
@@ -273,6 +286,7 @@ export default function DundubhiCinematicLab() {
   }, [playCue]);
 
   const start = () => {
+    cameraTrackRef.current?.restart();
     timeRef.current = 0;
     firedRef.current = {};
     lastTimeRef.current = 0;
@@ -285,6 +299,16 @@ export default function DundubhiCinematicLab() {
         void video.play().catch(() => undefined);
       } catch { /* static background remains available */ }
     }
+  };
+
+  const skip = () => {
+    timeRef.current = DURATION_SEC;
+    playingRef.current = false;
+    cameraTrackRef.current?.skip();
+    setIsPlaying(false);
+    setSeconds(DURATION_SEC);
+    videoRef.current?.pause();
+    for (const audio of Object.values(audioRef.current)) audio.pause();
   };
 
   const toggleMute = () => {
@@ -354,6 +378,14 @@ export default function DundubhiCinematicLab() {
             className="rounded-lg bg-[#a75e35] px-5 py-3 text-sm font-semibold text-white hover:bg-[#c77b44]"
           >
             {isPlaying ? 'Restart cinematic' : seconds > 0 ? 'Replay cinematic' : 'Play cinematic'}
+          </button>
+          <button
+            type="button"
+            disabled={!isPlaying}
+            onClick={skip}
+            className="rounded-lg border border-[#674937] px-4 py-3 text-sm hover:bg-[#271b16] disabled:opacity-40"
+          >
+            Skip cinematic
           </button>
           <button
             type="button"
