@@ -10,7 +10,7 @@ import {GAME_ASSETS} from '@/lib/game/assets';
 import {isSoftwareWebGLRenderer} from '@/lib/game/hadesSpriteBaker';
 import {
   createDundubhiScene, createBossPhaseScene, MeruTimelinePlayer, sampleCinematic,
-  validateCinematic, type MeruCinematic, type BossCharacter,
+  validateCinematic, NEUTRAL_CINEMATIC_POSE, type MeruCinematic, type BossCharacter,
 } from '@/engine/meru/cinematicTimeline';
 import {GRAPHICS_PRESETS,type GraphicsTier} from '@/engine/meru/adaptiveQuality';
 import {makeMeruBossParams,paintMeruFrame} from '@/engine/meru/cinematicVisuals';
@@ -147,13 +147,18 @@ export default function MeruCinematicStudio(){
       void videoRef.current?.play().catch(()=>undefined);
     }
   };
-  const updateAtCursor=(track:'camera'|'actor'|'lighting',prop:string,number:number|string)=>{
+  const updateAtCursor=(track:'camera'|'actor'|'pose'|'lighting',prop:string,number:number|string)=>{
     const current=sceneRef.current;
     const sampled=sampleCinematic(current,timelineRef.current.time);
-    const source=(current[track] as unknown as Array<{time:number;value:Record<string,unknown>;ease?:string}>);
+    // v1 scenes created before pose authoring remain editable: initialize a
+    // neutral rest track at t=0 instead of producing a broken keyframe file.
+    const initial=track==='pose'
+      ? (current.pose??[{time:0,value:{...NEUTRAL_CINEMATIC_POSE}}])
+      : current[track];
+    const source=(initial as unknown as Array<{time:number;value:Record<string,unknown>;ease?:string}>);
     const nearby=source.findIndex(k=>Math.abs(k.time-timelineRef.current.time)<0.02);
     const keys=source.map(k=>({...k,value:{...k.value}}));
-    const val=nearby>=0?{...keys[nearby].value}:{...(sampled[track] as unknown as Record<string,unknown>)};
+    const val=nearby>=0?{...keys[nearby].value}:{...((sampled[track]??NEUTRAL_CINEMATIC_POSE) as unknown as Record<string,unknown>)};
     val[prop]=number;
     if(nearby>=0)keys[nearby].value=val;
     else keys.push({time:timelineRef.current.time,value:val,ease:'smooth'});
@@ -164,6 +169,18 @@ export default function MeruCinematicStudio(){
     setTime(time);
   };
 
+  const addHardCut=()=>{
+    const current=sceneRef.current;
+    const at=Number(time.toFixed(2));
+    if(at<=0.04 || at>=current.duration-0.04)return;
+    const sampled=sampleCinematic(current,at).camera;
+    const keys=current.camera.map(k=>({...k,value:{...k.value}}));
+    let i=keys.findIndex(k=>Math.abs(k.time-at)<0.015);
+    if(i<0){keys.push({time:at,value:{...sampled},ease:'smooth'});keys.sort((a,b)=>a.time-b.time);i=keys.findIndex(k=>k.time===at);}
+    if(i>0)keys[i-1].ease='step'; // Exact authored edit, no interpolated orbit through the video plate
+    loadScene({...current,camera:keys});
+    timelineRef.current.seek(at);setTime(at);
+  };
   const addCue=(kind:'drum'|'roar'|'impact'|'vfx'|'subtitle')=>{
     const current=sceneRef.current;
     const at=Number(time.toFixed(2));
@@ -215,7 +232,7 @@ export default function MeruCinematicStudio(){
         <div>
           <div className="text-[11px] uppercase tracking-[.24em] text-[#da9d60]">Kaliyuga · Meru Engine</div>
           <h1 className="font-serif text-3xl font-bold">Cinematic Studio</h1>
-          <p className="text-xs text-[#a99c94]">Editable, validated scene timeline · two original boss rigs · isolated from combat</p>
+          <p className="text-xs text-[#a99c94]">Editable camera cuts · real skeletal performance keyframes · two original boss rigs</p>
         </div>
         <a href="/" className="rounded border border-[#665043] px-4 py-2 text-sm hover:bg-[#20151a]">← Back to game</a>
       </header>
@@ -236,16 +253,17 @@ export default function MeruCinematicStudio(){
           </div>
           <input type="range" aria-label="Cinematic scrub timeline" min={0} max={scene.duration} step={0.01} value={time} onChange={e=>seek(Number(e.target.value))} className="w-full accent-[#cc7845]"/>
           <div className="rounded-lg border border-[#43352e] bg-[#151115] p-4">
-            <div className="mb-3 flex justify-between"><h2 className="font-semibold">Timeline</h2><span className="text-xs text-[#b49a82]">Keyframes: camera · actor · lighting</span></div>
-            {(['camera','actor','lighting'] as const).map(track=><div key={track} className="grid grid-cols-[75px_1fr] items-center gap-2 mb-3">
+            <div className="mb-3 flex justify-between"><h2 className="font-semibold">Timeline</h2><span className="text-xs text-[#b49a82]">Camera cuts · FBX body pose · movement · light</span></div>
+            {(['camera','actor','pose','lighting'] as const).map(track=><div key={track} className="grid grid-cols-[75px_1fr] items-center gap-2 mb-3">
               <span className="capitalize text-sm text-[#beae9b]">{track}</span>
               <div className="relative h-6 rounded bg-[#30272e]">
-                {scene[track].map((key,index)=><button key={index} title={track+' at '+fmt(key.time)+'s'} onClick={()=>seek(key.time)}
+                {scene[track]?.map((key,index)=><button key={index} title={track+' at '+fmt(key.time)+'s'} onClick={()=>seek(key.time)}
                   className="absolute top-1 h-4 w-2 -translate-x-1/2 rounded-sm bg-[#e1aa6e] hover:bg-white"
                   style={{left:(key.time/scene.duration*100)+'%'}}/>)}
                 <div className="pointer-events-none absolute inset-y-0 w-px bg-white" style={{left:(time/scene.duration*100)+'%'}}/>
               </div>
             </div>)}
+            <button type="button" aria-label="Insert camera cut at playhead" onClick={addHardCut} disabled={time<=0.04||time>=scene.duration-0.04} className="mb-3 rounded border border-[#8c6252] px-3 py-1.5 text-xs text-[#edc0a1] disabled:opacity-40">+ Insert hard camera cut at playhead</button>
             <div className="grid grid-cols-[75px_1fr] items-center gap-2">
               <span className="text-sm text-[#beae9b]">Cues</span>
               <div className="relative h-6 rounded bg-[#30272e]">
@@ -272,8 +290,14 @@ export default function MeruCinematicStudio(){
               {track:'lighting' as const,field:'ash',label:'Ash density',min:0,max:1,step:0.02},
               {track:'lighting' as const,field:'warmth',label:'Warmth',min:0,max:1,step:0.02},
               {track:'lighting' as const,field:'exposure',label:'Light exposure',min:0,max:2,step:0.02},
+              {track:'pose' as const,field:'rootYaw',label:'3D character facing',min:-0.9,max:0.9,step:0.03},
+              {track:'pose' as const,field:'torsoYaw',label:'Spine turn',min:-0.55,max:0.55,step:0.03},
+              {track:'pose' as const,field:'torsoLean',label:'Spine lean',min:-0.45,max:0.45,step:0.03},
+              {track:'pose' as const,field:'rightArmLift',label:'Weapon-arm lift',min:-0.9,max:0.9,step:0.03},
+              {track:'pose' as const,field:'rightElbowBend',label:'Weapon elbow bend',min:-1,max:1,step:0.03},
+              {track:'pose' as const,field:'leftArmLift',label:'Off-hand lift',min:-0.9,max:0.9,step:0.03},
             ]).map(c=><label key={c.track+c.field} className="block">
-              <span className="mb-1 flex justify-between text-xs"><span>{c.label}</span><span className="font-mono">{fmt((selected[c.track] as unknown as Record<string,number>)[c.field])}</span></span>
+              <span className="mb-1 flex justify-between text-xs"><span>{c.label}</span><span className="font-mono">{fmt(((selected[c.track]??NEUTRAL_CINEMATIC_POSE) as unknown as Record<string,number>)[c.field])}</span></span>
               <input type="range" min={c.min} max={c.max} step={c.step}
                 value={(selected[c.track] as unknown as Record<string,number>)[c.field]}
                 onChange={e=>updateAtCursor(c.track,c.field,Number(e.target.value))}
@@ -289,7 +313,7 @@ export default function MeruCinematicStudio(){
                 <option value="attack">Attack / roar beat</option>
               </select>
             </label>
-            <p className="text-xs text-[#967f74]">Editing creates a keyframe at the current playhead. Bone-level posing still requires additional tooling.</p>
+            <p className="text-xs text-[#967f74]">Editing creates a keyframe at the current playhead. Rig-local upper-body keyframes are applied to the actual FBX skeleton after animation sampling. Full IK, facial and retargeting remain separate work.</p>
           </div>
           <div className="rounded-lg border border-[#43352e] bg-[#171216] p-4 space-y-3">
             <h2 className="font-semibold">Sound and title cues</h2>
