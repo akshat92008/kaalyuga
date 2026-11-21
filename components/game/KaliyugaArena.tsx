@@ -1104,10 +1104,20 @@ export default function KaliyugaArena() {
       const nextTier = order[(order.indexOf(prev.tier) + 1) % order.length];
       const next = presetForQualityTier(nextTier);
       simRef.current.graphicsSettings = next;
+      simRef.current.lowEndMode = next.tier === 'performance';
+      webglDemonSlayerVfxRef.current?.setQualityProfile(next.tier);
       saveMeruGraphicsSettings(next);
       return next;
     });
   }, []);
+
+  useEffect(() => {
+    // Persisted player graphics preferences must reach the mutable rendering loop
+    // even if the player enters directly at a chamber via URL.
+    simRef.current.graphicsSettings = graphicsSettings;
+    simRef.current.lowEndMode = graphicsSettings.tier === 'performance';
+    webglDemonSlayerVfxRef.current?.setQualityProfile(graphicsSettings.tier);
+  }, [graphicsSettings]);
 
   const cycleCameraPreset = useCallback(() => {
     setCameraPreset((prev) => {
@@ -1151,6 +1161,7 @@ export default function KaliyugaArena() {
     }
     if (!webglDemonSlayerVfxRef.current) {
       webglDemonSlayerVfxRef.current = new WebglDemonSlayerVfxOverlay();
+      webglDemonSlayerVfxRef.current.setQualityProfile(simRef.current.graphicsSettings.tier);
     }
   }, []);
 
