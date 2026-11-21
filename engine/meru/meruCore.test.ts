@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createDundubhiScene, validateCinematic, sampleCinematic, cuesBetween, MeruTimelinePlayer} from './cinematicTimeline';
+import {createDundubhiScene, createVrikodaraScene, validateCinematic, sampleCinematic, cuesBetween, MeruTimelinePlayer} from './cinematicTimeline';
 import {MeruAdaptiveQuality,GRAPHICS_PRESETS} from './adaptiveQuality';
 import {beginPortalTransition,advancePortalTransition,portalPalette} from './portalDirector';
-import {shouldStartDundubhiIntro} from './runtimePolicy';
+import {shouldStartDundubhiIntro,shouldStartBossIntro,meruStorageKey,defaultBossIntro} from './runtimePolicy';
 
 test('canonical Dundubhi sequence validates and produces finite frames at every sample',()=>{
   const scene=createDundubhiScene();
@@ -96,4 +96,43 @@ test('Dundubhi intro launches only for live normal boss encounter',()=>{
   assert.equal(shouldStartDundubhiIntro({...base,stage:'title'}),false);
   assert.equal(shouldStartDundubhiIntro({...base,hasDundubhi:false}),false);
   assert.equal(shouldStartDundubhiIntro({...base,chamberIndex:0}),false);
+});
+
+test('Act I cinematics use actual game arena and painted poster assets, not phantom paths',()=>{
+  const d=createDundubhiScene();
+  const v=createVrikodaraScene();
+  assert.equal(d.boss,'dundubhi');
+  assert.equal(v.boss,'vrikodara');
+  assert.equal(d.id,'dundubhi-entrance');
+  assert.equal(v.id,'vrikodara-entrance');
+  assert.equal(d.backgroundUrl,'/videos/Flames_flickering_around_stone_f_09be2052.mp4');
+  assert.equal(d.posterUrl,'/arenas/Gemini_Generated_Image_bc2kjfbc2kjfbc2k.png');
+  assert.equal(v.backgroundUrl,'/videos/Animate_mythological_game_enviro_f7acefd6_1080p.mp4');
+  assert.equal(v.posterUrl,'/assets/aistudio/Gemini_Generated_Image_plgsv7plgsv7plgs.png');
+  assert.equal(validateCinematic(v).id,v.id);
+  assert.equal(defaultBossIntro('vrikodara').id,v.id);
+  assert.notEqual(meruStorageKey('dundubhi'),meruStorageKey('vrikodara'));
+  for(const scene of [d,v]) {
+    for(let t=0;t<=scene.duration;t+=0.035){
+      const frame=sampleCinematic(scene,t);
+      assert.ok(Number.isFinite(frame.camera.zoom));
+      assert.ok(frame.actor.opacity>=0&&frame.actor.opacity<=1);
+    }
+  }
+});
+test('Vrikodara cinematic starts only for a live Chamber VIII phase-1 boss',()=>{
+  const base={boss:'vrikodara' as const,chamberIndex:7,stage:'playing',hasBoss:true};
+  assert.equal(shouldStartBossIntro(base),true);
+  assert.equal(shouldStartBossIntro({...base,chamberIndex:3}),false);
+  assert.equal(shouldStartBossIntro({...base,hasBoss:false}),false);
+  assert.equal(shouldStartBossIntro({...base,stage:'title'}),false);
+  for(const query of ['?phase=2','?cleared=1','?cinematic=0','?wave=2'])
+    assert.equal(shouldStartBossIntro({...base,query}),false);
+});
+test('scene URL whitelist rejects external URLs and parent traversal for both bosses',()=>{
+  const v=createVrikodaraScene();
+  for(const bad of ['/assets/aistudio/../../private.png','//attacker/scene.png',
+    'https://attacker.example/evil.png','/scripts/main.js']){
+    assert.throws(()=>validateCinematic({...v,posterUrl:bad}),/URL/);
+  }
 });
