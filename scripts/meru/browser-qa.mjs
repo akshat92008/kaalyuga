@@ -31,4 +31,23 @@ try{
   console.log('MERU_BROWSER_QA: HTTP=200; play/pause/restart=OK; inspector=OK; export JSON=OK; screenshot=OK');
   console.log('MERU_BROWSER_QA: page errors:',errors.length, errors.slice(0,4));
   if(errors.length)throw new Error('Unhandled browser exceptions: '+errors.join(' | ').slice(0,1000));
+  // Real Act I integration: start directly at Chamber IV, then skip the cinematic.
+  // We verify the game actually gives control back, not merely an isolated preview.
+  const gamePage=await context.newPage();
+  const gameErrors=[];
+  gamePage.on('pageerror',e=>gameErrors.push(e.message));
+  const gameResponse=await gamePage.goto('http://127.0.0.1:3000/?chamber=4&cinematic=1',{
+    waitUntil:'domcontentloaded',timeout:120000
+  });
+  assert.equal(gameResponse?.status(),200,'Main Kaliyuga route should load');
+  const dialog=gamePage.getByTestId('meru-boss-cinematic');
+  await dialog.waitFor({timeout:90000});
+  await gamePage.screenshot({path:join(out,'meru-ingame-dundubhi-intro.png'),animations:'disabled'});
+  await gamePage.getByRole('button',{name:'Skip boss cinematic and begin combat'}).click();
+  await dialog.waitFor({state:'detached',timeout:15000});
+  console.log('MERU_GAMEPLAY_QA: chamber=4 intro visible; Skip releases overlay; HTTP=200');
+  console.log('MERU_GAMEPLAY_QA: page errors:',gameErrors.length,gameErrors.slice(0,4));
+  if(gameErrors.length)throw new Error('Game page exceptions: '+gameErrors.join(' | ').slice(0,1200));
+  await gamePage.close();
+
 }finally{await browser.close();}
