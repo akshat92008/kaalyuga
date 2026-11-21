@@ -187,6 +187,23 @@ export function validateCinematic(input: unknown): MeruCinematic {
     cues: scene.cues.map(k => ({...k})).sort((a,b)=>a.time-b.time || a.id.localeCompare(b.id)),
   };
 }
+/** Proportionally retime every camera, FBX-pose, lighting and sound cue.
+ * Prevents a typical editor failure where changing duration leaves sound/FX
+ * and character animation out of sync or deletes the final keyframe. */
+export function retimeCinematic(scene:MeruCinematic,newDuration:number):MeruCinematic {
+  const source=validateCinematic(scene);
+  if(!finite(newDuration)||newDuration<=0||newDuration>120)throw new Error('Invalid retimed duration');
+  const shift=(t:number)=>t===source.duration?newDuration:Math.min(newDuration,t/source.duration*newDuration);
+  return validateCinematic({
+    ...source,duration:newDuration,
+    camera:source.camera.map(k=>({...k,time:shift(k.time)})),
+    actor:source.actor.map(k=>({...k,time:shift(k.time)})),
+    lighting:source.lighting.map(k=>({...k,time:shift(k.time)})),
+    ...(source.pose?{pose:source.pose.map(k=>({...k,time:shift(k.time)}))}:{}),
+    cues:source.cues.map(c=>({...c,time:shift(c.time)})),
+  });
+}
+
 export function sampleCinematic(scene: MeruCinematic, t: number): CinematicFrame {
   const time = clamp(Number.isFinite(t) ? t : 0, 0, scene.duration);
   return {
