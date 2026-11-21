@@ -39,7 +39,7 @@ import {
 } from '@/lib/game/rules';
 import { soundEngine } from '@/lib/game/audio';
 import { Act1FrameProfiler } from '@/lib/game/act1Performance';
-import { Act1CinematicCamera, composeAct1CinematicZoom, getAct1FinisherCameraShot } from '@/lib/game/act1CinematicCamera';
+import { Act1CinematicCamera, composeAct1CinematicZoom, getAct1FinisherCameraShot, preserveAct1ExecutionContactZoom } from '@/lib/game/act1CinematicCamera';
 import {
   DUNDUBHI_CHARGE_TRAVEL_SEC,
   advanceDundubhiCharge,
@@ -4645,7 +4645,8 @@ export default function KaliyugaArena() {
     sim.cameraShakeTrauma = execHit.clampedCameraTrauma;
     sim.cameraKickX += execHit.cameraKickX;
     sim.cameraKickY += execHit.cameraKickY;
-    sim.cameraZoom = BASE_CAMERA_ZOOM + 0.055;
+    // Do not snap out of an active cinematic close-up on the hit-stop frame.
+    sim.cameraZoom = preserveAct1ExecutionContactZoom(sim.cameraZoom, BASE_CAMERA_ZOOM);
     sim.screenFlashAlpha = 0.22;
     sim.screenFlashColor = '#ff3824';
     sim.comboCount += 3;
@@ -7084,6 +7085,11 @@ export default function KaliyugaArena() {
       headY: number | null;
       atMs: number;
     }> = [];
+    const cameraShotTrace: Array<{
+      action: string; variant: ParashuFinisherVariant | null;
+      zoom: number; unboostedZoom: number; boost: number;
+      focusWeight: number; atMs: number;
+    }> = [];
     const strikeCueTrace: Array<{
       kind: 'fired' | 'cancelled';
       action: Act1StrikeAction;
@@ -7163,6 +7169,7 @@ export default function KaliyugaArena() {
               selected: qaForcedChargeSelected,
             },
             weaponPoseTrace: weaponPoseTrace.slice(),
+            cameraShotTrace: cameraShotTrace.slice(),
             // Production-safe opt-in read-only combat evidence for the real
             // browser QA runner. No gameplay mutation or per-frame allocations.
             combat: {
@@ -7263,6 +7270,16 @@ export default function KaliyugaArena() {
         sim.cameraZoom += (targetZoom - sim.cameraZoom) * (1 - Math.exp(-6.5 * dt));
       }
       const zoom = sim.cameraZoom;
+      if (perfTelemetryEnabled && cinematicCue.active &&
+          sim.player.action === 'execute') {
+        cameraShotTrace.push({
+          action: sim.player.action, variant: sim.player.finisherVariant,
+          zoom, unboostedZoom: zoom - cinematicCue.zoomBoost,
+          boost: cinematicCue.zoomBoost,
+          focusWeight: cinematicCue.focusWeight, atMs: now,
+        });
+        if (cameraShotTrace.length > 64) cameraShotTrace.shift();
+      }
 
       // Velocity + Cursor + Boss Look-Ahead so the 2.5D camera glides ahead of Rudra's action
       const lookAheadX = sim.player.vx * 0.18 + (sim.input.pointerScreenX - cw * 0.5) * 0.14;
