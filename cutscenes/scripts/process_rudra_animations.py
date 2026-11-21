@@ -30,6 +30,7 @@ def get_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", required=True, type=Path)
     parser.add_argument("--clips", required=True, type=Path)
+    parser.add_argument("--diffuse", default=Path("public/kaalyuga/rudra/diffuse.png"), type=Path)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--no-preview", action="store_true")
     return parser.parse_args(blender_argv())
@@ -140,6 +141,45 @@ def export_glb(bpy: Any, dest: Path) -> None:
         raise RuntimeError("GLB output missing or suspiciously small")
 
 
+def apply_character_diffuse(bpy: Any, imported_model: list[Any], texture_path: Path) -> int:
+    """Use the exact painted albedo on the UVs of the validated skinned FBX."""
+    if not texture_path.is_file():
+        raise FileNotFoundError("Hero diffuse map missing: " + str(texture_path))
+    image = bpy.data.images.load(str(texture_path.resolve()), check_existing=True)
+    image.colorspace_settings.name = 'sRGB'
+    mat = bpy.data.materials.new("Kaliyuga_Rudra_PaintedAlbedo")
+    mat.use_nodes = True
+    nodes = mat.node_tree.nodes
+    bsdf = nodes.get('Principled BSDF')
+    if bsdf is None:
+        raise RuntimeError("Blender Principled BSDF node not found")
+    diffuse = nodes.new('ShaderNodeTexImage')
+    diffuse.image = image
+    mat.node_tree.links.new(diffuse.outputs['Color'], bsdf.inputs['Base Color'])
+    bsdf.inputs['Metallic'].default_value = 0.08
+    bsdf.inputs['Roughness'].default_value = 0.84
+    textured = 0
+    for obj in imported_model:
+        if obj.type != 'MESH':
+            continue
+        if not obj.data.uv_layers:
+            raise RuntimeError("Rigged mesh missing UVs; cannot validate painted material")
+        obj.data.materials.clear()
+        obj.data.materials.append(mat)
+        textured += 1
+    if textured == 0:
+        raise RuntimeError("No mesh was available for painted material")
+    return textured
+
+
+def set_idle_preview_pose(bpy: Any, imported_model: list[Any]) -> None:
+    armature = find_armature(imported_model)
+    if armature.animation_data:
+        for track in armature.animation_data.nla_tracks:
+            track.mute = track.name != 'Rudra_idle'
+    bpy.context.scene.frame_set(8)
+
+
 def preview_model(bpy: Any, imported_model: list[Any], out: Path) -> None:
     from mathutils import Vector
 
@@ -167,20 +207,22 @@ def preview_model(bpy: Any, imported_model: list[Any], out: Path) -> None:
     bpy.context.scene.collection.objects.link(light)
     light.location = center + Vector((distance * 0.3, -distance * 0.5, distance * 0.65))
     light.rotation_euler = (center - light.location).to_track_quat("-Z", "Y").to_euler()
-    light_data.energy = 1100
+    light_data.energy = 570
     light_data.shape = "DISK"
     light_data.size = max(2, distance * 0.4)
 
     scene = bpy.context.scene
     scene.render.engine = "CYCLES"
+    scene.view_settings.view_transform = "Standard"
+    scene.view_settings.exposure = -0.25
     scene.cycles.samples = 8
     scene.render.resolution_x = 960
     scene.render.resolution_y = 540
     scene.render.resolution_percentage = 100
-    scene.render.film_transparent = True
+    scene.render.film_transparent = False
     scene.render.image_settings.file_format = "PNG"
     scene.render.filepath = str(out)
-    scene.frame_set(1)
+    set_idle_preview_pose(bpy, imported_model)
     bpy.ops.render.render(write_still=True)
     if not out.exists():
         raise RuntimeError("Blender preview render did not write output")
@@ -213,6 +255,8 @@ def main() -> int:
         bone_names = set(b.name for b in armature.data.bones)
         report["canonical_bone_count"] = len(bone_names)
         report["mesh_count"] = sum(obj.type == "MESH" for obj in base)
+        report["painted_material_mesh_count"] = apply_character_diffuse(bpy, base, args.diffuse)
+        report["diffuse_texture"] = str(args.diffuse)
         if not bone_names or not report["mesh_count"]:
             raise RuntimeError("Canonical FBX missing armature bones or skinned geometry")
 
