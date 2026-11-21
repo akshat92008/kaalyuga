@@ -53,6 +53,17 @@ Then open `/meru-studio`. Asset URLs are existing project paths. Exported `.meru
 - **Important limitation:** Studio scene edits persist only in the author's browser unless exported and incorporated into a shipped game build. Player browsers do not automatically receive another browser's scene JSON.
 - **Important visual limitation:** animations, pose believability, cinematic scale, lighting matching and screenshot review remain unverified. Automated browser tests do not establish AAA artistic fidelity.
 
+
+## Verified dual-boss first-frame milestone — Nov 21, 2026
+
+- **Core checks passed:** 13/13 automated regression tests, strict Meru TypeScript check and Next.js production build ([CI run](https://github.com/akshat92008/kaalyuga/actions/runs/44936404288)).
+- **Browser integration passed:** [Chromium run 44936400315](https://github.com/akshat92008/kaalyuga/actions/runs/44936400315). The editor can select both bosses; actual painted posters and MP4 backgrounds returned HTTP 200; a Studio-authored cinematic plays in the appropriate Act I boss encounter.
+- **Both 3D models genuinely loaded:** browser checked `data-meru-rig-status=rigged` and `data-meru-started-with-rig=yes` for both Dundubhi and Vrikodara. Their first cinematic frames use the original 3D rig, not a disguised portrait fallback; the renderer remained usable through the screenshot checkpoint.
+- **Transition back to gameplay passed:** Dundubhi Skip and natural end both release combat, and Vrikodara Skip releases combat, with zero uncaught browser errors.
+- **Slow asset loading corrected:** the camera/animation timeline waits for actual boss-rig readiness where possible, with a 12.5s watchdog to avoid indefinite loading. Later-loaded rig still promotes from portrait fallback; missing rigs do not block the run indefinitely.
+- **Evidence:** [downloadable CI artifact with studio screenshots, both boss screenshots and exported scene JSON](https://github.com/akshat92008/kaalyuga/actions/runs/44936400315/artifacts/14720100090).
+- **NOT proven:** screenshot aesthetics, smoothness and character silhouette have not been artistically reviewed in this response; software Chromium runs do not validate M3 Air or Windows performance. No 30-minute soak, animation-quality pass, lip sync, multi-actor choreography or full portal-travel cinematic exists yet.
+
 ## Release acceptance criteria (not yet met)
 
 - Real screenshot/video review of the editor at `/meru-studio`.
