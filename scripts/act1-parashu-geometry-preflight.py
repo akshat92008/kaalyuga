@@ -55,7 +55,10 @@ def main():
     for mesh in meshes:
         mat = mesh.matrix_world
         stride = max(1, len(mesh.data.vertices) // 45000)
-        verts.extend((mat @ v.co).copy() for v in mesh.data.vertices[::stride])
+        # Blender bpy_prop_collection supports indexed access but does not
+        # reliably support Python extended slicing with a stride.
+        verts.extend((mat @ mesh.data.vertices[i].co).copy()
+                     for i in range(0, len(mesh.data.vertices), stride))
         tri_count += sum(max(0, len(face.vertices)-2) for face in mesh.data.polygons)
     if len(verts) < 16:
         raise RuntimeError("Parashu mesh has insufficient geometry for head calibration")
