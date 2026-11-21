@@ -2645,6 +2645,30 @@ export default function KaliyugaArena() {
             }
           }
         }
+        // Opt-in production-browser HEAVY test: authentic [K] attack and
+        // original 3D model, with an actual 4-orb charge staged for repeatable
+        // rich Smash/Pillar/Thrust art direction. Never active in gameplay.
+        if(params.get('perf')==='1'&&params.get('qaHeavy')==='1'&&clampedIdx===0){
+          const qaHeavyStance=params.get('qaHeavyStance');
+          if(qaHeavyStance==='smash'||qaHeavyStance==='pillar'||qaHeavyStance==='thrust'){
+            sim.player.stance=qaHeavyStance;
+          }
+          sim.player.focusOrbs=4;
+          const heavyTarget=sim.enemies.find(e=>!e.isBoss&&e.aiState!=='ko');
+          if(heavyTarget){
+            heavyTarget.x=sim.player.x+92;
+            heavyTarget.y=sim.player.y+4;
+            heavyTarget.aiState='recover';
+            heavyTarget.aiTimer=12;
+            heavyTarget.immobilizedTimer=12;
+            for(const other of sim.enemies){
+              if(other===heavyTarget)continue;
+              other.x=Math.min(worldW*0.80,worldW-80);
+              other.y=Math.min(worldH*0.75,worldH-80);
+              other.immobilizedTimer=Math.max(other.immobilizedTimer,12);
+            }
+          }
+        }
       }
 
       // Stage B (Step 10): Pre-bake core sprite atlases lazily during active gameplay (never during Title Screen)
