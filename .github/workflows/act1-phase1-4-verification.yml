@@ -11,7 +11,7 @@ permissions:
 
 concurrency:
   group: act1-phase1-4-verification
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   game:
