@@ -86,6 +86,18 @@ test('Atomic enemy animation prevents hit-flash from interrupting active windup 
   );
 });
 
+test('Light hit flashes do not reset enemy idle, chase, or recover animations', () => {
+  for (const aiState of ['idle', 'chase', 'recover'] as const) {
+    const result = resolveAtomicEnemyAnimState({
+      aiState,
+      isHitFlash: true,
+      isPostureBroken: false,
+      speed: 0,
+    });
+    assert.equal(result, aiState === 'chase' ? 'chase' : 'idle');
+  }
+});
+
 test('Enemy recovery watchdog prevents multi-minute freezes and caps recovery timers', () => {
   // Corrupt huge timer gets strictly clamped
   const clamped = stepEnemyRecoveryWatchdog({
@@ -96,8 +108,8 @@ test('Enemy recovery watchdog prevents multi-minute freezes and caps recovery ti
     isBoss: false,
     dt: 0.016,
   });
-  assert.ok(clamped.nextAiTimer <= 2.6);
-  assert.ok(clamped.nextPostureBrokenTimer <= 2.6);
+  assert.ok(clamped.nextAiTimer <= 2.2);
+  assert.ok(clamped.nextPostureBrokenTimer <= 2.2);
 
   // Stalled enemy past watchdog threshold forcibly unfreezes into chase
   const unfrozen = stepEnemyRecoveryWatchdog({
