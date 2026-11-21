@@ -40,6 +40,7 @@ import {
 import { soundEngine } from '@/lib/game/audio';
 import { Act1FrameProfiler } from '@/lib/game/act1Performance';
 import { Act1CinematicCamera } from '@/lib/game/act1CinematicCamera';
+import { canFirePendingStrike, shouldCancelPendingStrike, type Act1StrikeAction } from '@/lib/game/act1ActionTimeline';
 import {
   loadAndProcessSprite,
   getProcessedSpriteSync,
@@ -531,6 +532,7 @@ export default function KaliyugaArena() {
   const webglDemonSlayerVfxRef = useRef<WebglDemonSlayerVfxOverlay | null>(null);
   const pendingStrikeVfxRef = useRef<{
     fired: boolean;
+    expectedAction: Act1StrikeAction;
     triggerThreshold: number;
     execute: () => void;
   } | null>(null);
@@ -2176,6 +2178,7 @@ export default function KaliyugaArena() {
       const spec = CHAMBERS[clampedIdx];
       const isTitleMode = sim.state === 'title';
       act1CameraRef.current?.cancel();
+      pendingStrikeVfxRef.current = null;
       pendingBossEntranceRef.current = null;
       // Release old chamber's live rigs before loading the next wave of distinct models.
       // This prevents scenes from retaining every boss and enemy encountered in Act I.
@@ -4885,6 +4888,7 @@ export default function KaliyugaArena() {
 
     pendingStrikeVfxRef.current = {
       fired: false,
+      expectedAction: 'heavy_unleash',
       triggerThreshold: 0.28,
       execute: () => {
         const curP = simRef.current.player;
@@ -5573,6 +5577,7 @@ export default function KaliyugaArena() {
 
     pendingStrikeVfxRef.current = {
       fired: false,
+      expectedAction: 'light_attack',
       triggerThreshold: isComboFinisher ? 0.28 : 0.25,
       execute: () => {
         const curP = simRef.current.player;
@@ -7397,15 +7402,15 @@ export default function KaliyugaArena() {
           if (pendingStrike && !pendingStrike.fired) {
             const curProgress =
               1 - Math.max(0, p.actionTimer) / Math.max(0.05, p.actionDuration || 0.34);
-            const gate = evaluateStrikeActiveFrameGate({
-              attackProgress: curProgress,
-              triggerThreshold: pendingStrike.triggerThreshold,
-              alreadyFired: pendingStrike.fired,
-            });
-            if (gate.shouldFireNow || p.actionTimer <= 0) {
-              pendingStrike.fired = true;
-              pendingStrike.execute();
+            if (shouldCancelPendingStrike(pendingStrike.expectedAction, prevAction)) {
               pendingStrikeVfxRef.current = null;
+            } else if (canFirePendingStrike(
+              pendingStrike.expectedAction, prevAction, curProgress,
+              pendingStrike.triggerThreshold, pendingStrike.fired
+            ) || p.actionTimer <= 0) {
+              pendingStrike.fired = true;
+              pendingStrikeVfxRef.current = null;
+              pendingStrike.execute();
             }
           }
 
