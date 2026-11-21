@@ -65,8 +65,10 @@ try{
   // The trace is read-only opt-in telemetry, not a mocked hit or keyframe.
   await page.waitForFunction((requiredVariant)=>{
     const samples=window.__KALIYUGA_ACT1_PERF__?.executionVictimTrace||[];
+    // A lethal finisher plays the enemy's death clip, not a forced hurt pose.
+    // Both lethal and nonlethal hits must still show the directional recoil.
     return samples.some(s=>s.variant===requiredVariant &&
-      s.forceHurt===true && s.progress>=0.35 &&
+      s.progress>=0.35 &&
       (Math.abs(s.offsetX)>1.5 || Math.abs(s.offsetY)>1.5));
   },variant,{timeout:45000,polling:250});
   // Prove the real dynamic camera actually received the eased cinematic
