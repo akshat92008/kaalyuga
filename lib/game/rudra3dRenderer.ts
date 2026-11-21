@@ -198,6 +198,14 @@ export function computeRudraBakedFrameTime(
   };
 }
 
+/** Baked-sprite transitions retain pose continuity without fading precise contact or parry frames. */
+export function getRudraTransitionBlendSeconds(from: RudraAnimState, to: RudraAnimState): number {
+  if (from === to || to === 'hurt' || to === 'dash' || to === 'block') return 0;
+  if (isNormalizedRudraActionState(to)) return 0.038;
+  if (isNormalizedRudraActionState(from)) return 0.07;
+  return 0.11;
+}
+
 // Exact 1:1 vertex match (493,632 verts === 493,632 verts) between Pro Melee Axe Pack rig & Ashen_Warborn texture FBX!
 const RUDRA_RIGGED_FBX_URL =
   '/new_3d_assets/Animations/Pro Melee Axe Pack/Meshy_AI_Ashen_Warborn_20261025_generate.fbx';
@@ -255,6 +263,10 @@ export class Rudra3DRenderer {
   private stateElapsedSec = 0;
   private lastAnimState: RudraAnimState = 'idle';
   private lastAttackSerial = -1;
+  private blendFromCanvas: HTMLCanvasElement | null = null;
+  private blendOutCanvas: HTMLCanvasElement | null = null;
+  private blendDurationSec = 0;
+  private blendElapsedSec = 0;
   private frameCache: Map<string, HTMLCanvasElement> = new Map();
   private celMaterials: THREE.Material[] = [];
   private parashuAuraMat: THREE.ShaderMaterial | null = null;
@@ -286,6 +298,12 @@ export class Rudra3DRenderer {
       this.canvas = document.createElement('canvas');
       this.canvas.width = size;
       this.canvas.height = size;
+      this.blendFromCanvas = document.createElement('canvas');
+      this.blendFromCanvas.width = size;
+      this.blendFromCanvas.height = size;
+      this.blendOutCanvas = document.createElement('canvas');
+      this.blendOutCanvas.width = size;
+      this.blendOutCanvas.height = size;
     } else {
       this.canvas = null as unknown as HTMLCanvasElement;
     }
@@ -605,6 +623,19 @@ export class Rudra3DRenderer {
     const serialChanged =
       typeof input.attackSerial === 'number' && input.attackSerial !== this.lastAttackSerial;
     if (nextState !== this.lastAnimState || serialChanged) {
+      const duration = serialChanged && nextState === this.lastAnimState
+        ? 0
+        : getRudraTransitionBlendSeconds(this.lastAnimState, nextState);
+      this.blendDurationSec = 0;
+      if (duration > 0 && this.canvas?.width && this.blendFromCanvas) {
+        const sourceCtx = this.blendFromCanvas.getContext('2d');
+        if (sourceCtx) {
+          sourceCtx.clearRect(0, 0, this.size, this.size);
+          sourceCtx.drawImage(this.canvas, 0, 0, this.size, this.size);
+          this.blendElapsedSec = 0;
+          this.blendDurationSec = duration;
+        }
+      }
       this.stateElapsedSec = 0;
       this.lastAnimState = nextState;
       if (typeof input.attackSerial === 'number') {
@@ -635,7 +666,25 @@ export class Rudra3DRenderer {
       Boolean(input.susanooActive)
     );
     if (baked) {
-      this.canvas = baked;
+      if (this.blendDurationSec > 0 && this.blendFromCanvas && this.blendOutCanvas) {
+        this.blendElapsedSec += stepDt;
+        const alpha = Math.min(1, this.blendElapsedSec / this.blendDurationSec);
+        const blendCtx = this.blendOutCanvas.getContext('2d');
+        if (blendCtx && alpha < 1) {
+          blendCtx.clearRect(0, 0, this.size, this.size);
+          blendCtx.globalAlpha = 1 - alpha;
+          blendCtx.drawImage(this.blendFromCanvas, 0, 0, this.size, this.size);
+          blendCtx.globalAlpha = alpha;
+          blendCtx.drawImage(baked, 0, 0, this.size, this.size);
+          blendCtx.globalAlpha = 1;
+          this.canvas = this.blendOutCanvas;
+        } else {
+          this.blendDurationSec = 0;
+          this.canvas = baked;
+        }
+      } else {
+        this.canvas = baked;
+      }
       return true;
     }
     return false;
