@@ -17,14 +17,14 @@ describe('Phase 3 — Wide-Camera (0.96) Silhouette Readability & 3D Character R
     assert.equal(rudraSpec.rimHex, '#ffe4b8');
     assert.equal(rudraSpec.outlineColor, '#120806');
 
-    const enemySteelSpec = getSilhouetteSpecForRole('regular_enemy');
-    assert.equal(enemySteelSpec.rimHex, '#cbd5e1');
+    const enemySpec = getSilhouetteSpecForRole('regular_enemy');
+    assert.equal(enemySpec.rimHex, '#ffe6be');
 
     const enemyCrimsonSpec = getSilhouetteSpecForRole('regular_enemy_crimson');
     assert.equal(enemyCrimsonSpec.rimHex, '#fde68a');
 
     const bossSpec = getSilhouetteSpecForRole('boss');
-    assert.equal(bossSpec.rimHex, '#ffd89e');
+    assert.equal(bossSpec.rimHex, '#ffe2ad');
     assert.ok(bossSpec.outlineThickness >= 2.2);
 
     assert.equal(BOSS_SCALE_AUTHORITY.semi_boss, 1.75);

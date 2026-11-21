@@ -303,6 +303,7 @@ import {
   getChamberGeometry,
   getOrStartArenaVideo,
   prewarmArenaVideo,
+  releaseArenaVideos,
   renderParallaxAbyss,
   renderIsometricChamberPlatform,
   updateAndRenderPressureTraps,
@@ -1213,6 +1214,9 @@ export default function KaliyugaArena() {
     return () => {
       window.clearInterval(preloadTimer);
       if (storageSyncTimer !== null) window.clearTimeout(storageSyncTimer);
+      releaseArenaVideos();
+      susanoo3dRef.current?.dispose();
+      susanoo3dRef.current = null;
       rudra3dRef.current?.dispose();
       enemy3dRef.current?.dispose();
       boss3dRef.current?.dispose();
@@ -2782,14 +2786,14 @@ export default function KaliyugaArena() {
       if (initialChamber.phase2BackgroundUrl) {
         loadBgWithRetry(initialChamber.phase2BackgroundUrl);
       }
-      if (initialChamber.videoUrl) {
+      if (simRef.current.videoBgEnabled && initialChamber.videoUrl) {
         if (isDirectGameplay) {
           getOrStartArenaVideo(initialChamber.videoUrl, false);
         } else {
           prewarmArenaVideo(initialChamber.videoUrl);
         }
       }
-      if (initialChamber.phase2VideoUrl) {
+      if (simRef.current.videoBgEnabled && initialChamber.phase2VideoUrl) {
         prewarmArenaVideo(initialChamber.phase2VideoUrl);
       }
     }
@@ -11283,10 +11287,10 @@ export default function KaliyugaArena() {
           const rendered3D =
             rudra3d &&
             rudra3d.updateAndRender({
-              dt: simDt > 0 ? simDt : dt,
+              dt: isRenderHubMode ? dt : simDt,
               vx: p.vx,
               vy: p.vy,
-              facingX: p.lastMoveDirX || p.facing,
+              facingX: p.lastMoveDirX || (p.lastMoveDirY === 0 ? p.facing : 0),
               facingY: p.lastMoveDirY,
               slashAngle: p.slashAngle,
               isAttacking: coreLock.rudraIsAttacking,
@@ -11312,7 +11316,7 @@ export default function KaliyugaArena() {
           if (p.transformTimer > 0) {
             const susanoo3d = susanoo3dRef.current;
             const susanooCanvas = susanoo3d?.renderFrame({
-              facingX: p.lastMoveDirX || p.facing,
+              facingX: p.lastMoveDirX || (p.lastMoveDirY === 0 ? p.facing : 0),
               facingY: p.lastMoveDirY,
               slashAngle: p.slashAngle,
               weaponSwingProgress: p.weaponSwingProgress,
@@ -11322,7 +11326,7 @@ export default function KaliyugaArena() {
               comboStep: p.comboStep,
               transformTimer: p.transformTimer,
               nowMs: now,
-              dt: simDt > 0 ? simDt : dt,
+              dt: simDt,
               palette: 'crimson_gold',
             });
             if (susanooCanvas && susanoo3d) {

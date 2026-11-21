@@ -1,0 +1,36 @@
+name: Act I checks
+on:
+  pull_request:
+    paths:
+      - 'app/**'
+      - 'components/**'
+      - 'engine/**'
+      - 'hooks/**'
+      - 'lib/**'
+      - 'package.json'
+      - 'tsconfig.json'
+      - '.github/workflows/act1-checks.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            app
+            components
+            engine
+            hooks
+            lib
+            public/kaalyuga
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - run: npm test
+      - run: npm run typecheck
+      - run: npm run build
