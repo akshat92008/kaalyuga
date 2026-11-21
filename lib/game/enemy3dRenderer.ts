@@ -820,6 +820,7 @@ export function bindTexturedGeometryToSkeleton(
 
 export class Enemy3DRenderer {
   private renderer: THREE.WebGLRenderer | null = null;
+  private disposed = false;
   private scene: THREE.Scene;
   private camera: THREE.PerspectiveCamera;
   private slots: Map<string, EnemyModelSlot> = new Map();
@@ -1073,6 +1074,7 @@ export class Enemy3DRenderer {
   private readonly failedSlotRetryAt = new Map<string, number>();
 
   private ensureSlotLoaded(slotKey: string): Promise<void> {
+    if (this.disposed) return Promise.resolve();
     const existing = this.slotLoadPromises.get(slotKey);
     if (existing) return existing;
     const slot = this.slots.get(slotKey);
@@ -1113,6 +1115,7 @@ export class Enemy3DRenderer {
       loadRawFbx(slot.animUrls.idle, true),
       loadRawFbx(slot.animUrls.chase, true),
     ]).then(([riggedGroup, texturedGroup, diffuseMap, idleAnimGroup, chaseAnimGroup]) => {
+      if (this.disposed) return;
       const baseGroup = riggedGroup || texturedGroup;
       if (!baseGroup) throw new Error(`Missing rig for enemy slot: ${slotKey}`);
 
@@ -1208,13 +1211,14 @@ export class Enemy3DRenderer {
       // STAGE 2: Stream windup, attack, hurt, and death clips in the background and refresh cache
       const stage2DelayMs = isSoftwareWebGLRenderer() ? 14000 : 450;
       const runStage2 = () => {
-        if (!this.renderer) return;
+        if (this.disposed || !this.renderer) return;
         Promise.all([
           loadRawFbx(slot.animUrls.windup, true),
           loadRawFbx(slot.animUrls.attack, true),
           loadRawFbx(slot.animUrls.hurt, true),
           loadRawFbx(slot.animUrls.death, true),
         ]).then(([windupAnimGroup, attackAnimGroup, hurtAnimGroup, deathAnimGroup]) => {
+          if (this.disposed) return;
           registerClip('windup', windupAnimGroup);
           registerClip('attack', attackAnimGroup);
           registerClip('hurt', hurtAnimGroup);
@@ -1579,6 +1583,7 @@ export class Enemy3DRenderer {
   }
 
   public dispose(): void {
+    this.disposed = true;
     if (typeof window !== 'undefined') {
       for (const tid of this.prewarmTimers) {
         window.clearTimeout(tid);
@@ -1588,6 +1593,21 @@ export class Enemy3DRenderer {
     this.atlasFrameCache.clear();
     this.slotLastCanvas.clear();
     this.failedSlotRetryAt.clear();
+    this.slotLoadPromises.clear();
+    this.loadingSlots.clear();
+    for (const slot of this.slots.values()) {
+      slot.mixer?.stopAllAction();
+      slot.group?.removeFromParent();
+      slot.group = null;
+      slot.mixer = null;
+      slot.actions = {};
+      slot.ready = false;
+    }
+    this.slots.clear();
+    this.sharedWeaponTemplates = {};
+    this.scene.clear();
+    this.lastActiveCanvas = null;
+    this.activeSlotKey = null;
     this.renderer = null;
   }
 }
