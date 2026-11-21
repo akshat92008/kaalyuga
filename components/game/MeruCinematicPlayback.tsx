@@ -12,15 +12,18 @@ import {makeMeruBossParams,paintMeruFrame,MERU_FRAME_WIDTH,MERU_FRAME_HEIGHT} fr
 export type MeruCinematicEndReason='completed'|'skipped';
 export interface MeruCinematicPlaybackProps {
   scene:MeruCinematic;
+  muted?:boolean;
   onFinish:(reason:MeruCinematicEndReason)=>void;
 }
-export default function MeruCinematicPlayback({scene,onFinish}:MeruCinematicPlaybackProps){
+export default function MeruCinematicPlayback({scene,onFinish,muted=false}:MeruCinematicPlaybackProps){
   const canvasRef=useRef<HTMLCanvasElement|null>(null);
   const videoRef=useRef<HTMLVideoElement|null>(null);
   const skipRef=useRef<HTMLButtonElement|null>(null);
   const timelineRef=useRef(new MeruTimelinePlayer(scene));
   const onFinishRef=useRef(onFinish);
   onFinishRef.current=onFinish;
+  const mutedRef=useRef(muted);
+  mutedRef.current=muted;
   const finishOnceRef=useRef(false);
   const [status,setStatus]=useState('Summoning the Warden…');
   const [seconds,setSeconds]=useState(0);
@@ -87,7 +90,7 @@ export default function MeruCinematicPlayback({scene,onFinish}:MeruCinematicPlay
         for(const cue of result.cues){
           if(cue.kind!=='drum'&&cue.kind!=='roar'&&cue.kind!=='impact')continue;
           const track=audio[cue.kind];
-          if(!track)continue;
+          if(!track || mutedRef.current)continue;
           try{track.currentTime=0;void track.play().catch(()=>undefined);}catch{}
         }
       }
