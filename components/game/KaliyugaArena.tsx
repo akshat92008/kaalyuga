@@ -4772,22 +4772,10 @@ export default function KaliyugaArena() {
         brokenEnemy.x, brokenEnemy.y - 11, 12, '#a77a56', 152, 2.9, 64
       );
     }
-    const execSlashRow =
-      finisherSpec.variant === 'spin_360_cleave'
-        ? PARASHU_FLIPBOOK_ROWS.SPIN_360_WHIRLWIND_RING
-        : PARASHU_FLIPBOOK_ROWS.DOWNWARD_CRUSH_FISSURE;
-    spawnFlipbookVfx(
-      PHASE2_VFX_SHEETS.parashuSlashes3x3.url,
-      actualContact.x,
-      actualContact.y,
-      impactBudget.impactFlipbookSize,
-      executionVisual.useGroundedOverheadContact ? 0.20 : 0.26,
-      finisherSpec.variant === 'impaling_lunge' ? p.slashAngle : 0,
-      finisherSpec.variant === 'spin_360_cleave' ? 0.72 : 1,
-      'screen',
-      PHASE2_VFX_SHEETS.parashuSlashes3x3,
-      execSlashRow
-    );
+    // No stand-alone Parashu slash flipbook here. That sprite painted a
+    // residual crimson hook away from the visible axe in real browser PNGs.
+    // The only swing is now the measured socket-head trail drawn on Rudra.
+    // The directional splatter below belongs to the physical enemy hit.
     spawnFlipbookVfx(
       PHASE2_VFX_SHEETS.parryAndHitSparks4x2.url,
       actualContact.x,
