@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Act1CinematicCamera, composeAct1CinematicZoom, getAct1FinisherCameraShot, preserveAct1ExecutionContactZoom } from './act1CinematicCamera';
+import { Act1CinematicCamera, composeAct1CinematicZoom, getAct1FinisherCameraShot, preserveAct1ExecutionContactZoom, removePreviousAct1CinematicZoom } from './act1CinematicCamera';
 test('phase camera softly returns to gameplay and never exceeds safe 2.5D zoom/weight', () => {
   const camera = new Act1CinematicCamera();
   assert.equal(camera.start({
@@ -59,4 +59,26 @@ test('Execution contact cannot kick an already zoomed-in camera back to the wide
  assert.equal(preserveAct1ExecutionContactZoom(0.92,0.94),0.995);
  assert.ok(preserveAct1ExecutionContactZoom(1.3,0.94)<=1.20);
  assert.ok(Number.isFinite(preserveAct1ExecutionContactZoom(NaN,Infinity)));
+});
+
+test('The shot overlay cannot compound frame after frame during an execution', () => {
+ let displayed = 0.94;
+ let applied = 0;
+ for (const hz of [30,60,120]) {
+   displayed=0.94; applied=0;
+   for(let i=0;i<hz;i++){
+     const base=removePreviousAct1CinematicZoom(displayed, applied);
+     // Real arena dynamic camera moves the base smoothly toward 0.94.
+     const dt=1/hz;
+     const next=base + (0.94-base)*Math.min(1,dt*2.8);
+     displayed=composeAct1CinematicZoom(next,0.14);
+     applied=displayed-next;
+     assert.ok(displayed>=1.07 && displayed<=1.081,
+       'zoom must stay near 1.08 not accumulate to 1.20 at '+hz+' Hz');
+   }
+   const base=removePreviousAct1CinematicZoom(displayed,applied);
+   assert.ok(Math.abs(base-0.94)<0.001);
+ }
+ assert.equal(removePreviousAct1CinematicZoom(1.08,0.14),0.9400000000000001);
+ assert.equal(removePreviousAct1CinematicZoom(NaN,0.14),0.94);
 });
