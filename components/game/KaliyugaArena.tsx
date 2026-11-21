@@ -4739,9 +4739,44 @@ export default function KaliyugaArena() {
         brokenEnemy.x, brokenEnemy.y - 11, 12,
         '#a77a56', 152, 2.9, 64
       );
+    } else if (finisherSpec.variant === 'impaling_lunge') {
+      // A long, concentrated Parashu thrust. Align the short energy cut with
+      // the aim and enemy contact; do not layer a sun wheel, water dragon or
+      // sky lightning over a narrow physical lunge.
+      const aim = p.slashAngle;
+      const contactX = brokenEnemy.x;
+      const contactY = brokenEnemy.y - 24;
+      const startX = contactX - Math.cos(aim) * 36;
+      const startY = contactY - Math.sin(aim) * 36;
+      spawnShockwave(
+        brokenEnemy.x, brokenEnemy.y,
+        executionVisual.groundShockwaveRadius, '#a75b42', 0.23
+      );
+      webglDemonSlayerVfxRef.current?.spawnSlashRibbon({
+        x: startX, y: startY, angle: aim,
+        radius: executionVisual.slashRadius,
+        width: executionVisual.slashWidth,
+        arcSpan: executionVisual.slashArcSpan,
+        direction: 1, palette: 'sun', duration: 0.23, tiltX: 0.32,
+      });
+      webglDemonSlayerVfxRef.current?.spawnClashStarburst({
+        x: contactX, y: contactY,
+        scale: executionVisual.impactBurstScale,
+        palette: 'sun', duration: 0.17,
+      });
+      webglDemonSlayerVfxRef.current?.spawnSparkBurst({
+        x: contactX + Math.cos(aim) * 9,
+        y: contactY + Math.sin(aim) * 9,
+        count: executionVisual.sparkCount, speed: 360,
+        palette: 'sun',
+      });
+      triggerImpactInversionFlash(
+        bloodDemonArtsRef.current,
+        contactX, contactY, 0.026, '#ffb35e'
+      );
     } else {
-      // Preserve original sweeping/impaling set pieces. They remain separate
-      // milestones for Blender interaction choreography and readability QA.
+      // The spinning execution keeps its broad legacy circular set piece.
+      // It still needs animation and screenshot review before release.
     spawnShockwave(brokenEnemy.x, brokenEnemy.y, 290, '#ff4d3b', 0.48);
     spawnSunHaloRing(bloodDemonArtsRef.current, {
       x: brokenEnemy.x,
