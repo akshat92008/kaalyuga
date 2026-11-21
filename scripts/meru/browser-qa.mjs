@@ -27,7 +27,26 @@ try{
   assert.equal(data.schemaVersion,1);
   assert.equal(data.boss,'dundubhi');
   assert.ok(data.camera.length>=3);
+  assert.ok(data.pose?.length>=4,'Original rig includes authored skeletal choreography');
   await page.screenshot({path:join(out,'meru-studio.png'),fullPage:true,animations:'disabled'});
+  // Author actual FBX joint rotations and a hard camera cut through UI,
+  // export and validate the result. No synthetic scene or isolated harness.
+  const armControl=page.getByLabel('Weapon-arm lift');
+  await armControl.focus();
+  await page.keyboard.press('ArrowRight');
+  await page.locator('button[title="camera at 3.00s"]').click();
+  await page.getByRole('button',{name:'Insert camera cut at playhead'}).click();
+  const choreoExportP=page.waitForEvent('download',{timeout:10000});
+  await page.getByRole('button',{name:'Export scene JSON'}).click();
+  const choreoExport=await choreoExportP;
+  await choreoExport.saveAs(join(out,'exported-dundubhi-choreography.meru.json'));
+  const choreoData=JSON.parse(await readFile(join(out,'exported-dundubhi-choreography.meru.json'),'utf8'));
+  assert.ok(choreoData.pose[0].value.rightArmLift>data.pose[0].value.rightArmLift,
+    'Studio joint control must persist to exported real-rig pose tracks');
+  assert.equal(choreoData.camera[0].ease,'step',
+    'Director camera cut must produce a discontinuous camera track');
+  await page.screenshot({path:join(out,'meru-studio-choreography.png'),fullPage:true,animations:'disabled'});
+  console.log('MERU_DIRECTOR_QA: editable rig joint keyframes, hard camera cut, export and roundtrip PASS');
 
   // Meru should use the same real, proxy-mapped MP4 and poster as the actual
   // boss chamber. This check catches silent black/blank backgrounds.
@@ -50,6 +69,8 @@ try{
   const phaseData=JSON.parse(await readFile(join(out,'exported-vrikodara-phase2.meru.json'),'utf8'));
   assert.equal(phaseData.bossPhase,2);
   assert.equal(phaseData.boss,'vrikodara');
+  assert.ok(phaseData.pose?.some(k=>Math.abs(k.value.rightArmLift)>0.1),
+    'Boss transformation scene must include a real arm performance');
   await checkSceneAssets(phaseData);
   await page.screenshot({path:join(out,'meru-vrikodara-phase2-editor.png'),fullPage:true,animations:'disabled'});
   await page.getByLabel('Select boss cinematic').selectOption('vrikodara');
