@@ -38,6 +38,7 @@ import {
   computeGodOfWarHeavyStyleSpec,
 } from '@/lib/game/rules';
 import { soundEngine } from '@/lib/game/audio';
+import { Act1FrameProfiler } from '@/lib/game/act1Performance';
 import {
   loadAndProcessSprite,
   getProcessedSpriteSync,
@@ -537,6 +538,7 @@ export default function KaliyugaArena() {
   const lastRigChamberRef = useRef<number>(-1);
   const gamepadPrevButtonsRef = useRef<boolean[]>([]);
   const [preloadProgress, setPreloadProgress] = useState<number>(18);
+  const act1FrameProfilerRef = useRef<Act1FrameProfiler>(new Act1FrameProfiler(1200));
   const [cameraPreset, setCameraPreset] = useState<HadesCameraPreset>('dynamic_action');
   const [enemyRenderMode, setEnemyRenderMode] = useState<EnemyRenderMode>('all_3d');
   const [activeHubDialogueNpc, setActiveHubDialogueNpc] = useState<HubNpcId | null>(null);
@@ -6797,6 +6799,8 @@ export default function KaliyugaArena() {
     let softTimerId: number | null = null;
     let lastTime = performance.now();
     let hudSyncAccum = 0;
+    let telemetryLastMs = 0;
+    const perfTelemetryEnabled = new URLSearchParams(window.location.search).get('perf') === '1';
 
     const afterDraw = (cb: FrameRequestCallback) => {
       if (isSoftwareWebGLRenderer()) {
@@ -6830,11 +6834,28 @@ export default function KaliyugaArena() {
         return;
       }
 
+      // Measure raw RAF intervals separately from capped simulation time and the HUD counter.
+      // Only opt-in QA sessions write telemetry to window; no production render allocations.
+      if (perfTelemetryEnabled) {
+        const profiler = act1FrameProfilerRef.current;
+        profiler.record(rawDt, document.hidden);
+        if (now - telemetryLastMs >= 500) {
+          telemetryLastMs = now;
+          (window as Window & { __KALIYUGA_ACT1_PERF__?: unknown }).__KALIYUGA_ACT1_PERF__ = {
+            ...profiler.snapshot(),
+            chamber: sim.chamberIndex + 1,
+            gameState: sim.state,
+            boss: sim.enemies.find((e) => e.isBoss && e.aiState !== 'ko')?.type ?? null,
+            graphicsTier: sim.graphicsSettings.tier,
+            recordedAtMs: now,
+          };
+        }
+      }
       // FPS counter
       sim.frameCounter += 1;
       sim.fpsAccum += rawDt;
       if (sim.fpsAccum >= 0.5) {
-        sim.fps = Math.min(60, Math.max(1, Math.round(sim.frameCounter / sim.fpsAccum)));
+        sim.fps = Math.min(240, Math.max(1, Math.round(sim.frameCounter / sim.fpsAccum)));
         sim.frameCounter = 0;
         sim.fpsAccum = 0;
       }
@@ -12160,6 +12181,10 @@ export default function KaliyugaArena() {
       if (softTimerId !== null) window.clearTimeout(softTimerId);
       window.cancelAnimationFrame(rafId);
       window.removeEventListener('resize', resizeCanvas);
+      if (perfTelemetryEnabled) {
+        delete (window as Window & { __KALIYUGA_ACT1_PERF__?: unknown }).__KALIYUGA_ACT1_PERF__;
+        act1FrameProfilerRef.current.reset();
+      }
     };
   }, [
     createEnemyFromSpec,
