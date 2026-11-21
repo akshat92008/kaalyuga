@@ -164,6 +164,7 @@ export default function MeruCinematicPlayback({scene,onFinish,muted=false}:MeruC
       role="dialog" aria-modal="true"
       aria-label={scene.title+' cinematic'}
       data-testid="meru-boss-cinematic"
+      data-meru-rig-status={!ready ? 'loading' : status.includes('3D rig active') ? 'rigged' : 'fallback'}
       className="fixed inset-0 z-[85] flex items-center justify-center bg-[#050407]/[0.98] p-2 sm:p-6"
     >
       <div className="relative w-full max-w-6xl">
