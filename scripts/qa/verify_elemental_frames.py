@@ -14,6 +14,8 @@ CHECKS = [
     ("09-agni-smash-heavy-contact", "fire", 900),
     ("09-vayu-green-gale-heavy-contact", "wind", 900),
     ("09-vajra-thunder-heavy-contact", "thunder", 150),
+    ("10-smash-light-parashu", "any", 175),
+    ("10-pillar-light-parashu", "any", 175),
     ("10-light-parashu", "any", 175),
     ("10-agneyastra-fire", "fire", 400),
     ("10-vayavyastra-wind", "wind", 650),
