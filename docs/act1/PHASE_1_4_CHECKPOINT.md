@@ -86,3 +86,30 @@ reported explicitly.
 - Complete a full Act I playthrough and compare before/after recordings.
 
 Status: implementation work in progress; **not** 100% complete or AAA certified.
+
+## Verification evidence update — 21 November 2026
+
+A headless Chromium pass has actually exercised the game's start button and
+live debug combat room (not just component tests). The saved evidence includes
+screenshots for Agni, Vayu, Vajra heavy contact; the light Parashu; Agneyastra,
+Vayavyastra, Vajrastra, Varuna water-dragon and guardian effects; and the live
+Dundubhi boss camera entrance/skip. The browser test report recorded a final
+**FAIL** in the separate cinematic lab: it waited to click Skip after the
+8.6-second timeline had already auto-completed while heavy 3D screenshots were
+being captured. The smoke script was corrected to restart and click Skip on an
+active timeline; **the corrected run must pass before sign-off**.
+
+A separate Blender verification report records **10 accepted animations,
+57 bones, 1 skinned mesh, 960x540 preview**, with a passing export check.
+This validates import/export mechanics, not the artistic quality of every
+animation or finished execution choreography.
+
+An automated GitHub Actions unit-test workflow now exists at
+`.github/workflows/phase1-4-verify.yml`. Its status should be checked in
+the repository Actions tab. Do not count an unexecuted workflow as a pass.
+
+**Remaining release gates:** a fully passing browser smoke run with evidence,
+all three executions played and interrupted in actual combat, blade-tip
+contact synchronization visually inspected frame by frame, all elemental
+light/heavy permutations checked, and real-hardware performance evaluation.
+Keep Phase 1–4 open until those gates are satisfied.
