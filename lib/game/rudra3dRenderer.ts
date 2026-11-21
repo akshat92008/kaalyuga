@@ -208,7 +208,7 @@ export function getRudraTransitionBlendSeconds(from: RudraAnimState, to: RudraAn
 
 // Exact 1:1 vertex match (493,632 verts === 493,632 verts) between Pro Melee Axe Pack rig & Ashen_Warborn texture FBX!
 const RUDRA_RIGGED_FBX_URL =
-  '/new_3d_assets/Animations/Pro Melee Axe Pack/Meshy_AI_Ashen_Warborn_20261025_generate.fbx';
+  '/kaalyuga/rudra/rigged.fbx';
 const RUDRA_TEXTURE_FBX_URL =
   '/models/Meshy_AI_Ashen_Warborn_20261025_texture_fbx/Meshy_AI_Ashen_Warborn_20261025_texture.fbx';
 const RUDRA_DIFFUSE_URL =
@@ -216,7 +216,7 @@ const RUDRA_DIFFUSE_URL =
 
 // 3D Parashu Battle-Axe attached to Rudra's mixamorigRightHand bone
 const PARASHU_WEAPON_FBX_URL =
-  '/new_3d_assets/3D Models/Weapons/Bloodforged_Trident_Axe_20261025/Meshy_AI_Bloodforged_Trident_Axe_20261025_texture.fbx';
+  '/kaalyuga/parashu/weapon.fbx';
 const PARASHU_DIFFUSE_URL =
   '/models/Meshy_AI_Bloodforged_Trident_A_1025041928_texture_fbx/Meshy_AI_Bloodforged_Trident_A_1025041928_texture.png';
 
@@ -235,16 +235,16 @@ const RUDRA_LOCAL_ANIM_URLS: Record<RudraAnimState, string> = {
 };
 
 const RUDRA_ANIM_URLS: Record<RudraAnimState, string> = {
-  idle: '/new_3d_assets/Animations/Pro Melee Axe Pack/standing idle.fbx',
-  run: '/new_3d_assets/Animations/Pro Melee Axe Pack/standing run forward.fbx',
-  dash: '/new_3d_assets/Animations/Pro Melee Axe Pack/standing run forward.fbx',
-  attack1: '/new_3d_assets/Animations/Pro Melee Axe Pack/standing melee combo attack ver. 1.fbx',
-  attack2: '/new_3d_assets/Animations/Pro Melee Axe Pack/standing melee combo attack ver. 2.fbx',
-  attack3: '/new_3d_assets/Animations/Pro Melee Axe Pack/standing melee combo attack ver. 3.fbx',
-  heavy: '/new_3d_assets/Animations/Pro Melee Axe Pack/standing melee attack downward.fbx',
-  cast: '/new_3d_assets/Animations/Pro Melee Axe Pack/standing melee attack 360 high.fbx',
-  block: '/new_3d_assets/Animations/Pro Melee Axe Pack/standing block idle.fbx',
-  hurt: '/new_3d_assets/Animations/Pro Melee Axe Pack/standing react large from left.fbx',
+  idle: '/animations/pro_melee_axe/standing idle.fbx',
+  run: '/animations/pro_melee_axe/standing run forward.fbx',
+  dash: '/animations/pro_melee_axe/standing run forward.fbx',
+  attack1: '/animations/pro_melee_axe/standing melee combo attack ver. 1.fbx',
+  attack2: '/animations/pro_melee_axe/standing melee combo attack ver. 2.fbx',
+  attack3: '/animations/pro_melee_axe/standing melee combo attack ver. 3.fbx',
+  heavy: '/animations/pro_melee_axe/standing melee attack downward.fbx',
+  cast: '/animations/pro_melee_axe/standing melee attack 360 high.fbx',
+  block: '/animations/pro_melee_axe/standing block idle.fbx',
+  hurt: '/animations/pro_melee_axe/standing react large from left.fbx',
 };
 
 export class Rudra3DRenderer {
