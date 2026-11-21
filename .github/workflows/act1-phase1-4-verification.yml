@@ -82,6 +82,7 @@ jobs:
             scripts/qa/verify_rudra_glb.py
             public/kaalyuga/rudra/rigged.fbx
             public/kaalyuga/rudra/diffuse.png
+            public/models/Meshy_AI_Ashen_Warborn_20261025_texture_fbx/Meshy_AI_Ashen_Warborn_20261025_texture.fbx
             public/kaalyuga/anims/rudra
       - name: Install real Blender on runner
         run: |
