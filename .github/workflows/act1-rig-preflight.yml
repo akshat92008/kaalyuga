@@ -19,6 +19,9 @@ jobs:
             scripts/act1-rig-audit.py
             public/models/Meshy_AI_Ashen_Warborn_biped
             public/animations/lite_magic
+            new 3D assets and animations/Animations/Creature Pack (4)
+            new 3D assets and animations/Animations/Pro Melee Axe Pack (5)
+            new 3D assets and animations/Animations/Pro Magic Pack
           sparse-checkout-cone-mode: false
       - name: Install Blender and NumPy for FBX support
         run: |
@@ -30,19 +33,32 @@ jobs:
             --rig "public/models/Meshy_AI_Ashen_Warborn_biped/Meshy_AI_Ashen_Warborn_biped_Meshy_Merged_Animations.fbx" \
             --clip "public/animations/lite_magic/Standing 1H Magic Attack 01.fbx" \
             --output "artifacts/act1-rudra-rig-audit.json"
+          blender -b --python scripts/act1-rig-audit.py -- \
+            --rig "new 3D assets and animations/Animations/Creature Pack (4)/Meshy_AI_Bellhorn_Warlord_20261114_generate.fbx" \
+            --clip "new 3D assets and animations/Animations/Creature Pack (4)/mutant run.fbx" \
+            --clip "new 3D assets and animations/Animations/Creature Pack (4)/mutant swiping.fbx" \
+            --clip "new 3D assets and animations/Animations/Creature Pack (4)/mutant dying.fbx" \
+            --output "artifacts/act1-dundubhi-rig-audit.json"
+          blender -b --python scripts/act1-rig-audit.py -- \
+            --rig "new 3D assets and animations/Animations/Pro Melee Axe Pack (5)/Meshy_AI_Crimson_Skull_Warlord_20261030_generate.fbx" \
+            --clip "new 3D assets and animations/Animations/Pro Melee Axe Pack (5)/standing melee attack downward.fbx" \
+            --clip "new 3D assets and animations/Animations/Pro Melee Axe Pack (5)/standing melee attack 360 high.fbx" \
+            --clip "new 3D assets and animations/Animations/Pro Magic Pack/Standing React Death Backward.fbx" \
+            --output "artifacts/act1-vrikodara-rig-audit.json"
           python3 - <<'PY'
           import json
-          r=json.load(open("artifacts/act1-rudra-rig-audit.json"))
-          assert r["canonical"]["mesh_count"] > 0
-          assert r["canonical"]["bone_count"] > 0
-          assert len(r["clips"]) == 1
-          print("Rig inspection complete; clip compatibility =",r["clips"][0]["compatible_for_direct_binding"])
+          for actor in ("rudra","dundubhi","vrikodara"):
+              r=json.load(open(f"artifacts/act1-{actor}-rig-audit.json"))
+              assert r["canonical"]["mesh_count"] > 0,actor
+              assert r["canonical"]["bone_count"] > 0,actor
+              print(actor,"bones:",r["canonical"]["bone_count"],"clips:",len(r["clips"]),
+                    "exact_bindable:",[c["compatible_for_direct_binding"] for c in r["clips"]])
           PY
       - name: Preserve rig/clip metadata for Blender director review
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: act1-rudra-rig-preflight
-          path: artifacts/act1-rudra-rig-audit.json
+          path: artifacts/act1-*-rig-audit.json
           if-no-files-found: warn
           retention-days: 14
