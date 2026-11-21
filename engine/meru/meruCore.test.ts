@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {createDundubhiScene, validateCinematic, sampleCinematic, cuesBetween, MeruTimelinePlayer} from './cinematicTimeline';
 import {MeruAdaptiveQuality,GRAPHICS_PRESETS} from './adaptiveQuality';
 import {beginPortalTransition,advancePortalTransition,portalPalette} from './portalDirector';
+import {shouldStartDundubhiIntro} from './runtimePolicy';
 
 test('canonical Dundubhi sequence validates and produces finite frames at every sample',()=>{
   const scene=createDundubhiScene();
@@ -83,4 +84,16 @@ test('portal loading never reveals an unready chamber, then finishes correctly',
   assert.equal(advancePortalTransition(p,2,true),p);
   assert.notEqual(portalPalette('deva').core,portalPalette('warden').core);
   assert.throws(()=>beginPortalTransition('deva','',1.6),/Invalid/);
+});
+
+test('Dundubhi intro launches only for live normal boss encounter',()=>{
+  const base={chamberIndex:3,stage:'playing',hasDundubhi:true};
+  assert.equal(shouldStartDundubhiIntro(base),true);
+  assert.equal(shouldStartDundubhiIntro({...base,query:'?cinematic=0'}),false);
+  assert.equal(shouldStartDundubhiIntro({...base,query:'?phase=2'}),false);
+  assert.equal(shouldStartDundubhiIntro({...base,query:'?cleared=1'}),false);
+  assert.equal(shouldStartDundubhiIntro({...base,query:'?wave=2'}),false);
+  assert.equal(shouldStartDundubhiIntro({...base,stage:'title'}),false);
+  assert.equal(shouldStartDundubhiIntro({...base,hasDundubhi:false}),false);
+  assert.equal(shouldStartDundubhiIntro({...base,chamberIndex:0}),false);
 });
