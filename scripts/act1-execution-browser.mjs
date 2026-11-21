@@ -61,6 +61,14 @@ try{
     return (t.strikeCues||[]).some(e=>
       e.action==='execute'&&e.kind==='fired');
   },null,{timeout:110000,polling:250});
+  // Also prove the enemy is visibly animated by the same real action.
+  // The trace is read-only opt-in telemetry, not a mocked hit or keyframe.
+  await page.waitForFunction((requiredVariant)=>{
+    const samples=window.__KALIYUGA_ACT1_PERF__?.executionVictimTrace||[];
+    return samples.some(s=>s.variant===requiredVariant &&
+      s.forceHurt===true && s.progress>=0.35 &&
+      (Math.abs(s.offsetX)>1.5 || Math.abs(s.offsetY)>1.5));
+  },variant,{timeout:45000,polling:250});
   // Prove the real dynamic camera actually received the eased cinematic
   // boost. The previous implementation multiplied that boost by frame dt.
   await page.waitForFunction((requiredVariant)=>{
@@ -74,7 +82,8 @@ try{
     return {
       gameState:t.gameState,combat:t.combat,
       strikeCues:t.strikeCues,weaponPoseTrace:t.weaponPoseTrace,
-      cameraShotTrace:t.cameraShotTrace,frameSamples:t.samples,
+      cameraShotTrace:t.cameraShotTrace,
+      executionVictimTrace:t.executionVictimTrace,frameSamples:t.samples,
     };
   });
   report.evidence.after=after;
