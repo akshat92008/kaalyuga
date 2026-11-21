@@ -27,7 +27,8 @@ export function paintMeruFrame(
   scene:MeruCinematic,
   boss:Boss3DRenderer|null,
   ready:boolean,
-  portrait:HTMLImageElement|null
+  portrait:HTMLImageElement|null,
+  particleMultiplier=1
 ){
   ctx.clearRect(0,0,W,H);
   const shake=frame.camera.shake;
@@ -50,7 +51,7 @@ export function paintMeruFrame(
   ctx.restore();
 
   // Deterministic atmosphere: no per-frame allocations for new image textures.
-  for(let i=0;i<40;i++){
+  for(let i=0;i<Math.round(40*clamp(particleMultiplier,0.15,1));i++){
     const ax=((i*179.93+Math.sin(i*2.3+frame.time*0.4)*13)%W+W)%W;
     const ay=((i*47.6-frame.time*(8+i%6*3))%H+H)%H;
     ctx.fillStyle='rgba(255,165,82,'+(0.05+0.30*frame.lighting.ash*(i%5)/4)+')';
