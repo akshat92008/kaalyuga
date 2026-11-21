@@ -1307,11 +1307,14 @@ export class WebglDemonSlayerVfxOverlay {
     const steps = 36;
     for (let i = 0; i <= steps; i++) {
       const t = i / steps;
-      const theta = t * Math.PI * 2.18 - Math.PI * 0.55;
-      const rad = baseR * (0.56 + t * 0.62);
-      const x = Math.cos(theta) * rad;
-      const y = Math.sin(theta) * rad * 0.66 + Math.sin(t * Math.PI) * 52;
-      const z = Math.sin(t * Math.PI * 2.4) * 38 + t * 28;
+      // An OPEN, progressive serpent stroke, not a circular blue portal.
+      // The former 2.18-PI coil closed around the fighter and read as
+      // concentric neon water rings in captured real gameplay.
+      const theta = t * Math.PI * 1.46 - Math.PI * 0.75;
+      const rad = baseR * (0.30 + t * 0.90);
+      const x = Math.cos(theta) * rad + (t - 0.5) * baseR * 0.32;
+      const y = Math.sin(theta) * rad * 0.66 + Math.sin(t * Math.PI) * 44;
+      const z = Math.sin(t * Math.PI * 1.75) * 36 + t * 30;
       pts.push(new THREE.Vector3(x, y, z));
     }
 
@@ -1348,7 +1351,9 @@ export class WebglDemonSlayerVfxOverlay {
     group.add(inkBody, dragonBody);
 
     // Companion swirling Hokusai woodblock wave crest ribbons embracing the coiled dragon
-    const waveSplashGeo = buildCurvedRibbonGeometry(baseR * 1.12, 42, Math.PI * 1.65, 1, 30);
+    // A shorter, offset open crest follows the dragon's wake rather than
+    // drawing the generic near-complete water halo around Rudra.
+    const waveSplashGeo = buildCurvedRibbonGeometry(baseR * 0.95, 34, Math.PI * 1.24, 1, 30);
     geos.push(waveSplashGeo);
     const waveSplashMat = createRibbonMaterial(pal, 1.0, 0.92, true, THREE.NormalBlending, 1.15);
     const waveSplashMesh = new THREE.Mesh(waveSplashGeo, waveSplashMat);
