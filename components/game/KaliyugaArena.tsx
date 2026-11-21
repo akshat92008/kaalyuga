@@ -12895,8 +12895,11 @@ export default function KaliyugaArena() {
             </div>
           )}
 
-          {/* Top-Right: Locked Vertical Slice Utility Bar (Vaitarani Shrine, Chambers & Keybinds, Pause) */}
-          <div className="pointer-events-auto flex items-center gap-1.5 relative shrink-0">
+          {/* Boss health takes precedence at top center; utility controls move below it
+              so the HUD never draws menus across Dundubhi/Vrikodara's name or posture. */}
+          <div className={`pointer-events-auto flex items-center gap-1.5 relative shrink-0 ${
+            sliceStage === 'combat_arena' && hud.boss ? 'mt-[96px] xl:mt-[84px]' : ''
+          }`}>
             {sliceStage === 'combat_arena' && (
               <>
                 <button
