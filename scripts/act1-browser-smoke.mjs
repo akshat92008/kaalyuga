@@ -42,10 +42,10 @@ try {
       await page.goto(base+'/?autostart=1&chamber='+chamber+'&perf=1',
           {waitUntil:'domcontentloaded',timeout:60000});
       await page.waitForFunction(() => document.body.dataset.state === 'playing',
-          {timeout:maxWaitMs});
+          null,{timeout:maxWaitMs});
       await page.waitForFunction(() =>
          (window.__KALIYUGA_ACT1_PERF__?.samples || 0) >= 18,
-         {timeout:maxWaitMs});
+         null,{timeout:maxWaitMs});
       ready=true;
       await page.keyboard.down('d');
       await page.waitForTimeout(300);
