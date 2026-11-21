@@ -6920,6 +6920,7 @@ export default function KaliyugaArena() {
       attackSerial: number;
       progress: number;
       threshold: number;
+      damageDelta: number;
       atMs: number;
     }> = [];
     const traceStrikeCue = (
@@ -6928,10 +6929,11 @@ export default function KaliyugaArena() {
       progress: number,
       threshold: number,
       attackSerial: number,
-      atMs: number
+      atMs: number,
+      damageDelta = 0
     ) => {
       if (!perfTelemetryEnabled) return;
-      strikeCueTrace.push({ kind, action, attackSerial, progress, threshold, atMs });
+      strikeCueTrace.push({ kind, action, attackSerial, progress, threshold, damageDelta, atMs });
       if (strikeCueTrace.length > 24) strikeCueTrace.shift();
     };
 
@@ -7521,9 +7523,11 @@ export default function KaliyugaArena() {
             ) || p.actionTimer <= 0) {
               pendingStrike.fired = true;
               pendingStrikeVfxRef.current = null;
-              traceStrikeCue('fired', pendingStrike.expectedAction, curProgress,
-                pendingStrike.triggerThreshold, pendingStrike.attackSerial, now);
+              const damageDealtBeforeContact = sim.runDamageDealt;
               pendingStrike.execute();
+              traceStrikeCue('fired', pendingStrike.expectedAction, curProgress,
+                pendingStrike.triggerThreshold, pendingStrike.attackSerial, now,
+                Math.max(0, sim.runDamageDealt - damageDealtBeforeContact));
             }
           }
 
