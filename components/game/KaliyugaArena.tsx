@@ -8824,56 +8824,48 @@ export default function KaliyugaArena() {
                 const originX = e.telegraphX;
                 const originY = e.telegraphY;
                 const halfW = e.isBoss ? 56 : 34;
+                const obstacle = e.type === 'dundubhi' ? findBaitablePillarOnTrajectory({
+                  bossX: originX, bossY: originY, aimAngle: e.aimAngle,
+                  endX: e.corridorEndX, endY: e.corridorEndY, pillars: sim.props,
+                }) : null;
+                const endX = obstacle?.willImpact ? obstacle.stopX : e.corridorEndX;
+                const endY = obstacle?.willImpact ? obstacle.stopY : e.corridorEndY;
                 playerHit = isPointInDashCorridor({
                   px: p.x,
                   py: p.y,
                   startX: originX,
                   startY: originY,
-                  endX: e.corridorEndX,
-                  endY: e.corridorEndY,
+                  endX,
+                  endY,
                   halfWidth: halfW,
                 });
-                e.x = Math.max(minX, Math.min(maxX, e.corridorEndX));
-                e.y = Math.max(minY, Math.min(maxY, e.corridorEndY));
+                e.x = Math.max(minX, Math.min(maxX, endX));
+                e.y = Math.max(minY, Math.min(maxY, endY));
 
-                // Step 23: Dundubhi Pillar-Baiting Horn-Charge Collision & 3-Stage Sandstone Degradation (Intact -> Cracked -> Shattered Stump)
                 if (e.type === 'dundubhi') {
-                  let hitPillar = false;
-                  for (const pr of sim.props) {
-                    if (!pr.destroyed && (pr.pillarStage ?? 0) < 2 && pr.type === 'kurukshetra_pillar') {
-                      const hitCorridor = isPointInDashCorridor({
-                        px: pr.x,
-                        py: pr.y,
-                        startX: originX,
-                        startY: originY,
-                        endX: e.x,
-                        endY: e.y,
-                        halfWidth: 82,
-                      });
-                      if (hitCorridor || Math.hypot(pr.x - e.x, pr.y - e.y) < 105) {
-                        const nextStage = Math.min(2, (pr.pillarStage ?? 0) + 1) as 1 | 2;
-                        pr.pillarStage = nextStage;
-                        pr.destroyed = nextStage >= 2;
-                        pr.hp = pr.destroyed ? 0 : Math.round(pr.maxHp * 0.5);
-                        pr.hitFlashTimer = 0.25;
-                        pr.shakeTimer = 0.35;
-                        hitPillar = true;
-                        spawnShockwave(pr.x, pr.y, 185, '#ffd86b', 0.45);
-                        spawnFlipbookVfx(
-                          PHASE2_VFX_SHEETS.dundubhiShockwaveAndShatter4x2.url,
-                          pr.x,
-                          pr.y - 22,
-                          178,
-                          0.36,
-                          0,
-                          1,
-                          'screen',
-                          PHASE2_VFX_SHEETS.dundubhiShockwaveAndShatter4x2,
-                          DUNDUBHI_FLIPBOOK_ROWS.PILLAR_SANDSTONE_SHATTER
-                        );
-                        spawnParticles(pr.x, pr.y - 36, 36, '#d4a548', 250, 5.5, 95);
-                      }
-                    }
+                  const pr = obstacle?.willImpact ? sim.props.find(prop => prop.id === obstacle.id) : undefined;
+                  const hitPillar = Boolean(pr);
+                  if (pr) {
+                    const nextStage = Math.min(2, (pr.pillarStage ?? 0) + 1) as 1 | 2;
+                    pr.pillarStage = nextStage;
+                    pr.destroyed = nextStage >= 2;
+                    pr.hp = pr.destroyed ? 0 : Math.round(pr.maxHp * 0.5);
+                    pr.hitFlashTimer = 0.25;
+                    pr.shakeTimer = 0.35;
+                    spawnShockwave(pr.x, pr.y, 185, '#ffd86b', 0.45);
+                    spawnFlipbookVfx(
+                      PHASE2_VFX_SHEETS.dundubhiShockwaveAndShatter4x2.url,
+                      pr.x,
+                      pr.y - 22,
+                      178,
+                      0.36,
+                      0,
+                      1,
+                      'screen',
+                      PHASE2_VFX_SHEETS.dundubhiShockwaveAndShatter4x2,
+                      DUNDUBHI_FLIPBOOK_ROWS.PILLAR_SANDSTONE_SHATTER
+                    );
+                    spawnParticles(pr.x, pr.y - 36, 36, '#d4a548', 250, 5.5, 95);
                   }
                   const intactPillarsLeft = sim.props.some(
                     (pr) => !pr.destroyed && (pr.pillarStage ?? 0) < 2 && pr.type === 'kurukshetra_pillar'
@@ -10040,9 +10032,11 @@ export default function KaliyugaArena() {
         activeBoss.aiState === 'windup' &&
         activeBoss.attackKind === 'corridor'
           ? findBaitablePillarOnTrajectory({
-              bossX: activeBoss.x,
-              bossY: activeBoss.y,
+              bossX: activeBoss.telegraphX,
+              bossY: activeBoss.telegraphY,
               aimAngle: activeBoss.aimAngle,
+              endX: activeBoss.corridorEndX,
+              endY: activeBoss.corridorEndY,
               pillars: sim.props,
             })
           : null;

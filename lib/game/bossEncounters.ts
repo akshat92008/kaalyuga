@@ -468,48 +468,33 @@ export function findBaitablePillarOnTrajectory(params: {
   bossX: number;
   bossY: number;
   aimAngle: number;
+  endX?: number;
+  endY?: number;
   pillars: Array<{ id: number; x: number; y: number; destroyed: boolean; type: string }>;
-}): { id: number; x: number; y: number; willImpact: boolean } | null {
-  const intact = params.pillars.filter(
-    (p) =>
-      !p.destroyed &&
-      (p.type === 'kurukshetra_pillar' || p.type === 'dragon_pillar')
-  );
-  if (intact.length === 0) return null;
-
-  const endX = params.bossX + Math.cos(params.aimAngle) * 350;
-  const endY = params.bossY + Math.sin(params.aimAngle) * 350;
-  const dx = endX - params.bossX;
-  const dy = endY - params.bossY;
-  const lenSq = dx * dx + dy * dy || 1;
-
-  let best: { id: number; x: number; y: number; willImpact: boolean; dist: number } | null =
-    null;
-
-  for (const pil of intact) {
-    const t = Math.max(
-      0,
-      Math.min(1, ((pil.x - params.bossX) * dx + (pil.y - params.bossY) * dy) / lenSq)
-    );
-    const projX = params.bossX + t * dx;
-    const projY = params.bossY + t * dy;
-    const perpDist = Math.hypot(pil.x - projX, pil.y - projY);
-    const willImpact = t > 0.08 && perpDist <= 78;
-    const scoreDist = willImpact ? perpDist : perpDist + 160;
-    if (!best || scoreDist < best.dist) {
-      best = {
-        id: pil.id,
-        x: pil.x,
-        y: pil.y,
-        willImpact,
-        dist: scoreDist,
-      };
-    }
+}) {
+  const dx = (params.endX ?? params.bossX + Math.cos(params.aimAngle) * 350) - params.bossX;
+  const dy = (params.endY ?? params.bossY + Math.sin(params.aimAngle) * 350) - params.bossY;
+  const length = Math.hypot(dx, dy);
+  if (!length) return null;
+  const ux = dx / length, uy = dy / length;
+  const radius = 82;
+  let best: { id: number; x: number; y: number; willImpact: boolean; stopX: number; stopY: number } | null = null;
+  let bestDistance = Infinity;
+  for (const pillar of params.pillars) {
+    if (pillar.destroyed || (pillar.type !== 'kurukshetra_pillar' && pillar.type !== 'dragon_pillar')) continue;
+    const x = pillar.x - params.bossX, y = pillar.y - params.bossY;
+    const along = x * ux + y * uy;
+    const side = Math.abs(x * uy - y * ux);
+    const entry = Math.max(0, along - Math.sqrt(Math.max(0, radius * radius - side * side)));
+    const willImpact = along >= 0 && side <= radius && entry <= length;
+    const closest = Math.max(0, Math.min(length, along));
+    const distance = willImpact ? entry : Math.hypot(x - closest * ux, y - closest * uy);
+    if (best && (best.willImpact && !willImpact || best.willImpact === willImpact && distance >= bestDistance)) continue;
+    bestDistance = distance;
+    best = { id: pillar.id, x: pillar.x, y: pillar.y, willImpact,
+      stopX: params.bossX + ux * entry, stopY: params.bossY + uy * entry };
   }
-
-  return best
-    ? { id: best.id, x: best.x, y: best.y, willImpact: best.willImpact }
-    : null;
+  return best;
 }
 
 /**
