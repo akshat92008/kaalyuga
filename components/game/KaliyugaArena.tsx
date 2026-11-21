@@ -5291,7 +5291,7 @@ export default function KaliyugaArena() {
     }
 
     soundEngine.playParashuHeavy();
-    soundEngine.playBreathingStyle(primaryHeavyPalette);
+    soundEngine.playBreathingStyle(primaryHeavyPalette==='void'?'crimson':primaryHeavyPalette);
     let hitAny = false;
 
     const corridorEndX = originX + Math.cos(p.slashAngle) * heavySpec.corridorLengthPx;
