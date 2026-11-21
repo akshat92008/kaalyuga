@@ -51,7 +51,7 @@ import { Boss3DRenderer } from '@/lib/game/boss3dRenderer';
 import MeruCinematicPlayback from '@/components/game/MeruCinematicPlayback';
 import MeruPortalTravel, { type MeruPortalJourney } from '@/components/game/MeruPortalTravel';
 import type { MeruCinematic } from '@/engine/meru/cinematicTimeline';
-import { shouldStartBossIntro, readBossIntro } from '@/engine/meru/runtimePolicy';
+import { shouldStartBossIntro, shouldStartBossPhase, readBossIntro, readBossPhase } from '@/engine/meru/runtimePolicy';
 import { renderMeruPortal } from '@/engine/meru/portalDirector';
 import { Susanoo3DRenderer } from '@/lib/game/susanoo3dRenderer';
 import CholaBrassHud from '@/components/game/CholaBrassHud';
@@ -8083,6 +8083,24 @@ export default function KaliyugaArena() {
                 : computeBossPhase(e.hp, e.maxHp);
             if (nextPhase > e.phase) {
               e.phase = nextPhase;
+              // Keep exact gameplay phase mechanics, damage, posture and AI intact.
+              // A one-time authored Meru reveal pauses only this live encounter;
+              // URL-driven phase rehearsal and cinematic=0 stay unaffected.
+              if (
+                e.hp > 0 && (e.type === 'dundubhi' || e.type === 'vrikodara') &&
+                (nextPhase === 2 || nextPhase === 3) &&
+                !meruTravelPendingRef.current &&
+                shouldStartBossPhase({
+                  boss: e.type, chamberIndex: sim.chamberIndex,
+                  stage: sim.state, hasBoss: true, phase: nextPhase,
+                  query: typeof window !== 'undefined' ? window.location.search : '',
+                })
+              ) {
+                sim.modalPaused = true;
+                sim.input.keysHeld.clear();
+                sim.input.justPressed.clear();
+                setActiveMeruScene(readBossPhase(e.type,nextPhase));
+              }
               e.posture = e.maxPosture;
               e.immobilizedTimer = 0;
               sim.slowMoTimer = 0.32;
