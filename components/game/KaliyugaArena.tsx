@@ -1181,6 +1181,21 @@ export default function KaliyugaArena() {
       };
       const fixture = {
         grantResources: () => { prepareArena(); },
+        // QA-only story overlay fixture proves a boss camera does not expire
+        // behind the actual ENGAGE / FACE dialogue shown in normal Act I.
+        prepareBossDialogue: (kind: 'dundubhi' | 'vrikodara') => {
+          const sim = simRef.current;
+          const expectedChamber = kind === 'dundubhi' ? 3 : 7;
+          if (sim.state !== 'playing' || sim.chamberIndex !== expectedChamber) {
+            throw new Error('Boss dialogue QA fixture requires the matching live boss chamber');
+          }
+          liveCameraRef.current = {
+            kind: 'boss',
+            elapsedSec: 0,
+            track: createBossEntranceCameraTrack(kind),
+          };
+          setSliceStage(kind === 'dundubhi' ? 'dundubhi_intro' : 'vrikodara_intro');
+        },
         prepareExecution: (variant: ParashuFinisherVariant) => {
           if (!['downward_crush', 'spin_360_cleave', 'impaling_lunge'].includes(variant)) {
             throw new Error('Unknown finisher fixture ' + String(variant));
