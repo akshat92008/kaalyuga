@@ -6,15 +6,21 @@ on:
     paths:
       - 'engine/meru/**'
       - 'components/game/MeruCinematicStudio.tsx'
+      - 'components/game/MeruCinematicPlayback.tsx'
+      - 'components/game/KaliyugaArena.tsx'
       - 'app/meru-studio/**'
       - 'lib/game/chamberGeometry.ts'
+      - 'tsconfig.meru.json'
       - '.github/workflows/meru-production-core.yml'
   pull_request:
     paths:
       - 'engine/meru/**'
       - 'components/game/MeruCinematicStudio.tsx'
+      - 'components/game/MeruCinematicPlayback.tsx'
+      - 'components/game/KaliyugaArena.tsx'
       - 'app/meru-studio/**'
       - 'lib/game/chamberGeometry.ts'
+      - 'tsconfig.meru.json'
       - '.github/workflows/meru-production-core.yml'
 permissions:
   contents: read
