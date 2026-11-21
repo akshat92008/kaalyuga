@@ -65,40 +65,79 @@ export function paintMeruFrame(
   }
   ctx.restore();
 
-  // Precise authored impact cues: a short-lived chakra fracture and ink-spark
-  // eruption at the boss's feet. This does not run when merely scrubbing before
-  // the cue, does not invent hit/damage events, and is bounded for the M3 Air.
-  const pulse=scene.cues.filter(c=>c.kind==='vfx'&&frame.time>=c.time&&frame.time<c.time+0.72)
-    .map(c=>clamp(1-(frame.time-c.time)/0.72,0,1));
-  if(pulse.length){
-    const power=Math.max(...pulse);
-    const impactX=W/2+frame.actor.x;
-    const impactY=H*0.77+frame.actor.y;
-    const color=scene.boss==='vrikodara'?'255,84,43':'242,90,110';
+  // Cue-locked animation. The camera transform is exactly the one used for the
+  // boss above: rings, ink lashes and hot debris stay attached to its feet as
+  // authored camera moves zoom or shake. No giant composited square textures.
+  const activeImpactCues=scene.cues.filter(c=>c.kind==='vfx'&&frame.time>=c.time&&frame.time<c.time+0.8);
+  for(const cue of activeImpactCues){
+    const age=frame.time-cue.time;
+    const life=clamp(1-age/0.8,0,1);
+    const rise=1-life;
+    const furnace=cue.payload==='blood-furnace';
+    const sunder=cue.payload==='earth-sunder';
+    const color=furnace?'255,96,43':sunder?'252,81,101':'250,195,118';
+    const worldX=W/2+frame.actor.x;
+    const worldY=H-52+frame.actor.y;
+    const bloom=frame.actor.scale;
+    ctx.save();
+    ctx.translate(W/2+frame.camera.x+dx,H/2+frame.camera.y+dy);
+    ctx.rotate(frame.camera.roll);
+    ctx.scale(frame.camera.zoom,frame.camera.zoom);
+    ctx.translate(-W/2,-H/2);
+    ctx.globalCompositeOperation='screen';
+    // Four elliptical ground waves expand outward from the same plane as the boss.
+    for(let ring=0;ring<4;ring++){
+      const r=(24+ring*19+rise*(118+ring*14))*bloom;
+      ctx.strokeStyle='rgba('+color+',1)';
+      ctx.globalAlpha=clamp(life*(0.62-ring*0.12),0,1);
+      ctx.lineWidth=(6-ring*1.1)*bloom;
+      ctx.beginPath();
+      ctx.ellipse(worldX,worldY,r,r*0.26,0,0,Math.PI*2);
+      ctx.stroke();
+    }
+    // Ink-edged vertical cuts echo a hand-drawn anime impact, rather than a
+    // physically implausible neon full-screen flash. The strokes are bounded.
+    for(let slash=0;slash<5;slash++){
+      const direction=slash%2===0?1:-1;
+      const swing=(slash-2)*38*bloom;
+      const bottomX=worldX+swing;
+      const bottomY=worldY-11*bloom;
+      const reach=(80+slash%3*23+rise*50)*bloom;
+      ctx.globalAlpha=life*(0.37+(slash%2)*0.1);
+      ctx.strokeStyle='rgba('+color+',1)';
+      ctx.lineWidth=(7-slash*0.9)*bloom;
+      ctx.beginPath();
+      ctx.moveTo(bottomX,bottomY);
+      ctx.quadraticCurveTo(bottomX+direction*reach*0.9,bottomY-reach*0.6,bottomX+direction*reach*0.55,bottomY-reach*1.4);
+      ctx.stroke();
+      ctx.lineWidth=1.2*bloom;
+      ctx.strokeStyle='rgba(255,235,196,1)';
+      ctx.stroke();
+    }
+    // Fire/earth fragments have deterministic paths, preserving frame-to-frame
+    // continuity on M3 Air and software WebGL test runners.
+    for(let i=0;i<20;i++){
+      const theta=i*2.399963;
+      const dxShard=Math.cos(theta)*(16+i%5*15+rise*75)*bloom;
+      const dyShard=Math.sin(theta)*(12+i%4*10+rise*70)*bloom;
+      const px=worldX+dxShard;
+      const py=worldY-48*bloom-dyShard-rise*34*bloom;
+      ctx.globalAlpha=life*(0.42+(i%3)*0.12);
+      ctx.fillStyle=i%4===0?'#fff2cc':'rgba('+color+',1)';
+      ctx.beginPath();
+      ctx.moveTo(px,py);
+      ctx.lineTo(px+Math.cos(theta)*10*bloom,py-13*bloom);
+      ctx.lineTo(px-3*bloom,py+5*bloom);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+    // A narrow beat flash is allowed; avoid opaque full-frame bloom or cropped
+    // offscreen quads that previously caused obvious orange rectangles.
     ctx.save();
     ctx.globalCompositeOperation='screen';
-    for(let ring=0;ring<3;ring++){
-      const radius=(1-power)*115+30+ring*18;
-      ctx.globalAlpha=power*(0.55-ring*0.13);
-      ctx.strokeStyle='rgba('+color+',1)';
-      ctx.lineWidth=6-ring*1.35;
-      ctx.beginPath();
-      ctx.ellipse(impactX,impactY,radius,radius*0.34,0,0,Math.PI*2);
-      ctx.stroke();
-    }
-    for(let i=0;i<20;i++){
-      const ang=i*Math.PI*2/20+(i%3)*0.16;
-      const reach=(1-power)*(35+(i%5)*19);
-      const sx=impactX+Math.cos(ang)*reach;
-      const sy=impactY+Math.sin(ang)*reach*0.45;
-      ctx.globalAlpha=power*0.8;
-      ctx.strokeStyle='rgba('+color+',1)';
-      ctx.lineWidth=1.1+(i%3);
-      ctx.beginPath();
-      ctx.moveTo(sx,sy);
-      ctx.lineTo(sx+Math.cos(ang)*(8+power*24),sy+Math.sin(ang)*9);
-      ctx.stroke();
-    }
+    ctx.fillStyle='rgba('+color+','+(clamp((1-age/0.15)*0.09,0,0.09))+')';
+    ctx.fillRect(0,0,W,H);
     ctx.restore();
   }
 
