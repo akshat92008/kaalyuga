@@ -48,6 +48,9 @@ import {
 } from '@/lib/game/spriteProcessor';
 import { Rudra3DRenderer } from '@/lib/game/rudra3dRenderer';
 import { Boss3DRenderer } from '@/lib/game/boss3dRenderer';
+import MeruCinematicPlayback from '@/components/game/MeruCinematicPlayback';
+import type { MeruCinematic } from '@/engine/meru/cinematicTimeline';
+import { shouldStartDundubhiIntro, readDundubhiIntro } from '@/engine/meru/runtimePolicy';
 import { Susanoo3DRenderer } from '@/lib/game/susanoo3dRenderer';
 import CholaBrassHud from '@/components/game/CholaBrassHud';
 import {
@@ -539,6 +542,8 @@ export default function KaliyugaArena() {
   const [enemyRenderMode, setEnemyRenderMode] = useState<EnemyRenderMode>('all_3d');
   const [activeHubDialogueNpc, setActiveHubDialogueNpc] = useState<HubNpcId | null>(null);
   const [chamberLoadingLabel, setChamberLoadingLabel] = useState<string | null>(null);
+  // Meru cinematic handoff. When present, gameplay is paused until finish or skip.
+  const [activeMeruScene, setActiveMeruScene] = useState<MeruCinematic | null>(null);
   const [isDebugMode] = useState<boolean>(() =>
     typeof window !== 'undefined'
       ? new URLSearchParams(window.location.search).get('debug') === '1'
@@ -2425,6 +2430,24 @@ export default function KaliyugaArena() {
         }
       }
 
+      // Meru Director: enter a real boss cinematic only for a live normal Dundubhi
+      // encounter. Never interrupt title/hub, direct phase-2 debug tests, or cleared scenes.
+      const meruDundubhiIntro = shouldStartDundubhiIntro({
+        chamberIndex: clampedIdx,
+        stage: sim.state,
+        hasDundubhi: sim.enemies.some(e => e.type === 'dundubhi' && e.hp > 0),
+        query: typeof window !== 'undefined' ? window.location.search : '',
+      });
+      if (meruDundubhiIntro) {
+        // Pause immediately; state-sync effect maintains pause during the overlay.
+        sim.modalPaused = true;
+        sim.input.keysHeld.clear();
+        sim.input.justPressed.clear();
+        setActiveMeruScene(readDundubhiIntro());
+      } else {
+        setActiveMeruScene(null);
+      }
+
       // Stage B (Step 10): Pre-bake core sprite atlases lazily during active gameplay (never during Title Screen)
       if (!isTitleMode) {
         rudra3dRef.current?.prewarmCoreAtlas();
@@ -2440,7 +2463,7 @@ export default function KaliyugaArena() {
                 : 'semi_boss';
           boss3dRef.current.prewarmBossAtlas(bossKind);
           const bossUnit = sim.enemies.find((en) => en.isBoss || en.type === 'semi_boss_bloodforge');
-          if (bossUnit) {
+          if (bossUnit && !meruDundubhiIntro) {
             // Purple-Crimson Blood Demon Art Entrance Cage (Zero cyan Akaza compass on Dundubhi!)
             webglDemonSlayerVfxRef.current?.spawnBloodThreadCage({
               x: bossUnit.x,
@@ -12155,6 +12178,7 @@ export default function KaliyugaArena() {
       hubBoatDrawerOpen ||
       activeHubDialogueNpc !== null ||
       chamberLoadingLabel !== null ||
+      activeMeruScene !== null ||
       (sliceStage !== 'combat_arena' &&
         sliceStage !== 'vaitarani_hub' &&
         sliceStage !== 'opening_wake');
@@ -12167,6 +12191,7 @@ export default function KaliyugaArena() {
     hubBoatDrawerOpen,
     activeHubDialogueNpc,
     chamberLoadingLabel,
+    activeMeruScene,
     sliceStage,
   ]);
 
@@ -13103,6 +13128,35 @@ export default function KaliyugaArena() {
           onEnterCharnelPlains={() => {
             setActiveHubDialogueNpc(null);
             startGameAtChamber(0);
+          }}
+        />
+      )}
+
+      {/* Meru real-asset boss introduction: freezes combat and always releases
+          controls on completion or skip. Separate from narrative/story overlays. */}
+      {activeMeruScene && sliceStage === 'combat_arena' && (
+        <MeruCinematicPlayback
+          key={activeMeruScene.id}
+          scene={activeMeruScene}
+          onFinish={(reason) => {
+            const sim = simRef.current;
+            sim.input.keysHeld.clear();
+            sim.input.justPressed.clear();
+            sim.player.invulnTimer = Math.max(sim.player.invulnTimer, 0.8);
+            if (reason === 'completed') {
+              const boss = sim.enemies.find(e => e.type === 'dundubhi' && e.hp > 0);
+              if (boss) {
+                webglDemonSlayerVfxRef.current?.spawnBloodThreadCage({
+                  x: boss.x,
+                  y: boss.y - 12,
+                  radius: 275,
+                  palette: 'void',
+                  duration: 1.2,
+                  threadCount: 16,
+                });
+              }
+            }
+            setActiveMeruScene(null);
           }}
         />
       )}
