@@ -2596,6 +2596,29 @@ export default function KaliyugaArena() {
           sim.waveQueue = [];
           sim.chamberClearTimer = 1.5;
         }
+        // Opt-in PRODUCTION-BROWSER execution rehearsal. A real existing
+        // chamber enemy is placed into the exact gameplay posture-break state;
+        // pressing [F] still uses the full canonical execution, 3D animation,
+        // camera, damage, sound, hit-stop and input-release systems. Without
+        // ?perf=1&qaExecution=1 normal gameplay/spawns are unchanged.
+        if (params.get('perf') === '1' &&
+            params.get('qaExecution') === '1' && clampedIdx === 0) {
+          const target = sim.enemies.find(e => !e.isBoss && e.aiState !== 'ko');
+          if (target) {
+            target.x = sim.player.x + 78;
+            target.y = sim.player.y + 4;
+            target.posture = 0;
+            target.postureBrokenTimer = 12;
+            target.aiState = 'recover';
+            target.aiTimer = 12;
+            for (const other of sim.enemies) {
+              if (other === target) continue;
+              other.x = Math.min(worldW * 0.80, worldW - 80);
+              other.y = Math.min(worldH * 0.75, worldH - 80);
+              other.immobilizedTimer = Math.max(other.immobilizedTimer, 12);
+            }
+          }
+        }
       }
 
       // Stage B (Step 10): Pre-bake core sprite atlases lazily during active gameplay (never during Title Screen)
@@ -12656,7 +12679,9 @@ export default function KaliyugaArena() {
       if (perfTelemetryEnabled && sim.state === 'playing') {
         const active = sim.player.action === 'light_attack'
           ? 'light'
-          : sim.player.action === 'heavy_unleash' ? 'heavy' : null;
+          : sim.player.action === 'heavy_unleash'
+            ? 'heavy'
+            : sim.player.action === 'execute' ? 'execute' : null;
         const swing = sim.player.weaponSwingProgress;
         const key = active ? `ch${sim.chamberIndex + 1}-${active}` : null;
         if (key && swing >= 0.33 && swing <= 0.58 &&
