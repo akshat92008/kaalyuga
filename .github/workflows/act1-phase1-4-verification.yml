@@ -81,6 +81,7 @@ jobs:
             cutscenes/scripts/process_rudra_animations.py
             scripts/qa/verify_rudra_glb.py
             public/kaalyuga/rudra/rigged.fbx
+            public/kaalyuga/rudra/diffuse.png
             public/kaalyuga/anims/rudra
       - name: Install real Blender on runner
         run: |
