@@ -84,3 +84,18 @@ npm run build
 ```
 
 CI: `.github/workflows/meru-production-core.yml`. The job includes a non-blocking full repository type audit and reports its errors; do not equate its success with a completely type-safe legacy engine.
+
+## Meru continuation — portal journeys and original-rig phase reveals (2026-11-22)
+
+Changes on draft PR #9, **not on main**:
+
+1. **Vaitarani ferry and regular gate journeys:** a lightweight skippable Canvas2D portal-travel UI now covers actual room changes. It retains original painted/MP4 arenas, gates the switch on destination poster readiness (7s bounded image fallback), clears buffered input, and never requires a second MP4 decoder or a 3D arena rebuild. Walk-in ferry, ferry interaction, hub NPC entry, boon-completion and right-gate/timeout transitions share this passage. Direct URL/debug starts stay unchanged. Duplicate gate reward claims are guarded.
+2. **Poster-to-video continuity:** the real boss-cinematic player and Meru Studio retain the painted poster until the MP4 decodes a first frame, then crossfade into moving scenery. Failed video playback leaves the poster visible.
+3. **Real original-boss phase reveals:** Dundubhi and Vrikodara now have distinct 4.2-second authorable phase-II and phase-III timelines using the original Boss3DRenderer. Vrikodara phases use the existing Blood-Eclipse/slag-furnace MP4 and painted Sanctum artwork. The combat loop triggers these only for actual live, living-boss phase transitions, excluding title, debug phase starts and cinematic=0. Skip returns to combat.
+4. **Scene isolation / editor:** phase scenes use separate per-boss/per-phase browser-local keys. Studio can select, edit and export all six scenes. The existing v1 schema remains backward compatible; a validated optional bossPhase selects the true rig phase in the original 3D renderer.
+5. **Legibility:** anchored ground shadows and authored ink-impact rings and sparks reduce the cutout feel, with lightweight 2.5D effects appropriate for the M3 Air budget.
+6. **Automated checks:** CI includes Node regression tests, focused Meru TypeScript, Next production build, and Chromium Studio/game browser QA. Extended browser QA tests the walkable hub→ferry transition and Phase-II scene export.
+
+### Unfinished release gates
+
+The new passage and phase scenes require verified browser screenshots, repeated full gameplay testing across transitions and input methods, checks for slow video/poster loading, 30/60 FPS strike timing, audio unlock and frame pacing, M3 Air 8GB GPU and thermal profiling, and director approval for visual staging. The real rig phase sequences reuse existing animation states; bone posing/IK, bespoke transformation meshes, synchronized multi-character performance, facial animation, lip sync and full cinematic scene physics are **not complete**. Scene authoring is browser-local until exported and committed. **Keep PR #9 in draft and unmerged** pending full evidence.
