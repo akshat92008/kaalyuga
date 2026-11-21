@@ -1,0 +1,51 @@
+const fs = require('node:fs/promises');
+const path = require('node:path');
+const { chromium } = require('playwright-core');
+
+async function main() {
+  const output = path.resolve(process.env.ARTIFACT_DIR || 'act1-captures');
+  await fs.mkdir(output, { recursive: true });
+  const browser = await chromium.launch({
+    channel: 'chrome',
+    args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
+  });
+  const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+  const result = { errors: [], mediaFailures: [], rooms: [] };
+  page.on('pageerror', error => result.errors.push(error.message));
+  page.on('response', response => {
+    if (response.status() >= 400 && /\.(png|jpg|fbx|bin|mp4|mp3|wav)(\?|$)/i.test(response.url())) {
+      result.mediaFailures.push({ url: response.url(), status: response.status() });
+    }
+  });
+  try {
+    const base = process.env.GAME_URL || 'http://127.0.0.1:3000';
+    for (const chamber of [1, 4, 8]) {
+      await page.goto(base + '/?chamber=' + chamber, { waitUntil: 'domcontentloaded' });
+      await page.getByTestId('hud-pause-btn').waitFor({ timeout: 90000 });
+      await page.getByTestId('chamber-loader').waitFor({ state: 'hidden', timeout: 90000 });
+      await page.keyboard.press('KeyJ');
+      const timing = await page.evaluate(async () => {
+        const intervals = [];
+        let prev = await new Promise(requestAnimationFrame);
+        for (let i = 0; i < 60; i++) {
+          const now = await new Promise(requestAnimationFrame);
+          intervals.push(now - prev);
+          prev = now;
+        }
+        intervals.sort((a, b) => a - b);
+        return { medianMs: intervals[29], p95Ms: intervals[56], state: document.body.dataset.state };
+      });
+      if (timing.state !== 'playing') throw new Error('Room ' + chamber + ' ended in ' + timing.state);
+      result.rooms.push({ chamber, ...timing });
+      await page.screenshot({ path: path.join(output, 'chamber-' + chamber + '.png') });
+      await page.getByTestId('hud-pause-btn').click();
+      await page.waitForFunction(() => document.body.dataset.state === 'paused');
+    }
+    if (result.errors.length) throw new Error(result.errors.join('\n'));
+  } finally {
+    await fs.writeFile(path.join(output, 'measurements.json'), JSON.stringify(result, null, 2));
+    await browser.close();
+  }
+}
+
+main().catch(error => { console.error(error); process.exitCode = 1; });

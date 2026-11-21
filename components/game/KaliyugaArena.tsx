@@ -8017,6 +8017,7 @@ export default function KaliyugaArena() {
                 ? computeVrikodaraPhase(e.hp, e.maxHp)
                 : computeBossPhase(e.hp, e.maxHp);
             if (nextPhase > e.phase) {
+              const bossPhasePalette: DemonSlayerVfxPalette = e.type === 'vrikodara' ? 'magma' : 'bronze';
               e.phase = nextPhase;
               e.posture = e.maxPosture;
               e.immobilizedTimer = 0;
@@ -8740,7 +8741,7 @@ export default function KaliyugaArena() {
               const enemyTier = classifyEnemyVfxTier({
                 type: e.type,
                 isBoss: e.isBoss,
-                isSemiBoss: e.isSemiBoss,
+                isSemiBoss: e.type === 'semi_boss_bloodforge',
               });
               const enemyBudget = getEnemySlashVfxBudget(enemyTier, e.telegraphRadius, e.attackKind);
               const enemyVfxPal: DemonSlayerVfxPalette =
