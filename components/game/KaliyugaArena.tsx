@@ -303,6 +303,7 @@ import {
   getChamberGeometry,
   getOrStartArenaVideo,
   prewarmArenaVideo,
+  releaseArenaVideos,
   renderParallaxAbyss,
   renderIsometricChamberPlatform,
   updateAndRenderPressureTraps,
@@ -2135,6 +2136,9 @@ export default function KaliyugaArena() {
       const clampedIdx = Math.max(0, Math.min(CHAMBERS.length - 1, index));
       const spec = CHAMBERS[clampedIdx];
       const isTitleMode = sim.state === 'title';
+      // Animated arena MP4 streaming is retired during gameplay. Static paintings stay stable.
+      sim.videoBgEnabled = false;
+      releaseArenaVideos();
       // Flush stale 3D baked frame caches between chambers to prevent Chamber 4 Dundubhi memory buildup/lag
       enemy3dRef.current?.clearFrameCache();
       boss3dRef.current?.clearFrameCache();
@@ -2804,14 +2808,6 @@ export default function KaliyugaArena() {
         ? Math.min(CHAMBERS.length - 1, rawStartCh - 1)
         : 0;
     const initialChamber = CHAMBERS[initialChIdx] || CHAMBERS[0];
-    const isDirectGameplay = Boolean(
-      startParams &&
-        (startParams.get('autostart') === '1' ||
-          startParams.get('autostart') === 'true' ||
-          startParams.get('hub') === '1' ||
-          startParams.get('hub') === 'true' ||
-          (Number.isFinite(rawStartCh) && rawStartCh >= 1))
-    );
     if (initialChamber) {
       loadBgWithRetry(initialChamber.backgroundUrl);
       if (initialChamber.unlockedBackgroundUrl) {
@@ -2820,16 +2816,7 @@ export default function KaliyugaArena() {
       if (initialChamber.phase2BackgroundUrl) {
         loadBgWithRetry(initialChamber.phase2BackgroundUrl);
       }
-      if (initialChamber.videoUrl) {
-        if (isDirectGameplay) {
-          getOrStartArenaVideo(initialChamber.videoUrl, false);
-        } else {
-          prewarmArenaVideo(initialChamber.videoUrl);
-        }
-      }
-      if (initialChamber.phase2VideoUrl) {
-        prewarmArenaVideo(initialChamber.phase2VideoUrl);
-      }
+      // Do not preload any 1080p arena MP4 (title and narrative cutscenes are unaffected).
     }
     loadBgWithRetry(GAME_ASSETS.titleBackdrop);
 
@@ -9931,13 +9918,6 @@ export default function KaliyugaArena() {
         : (chamberSpec.braziers[0]?.x ?? 0.5) * worldW;
 
       // Step 2: Render Full-Color 1080p Animated MP4 Arena (or Painted Fallback), Exit Gate Archways & Surface Scars
-      const resolvedChamberVideoUrl = isRenderHubMode
-        ? GAME_ASSETS.arenaVideos.ashHubRiver
-        : activeBoss && activeBoss.phase >= 2 && chamberSpec.phase2VideoUrl
-        ? chamberSpec.phase2VideoUrl
-        : isChamberCleared && chamberSpec.unlockedVideoUrl
-        ? chamberSpec.unlockedVideoUrl
-        : chamberSpec.videoUrl;
       renderIsometricChamberPlatform(
         ctx,
         worldW,
@@ -9959,8 +9939,8 @@ export default function KaliyugaArena() {
           void impactsAsset;
           void brazierFlameAsset;
         },
-        resolvedChamberVideoUrl,
-        !sim.videoBgEnabled
+        undefined,
+        true
       );
 
       // Step 2.2: Interactive Hand-Painted 4-Stage Floor Traps (zhy8c6zhy8c6zhy8_5d2df495.png)
@@ -12960,17 +12940,13 @@ export default function KaliyugaArena() {
                   </button>
                 </div>
                 <div className="flex items-center gap-1.5 pt-2 mt-2 border-t border-[#d4a548]/25">
-                  <button
-                    type="button"
-                    data-testid="toggle-video-bg-btn"
-                    onClick={() => {
-                      simRef.current.videoBgEnabled = !simRef.current.videoBgEnabled;
-                      setControlsOpen(false);
-                    }}
-                    className="flex-1 py-1.5 px-2 border border-[#d4a548]/45 text-[10px] font-mono-num text-[#f5ebd6] bg-[#141116] hover:border-[#d4a548] cursor-pointer"
+                  <div
+                    data-testid="static-arena-bg-mode"
+                    className="flex-1 py-1.5 px-2 border border-[#d4a548]/45 text-[10px] font-mono-num text-[#f5ebd6] bg-[#141116]"
+                    title="Painted chamber backgrounds stay consistent throughout combat; HD video is reserved for cutscenes"
                   >
-                    {(hud.videoBgEnabled ?? true) ? 'HD VIDEO BG: ON' : 'HD VIDEO BG: OFF'}
-                  </button>
+                    PAINTED ARENAS · STABLE
+                  </div>
                   {isDebugMode && (
                     <button
                       type="button"
