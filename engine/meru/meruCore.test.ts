@@ -192,3 +192,21 @@ test('boss phase reveals never launch on title, wrong chamber, dead rig or debug
   assert.equal(shouldStartBossPhase({...active,query:'?cleared=1'}),false);
   assert.equal(meruSceneStorageKey(createDundubhiScene()),meruStorageKey('dundubhi'));
 });
+
+test('authored entrance impacts align with their visual beat and remain in camera space',()=>{
+  const scenes=[
+    createDundubhiScene(),createVrikodaraScene(),
+    createBossPhaseScene('dundubhi',2),createBossPhaseScene('dundubhi',3),
+    createBossPhaseScene('vrikodara',2),createBossPhaseScene('vrikodara',3),
+  ];
+  for(const scene of scenes){
+    const audioImpacts=scene.cues.filter(c=>c.kind==='impact');
+    const visualImpacts=scene.cues.filter(c=>c.kind==='vfx');
+    assert.ok(audioImpacts.length>=1,scene.id+' has an authored impact sound');
+    assert.ok(visualImpacts.length>=1,scene.id+' has an authored visual impact');
+    assert.ok(audioImpacts.some(sound=>visualImpacts.some(vfx=>Math.abs(sound.time-vfx.time)<=0.05)),
+      scene.id+' visual and audible impacts remain synchronized');
+    assert.ok(visualImpacts.every(c=>['earth-sunder','blood-furnace','ward-break'].includes(c.payload??'')),
+      scene.id+' only uses palette-authored, bounded ink impact effects');
+  }
+});
