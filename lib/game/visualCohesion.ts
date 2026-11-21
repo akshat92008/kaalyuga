@@ -750,30 +750,48 @@ export function renderWeaponPoseTrail(
  * crescent while 3D source animation has not advanced to a second sample.
  */
 export function renderParashuBladeTipGlint(
-  ctx: CanvasRenderingContext2D,
-  point: {x:number;y:number},
-  alpha: number,
-  stance: 'smash' | 'pillar' | 'thrust' | string
-): boolean {
-  if (![point.x,point.y,alpha].every(Number.isFinite) || alpha <= 0.01)
-    return false;
-  const opacity = Math.max(0,Math.min(1,alpha));
-  const accent = stance === 'thrust' ? '#6fefff'
-    : stance === 'pillar' ? '#5bffc1' : '#ffb66b';
+  ctx:CanvasRenderingContext2D,
+  point:{x:number;y:number},
+  alpha:number,
+  stance:Act1HeavyBreathingStance,
+  element?:Act1BreathingElement
+):boolean {
+  if(![point.x,point.y,alpha].every(Number.isFinite)||alpha<=0.01)return false;
+  const opacity=Math.max(0,Math.min(1,alpha));
+  const ink=act1HeavyBreathingPalette(stance,element);
   ctx.save();
   ctx.globalCompositeOperation='source-over';
+  // The 145ms light attack may sample only ONE genuine FBX blade pose on
+  // software GPUs. Rather than invent a ghost trajectory, paint a visible
+  // 23px blade-tip ignition exactly on that physical cached mesh position.
+  const radius=23;
+  const aura=ctx.createRadialGradient(point.x,point.y,1,point.x,point.y,radius);
+  aura.addColorStop(0,ink.hot);
+  aura.addColorStop(0.23,ink.pigment);
+  aura.addColorStop(0.55,ink.ember+'a8');
+  aura.addColorStop(1,ink.ember+'00');
+  ctx.globalAlpha=opacity*0.72;
+  ctx.fillStyle=aura;
+  ctx.beginPath();
+  ctx.arc(point.x,point.y,radius,0,Math.PI*2);
+  ctx.fill();
+  // Narrow splintered hot-core cross, unique palette for water / jade /
+  // lightning / fire rather than yet another arena-size circle.
   ctx.lineCap='round';
-  ctx.strokeStyle='#12080b';
-  ctx.lineWidth=5.4;
-  ctx.globalAlpha=opacity*0.8;
-  ctx.beginPath();ctx.moveTo(point.x-5,point.y+2);ctx.lineTo(point.x+5,point.y-2);ctx.stroke();
-  ctx.strokeStyle=accent;
-  ctx.lineWidth=2.8;
-  ctx.globalAlpha=opacity;
-  ctx.beginPath();ctx.moveTo(point.x-5,point.y+2);ctx.lineTo(point.x+5,point.y-2);ctx.stroke();
-  ctx.lineWidth=1.3;
-  ctx.strokeStyle='#fff1c3';
-  ctx.beginPath();ctx.moveTo(point.x-2,point.y+3);ctx.lineTo(point.x+2,point.y-3);ctx.stroke();
+  const strokes=[
+    {a:[-9,2],b:[11,-4],width:3.2,ink:'#15070d',opacity:0.86},
+    {a:[-9,2],b:[11,-4],width:2.1,ink:ink.pigment,opacity:0.94},
+    {a:[-2,-9],b:[3,10],width:1.8,ink:ink.hot,opacity:0.90},
+    {a:[-5,-5],b:[5,5],width:0.8,ink:ink.hot,opacity:0.62},
+  ];
+  for(const stroke of strokes){
+    ctx.strokeStyle=stroke.ink;ctx.lineWidth=stroke.width;
+    ctx.globalAlpha=opacity*stroke.opacity;
+    ctx.beginPath();
+    ctx.moveTo(point.x+stroke.a[0],point.y+stroke.a[1]);
+    ctx.lineTo(point.x+stroke.b[0],point.y+stroke.b[1]);
+    ctx.stroke();
+  }
   ctx.restore();
   return true;
 }
