@@ -193,10 +193,10 @@ export default function MeruCinematicPlayback({scene,onFinish,muted=false}:MeruC
       data-meru-rig-status={!ready ? 'loading' : status.includes('3D rig active') ? 'rigged' : 'fallback'}
       data-meru-rig-detail={status}
       data-meru-started-with-rig={startedWithRig===null?'pending':startedWithRig?'yes':'no'}
-      className="fixed inset-0 z-[85] flex items-center justify-center bg-[#050407]/[0.98] p-2 sm:p-6"
+      className="fixed inset-0 z-[85] flex items-center justify-center overflow-hidden bg-[#050407]"
     >
-      <div className="relative w-full max-w-6xl">
-        <div className="relative aspect-video overflow-hidden rounded-xl border border-[#63462e] bg-[#0c070b] shadow-[0_30px_90px_rgba(0,0,0,0.95)]">
+      <div className="relative aspect-video w-full max-w-[177.778dvh]">
+        <div className="relative aspect-video overflow-hidden bg-[#0c070b]">
           <div className="absolute inset-0 bg-cover bg-center" style={{backgroundImage:'url('+scene.posterUrl+')'}}/>
           <video
             ref={videoRef} src={scene.backgroundUrl} poster={scene.posterUrl}
@@ -218,7 +218,7 @@ export default function MeruCinematicPlayback({scene,onFinish,muted=false}:MeruC
           </div>
           {!ready && <div role="status" className="absolute inset-0 flex items-center justify-center bg-black/50 text-center font-serif text-xl text-[#edc28e]">{status}</div>}
         </div>
-        <div className="mt-3 flex items-center gap-3">
+        <div className="absolute bottom-3 left-4 right-4 z-10 flex items-center gap-3 rounded-md border border-[#816044]/30 bg-[#080608]/80 px-3 py-2 backdrop-blur-sm">
           <div className="h-1 flex-1 overflow-hidden rounded bg-[#30221f]" aria-hidden="true">
             <div className="h-full bg-[#d08c56]" style={{width:Math.min(100,seconds/scene.duration*100)+'%'}}/>
           </div>
@@ -228,7 +228,7 @@ export default function MeruCinematicPlayback({scene,onFinish,muted=false}:MeruC
             type="button"
             aria-label="Skip boss cinematic and begin combat"
             onClick={()=>finish('skipped')}
-            className="rounded-md border border-[#8b674e] bg-[#291913] px-4 py-2 text-sm font-semibold text-[#f5d7ac] hover:bg-[#3c281a] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#f6ca7d]"
+            className="rounded-md border border-[#8b674e] bg-[#291913]/90 px-4 py-2 text-xs font-semibold text-[#f5d7ac] hover:bg-[#3c281a] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#f6ca7d]"
           >Skip cinematic <span className="text-[#c8ac8c]">(Esc)</span></button>
         </div>
       </div>
