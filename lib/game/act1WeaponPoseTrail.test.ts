@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { advanceWeaponPoseTrail,buildWeaponPoseTrailBands,projectWeaponHeadToWorld } from './act1WeaponPoseTrail';
+import { advanceWeaponPoseTrail,buildWeaponPoseTrailBands,projectWeaponHeadToWorld, type WeaponTrailSample } from './act1WeaponPoseTrail';
 
 test('Sprite head projection exactly shares Rudra world draw transform',()=>{
  const p=projectWeaponHeadToWorld({uv:{x:.5,y:.8},actorX:450,actorY:360,drawSize:136,footAnchorRatio:.8});
@@ -15,7 +15,7 @@ test('Invalid, absent, or behind-frame head projection never draws a ghost weapo
  }
 });
 test('Samples expire after 155 ms and do not multiply on cached animation frames',()=>{
- let samples=[];
+ let samples: WeaponTrailSample[]=[];
  for(let i=0;i<6;i++)samples=advanceWeaponPoseTrail({previous:samples,point:{x:100+i*6,y:100+i*2},atMs:i*20});
  assert.equal(samples.length,6);
  samples=advanceWeaponPoseTrail({previous:samples,point:{x:130,y:110},atMs:102});
