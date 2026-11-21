@@ -98,10 +98,11 @@ const base = process.env.GAME_URL || 'http://127.0.0.1:3100';
     }
     await fixture();
     await page.waitForTimeout(950);
+    const lightBefore = await countEvent('light-contact');
     await page.keyboard.press('j');
-    await page.waitForFunction(() => window.__kaliyugaPhaseQA?.action === 'light_attack', null, { timeout: 12000 });
+    await assertEvent('light-contact', 'thrust', lightBefore);
     await capture('10-light-parashu');
-    report.checks.push('real light Parashu action and screenshot');
+    report.checks.push('real light Parashu active-frame contact and screenshot');
 
     for (const astra of [
       { key: 'q', name: 'agneyastra-fire', id: 'agneyastra' },
@@ -113,6 +114,9 @@ const base = process.env.GAME_URL || 'http://127.0.0.1:3100';
       const before = await countEvent('astra-invoked');
       await page.keyboard.press(astra.key);
       await assertEvent('astra-invoked', astra.id, before);
+      // The cast event precedes WebGL's next animation frame; a screenshot
+      // taken immediately at keydown can show NO VFX despite a valid cast.
+      await page.waitForTimeout(240);
       await capture('10-' + astra.name);
       report.checks.push('real ' + astra.id + ' meter-spending Astra and screenshot');
     }
@@ -122,6 +126,7 @@ const base = process.env.GAME_URL || 'http://127.0.0.1:3100';
     const waterBefore = await countEvent('varuna-water-dragon');
     await page.keyboard.press('4');
     await assertEvent('varuna-water-dragon', 'varuna', waterBefore);
+    await page.waitForTimeout(160);
     await capture('10-varuna-water-dragon');
     report.checks.push('real Varuna water-dragon input, VFX dispatch and screenshot');
 
