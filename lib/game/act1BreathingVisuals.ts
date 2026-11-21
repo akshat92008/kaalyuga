@@ -30,7 +30,8 @@ export function computeParashuSwingVisual(
   progress: number,
   comboStep = 1,
 ): ParashuSwingVisual {
-  const isHeavy = action === 'heavy_unleash';
+  const isExecution = action === 'execute';
+  const isHeavy = action === 'heavy_unleash' || isExecution;
   const isLight = action === 'light_attack';
   const step = Math.max(1, Math.min(4, Number.isFinite(comboStep) ? Math.round(comboStep) : 1));
   if (!isLight && !isHeavy) return {active: false,alpha:0,radius:0,isHeavy:false,comboStep:step};
@@ -40,7 +41,7 @@ export function computeParashuSwingVisual(
   const inRamp = clamp01((p - 0.19) / 0.12);
   const outRamp = 1 - clamp01((p - 0.66) / 0.21);
   const alpha = Math.max(0, Math.min(inRamp, outRamp));
-  const radius = isHeavy ? 84 : step === 4 ? 82 : step === 3 ? 72 : 65;
+  const radius = isExecution ? 90 : isHeavy ? 84 : step === 4 ? 82 : step === 3 ? 72 : 65;
   return {
     active: alpha > 0.025,
     alpha,
