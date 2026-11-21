@@ -7,6 +7,7 @@ import {useEffect,useRef,useState} from 'react';
 import {Boss3DRenderer} from '@/lib/game/boss3dRenderer';
 import {GAME_ASSETS} from '@/lib/game/assets';
 import {MeruTimelinePlayer,type MeruCinematic} from '@/engine/meru/cinematicTimeline';
+import {MeruAdaptiveQuality} from '@/engine/meru/adaptiveQuality';
 import {makeMeruBossParams,paintMeruFrame,MERU_FRAME_WIDTH,MERU_FRAME_HEIGHT} from '@/engine/meru/cinematicVisuals';
 
 export type MeruCinematicEndReason='completed'|'skipped';
@@ -45,6 +46,7 @@ export default function MeruCinematicPlayback({scene,onFinish,muted=false}:MeruC
     let isReady=false;
     let audio:Record<string,HTMLAudioElement>={};
     const timeline=new MeruTimelinePlayer(scene);
+    const quality=new MeruAdaptiveQuality('balanced',60);
     timelineRef.current=timeline;
     let boss:Boss3DRenderer|null=null;
     const portrait=new Image();
@@ -86,6 +88,8 @@ export default function MeruCinematicPlayback({scene,onFinish,muted=false}:MeruC
       const dt=lastNow?Math.min(0.05,Math.max(0,(now-lastNow)/1000)):0.016;
       lastNow=now;
       const result=timeline.tick(dt);
+      quality.sample(Math.max(1,dt*1000));
+      const budget=quality.budget;
       if(isReady){
         for(const cue of result.cues){
           if(cue.kind!=='drum'&&cue.kind!=='roar'&&cue.kind!=='impact')continue;
@@ -97,15 +101,16 @@ export default function MeruCinematicPlayback({scene,onFinish,muted=false}:MeruC
       const canvas=canvasRef.current;
       const ctx=canvas?.getContext('2d');
       if(ctx){
-        if(isReady&&hasRig&&boss&&now-lastBoss>=30){
+        if(isReady&&hasRig&&boss&&now-lastBoss>=1000/budget.maxCharacterRenderFps){
+          const bossDt=lastBoss?Math.max(0.015,Math.min(0.04,(now-lastBoss)/1000)):0.033;
           lastBoss=now;
-          try{boss.updateAndRender(makeMeruBossParams(result.frame,Math.max(0.015,dt),scene.boss));}
+          try{boss.updateAndRender(makeMeruBossParams(result.frame,bossDt,scene.boss));}
           catch{
             hasRig=false;
             setStatus('Character renderer unavailable; portrait fallback active');
           }
         }
-        paintMeruFrame(ctx,result.frame,scene,boss,hasRig,portrait);
+        paintMeruFrame(ctx,result.frame,scene,boss,hasRig,portrait,budget.particleMultiplier);
       }
       if(now-lastUi>110){lastUi=now;setSeconds(result.frame.time);}
       if(result.ended){
