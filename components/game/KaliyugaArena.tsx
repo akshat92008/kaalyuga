@@ -48,6 +48,11 @@ import {
 } from '@/lib/game/spriteProcessor';
 import { Rudra3DRenderer } from '@/lib/game/rudra3dRenderer';
 import { Boss3DRenderer } from '@/lib/game/boss3dRenderer';
+import MeruCinematicPlayback from '@/components/game/MeruCinematicPlayback';
+import MeruPortalTravel, { type MeruPortalJourney } from '@/components/game/MeruPortalTravel';
+import type { MeruCinematic } from '@/engine/meru/cinematicTimeline';
+import { shouldStartBossIntro, shouldStartBossPhase, readBossIntro, readBossPhase } from '@/engine/meru/runtimePolicy';
+import { renderMeruPortal } from '@/engine/meru/portalDirector';
 import { Susanoo3DRenderer } from '@/lib/game/susanoo3dRenderer';
 import CholaBrassHud from '@/components/game/CholaBrassHud';
 import {
@@ -539,6 +544,11 @@ export default function KaliyugaArena() {
   const [enemyRenderMode, setEnemyRenderMode] = useState<EnemyRenderMode>('all_3d');
   const [activeHubDialogueNpc, setActiveHubDialogueNpc] = useState<HubNpcId | null>(null);
   const [chamberLoadingLabel, setChamberLoadingLabel] = useState<string | null>(null);
+  // Meru cinematic handoff. When present, gameplay is paused until finish or skip.
+  const [activeMeruScene, setActiveMeruScene] = useState<MeruCinematic | null>(null);
+  const meruTravelPendingRef = useRef(false);
+  const meruPortalCommitRef = useRef<(() => void) | null>(null);
+  const [activeMeruJourney, setActiveMeruJourney] = useState<MeruPortalJourney | null>(null);
   const [isDebugMode] = useState<boolean>(() =>
     typeof window !== 'undefined'
       ? new URLSearchParams(window.location.search).get('debug') === '1'
@@ -2425,6 +2435,26 @@ export default function KaliyugaArena() {
         }
       }
 
+      // Meru Director: both major Act I boss entrances now share the same
+      // authorable timeline, real FBX boss renderer and safe combat handoff.
+      const meruBossKind = clampedIdx === 3 ? 'dundubhi'
+        : clampedIdx === CHAMBERS.length - 1 ? 'vrikodara' : null;
+      const meruBossIntro = meruBossKind !== null && shouldStartBossIntro({
+        boss: meruBossKind,
+        chamberIndex: clampedIdx,
+        stage: sim.state,
+        hasBoss: sim.enemies.some(e => e.type === meruBossKind && e.hp > 0),
+        query: typeof window !== 'undefined' ? window.location.search : '',
+      });
+      if (meruBossIntro && meruBossKind !== null) {
+        sim.modalPaused = true;
+        sim.input.keysHeld.clear();
+        sim.input.justPressed.clear();
+        setActiveMeruScene(readBossIntro(meruBossKind));
+      } else {
+        setActiveMeruScene(null);
+      }
+
       // Stage B (Step 10): Pre-bake core sprite atlases lazily during active gameplay (never during Title Screen)
       if (!isTitleMode) {
         rudra3dRef.current?.prewarmCoreAtlas();
@@ -2440,7 +2470,7 @@ export default function KaliyugaArena() {
                 : 'semi_boss';
           boss3dRef.current.prewarmBossAtlas(bossKind);
           const bossUnit = sim.enemies.find((en) => en.isBoss || en.type === 'semi_boss_bloodforge');
-          if (bossUnit) {
+          if (bossUnit && !meruBossIntro) {
             // Purple-Crimson Blood Demon Art Entrance Cage (Zero cyan Akaza compass on Dundubhi!)
             webglDemonSlayerVfxRef.current?.spawnBloodThreadCage({
               x: bossUnit.x,
@@ -2617,6 +2647,50 @@ export default function KaliyugaArena() {
     [ensure3DRenderersBooted, loadChamber]
   );
 
+  // Meru journey: freeze the outgoing chamber, wait for destination artwork,
+  // and change rooms only behind the portal veil. Direct URL starts stay fast.
+  const queueMeruJourney = useCallback((journey: MeruPortalJourney, cross: () => void) => {
+    if (meruTravelPendingRef.current) return;
+    meruTravelPendingRef.current = true;
+    const sim = simRef.current;
+    sim.modalPaused = true;
+    sim.input.keysHeld.clear();
+    sim.input.justPressed.clear();
+    sim.player.vx = 0;
+    sim.player.vy = 0;
+    meruPortalCommitRef.current = cross;
+    setActiveMeruJourney(journey);
+  }, []);
+
+  const beginMeruHubCrossing = useCallback(() => {
+    if (sliceStageRef.current !== 'vaitarani_hub' &&
+        sliceStageRef.current !== 'opening_wake') return;
+    queueMeruJourney({
+      style: 'vaitarani', destination: 'charnel-plains',
+      label: 'THE CHARNEL PLAINS',
+      sourcePoster: GAME_ASSETS.chambers.vaitaraniAshHub,
+      destinationPoster: CHAMBERS[0].backgroundUrl,
+    }, () => startGameAtChamber(0));
+  }, [queueMeruJourney, startGameAtChamber]);
+
+  const advanceToNextChamber = useCallback((prevIdx: number) => {
+    const target = CHAMBERS[prevIdx + 1];
+    const source = CHAMBERS[prevIdx];
+    if (!target || !source) return;
+    queueMeruJourney({
+      style: prevIdx + 1 === 3 || prevIdx + 1 === CHAMBERS.length - 1 ? 'warden' : 'deva',
+      destination: 'chamber-' + target.id,
+      label: 'CHAMBER ' + target.id + ' · ' + target.name.toUpperCase(),
+      sourcePoster: source.backgroundUrl,
+      destinationPoster: target.backgroundUrl,
+    }, () => {
+      loadChamber(prevIdx + 1, false);
+      if (prevIdx === 0) setSliceStage('savitri_lantern_interlude');
+      else if (prevIdx === 1) setSliceStage('preserver_interlude');
+      else if (prevIdx === 3) setSliceStage('dundubhi_aftermath');
+    });
+  }, [loadChamber, queueMeruJourney]);
+
   // Hades-Style Celestial Boon Altar Handlers
   const openBoonAltar = useCallback(() => {
     const sim = simRef.current;
@@ -2634,6 +2708,7 @@ export default function KaliyugaArena() {
 
   const handleSelectBoon = useCallback(
     (boonId: CelestialBoonId) => {
+      if (meruTravelPendingRef.current) return;
       const sim = simRef.current;
       if (!sim.activeBoons.includes(boonId)) {
         sim.activeBoons.push(boonId);
@@ -2688,17 +2763,10 @@ export default function KaliyugaArena() {
         sim.chamberIndex < CHAMBERS.length - 1
       ) {
         const prevIdx = sim.chamberIndex;
-        loadChamber(prevIdx + 1, false);
-        if (prevIdx === 0) {
-          setSliceStage('savitri_lantern_interlude');
-        } else if (prevIdx === 1) {
-          setSliceStage('preserver_interlude');
-        } else if (prevIdx === 3) {
-          setSliceStage('dundubhi_aftermath');
-        }
+        advanceToNextChamber(prevIdx);
       }
     },
-    [loadChamber, spawnFloatingText, spawnParticles, spawnShockwave]
+    [advanceToNextChamber, spawnFloatingText, spawnParticles, spawnShockwave]
   );
 
   const handleRerollBoons = useCallback(() => {
@@ -6443,7 +6511,7 @@ export default function KaliyugaArena() {
           } else if (prox.station?.id === 'homa_shrine') {
             setActiveHubDialogueNpc('lohakara');
           } else if (prox.station?.id === 'ferry_gate') {
-            startGameAtChamber(0);
+            beginMeruHubCrossing();
           } else {
             setActiveHubDialogueNpc('savitri');
           }
@@ -6525,6 +6593,7 @@ export default function KaliyugaArena() {
     shrineOpen,
     storyOpen,
     startGameAtChamber,
+    beginMeruHubCrossing,
     triggerPartyLinkStrike,
     triggerSwitchStance,
     triggerSwitchWeapon,
@@ -7482,7 +7551,7 @@ export default function KaliyugaArena() {
           p.x = Math.max(180, Math.min(worldW - 180, p.x));
           p.y = Math.max(175, Math.min(worldH - 180, p.y));
           if (isInsideHubFerryGate(p.x, p.y)) {
-            startGameAtChamber(0);
+            beginMeruHubCrossing();
           }
         } else {
           // Constrain Rudra to 2:1 Isometric Chamber Platform Polygon & Interior Chasm Channels
@@ -8014,6 +8083,24 @@ export default function KaliyugaArena() {
                 : computeBossPhase(e.hp, e.maxHp);
             if (nextPhase > e.phase) {
               e.phase = nextPhase;
+              // Keep exact gameplay phase mechanics, damage, posture and AI intact.
+              // A one-time authored Meru reveal pauses only this live encounter;
+              // URL-driven phase rehearsal and cinematic=0 stay unaffected.
+              if (
+                e.hp > 0 && (e.type === 'dundubhi' || e.type === 'vrikodara') &&
+                (nextPhase === 2 || nextPhase === 3) &&
+                !meruTravelPendingRef.current &&
+                shouldStartBossPhase({
+                  boss: e.type, chamberIndex: sim.chamberIndex,
+                  stage: sim.state, hasBoss: true, phase: nextPhase,
+                  query: typeof window !== 'undefined' ? window.location.search : '',
+                })
+              ) {
+                sim.modalPaused = true;
+                sim.input.keysHeld.clear();
+                sim.input.justPressed.clear();
+                setActiveMeruScene(readBossPhase(e.type,nextPhase));
+              }
               e.posture = e.maxPosture;
               e.immobilizedTimer = 0;
               sim.slowMoTimer = 0.32;
@@ -8026,6 +8113,10 @@ export default function KaliyugaArena() {
                 soundEngine.playVoiceBark('vrikodara_phase2', { priority: 'high' });
                 soundEngine.syncBgmState('playing', 8, true, nextPhase, p.transformTimer > 0);
               }
+              // The actual live phase transition uses a valid elemental palette;
+              // leaving this undefined crashed the first post-reveal VFX burst.
+              const bossPhasePalette: DemonSlayerVfxPalette =
+                e.type === 'vrikodara' ? 'hinokami' : 'crimson_gold';
               spawnShockwave(e.x, e.y, 240, '#a855f7', 0.48);
               triggerImpactInversionFlash(bloodDemonArtsRef.current, e.x, e.y - 38, 0.06, '#c026d3');
               // Purple-Crimson Blood Demon Art Cage + Thorny Floor Vines (no cyan Akaza compass on Dundubhi!)
@@ -9599,7 +9690,7 @@ export default function KaliyugaArena() {
                 });
                 setSliceStage('shard1_memory');
               }
-            } else if (enteredRightGate) {
+            } else if (enteredRightGate && !meruTravelPendingRef.current) {
               // Player chose Right Gate: Amrita Kalasha Max HP +30 & +95 Karma Cache!
               p.maxHp += 30;
               p.hp = Math.min(p.maxHp, p.hp + 90);
@@ -9611,10 +9702,7 @@ export default function KaliyugaArena() {
               setBoonReadyCount(0);
               soundEngine.playSpell('gourd');
               const prevIdx = sim.chamberIndex;
-              loadChamber(prevIdx + 1, false);
-              if (prevIdx === 0) setSliceStage('savitri_lantern_interlude');
-              else if (prevIdx === 1) setSliceStage('preserver_interlude');
-              else if (prevIdx === 3) setSliceStage('dundubhi_aftermath');
+              advanceToNextChamber(prevIdx);
             } else if (
               sim.boonReadyCount > 0 &&
               (enteredLeftGate || sim.chamberClearTimer >= 14.0)
@@ -9629,17 +9717,11 @@ export default function KaliyugaArena() {
                 sim.boonReadyCount = 0;
                 setBoonReadyCount(0);
                 const prevIdx = sim.chamberIndex;
-                loadChamber(prevIdx + 1, false);
-                if (prevIdx === 0) setSliceStage('savitri_lantern_interlude');
-                else if (prevIdx === 1) setSliceStage('preserver_interlude');
-                else if (prevIdx === 3) setSliceStage('dundubhi_aftermath');
+                advanceToNextChamber(prevIdx);
               }
             } else if (sim.chamberClearTimer >= 15.0) {
               const prevIdx = sim.chamberIndex;
-              loadChamber(prevIdx + 1, false);
-              if (prevIdx === 0) setSliceStage('savitri_lantern_interlude');
-              else if (prevIdx === 1) setSliceStage('preserver_interlude');
-              else if (prevIdx === 3) setSliceStage('dundubhi_aftermath');
+              advanceToNextChamber(prevIdx);
             }
           }
         }
@@ -9967,6 +10049,19 @@ export default function KaliyugaArena() {
         const hubProx = findNearestHubStation(sim.player.x, sim.player.y);
         for (const st of VAITARANI_HUB_STATIONS) {
           const isNear = hubProx.station?.id === st.id;
+          // The hub's northern Charnel crossing is a unique teal Vaitarani
+          // passage, not a duplicate golden combat chamber doorway.
+          if (st.id === 'ferry_gate') {
+            renderMeruPortal(ctx, {
+              kind: 'vaitarani',
+              x: HUB_FERRY_GATE_POS.x,
+              y: HUB_FERRY_GATE_POS.y + 12,
+              size: 104,
+              unlocked: true,
+              timeMs: now,
+              intensity: isNear ? 1.12 : 0.78,
+            });
+          }
           const pulse = 0.72 + Math.sin(now * 0.005) * 0.18;
           ctx.save();
           ctx.translate(st.x, st.y);
@@ -12119,6 +12214,8 @@ export default function KaliyugaArena() {
     damagePropsNearPoint,
     gainAstraEnergy,
     loadChamber,
+    advanceToNextChamber,
+    beginMeruHubCrossing,
     recordQuestEvent,
     spawnAfterimage,
     spawnFloatingText,
@@ -12155,6 +12252,8 @@ export default function KaliyugaArena() {
       hubBoatDrawerOpen ||
       activeHubDialogueNpc !== null ||
       chamberLoadingLabel !== null ||
+      activeMeruScene !== null ||
+      activeMeruJourney !== null ||
       (sliceStage !== 'combat_arena' &&
         sliceStage !== 'vaitarani_hub' &&
         sliceStage !== 'opening_wake');
@@ -12167,6 +12266,8 @@ export default function KaliyugaArena() {
     hubBoatDrawerOpen,
     activeHubDialogueNpc,
     chamberLoadingLabel,
+    activeMeruScene,
+    activeMeruJourney,
     sliceStage,
   ]);
 
@@ -12662,6 +12763,7 @@ export default function KaliyugaArena() {
                     data-testid="exit-gate-right-btn"
                     onClick={(e) => {
                       e.currentTarget.blur();
+                      if (meruTravelPendingRef.current) return;
                       const sim = simRef.current;
                       const p = sim.player;
                       p.maxHp += 30;
@@ -12674,10 +12776,7 @@ export default function KaliyugaArena() {
                       setBoonReadyCount(0);
                       soundEngine.playSpell('gourd');
                       const prevIdx = sim.chamberIndex;
-                      loadChamber(prevIdx + 1, false);
-                      if (prevIdx === 0) setSliceStage('savitri_lantern_interlude');
-                      else if (prevIdx === 1) setSliceStage('preserver_interlude');
-                      else if (prevIdx === 3) setSliceStage('dundubhi_aftermath');
+                      advanceToNextChamber(prevIdx);
                     }}
                     className="px-3 py-1.5 bg-[#1a140d] hover:bg-[#2a2014] border border-[#d4a548] text-left cursor-pointer"
                   >
@@ -13102,13 +13201,65 @@ export default function KaliyugaArena() {
           }}
           onEnterCharnelPlains={() => {
             setActiveHubDialogueNpc(null);
-            startGameAtChamber(0);
+            beginMeruHubCrossing();
+          }}
+        />
+      )}
+
+      {/* Loading-safe Meru portal journey. Its passage covers the scene swap,
+          and the next MP4 is allowed to fade in using the existing video pool. */}
+      {activeMeruJourney && (
+        <MeruPortalTravel
+          key={activeMeruJourney.destination}
+          journey={activeMeruJourney}
+          onCross={() => {
+            meruPortalCommitRef.current?.();
+            meruPortalCommitRef.current = null;
+          }}
+          onFinish={() => {
+            const sim = simRef.current;
+            sim.input.keysHeld.clear();
+            sim.input.justPressed.clear();
+            sim.player.invulnTimer = Math.max(sim.player.invulnTimer, 0.8);
+            meruTravelPendingRef.current = false;
+            meruPortalCommitRef.current = null;
+            setActiveMeruJourney(null);
+          }}
+        />
+      )}
+
+      {/* Meru real-asset boss introduction: freezes combat and always releases
+          controls on completion or skip. Separate from narrative/story overlays. */}
+      {activeMeruScene && sliceStage === 'combat_arena' && (
+        <MeruCinematicPlayback
+          key={activeMeruScene.id}
+          scene={activeMeruScene}
+          muted={muted}
+          onFinish={(reason) => {
+            const sim = simRef.current;
+            sim.input.keysHeld.clear();
+            sim.input.justPressed.clear();
+            sim.player.invulnTimer = Math.max(sim.player.invulnTimer, 0.8);
+            if (reason === 'completed') {
+              const boss = sim.enemies.find(e => e.type === activeMeruScene.boss && e.hp > 0);
+              if (boss) {
+                webglDemonSlayerVfxRef.current?.spawnBloodThreadCage({
+                  x: boss.x,
+                  y: boss.y - 12,
+                  radius: 275,
+                  palette: 'void',
+                  duration: 1.2,
+                  threadCount: 16,
+                });
+              }
+            }
+            setActiveMeruScene(null);
           }}
         />
       )}
 
       {/* Fast Pre-Chamber Asset Loader Overlay (Solid obsidian, zero backdrop-blur over WebGL) */}
-      {chamberLoadingLabel && (
+      {chamberLoadingLabel && !activeMeruJourney && (
         <div
           data-testid="chamber-loader"
           className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#090608]/95 pointer-events-auto"

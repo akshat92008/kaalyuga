@@ -1,0 +1,68 @@
+name: Meru Studio browser QA and screenshot
+on:
+  pull_request:
+    paths:
+      - 'scripts/meru/browser-qa.mjs'
+      - '.github/workflows/meru-studio-browser-qa.yml'
+      - 'components/game/MeruCinematicStudio.tsx'
+      - 'components/game/MeruCinematicPlayback.tsx'
+      - 'components/game/MeruPortalTravel.tsx'
+      - 'components/game/KaliyugaArena.tsx'
+      - 'engine/meru/**'
+      - 'app/meru-studio/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: meru-studio-browser-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            app
+            components
+            lib
+            engine
+            scripts/meru/browser-qa.mjs
+            package.json
+            tsconfig.json
+            next-env.d.ts
+            next.config.ts
+            postcss.config.mjs
+            .eslintrc.json
+            public/kaalyuga/arena/
+            new 3D assets and animations/Animations/Creature Pack (4)/
+            new 3D assets and animations/3D Models/Bellhorn_Warlord/Meshy_AI_Bellhorn_Warlord_20261114_texture_fbx/
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install game dependencies and browser test runner
+        run: |
+          npm install --no-audit --no-fund --ignore-scripts
+          npm install --no-audit --no-fund --ignore-scripts --no-save playwright
+          npx playwright install --with-deps chromium
+      - name: Start Meru and run real Chromium authoring workflow
+        run: |
+          npm run dev -- --hostname 127.0.0.1 > /tmp/meru-server.log 2>&1 &
+          for i in $(seq 1 90); do
+            if curl -fsS http://127.0.0.1:3000/meru-studio -o /dev/null; then break; fi
+            sleep 2
+          done
+          node scripts/meru/browser-qa.mjs
+      - name: Print application errors on failure
+        if: failure()
+        run: tail -n 140 /tmp/meru-server.log || true
+      - name: Archive screenshot and exported real scene
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: meru-cinematic-studio-browser-qa
+          path: artifacts/meru-browser/
+          if-no-files-found: warn
+          retention-days: 14
