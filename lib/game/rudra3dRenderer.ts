@@ -20,6 +20,10 @@ import {
   setCelUnderGlow,
 } from './demonSlayerShader';
 import { loadFbxCached, simplifyBufferGeometry } from './meshSimplifier';
+import {
+  computeCameraFootAnchorRatio,
+  computeTrimmedCleaveClock,
+} from './kalaBhairavaSusanoo';
 
 export type RudraAnimState =
   | 'idle'
@@ -231,6 +235,7 @@ export class Rudra3DRenderer {
   private disposed = false;
   private prewarmQueue: Array<() => void> = [];
   private prewarmTimer: number | null = null;
+  public readonly footAnchorRatio: number;
 
   constructor(size = 256) {
     this.size = size;
@@ -238,10 +243,11 @@ export class Rudra3DRenderer {
     this.wrapper = new THREE.Group();
     this.scene.add(this.wrapper);
 
-    // Full-body Demon Slayer camera framing with generous headroom for overhead Parashu swings
+    // Tightened Demon Slayer camera framing so Rudra's face, armor, and Parashu fill the frame crisply
     this.camera = new THREE.PerspectiveCamera(33, 1, 0.1, 100);
-    this.camera.position.set(0, 2.02, 4.30);
-    this.camera.lookAt(0, 0.80, 0);
+    this.camera.position.set(0, 1.90, 3.92);
+    this.camera.lookAt(0, 0.78, 0);
+    this.footAnchorRatio = computeCameraFootAnchorRatio(this.camera, 0);
 
     // Unified Demon Slayer Studio Key / Fill / Rim Rig with clean sunlit ivory anime rim
     const studioLights = setupSharedStudioLightingRig(this.scene, 1.0);
@@ -638,13 +644,18 @@ export class Rudra3DRenderer {
       this.actions.idle;
 
     const clipDur = action ? Math.max(0.32, action.getClip().duration) : 1.0;
-    // Higher swing frame density (8 software / 18 GPU) eliminates frozen-pose steps during combo spam
-    const steps = isSoft ? 8 : isAttack ? 18 : 12;
+    // Higher swing frame density (12 software / 24 GPU) + active cleave window [0.14..0.88] eliminates stalled axe swings
+    const steps = isSoft ? (isAttack ? 12 : 8) : isAttack ? 24 : 14;
 
+    const effectiveNorm = isAttack
+      ? computeTrimmedCleaveClock(animTimeSec, 0.14, 0.88)
+      : Math.max(0, Math.min(0.999, animTimeSec));
     const stepIndex = isAction
-      ? Math.min(steps - 1, Math.floor(Math.max(0, Math.min(0.999, animTimeSec)) * steps))
+      ? Math.min(steps - 1, Math.floor(effectiveNorm * steps))
       : Math.floor(((Math.max(0, animTimeSec) % clipDur) / clipDur) * steps);
-    const quantizedTime = (stepIndex / steps) * clipDur;
+    const quantizedTime = isAttack
+      ? (0.14 + (stepIndex / Math.max(1, steps - 1)) * 0.74) * clipDur
+      : (stepIndex / steps) * clipDur;
 
     const stanceTag = susanooActive
       ? 'susanoo'

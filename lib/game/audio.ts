@@ -434,15 +434,24 @@ class SoundEngine {
   }
 
   public static readonly BGM_TRACKS = {
+    theBleedingCrown: '/audio/repo/the_bleeding_crown.mp3',
     beforeIronGate: '/assets/aistudio/Before_the_Iron_Gate.mp3',
+    mythicSanctuary: '/audio/repo/mythic_sanctuary.mp3',
+    vaitaraniRealm: '/audio/repo/vaitarani_realm.mp3',
     ironChariotsOfTheSun: '/assets/aistudio/Iron_Chariots_of_the_Sun.mp3',
+    mythicBattleImpact: '/audio/repo/mythic_battle_impact.mp3',
+    dundubhiBossTheme: '/audio/repo/dundubhi_boss_theme.mp3',
+    darkWesternRpg: '/audio/repo/dark_western_rpg.mp3',
+    demonBossBattle: '/audio/repo/demon_boss_battle.mp3',
+    mythicBattleChaos: '/audio/repo/mythic_battle_chaos.mp3',
+    vrikodaraBossTheme: '/audio/repo/vrikodara_boss_theme.mp3',
+    apocalypticClimax: '/audio/repo/apocalyptic_climax.mp3',
+    godOfWarEpic: '/audio/repo/god_of_war_epic.mp3',
+    pureEpicBoss: '/audio/repo/pure_epic_boss.mp3',
     whereBronzeGodsWeep: '/assets/aistudio/Where_Bronze_Gods_Weep.mp3',
     judgmentAtRuinedGate: '/assets/aistudio/Judgment_at_the_Ruined_Gate.mp3',
     mahadevaRising: '/assets/aistudio/Ma_de_va_Rising.mp3',
     titansFinalStride: '/assets/aistudio/The_Titan_s_Final_Stride.mp3',
-    dundubhiBossTheme: '/audio/repo/dundubhi_boss_theme.mp3',
-    vrikodaraBossTheme: '/audio/repo/vrikodara_boss_theme.mp3',
-    vaitaraniRealm: '/audio/repo/vaitarani_realm.mp3',
   } as const;
 
   public static readonly SFX_FILES = {
@@ -457,10 +466,12 @@ class SoundEngine {
     slashFast: '/audio/repo/slash_fast.wav',
     axeHeavySwing: '/audio/repo/axe_heavy_swing.wav',
     axeEnormousSwing: '/audio/repo/axe_enormous_swing.wav',
+    heavyIronSwing: '/audio/repo/heavy_iron_swing.wav',
     weaponSmash: '/audio/repo/weapon_smash.wav',
     heavyIronHit: '/audio/repo/heavy_iron_hit.wav',
     weaponClash: '/audio/repo/weapon_clash.wav',
     bronzeArmorHit: '/audio/repo/bronze_armor_hit.wav',
+    ancientIronBlock: '/audio/repo/ancient_iron_block.wav',
     parryPerfect: '/audio/repo/parry_perfect.wav',
     defensiveBlock: '/audio/repo/defensive_block.wav',
     lightningStrike: '/audio/repo/lightning_strike.wav',
@@ -475,12 +486,59 @@ class SoundEngine {
     vrikodaraVacuum: '/audio/repo/vrikodara_vacuum.wav',
     monsterRoar: '/audio/repo/monster_roar.wav',
     bossRoarDeep: '/audio/repo/boss_roar_deep.wav',
+    footstepWarrior: '/audio/repo/footstep_warrior.wav',
+    footstepRapid: '/audio/repo/footstep_rapid.wav',
+    footstepBoss: '/audio/repo/footstep_boss.wav',
+    // 7 New ElevenLabs Combat, VFX & Hub SFX
+    susanooSummon: '/audio/repo/sfx_susanoo_summon.mp3',
+    susanooDeflect: '/audio/repo/sfx_susanoo_deflect.mp3',
+    bloodDemonVine: '/audio/repo/sfx_blood_demon_vine.mp3',
+    parashuHeavy: '/audio/repo/sfx_parashu_heavy.mp3',
+    forgeHammer: '/audio/repo/sfx_forge_hammer.mp3',
+    templeUiClick: '/audio/repo/sfx_temple_ui_click.mp3',
+    ferryPortal: '/audio/repo/sfx_ferry_portal.mp3',
+  } as const;
+
+  public static readonly VOICE_CLIPS = {
+    dundubhi_intro: '/audio/repo/voice_dundubhi_intro.mp3',
+    dundubhi_charge: '/audio/repo/voice_dundubhi_charge.mp3',
+    dundubhi_stagger: '/audio/repo/voice_dundubhi_stagger.mp3',
+    dundubhi_death: '/audio/repo/voice_dundubhi_death.mp3',
+    vrikodara_intro: '/audio/repo/voice_vrikodara_intro.mp3',
+    vrikodara_vacuum: '/audio/repo/voice_vrikodara_vacuum.mp3',
+    vrikodara_slag: '/audio/repo/voice_vrikodara_slag.mp3',
+    vrikodara_phase2: '/audio/repo/voice_vrikodara_phase2.mp3',
+    vrikodara_stagger: '/audio/repo/voice_vrikodara_stagger.mp3',
+    vrikodara_death: '/audio/repo/voice_vrikodara_death.mp3',
+    smith_welcome: '/audio/repo/voice_smith_welcome.mp3',
+    smith_temper: '/audio/repo/voice_smith_temper.mp3',
+    rudra_susanoo: '/audio/repo/voice_rudra_susanoo.mp3',
+    rudra_heavy: '/audio/repo/voice_rudra_heavy.mp3',
+    rudra_parry: '/audio/repo/voice_rudra_parry.mp3',
+    rudra_execute: '/audio/repo/voice_rudra_execute.mp3',
+    rudra_dash: '/audio/repo/voice_rudra_dash.mp3',
+    rudra_victory: '/audio/repo/voice_rudra_victory.mp3',
+    savitri_hub: '/audio/repo/voice_savitri_hub.mp3',
   } as const;
 
   private sfxPool: Map<string, HTMLAudioElement[]> = new Map();
+  private sfxLastPlayedAt: Map<string, number> = new Map();
+  private voiceLastPlayedAt: Map<string, number> = new Map();
+  private activeVoiceAudio: HTMLAudioElement | null = null;
+  private voiceDuckUntilMs: number = 0;
 
-  private playWavSfx(url: string, volume: number = 0.3, playbackRate: number = 1.0) {
+  private playWavSfx(
+    url: string,
+    volume: number = 0.3,
+    playbackRate: number = 1.0,
+    minCooldownMs: number = 45
+  ) {
     if (this.muted || typeof window === 'undefined') return;
+    const nowMs = performance.now();
+    const lastMs = this.sfxLastPlayedAt.get(url) ?? 0;
+    if (nowMs - lastMs < minCooldownMs) return;
+    this.sfxLastPlayedAt.set(url, nowMs);
+
     try {
       let pool = this.sfxPool.get(url);
       if (!pool) {
@@ -496,11 +554,117 @@ class SoundEngine {
       if (audio) {
         audio.currentTime = 0;
         audio.volume = Math.max(0, Math.min(1, volume));
-        audio.playbackRate = Math.max(0.5, Math.min(1.6, playbackRate * (0.94 + Math.random() * 0.12)));
+        audio.playbackRate = Math.max(0.5, Math.min(1.6, playbackRate * (0.95 + Math.random() * 0.10)));
         audio.play().catch(() => {});
       }
     } catch {
       // Ignore audio element errors in restricted contexts
+    }
+  }
+
+  public playSusanooSummon() {
+    this.playWavSfx(SoundEngine.SFX_FILES.susanooSummon, 0.56, 1.0, 220);
+    this.playSpell('transform');
+  }
+
+  public playSusanooDeflect() {
+    this.playWavSfx(SoundEngine.SFX_FILES.susanooDeflect, 0.48, 1.02, 90);
+    this.playWavSfx(SoundEngine.SFX_FILES.parryPerfect, 0.24, 1.12, 90);
+  }
+
+  public playBloodDemonArt() {
+    this.playWavSfx(SoundEngine.SFX_FILES.bloodDemonVine, 0.46, 0.98, 140);
+  }
+
+  public playParashuHeavy() {
+    this.playWavSfx(SoundEngine.SFX_FILES.parashuHeavy, 0.52, 0.98, 90);
+  }
+
+  public playForgeHammer() {
+    this.playWavSfx(SoundEngine.SFX_FILES.forgeHammer, 0.52, 1.0, 140);
+  }
+
+  public playUiClick() {
+    this.playWavSfx(SoundEngine.SFX_FILES.templeUiClick, 0.36, 1.02, 55);
+  }
+
+  public playFerryPortal() {
+    this.playWavSfx(SoundEngine.SFX_FILES.ferryPortal, 0.48, 1.0, 250);
+  }
+
+  public playHeavyIronSwing() {
+    this.playWavSfx(SoundEngine.SFX_FILES.heavyIronSwing, 0.44, 0.96, 110);
+  }
+
+  public playIronBlock() {
+    this.playWavSfx(SoundEngine.SFX_FILES.ancientIronBlock, 0.44, 1.0, 95);
+  }
+
+  public playFootstep(kind: 'warrior' | 'rapid' | 'boss') {
+    if (kind === 'boss') {
+      this.playWavSfx(SoundEngine.SFX_FILES.footstepBoss, 0.34, 0.94, 340);
+    } else if (kind === 'rapid') {
+      this.playWavSfx(SoundEngine.SFX_FILES.footstepRapid, 0.24, 1.06, 220);
+    } else {
+      this.playWavSfx(SoundEngine.SFX_FILES.footstepWarrior, 0.20, 1.0, 260);
+    }
+  }
+
+  /**
+   * Plays a curated ElevenLabs v4 mid-battle or Hub voice bark with priority queueing,
+   * spam-protection cooldown, and automatic -6 dB (0.50x) BGM ducking.
+   */
+  public playVoiceBark(
+    key: keyof typeof SoundEngine.VOICE_CLIPS,
+    options?: { priority?: 'normal' | 'high'; cooldownMs?: number; volume?: number }
+  ) {
+    if (this.muted || typeof window === 'undefined') return;
+    const url = SoundEngine.VOICE_CLIPS[key];
+    if (!url) return;
+
+    const nowMs = performance.now();
+    const cooldownMs = options?.cooldownMs ?? (key.includes('intro') || key.includes('death') ? 1500 : 3800);
+    const lastMs = this.voiceLastPlayedAt.get(key) ?? 0;
+    if (nowMs - lastMs < cooldownMs) return;
+
+    const priority = options?.priority ?? (key.includes('intro') || key.includes('death') || key.includes('phase2') || key.includes('susanoo') ? 'high' : 'normal');
+    if (
+      this.activeVoiceAudio &&
+      !this.activeVoiceAudio.paused &&
+      !this.activeVoiceAudio.ended &&
+      priority !== 'high'
+    ) {
+      return;
+    }
+
+    this.voiceLastPlayedAt.set(key, nowMs);
+
+    try {
+      if (this.activeVoiceAudio && !this.activeVoiceAudio.paused) {
+        this.activeVoiceAudio.pause();
+        this.activeVoiceAudio.currentTime = 0;
+      }
+      const audio = new Audio(url);
+      audio.preload = 'auto';
+      audio.volume = Math.max(0, Math.min(1, options?.volume ?? 0.86));
+      this.activeVoiceAudio = audio;
+      this.voiceDuckUntilMs = nowMs + 3400;
+
+      audio.addEventListener('ended', () => {
+        if (this.activeVoiceAudio === audio) {
+          this.voiceDuckUntilMs = performance.now() + 260;
+        }
+      });
+      audio.addEventListener('error', () => {
+        if (this.activeVoiceAudio === audio) {
+          this.voiceDuckUntilMs = 0;
+        }
+      });
+      audio.play().catch(() => {
+        this.voiceDuckUntilMs = 0;
+      });
+    } catch {
+      this.voiceDuckUntilMs = 0;
     }
   }
 
@@ -514,7 +678,7 @@ class SoundEngine {
     }
   > = new Map();
 
-  private activeTrackUrl: string = SoundEngine.BGM_TRACKS.beforeIronGate;
+  private activeTrackUrl: string = SoundEngine.BGM_TRACKS.theBleedingCrown;
   private activeBaseVolume: number = 0.4;
   private duckMultiplier: number = 1.0;
   private customBgmUrl: string | null = null;
@@ -522,6 +686,8 @@ class SoundEngine {
   private currentContextMode: 'title' | 'prologue' | 'shrine' | 'playing' | 'paused' | 'victory' | 'defeat' | 'look' = 'title';
   private currentChamberId: number = 1;
   private currentIsBoss: boolean = false;
+  private currentBossPhase: number = 1;
+  private currentSusanooActive: boolean = false;
   private unlockListenersBound: boolean = false;
 
   private ensureUnlockListeners() {
@@ -548,7 +714,7 @@ class SoundEngine {
     if (!entry && typeof window !== 'undefined') {
       const audio = new Audio(url);
       audio.loop = true;
-      audio.preload = 'auto';
+      audio.preload = 'metadata';
       audio.volume = 0;
       const newEntry = {
         audio,
@@ -568,10 +734,27 @@ class SoundEngine {
   public preloadAllSoundtracks() {
     if (typeof window === 'undefined') return;
     this.ensureUnlockListeners();
-    Object.values(SoundEngine.BGM_TRACKS).forEach((url) => {
+    // Pre-register the active title/hub/chamber-1 tracks immediately; others load lazily on demand
+    [
+      SoundEngine.BGM_TRACKS.theBleedingCrown,
+      SoundEngine.BGM_TRACKS.mythicSanctuary,
+      SoundEngine.BGM_TRACKS.ironChariotsOfTheSun,
+      SoundEngine.BGM_TRACKS.dundubhiBossTheme,
+      SoundEngine.BGM_TRACKS.vrikodaraBossTheme,
+      SoundEngine.BGM_TRACKS.godOfWarEpic,
+    ].forEach((url) => {
       this.getOrCreateTrack(url);
     });
-    Object.values(SoundEngine.SFX_FILES).forEach((url) => {
+    // Pre-warm the most frequent combat & UI SFX
+    [
+      SoundEngine.SFX_FILES.slashFast,
+      SoundEngine.SFX_FILES.parashuHeavy,
+      SoundEngine.SFX_FILES.susanooSummon,
+      SoundEngine.SFX_FILES.susanooDeflect,
+      SoundEngine.SFX_FILES.bloodDemonVine,
+      SoundEngine.SFX_FILES.templeUiClick,
+      SoundEngine.SFX_FILES.forgeHammer,
+    ].forEach((url) => {
       if (!this.sfxPool.has(url)) {
         const a = new Audio(url);
         a.preload = 'auto';
@@ -593,10 +776,12 @@ class SoundEngine {
     }
   }
 
-  private resolveTrackForState(
+  public resolveTrackForState(
     mode: 'title' | 'prologue' | 'shrine' | 'playing' | 'paused' | 'victory' | 'defeat' | 'look',
     chamberId: number,
-    isBoss: boolean
+    isBoss: boolean,
+    bossPhase: number = 1,
+    susanooActive: boolean = false
   ): { url: string; baseVol: number; duck: number } {
     if (this.customBgmUrl) {
       return {
@@ -606,11 +791,14 @@ class SoundEngine {
       };
     }
 
-    if (mode === 'title' || mode === 'prologue') {
+    if (mode === 'title') {
+      return { url: SoundEngine.BGM_TRACKS.theBleedingCrown, baseVol: 0.42, duck: 1.0 };
+    }
+    if (mode === 'prologue') {
       return { url: SoundEngine.BGM_TRACKS.beforeIronGate, baseVol: 0.40, duck: 1.0 };
     }
     if (mode === 'shrine') {
-      return { url: SoundEngine.BGM_TRACKS.vaitaraniRealm, baseVol: 0.36, duck: 0.90 };
+      return { url: SoundEngine.BGM_TRACKS.vaitaraniRealm, baseVol: 0.38, duck: 0.92 };
     }
     if (mode === 'defeat') {
       return { url: SoundEngine.BGM_TRACKS.whereBronzeGodsWeep, baseVol: 0.36, duck: 1.0 };
@@ -619,30 +807,45 @@ class SoundEngine {
       return { url: SoundEngine.BGM_TRACKS.mahadevaRising, baseVol: 0.44, duck: 1.0 };
     }
 
-    // Active combat / paused / look inside a chamber — hooked dynamic BGM progression
-    const duck = mode === 'paused' ? 0.34 : mode === 'look' ? 0.12 : 1.0;
-    if (chamberId === 2) {
-      return { url: SoundEngine.BGM_TRACKS.dundubhiBossTheme, baseVol: 0.44, duck };
+    const duck = mode === 'paused' ? 0.32 : mode === 'look' ? 0.14 : 1.0;
+
+    // Kala-Bhairava Susanoo surge temporarily swells into God of War Epic Orchestration
+    if (susanooActive && mode === 'playing') {
+      return { url: SoundEngine.BGM_TRACKS.godOfWarEpic, baseVol: 0.48, duck };
     }
-    if (chamberId === 5) {
-      return { url: SoundEngine.BGM_TRACKS.vrikodaraBossTheme, baseVol: 0.44, duck };
+
+    // Exact Curated Act I 8-Chamber Soundtrack Matrix (100% of curated repo soundtracks wired)
+    if (chamberId === 2) {
+      return { url: SoundEngine.BGM_TRACKS.judgmentAtRuinedGate, baseVol: 0.44, duck };
+    }
+    if (chamberId === 4) {
+      return { url: SoundEngine.BGM_TRACKS.dundubhiBossTheme, baseVol: 0.46, duck };
+    }
+    if (chamberId === 6) {
+      return { url: SoundEngine.BGM_TRACKS.demonBossBattle, baseVol: 0.45, duck };
+    }
+    if (chamberId === 8) {
+      if (bossPhase >= 2) {
+        return { url: SoundEngine.BGM_TRACKS.apocalypticClimax, baseVol: 0.48, duck };
+      }
+      return { url: SoundEngine.BGM_TRACKS.vrikodaraBossTheme, baseVol: 0.46, duck };
     }
     if (isBoss) {
-      return { url: SoundEngine.BGM_TRACKS.titansFinalStride, baseVol: 0.46, duck };
+      return { url: SoundEngine.BGM_TRACKS.pureEpicBoss, baseVol: 0.46, duck };
     }
     if (chamberId === 1) {
       return { url: SoundEngine.BGM_TRACKS.ironChariotsOfTheSun, baseVol: 0.42, duck };
     }
     if (chamberId === 3) {
-      return { url: SoundEngine.BGM_TRACKS.whereBronzeGodsWeep, baseVol: 0.40, duck };
+      return { url: SoundEngine.BGM_TRACKS.mythicBattleImpact, baseVol: 0.43, duck };
     }
-    if (chamberId <= 5) {
-      return { url: SoundEngine.BGM_TRACKS.judgmentAtRuinedGate, baseVol: 0.42, duck };
+    if (chamberId === 5) {
+      return { url: SoundEngine.BGM_TRACKS.darkWesternRpg, baseVol: 0.42, duck };
     }
-    if (chamberId === 6) {
-      return { url: SoundEngine.BGM_TRACKS.ironChariotsOfTheSun, baseVol: 0.43, duck };
+    if (chamberId === 7) {
+      return { url: SoundEngine.BGM_TRACKS.titansFinalStride, baseVol: 0.45, duck };
     }
-    return { url: SoundEngine.BGM_TRACKS.mahadevaRising, baseVol: 0.44, duck };
+    return { url: SoundEngine.BGM_TRACKS.mythicBattleChaos, baseVol: 0.42, duck };
   }
 
   /**
@@ -651,19 +854,22 @@ class SoundEngine {
   public syncBgmState(
     mode: 'title' | 'prologue' | 'shrine' | 'playing' | 'paused' | 'victory' | 'defeat' | 'look',
     chamberId: number = this.currentChamberId,
-    isBoss: boolean = this.currentIsBoss
+    isBoss: boolean = this.currentIsBoss,
+    bossPhase: number = this.currentBossPhase,
+    susanooActive: boolean = this.currentSusanooActive
   ) {
     this.currentContextMode = mode;
     this.currentChamberId = chamberId;
     this.currentIsBoss = isBoss;
+    this.currentBossPhase = bossPhase;
+    this.currentSusanooActive = susanooActive;
 
     this.ensureUnlockListeners();
-    const resolved = this.resolveTrackForState(mode, chamberId, isBoss);
+    const resolved = this.resolveTrackForState(mode, chamberId, isBoss, bossPhase, susanooActive);
     this.activeTrackUrl = resolved.url;
     this.activeBaseVolume = resolved.baseVol;
     this.duckMultiplier = resolved.duck;
 
-    // Update target volumes across all tracks in the deck
     this.trackDeck.forEach((entry, url) => {
       if (url === this.activeTrackUrl && !this.muted && this.musicEnabled) {
         entry.targetVol = this.activeBaseVolume * this.duckMultiplier;
@@ -686,32 +892,34 @@ class SoundEngine {
 
   private ensureFaderLoop() {
     if (this.faderInterval !== null || typeof window === 'undefined') return;
-    // 50ms smooth crossfader & loop-boundary envelope (~2.2s full crossfade time)
+    // 50ms smooth equal-power crossfader + voice-bark auto-ducking (-6 dB)
     this.faderInterval = window.setInterval(() => {
       let anyActive = false;
+      const nowMs = performance.now();
+      const voiceDuck = nowMs < this.voiceDuckUntilMs ? 0.50 : 1.0;
 
       this.trackDeck.forEach((entry, url) => {
         const isTargetTrack = url === this.activeTrackUrl && !this.muted && this.musicEnabled;
-        const desiredBase = isTargetTrack ? this.activeBaseVolume * this.duckMultiplier : 0;
+        const desiredBase = isTargetTrack ? this.activeBaseVolume * this.duckMultiplier * voiceDuck : 0;
 
         // Seamless loop tail/head envelope so MP3 looping is never abrupt
         let loopEnvelope = 1.0;
         if (isTargetTrack && !entry.audio.paused && Number.isFinite(entry.audio.duration) && entry.audio.duration > 8) {
           const rem = entry.audio.duration - entry.audio.currentTime;
           const pos = entry.audio.currentTime;
-          if (rem < 2.6) {
-            loopEnvelope = Math.max(0.18, rem / 2.6);
-          } else if (pos < 1.8) {
-            loopEnvelope = Math.max(0.18, pos / 1.8);
+          if (rem < 2.2) {
+            loopEnvelope = Math.max(0.22, rem / 2.2);
+          } else if (pos < 1.4) {
+            loopEnvelope = Math.max(0.22, pos / 1.4);
           }
         }
 
         entry.targetVol = desiredBase * loopEnvelope;
 
-        // Smooth interpolation step (~2.2 seconds for 0 -> 0.42 crossfade)
+        // Smooth equal-power feeling step (~1.5s full crossfade)
         const diff = entry.targetVol - entry.currentVol;
         if (Math.abs(diff) > 0.002) {
-          const stepRate = diff > 0 ? 0.011 : 0.013;
+          const stepRate = diff > 0 ? 0.015 : 0.018;
           if (Math.abs(diff) <= stepRate) {
             entry.currentVol = entry.targetVol;
           } else {
@@ -730,14 +938,12 @@ class SoundEngine {
             entry.audio.play().catch(() => {});
           }
         } else if (!isTargetTrack && !entry.audio.paused && entry.targetVol === 0) {
-          // Track has completely faded out to 0; pause cleanly without clicking
           entry.audio.pause();
         }
       });
 
-      // Fallback procedural synth ONLY if the active MP3 failed to load
       const activeEntry = this.trackDeck.get(this.activeTrackUrl);
-      if (activeEntry?.failed && !this.muted && this.musicEnabled && ! anyActive) {
+      if (activeEntry?.failed && !this.muted && this.musicEnabled && !anyActive) {
         this.startFallbackSynth();
       }
     }, 50);
@@ -745,7 +951,13 @@ class SoundEngine {
 
   public setCustomBgmUrl(url: string | null) {
     this.customBgmUrl = url;
-    this.syncBgmState(this.currentContextMode, this.currentChamberId, this.currentIsBoss);
+    this.syncBgmState(
+      this.currentContextMode,
+      this.currentChamberId,
+      this.currentIsBoss,
+      this.currentBossPhase,
+      this.currentSusanooActive
+    );
   }
 
   public toggleMusic(): boolean {
@@ -761,7 +973,13 @@ class SoundEngine {
   public startMusic() {
     if (this.muted || !this.musicEnabled || typeof window === 'undefined') return;
     this.preloadAllSoundtracks();
-    this.syncBgmState(this.currentContextMode, this.currentChamberId, this.currentIsBoss);
+    this.syncBgmState(
+      this.currentContextMode,
+      this.currentChamberId,
+      this.currentIsBoss,
+      this.currentBossPhase,
+      this.currentSusanooActive
+    );
   }
 
   private startFallbackSynth() {

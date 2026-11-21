@@ -22,6 +22,7 @@ export interface HubStationSpec {
 export const HUB_SPAWN_X = 640;
 export const HUB_SPAWN_Y = 470;
 export const HUB_SAVITRI_POS = { x: 310, y: 455 };
+export const HUB_WEAPONSMITH_POS = { x: 970, y: 452 };
 export const HUB_FERRY_GATE_POS = { x: 640, y: 205 };
 
 export const VAITARANI_HUB_STATIONS: HubStationSpec[] = [
@@ -32,17 +33,17 @@ export const VAITARANI_HUB_STATIONS: HubStationSpec[] = [
     interactRadiusPx: 135,
     title: 'Savitri’s Boat & Lantern',
     sanskritLabel: 'सावित्री नौका · LANTERN CHRONICLE',
-    promptHint: 'Examine Savitri’s Lantern & Sanjaya Chronicle',
+    promptHint: 'Read Sanjaya’s Chronicle & Act I Omen Notes',
     accentColor: '#f2c45a',
   },
   {
     id: 'homa_shrine',
     x: 925,
     y: 475,
-    interactRadiusPx: 130,
-    title: 'Homa Fire Shrine',
-    sanskritLabel: 'होम वेदी · SHRINE & ARSENAL FORGE',
-    promptHint: 'Spend Ashen Karma & Temper Weapon Aspects',
+    interactRadiusPx: 145,
+    title: 'Lohakara’s Parashu Forge',
+    sanskritLabel: 'लोहकार होम वेदी · WEAPONSMITH & SHRINE',
+    promptHint: 'Speak with Lohakara · Temper Parashu & Spend Ashen Karma',
     accentColor: '#ff7a33',
   },
   {
@@ -51,8 +52,8 @@ export const VAITARANI_HUB_STATIONS: HubStationSpec[] = [
     y: 215,
     interactRadiusPx: 125,
     title: 'Charnel Plains Crossing',
-    sanskritLabel: 'कुरुक्षेत्र द्वार · ACT I CHAMBER I',
-    promptHint: 'Step onto the Charnel Plains (Chamber I of V)',
+    sanskritLabel: 'कुरुक्षेत्र द्वार · ACT I CHAMBER I OF VIII',
+    promptHint: 'Step onto the Charnel Plains (8-Chamber Act I Trial)',
     accentColor: '#3ee0a8',
   },
 ];

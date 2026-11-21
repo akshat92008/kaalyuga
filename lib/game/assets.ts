@@ -120,16 +120,24 @@ export const GAME_ASSETS = {
 
   // Official Orchestral & Vedic Metal MP3 Soundtracks from Repository
   soundtracks: {
+    theBleedingCrown: '/audio/repo/the_bleeding_crown.mp3',
     beforeIronGate: '/assets/aistudio/Before_the_Iron_Gate.mp3',
+    mythicSanctuary: '/audio/repo/mythic_sanctuary.mp3',
+    vaitaraniRealm: '/audio/repo/vaitarani_realm.mp3',
     ironChariotsOfTheSun: '/assets/aistudio/Iron_Chariots_of_the_Sun.mp3',
+    mythicBattleImpact: '/audio/repo/mythic_battle_impact.mp3',
+    dundubhiBossTheme: '/audio/repo/dundubhi_boss_theme.mp3',
+    darkWesternRpg: '/audio/repo/dark_western_rpg.mp3',
+    demonBossBattle: '/audio/repo/demon_boss_battle.mp3',
+    mythicBattleChaos: '/audio/repo/mythic_battle_chaos.mp3',
+    vrikodaraBossTheme: '/audio/repo/vrikodara_boss_theme.mp3',
+    apocalypticClimax: '/audio/repo/apocalyptic_climax.mp3',
+    godOfWarEpic: '/audio/repo/god_of_war_epic.mp3',
+    pureEpicBoss: '/audio/repo/pure_epic_boss.mp3',
     whereBronzeGodsWeep: '/assets/aistudio/Where_Bronze_Gods_Weep.mp3',
     judgmentAtRuinedGate: '/assets/aistudio/Judgment_at_the_Ruined_Gate.mp3',
     mahadevaRising: '/assets/aistudio/Ma_de_va_Rising.mp3',
     titansFinalStride: '/assets/aistudio/The_Titan_s_Final_Stride.mp3',
-    dundubhiBossTheme: '/audio/repo/dundubhi_boss_theme.mp3',
-    vrikodaraBossTheme: '/audio/repo/vrikodara_boss_theme.mp3',
-    vaitaraniRealm: '/audio/repo/vaitarani_realm.mp3',
-    theBleedingCrown: '/audio/repo/the_bleeding_crown.mp3',
     kaalyugaBgm: '/kaalyuga/audio/bgm.mp3',
   },
 
