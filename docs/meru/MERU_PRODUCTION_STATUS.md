@@ -6,12 +6,12 @@ This branch is intentionally isolated from the playable `main` branch. It is **n
 
 - `engine/meru/cinematicTimeline.ts`: versioned JSON schema, strongly validated track data, deterministic camera/actor/lighting interpolation, precisely-once forward sound/events, seek/pause/replay/skip-safe state.
 - `engine/meru/portalDirector.ts`: Canvas2D Deva/Warden/Vaitarani portal visual language and a loading-safe transition state model. The visual render path is integrated into *existing regular chamber gates*, and the north hub ferry gate displays a distinct teal Vaitarani portal. Full journey/loading-gated transition choreography remains unimplemented.
-- `engine/meru/adaptiveQuality.ts`: bounded quality budgets with hysteresis and frame-time sampling.
+- `engine/meru/adaptiveQuality.ts`: bounded quality budgets with hysteresis and frame-time sampling; the cinematic runtime now uses measured frame durations to throttle boss rendering and scale ash particles. Game-wide adaptation remains future work.
 - `engine/meru/cinematicVisuals.ts`: shared rendering and subtitle pass used by editor and actual in-game cinematic.
 - `engine/meru/runtimePolicy.ts`: safe, tested boss-introduction eligibility (no title/phase2/cleared starts); reads the validated Studio-authored Dundubhi scene from browser storage and falls back to the built-in scene.
 - `components/game/MeruCinematicPlayback.tsx`: in-game skippable Dundubhi entrance. Uses the actual boss FBX renderer, authored timeline, MP4, cues, keyboard guard, resource cleanup and player's mute setting.
 - `components/game/KaliyugaArena.tsx`: live Chamber IV handoff; freezes gameplay, clears buffered input and restores control and grace invulnerability on skip/finish. Vaitarani hub's north ferry gate now has its own teal animated passage.
-- `scripts/meru/browser-qa.mjs`: Chromium E2E check for editor play/pause/export and real Chamber IV loading/Skip; screenshots and JSON preserved by CI artifact. Natural completion and exported authored-scene roundtrip are included in the latest test version, pending that run.
+- `scripts/meru/browser-qa.mjs`: Chromium E2E check for editor play/pause/export and real Chamber IV loading/Skip; screenshots and JSON preserved by CI artifact. Natural completion and exported authored-scene roundtrip **passed** in Chromium on [run 44933933727](https://github.com/akshat92008/kaalyuga/actions/runs/44933933727).
 - `components/game/MeruCinematicStudio.tsx`: playable standalone Dundubhi scene editor. Scrub, play/pause, keyframe editing for cameras, boss scale/opacity, atmospheric parameters, inspect cue tracks, import/export validated JSON, and browser-local autosave. Reuses actual Kaliyuga boss renderer, video, poster and audio.
 - `app/meru-studio/page.tsx`: route for the editor; only browser runtime.
 - `lib/game/chamberGeometry.ts`: additive magical portal energy behind original painted gates and 450ms soft transition from painted still to decoded MP4.
@@ -43,7 +43,7 @@ Then open `/meru-studio`. Asset URLs are existing project paths. Exported `.meru
 ## Release acceptance criteria (not yet met)
 
 - Real screenshot/video review of the editor at `/meru-studio`.
-- Chromium verified the real Chamber IV cinematic appears and Skip closes it without JS exceptions ([workflow](https://github.com/akshat92008/kaalyuga/actions/runs/44932829887)). Full timing, input-state and natural-completion review on real hardware is still required.
+- Chromium verified the real Chamber IV cinematic appears, loads the Studio-authored JSON, and releases the overlay on **both Skip and natural completion** with zero uncaught JS exceptions ([workflow](https://github.com/akshat92008/kaalyuga/actions/runs/44933933727)). Full gameplay timing, input-state and video/audio review on real hardware remains required.
 - Correct phase transitions and path/hub portals even under slow-network video decode.
 - Zero new TypeScript errors; work toward resolving legacy errors before setting strict repo-wide CI.
 - Frame-time, memory and 30-minute soak tests on M3 Air and entry-level Windows hardware.
