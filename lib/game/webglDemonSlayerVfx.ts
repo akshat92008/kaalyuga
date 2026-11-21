@@ -423,43 +423,93 @@ const RIBBON_FRAGMENT_SHADER = /* glsl */ `
   }
 `;
 
-// Dedicated Ukiyo-e Hokusai Water Dragon Scale + Parallel Striated Wave Shader (zero white pipe blowout!)
+// Dedicated Ukiyo-e Hokusai Painterly Watercolor Water Dragon Shader (Prussian indigo, slate-cerulean, rice-paper seafoam & Sumi-e ink)
 const WATER_DRAGON_FRAGMENT_SHADER = /* glsl */ `
   uniform float uTime;
   uniform float uLife;
   varying vec2 vUv;
 
+  float hash21(vec2 p) {
+    p = fract(p * vec2(123.34, 456.21));
+    p += dot(p, p + 45.32);
+    return fract(p.x * p.y);
+  }
+
   void main() {
     float u = vUv.x;
     float v = vUv.y;
 
-    // Parallel Hokusai woodblock wave lines + overlapping semicircular anime dragon scales
-    float waveFlow = u * 18.0 - uTime * 6.5;
+    // Flowing Ukiyo-e brush striations + overlapping semicircular dragon scales
+    float waveFlow = u * 16.0 - uTime * 5.8;
     float scaleX = fract(waveFlow);
-    float scaleY = fract(v * 7.0 + floor(waveFlow) * 0.5);
+    float scaleY = fract(v * 6.5 + floor(waveFlow) * 0.5);
     float scaleArc = length(vec2(scaleX - 0.5, scaleY - 0.5));
-    float scaleRim = smoothstep(0.36, 0.48, scaleArc);
+    float scaleRim = smoothstep(0.37, 0.49, scaleArc);
 
-    float stripe = sin((v * 8.0 + sin(u * 12.0 - uTime * 4.5) * 0.35) * 6.28318);
-    float stripeMask = smoothstep(-0.2, 0.25, stripe);
+    float brushRipple = sin((v * 7.0 + sin(u * 11.0 - uTime * 4.2) * 0.32) * 6.28318);
+    float washMask = smoothstep(-0.35, 0.45, brushRipple);
+    float paperGrain = (hash21(floor(vec2(u * 90.0, v * 40.0))) - 0.5) * 0.06;
 
-    vec3 deepIndigo = vec3(0.03, 0.14, 0.44);
-    vec3 cobaltBlue = vec3(0.02, 0.42, 0.92);
-    vec3 brightCyan = vec3(0.18, 0.88, 1.0);
-    vec3 seafoamWhite = vec3(0.92, 0.99, 1.0);
-    vec3 inkNavy = vec3(0.02, 0.05, 0.14);
+    // Painterly Hokusai woodblock palette (replaces garish flat neon cyan/royal blue)
+    vec3 deepPrussian = vec3(0.04, 0.12, 0.29);
+    vec3 ukiyoSlateBlue = vec3(0.09, 0.34, 0.57);
+    vec3 ceruleanMist = vec3(0.34, 0.72, 0.85);
+    vec3 ricePaperFoam = vec3(0.93, 0.96, 0.98);
+    vec3 sumiInk = vec3(0.02, 0.04, 0.10);
 
-    vec3 col = mix(deepIndigo, cobaltBlue, stripeMask);
-    // Highlight ridge along dorsal spine & scale edges
-    float dorsal = 1.0 - smoothstep(0.10, 0.42, abs(v - 0.5));
-    col = mix(col, brightCyan, dorsal * 0.78 + (1.0 - scaleRim) * 0.28);
-    // Crisp dark navy scale outlines
-    col = mix(col, inkNavy, scaleRim * 0.42);
-    // Narrow frothy white foam highlights near belly/edge
-    float foamLace = smoothstep(0.76, 0.94, sin(u * 36.0 - uTime * 9.0) * 0.5 + 0.5) * smoothstep(0.28, 0.46, abs(v - 0.5));
-    col = mix(col, seafoamWhite, foamLace * 0.85);
+    vec3 col = mix(deepPrussian, ukiyoSlateBlue, washMask);
+    // Soft cerulean watercolor crest along dorsal ridge
+    float dorsal = 1.0 - smoothstep(0.08, 0.44, abs(v - 0.5));
+    col = mix(col, ceruleanMist, dorsal * 0.68 + (1.0 - scaleRim) * 0.22);
+    // Crisp Sumi-e ink scale contours
+    col = mix(col, sumiInk, scaleRim * 0.52);
+    // Lace-like rice-paper seafoam curls along wave edges
+    float foamLace = smoothstep(0.72, 0.93, sin(u * 30.0 - uTime * 8.0 + v * 5.0) * 0.5 + 0.5) * smoothstep(0.26, 0.46, abs(v - 0.5));
+    col = mix(col, ricePaperFoam, foamLace * 0.82);
+    col += paperGrain;
 
-    float alpha = (1.0 - smoothstep(0.72, 1.0, uLife)) * smoothstep(0.0, 0.08, u) * 0.96;
+    float alpha = (1.0 - smoothstep(0.72, 1.0, uLife)) * smoothstep(0.0, 0.08, u) * 0.95;
+    if (alpha <= 0.01) discard;
+    gl_FragColor = vec4(col * alpha, alpha);
+  }
+`;
+
+// Sculpted Fresnel Ink-Rimmed Painterly Shader for Water Dragon Head, Mane Crest & Pearl Antlers
+const WATER_DRAGON_HEAD_VERTEX_SHADER = /* glsl */ `
+  varying vec2 vUv;
+  varying vec3 vViewNormal;
+  void main() {
+    vUv = uv;
+    vViewNormal = normalize(normalMatrix * normal);
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+
+const WATER_DRAGON_HEAD_FRAGMENT_SHADER = /* glsl */ `
+  uniform float uTime;
+  uniform float uLife;
+  uniform vec3 uBaseColor;
+  uniform vec3 uMidColor;
+  uniform vec3 uHighlightColor;
+  varying vec2 vUv;
+  varying vec3 vViewNormal;
+
+  void main() {
+    vec3 n = normalize(vViewNormal);
+    float ndotv = clamp(abs(n.z), 0.0, 1.0);
+    float fresnelInk = smoothstep(0.26, 0.05, ndotv);
+    float ridgeLight = smoothstep(0.12, 0.82, n.y * 0.5 + 0.5);
+    float waterStreak = sin(vUv.y * 16.0 - uTime * 7.5 + vUv.x * 8.0) * 0.5 + 0.5;
+    float foamCrest = smoothstep(0.56, 0.92, ridgeLight * 0.62 + waterStreak * 0.48);
+
+    vec3 col = mix(uBaseColor, uMidColor, clamp(ridgeLight * 0.72 + waterStreak * 0.34, 0.0, 1.0));
+    col = mix(col, uHighlightColor, foamCrest * 0.82);
+    // Crisp Ukiyo-e Prussian-sumi brush contour strictly along outer silhouette edges
+    vec3 sumiInk = vec3(0.03, 0.09, 0.22);
+    col = mix(col, sumiInk, fresnelInk * 0.62);
+
+    float fade = 1.0 - smoothstep(0.68, 1.0, uLife);
+    float alpha = fade * 0.96;
     if (alpha <= 0.01) discard;
     gl_FragColor = vec4(col * alpha, alpha);
   }
@@ -1264,98 +1314,146 @@ export class WebglDemonSlayerVfxOverlay {
     // Keep shader updated via bodyMat? Use fadeMats/custom cleanup: attach waveSplashMat to fadeMats via cast or dispose cleanly
     fadeMats.push(waveSplashMat as unknown as THREE.MeshBasicMaterial);
 
-    // Sculpted Fierce Eastern Dragon Head (Upper Snout Crest + Open Roaring Jaw + Branched Antlers + Glowing Eyes + Whiskers)
+    // Sculpted Painterly Ukiyo-e Eastern Dragon Head (Organic Fresnel Watercolor Snout + Open Jaw + Swept Wave Mane + Curved Pearl Antlers + Ribbon Whiskers + Trailing Ink Droplets)
     const headPos = pts[pts.length - 1];
     const headTan = curve.getTangent(1).normalize();
     const headGroup = new THREE.Group();
     headGroup.position.copy(headPos);
     headGroup.rotation.z = Math.atan2(headTan.y, headTan.x);
 
-    const upperJawGeo = new THREE.ConeGeometry(19, 58, 5);
-    upperJawGeo.rotateZ(-Math.PI * 0.5);
-    const lowerJawGeo = new THREE.ConeGeometry(13, 44, 5);
-    lowerJawGeo.rotateZ(-Math.PI * 0.5);
-    const crestGeo = new THREE.ConeGeometry(14, 42, 4);
-    crestGeo.rotateZ(Math.PI * 0.65);
+    const makeHeadWatercolorMat = (baseHex: string, midHex: string, hiHex: string) =>
+      new THREE.ShaderMaterial({
+        uniforms: {
+          uTime: { value: 0 },
+          uLife: { value: 0 },
+          uBaseColor: { value: new THREE.Color(baseHex) },
+          uMidColor: { value: new THREE.Color(midHex) },
+          uHighlightColor: { value: new THREE.Color(hiHex) },
+        },
+        vertexShader: WATER_DRAGON_HEAD_VERTEX_SHADER,
+        fragmentShader: WATER_DRAGON_HEAD_FRAGMENT_SHADER,
+        transparent: true,
+        premultipliedAlpha: true,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      });
 
-    const headCyanMat = new THREE.MeshBasicMaterial({
-      color: new THREE.Color('#18b8ff'),
-      transparent: true,
-      opacity: 0.96,
-      depthWrite: false,
-    });
-    const jawCobaltMat = new THREE.MeshBasicMaterial({
-      color: new THREE.Color('#0052cc'),
-      transparent: true,
-      opacity: 0.96,
-      depthWrite: false,
-    });
+    const snoutMat = makeHeadWatercolorMat('#15558c', '#3db8e0', '#f4fdff');
+    const jawMat = makeHeadWatercolorMat('#0e3c6b', '#2689ba', '#b8f2ff');
+    const maneMat = makeHeadWatercolorMat('#165a8f', '#52c8e8', '#f7feff');
+    const antlerMat = makeHeadWatercolorMat('#5d809c', '#bae0ec', '#fff9eb');
+
     const headInkMat = new THREE.MeshBasicMaterial({
-      color: 0x040b1d,
-      side: THREE.BackSide,
+      color: 0x0b2c52,
       transparent: true,
-      opacity: 0.95,
+      opacity: 0.78,
       depthWrite: false,
     });
-    const hornGeo = new THREE.ConeGeometry(4.5, 48, 5);
-    const hornMat = new THREE.MeshBasicMaterial({
-      color: new THREE.Color('#d8b86a'),
-      transparent: true,
-      opacity: 0.96,
-      depthWrite: false,
-    });
-    const eyeGeo = new THREE.SphereGeometry(4.5, 6, 6);
+    const eyeGeo = new THREE.SphereGeometry(4.2, 8, 8);
     const eyeMat = new THREE.MeshBasicMaterial({
-      color: new THREE.Color('#d8fbff'),
+      color: new THREE.Color('#ffffff'),
       transparent: true,
       opacity: 1.0,
       depthWrite: false,
     });
-    geos.push(upperJawGeo, lowerJawGeo, crestGeo, hornGeo, eyeGeo);
-    fadeMats.push(headCyanMat, jawCobaltMat, headInkMat, hornMat, eyeMat);
+    const dropletMat = new THREE.MeshBasicMaterial({
+      color: new THREE.Color('#9eeeff'),
+      transparent: true,
+      opacity: 0.86,
+      depthWrite: false,
+    });
 
-    const upperJaw = new THREE.Mesh(upperJawGeo, headCyanMat);
-    upperJaw.position.set(12, 7, 4);
-    upperJaw.rotation.z = 0.14;
-    const upperInk = new THREE.Mesh(upperJawGeo, headInkMat);
-    upperInk.position.copy(upperJaw.position);
-    upperInk.rotation.copy(upperJaw.rotation);
-    upperInk.scale.set(1.18, 1.24, 1.18);
+    // Organic sculpted snout & jaw using curved tapered TubeGeometry splines (no flat geometric cones!)
+    const snoutCurve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(-18, 4, 2),
+      new THREE.Vector3(6, 11, 5),
+      new THREE.Vector3(30, 8, 4),
+      new THREE.Vector3(44, 13, 2),
+    ]);
+    const upperJawGeo = buildTaperedDragonBodyGeometry(snoutCurve, 18, 17.5, 8);
 
-    const lowerJaw = new THREE.Mesh(lowerJawGeo, jawCobaltMat);
-    lowerJaw.position.set(8, -11, 2);
-    lowerJaw.rotation.z = -0.34;
-    const lowerInk = new THREE.Mesh(lowerJawGeo, headInkMat);
-    lowerInk.position.copy(lowerJaw.position);
-    lowerInk.rotation.copy(lowerJaw.rotation);
-    lowerInk.scale.set(1.2, 1.24, 1.2);
+    const lowerJawCurve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(-12, -6, 1),
+      new THREE.Vector3(8, -14, 2),
+      new THREE.Vector3(30, -18, 1),
+    ]);
+    const lowerJawGeo = buildTaperedDragonBodyGeometry(lowerJawCurve, 14, 11.5, 7);
 
-    const browCrest = new THREE.Mesh(crestGeo, jawCobaltMat);
-    browCrest.position.set(-14, 14, 6);
+    // Sweeping Ukiyo-e seafoam wave-mane plumes behind the brow
+    const maneCurve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(-2, 16, 6),
+      new THREE.Vector3(-22, 26, 9),
+      new THREE.Vector3(-46, 18, 4),
+    ]);
+    const crestGeo = buildTaperedDragonBodyGeometry(maneCurve, 14, 13, 7);
 
-    headGroup.add(upperInk, lowerInk, upperJaw, lowerJaw, browCrest);
+    geos.push(upperJawGeo, lowerJawGeo, crestGeo, eyeGeo);
+    fadeMats.push(
+      snoutMat as unknown as THREE.MeshBasicMaterial,
+      jawMat as unknown as THREE.MeshBasicMaterial,
+      maneMat as unknown as THREE.MeshBasicMaterial,
+      antlerMat as unknown as THREE.MeshBasicMaterial,
+      headInkMat,
+      eyeMat,
+      dropletMat
+    );
+
+    const upperJaw = new THREE.Mesh(upperJawGeo, snoutMat);
+    const lowerJaw = new THREE.Mesh(lowerJawGeo, jawMat);
+    const browCrest = new THREE.Mesh(crestGeo, maneMat);
+    headGroup.add(upperJaw, lowerJaw, browCrest);
 
     for (const side of [-1, 1]) {
-      const horn = new THREE.Mesh(hornGeo, hornMat);
-      horn.position.set(-18, side * 16, 10);
-      horn.rotation.z = side * 0.85;
-      horn.rotation.x = -0.25;
-      headGroup.add(horn);
+      // Swept curved sea-pearl dragon antlers
+      const hornCurve = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(-10, side * 12, 8),
+        new THREE.Vector3(-24, side * 26, 14),
+        new THREE.Vector3(-44, side * 34, 10),
+      ]);
+      const hornGeo = buildTaperedDragonBodyGeometry(hornCurve, 10, 4.4, 6);
+      geos.push(hornGeo);
+      headGroup.add(new THREE.Mesh(hornGeo, antlerMat));
+
+      // Luminous seafoam eyes with deep indigo brow socket
+      const eyeInk = new THREE.Mesh(eyeGeo, headInkMat);
+      eyeInk.position.set(12, side * 9, 12.5);
+      eyeInk.scale.setScalar(1.26);
+      headGroup.add(eyeInk);
 
       const eye = new THREE.Mesh(eyeGeo, eyeMat);
-      eye.position.set(10, side * 9, 14);
+      eye.position.set(12, side * 9, 14);
       headGroup.add(eye);
 
-      // Sweeping undulating dragon whiskers
+      // Flowing undulating calligraphic ribbon whiskers
       const wPts = [
-        new THREE.Vector3(24, side * 8, 6),
-        new THREE.Vector3(6, side * 34, 16),
-        new THREE.Vector3(-24, side * 26, 8),
-        new THREE.Vector3(-48, side * 46, 2),
+        new THREE.Vector3(32, side * 6, 5),
+        new THREE.Vector3(14, side * 32, 14),
+        new THREE.Vector3(-18, side * 24, 9),
+        new THREE.Vector3(-52, side * 44, 2),
       ];
-      const wGeo = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(wPts), 12, 2.4, 5, false);
+      const wGeo = buildTaperedDragonBodyGeometry(new THREE.CatmullRomCurve3(wPts), 14, 2.8, 5);
       geos.push(wGeo);
-      headGroup.add(new THREE.Mesh(wGeo, eyeMat));
+      headGroup.add(new THREE.Mesh(wGeo, maneMat));
+    }
+
+    // Soft translucent seafoam spray droplets trailing around the coiled crest
+    const dropGeo = new THREE.SphereGeometry(3.8, 6, 6);
+    geos.push(dropGeo);
+    const dropletOffsets = [
+      [26, 26, 8],
+      [-6, -28, 6],
+      [-34, 30, 5],
+      [40, -10, 7],
+      [-48, -22, 4],
+    ];
+    for (const [dx, dy, dz] of dropletOffsets) {
+      const dHalo = new THREE.Mesh(dropGeo, headInkMat);
+      dHalo.position.set(dx, dy, dz - 0.5);
+      dHalo.scale.set(1.18, 1.18, 1.18);
+      const dCore = new THREE.Mesh(dropGeo, dropletMat);
+      dCore.position.set(dx, dy, dz);
+      dCore.scale.set(0.88, 0.88, 0.88);
+      headGroup.add(dHalo, dCore);
     }
 
     group.add(headGroup);

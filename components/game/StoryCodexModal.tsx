@@ -117,7 +117,7 @@ export default function StoryCodexModal({
                 <p>
                   The Preserver said, &quot;Go and look.&quot; Then he broke the gem into six shards and threw
                   Rudra into the river of the dead. Three thousand years later Savitri pulls him out.
-                  &quot;Get up. You owe a lot of people.&quot; He carries a broken iron mace, and the souls
+                  &quot;Get up. You owe a lot of people.&quot; He carries a Bloodforged Parashu, and the souls
                   in the gem are what keep him alive.
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
@@ -166,7 +166,7 @@ export default function StoryCodexModal({
                     timed against enemy swings.
                   </p>
                   <div className="text-xs font-mono-num text-[#f2c45a]">
-                    Heavy Base: 92 DMG · 165 Posture
+                    Heavy Base: 108 DMG · 195 Posture
                   </div>
                 </div>
 
@@ -182,7 +182,7 @@ export default function StoryCodexModal({
                     and magma fissures before sweeping a massive 360-degree airborne Parashu cleave.
                   </p>
                   <div className="text-xs font-mono-num text-[#f2c45a]">
-                    Heavy Base: 80 DMG · 185px Radius · Ground Immune
+                    Heavy Base: 96 DMG · 190px Radius · Ground Immune
                   </div>
                 </div>
 
@@ -194,11 +194,11 @@ export default function StoryCodexModal({
                     3. Trishula Lunge Stance
                   </h4>
                   <p className="text-xs text-[#b5a995] leading-relaxed mb-3">
-                    Drives the Bloodforged Trident-Axe tip forward in a 235px armor-piercing lunge.
+                    Drives the Bloodforged Trident-Axe tip forward in a 240px armor-piercing lunge.
                     Ideal for punishing Dundubhi and Vrikodara after a Perfect Phantom Step dodge.
                   </p>
                   <div className="text-xs font-mono-num text-[#f2c45a]">
-                    Heavy Base: 104 DMG · 235px Reach
+                    Heavy Base: 120 DMG · 240px Reach
                   </div>
                 </div>
               </div>

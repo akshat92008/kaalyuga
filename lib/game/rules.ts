@@ -119,8 +119,8 @@ export const STANCE_CONFIGS: Record<StaffStance, StanceConfig> = {
     sanskritName: 'SMASH',
     englishName: 'Rakshasa Crushing Stance (Cone Cleave)',
     shortDesc: 'Overhead Parashu crush · Sends molten fissures forward when unlocked',
-    heavyDamageBase: 96,
-    postureDamageBase: 175,
+    heavyDamageBase: 108,
+    postureDamageBase: 195,
     rangePx: 155,
     elevatedImmuneToGround: false,
   },
@@ -129,8 +129,8 @@ export const STANCE_CONFIGS: Record<StaffStance, StanceConfig> = {
     sanskritName: 'PILLAR',
     englishName: 'Pillar Stance (360° Shockwave)',
     shortDesc: 'Vaults above ground quakes · 360° radial Parashu shockwave slam',
-    heavyDamageBase: 84,
-    postureDamageBase: 155,
+    heavyDamageBase: 96,
+    postureDamageBase: 175,
     rangePx: 190,
     elevatedImmuneToGround: true,
   },
@@ -139,8 +139,8 @@ export const STANCE_CONFIGS: Record<StaffStance, StanceConfig> = {
     sanskritName: 'THRUST',
     englishName: 'Thrust Stance (Armor-Piercing Lunge)',
     shortDesc: 'Long-reach forward Parashu haft drive · Pierces guard & lodges in pillars',
-    heavyDamageBase: 108,
-    postureDamageBase: 145,
+    heavyDamageBase: 120,
+    postureDamageBase: 165,
     rangePx: 240,
     elevatedImmuneToGround: false,
   },
@@ -303,9 +303,9 @@ export function calculateStanceHeavyDamage(params: {
   const stats = computeDerivedPlayerStats(params.ranks);
   const orbs = Math.max(0, Math.min(4, Math.floor(params.focusOrbsConsumed)));
 
-  // Each Focus Orb consumed amplifies heavy attack exponentially (1x -> 1.55x -> 2.2x -> 3.0x -> 4.0x)
-  const orbMultipliers = [0.75, 1.45, 2.15, 2.95, 3.85];
-  const orbMult = orbMultipliers[orbs] ?? 1.0;
+  // Decisive uncharged heavy (1.45x) scaling steeply with Focus Orbs (1.85x -> 2.45x -> 3.45x -> 4.35x)
+  const orbMultipliers = [1.45, 1.85, 2.45, 3.45, 4.35];
+  const orbMult = orbMultipliers[orbs] ?? 1.45;
   const resoluteMult = params.isResoluteCounter ? 1.35 : 1.0;
 
   const hpDamage = Math.round(

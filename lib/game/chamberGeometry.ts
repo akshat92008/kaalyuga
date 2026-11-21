@@ -1,6 +1,7 @@
 // Hades-Style Isometric Chamber Collision Boundaries, Asset-Driven Exit Gates, Reward Orbs, Floor Traps & Foreground Parallax
 import { GAME_ASSETS } from './assets';
 import { computeArenaFloorGradeSpec } from './hadesSpriteBaker';
+import { getChamberBiomeProfile } from './kalaBhairavaSusanoo';
 import { getProcessedSpriteSync } from './spriteProcessor';
 
 export interface NormPoint {
@@ -480,17 +481,18 @@ export function renderIsometricChamberPlatform(
   ctx.save();
 
   const geom = getChamberGeometry(chamberIndex);
+  const biome = getChamberBiomeProfile(chamberIndex);
   const resolvedVideoUrl = !disableVideoBg ? activeVideoUrl : undefined;
   const activeVideo = resolvedVideoUrl ? getOrStartArenaVideo(resolvedVideoUrl, false) : null;
+  // Render decoded MP4 frame 0 immediately instead of waiting for currentTime > 0.01
   const isVideoReady =
     Boolean(activeVideo) &&
     activeVideo!.readyState >= 2 &&
     activeVideo!.videoWidth > 0 &&
-    activeVideo!.videoHeight > 0 &&
-    activeVideo!.currentTime > 0.01;
+    activeVideo!.videoHeight > 0;
   const isBgImgReady = Boolean(bgImg && bgImg.complete && bgImg.naturalWidth > 0);
 
-  // 1. Always paint a warm Vedic sandstone sanctuary base + static artwork underneath so there is NEVER a black frame while video decodes
+  // 1. Paint per-chamber 60-30-10 sanctuary backdrop base + static art underneath so there is NEVER a blank frame
   const floorGrad = ctx.createRadialGradient(
     worldW * 0.5,
     worldH * 0.52,
@@ -499,9 +501,9 @@ export function renderIsometricChamberPlatform(
     worldH * 0.52,
     worldW * 0.68
   );
-  floorGrad.addColorStop(0, '#6e4834');
-  floorGrad.addColorStop(0.55, '#4b3022');
-  floorGrad.addColorStop(1, '#281812');
+  floorGrad.addColorStop(0, biome.baseCenterHex);
+  floorGrad.addColorStop(0.55, biome.baseMidHex);
+  floorGrad.addColorStop(1, biome.baseEdgeHex);
   ctx.fillStyle = floorGrad;
   ctx.fillRect(0, 0, worldW, worldH);
 
@@ -524,16 +526,16 @@ export function renderIsometricChamberPlatform(
       else ctx.lineTo(px, py);
     });
     ctx.closePath();
-    ctx.fillStyle = 'rgba(92, 62, 46, 0.82)';
+    ctx.fillStyle = biome.baseMidHex;
     ctx.fill();
-    ctx.strokeStyle = 'rgba(232, 184, 88, 0.55)';
+    ctx.strokeStyle = biome.rimAccentHex;
     ctx.lineWidth = 3;
     ctx.stroke();
     ctx.restore();
   }
 
-  // 1.5. Ufotable Nocturnal / Twilight Theatrical Contrast Grading & Stone Flagstone Depth:
-  // Deepen the courtyard backdrop into rich obsidian-indigo slate so bright cel flames, water, and lightning pop like Demon Slayer
+  // 1.5. Distinct Per-Chamber 60-30-10 Atmospheric Grading & Horizon Mist:
+  // Gives each of the 8 Act I chambers a recognizable chromatic mood while keeping cel VFX crisp
   ctx.save();
   const moodGrad = ctx.createRadialGradient(
     worldW * 0.5,
@@ -543,19 +545,20 @@ export function renderIsometricChamberPlatform(
     worldH * 0.52,
     worldW * 0.7
   );
-  if (chamberIndex >= 5) {
-    moodGrad.addColorStop(0, 'rgba(28, 10, 12, 0.22)');
-    moodGrad.addColorStop(0.55, 'rgba(18, 8, 16, 0.42)');
-    moodGrad.addColorStop(1, 'rgba(6, 4, 12, 0.72)');
-  } else {
-    moodGrad.addColorStop(0, 'rgba(12, 18, 36, 0.20)');
-    moodGrad.addColorStop(0.55, 'rgba(8, 13, 28, 0.40)');
-    moodGrad.addColorStop(1, 'rgba(4, 6, 16, 0.68)');
-  }
+  moodGrad.addColorStop(0, biome.moodCenterRgba);
+  moodGrad.addColorStop(0.55, biome.moodMidRgba);
+  moodGrad.addColorStop(1, biome.moodEdgeRgba);
   ctx.fillStyle = moodGrad;
   ctx.fillRect(0, 0, worldW, worldH);
 
-  // Subtle crisp isometric courtyard flagstone masonry & center arena combat seal (Mugen / Courtyard floor depth)
+  // Subtle top-horizon atmospheric sheen keyed to each biome
+  const horizonGrad = ctx.createLinearGradient(0, 0, 0, worldH * 0.42);
+  horizonGrad.addColorStop(0, biome.horizonGlowRgba);
+  horizonGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = horizonGrad;
+  ctx.fillRect(0, 0, worldW, worldH * 0.42);
+
+  // Subtle crisp isometric courtyard flagstone masonry & center arena combat seal
   ctx.save();
   ctx.beginPath();
   geom.outerPolygon.forEach((pt, idx) => {
@@ -569,7 +572,7 @@ export function renderIsometricChamberPlatform(
 
   const cx = worldW * 0.5;
   const cy = worldH * 0.54;
-  ctx.strokeStyle = chamberIndex >= 5 ? 'rgba(255, 136, 86, 0.10)' : 'rgba(148, 194, 255, 0.11)';
+  ctx.strokeStyle = biome.flagstoneStrokeRgba;
   ctx.lineWidth = 1.2;
   const tileStep = 76;
   for (let i = -14; i <= 14; i++) {

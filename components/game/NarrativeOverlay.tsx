@@ -353,11 +353,11 @@ export function NarrativeOverlay({
               The Boy Who Was Forged as an Astra
             </h2>
             <p className="text-sm md:text-base text-[#cfc2ae] leading-relaxed">
-              With all seven shards of the <strong>Mani</strong> whole in your brow, you tear
-              through the outer bronze barricades on the Eighteenth Night. Every swing of your iron
-              Gada crackles with Agni, Vayu, and Vajra at once. You do not tire. You do not bleed.
-              You have been taught only one truth by your father <strong>Kaala-Chakra</strong>: a
-              weapon does not ask who stands behind the gate.
+              With all six shards of the <strong>Mani</strong> whole in your brow, you tear
+              through the outer bronze barricades on the Eighteenth Night. Every swing of your
+              Bloodforged Parashu crackles with Agni, Vayu, and Vajra at once. You do not tire. You
+              do not bleed. You have been taught only one truth by your father{' '}
+              <strong>Kaala-Chakra</strong>: a weapon does not ask who stands behind the gate.
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs font-mono-num">
               <div className="p-3.5 bg-[#141016] border border-[#ff5e36]/45">
@@ -492,7 +492,7 @@ export function NarrativeOverlay({
               </div>
               <div className="text-[#d4a548]">
                 You do not hear him. You lunge. The Preserver reaches to your brow, tears the Mani
-                out, and shatters it into <strong>seven shards</strong> to free the souls. Instead,
+                out, and shatters it into <strong>six shards</strong> to free the souls. Instead,
                 the souls cling to the shards—and to you.
               </div>
             </div>
@@ -597,7 +597,7 @@ export function NarrativeOverlay({
               LOOKS: <strong className="text-[#f5c451]">{storyFlags.looks.length}/6</strong>
             </span>
             <span>
-              SHARDS: <strong className="text-[#ff7b54]">{storyFlags.shardsCollected}/7</strong>
+              SHARDS: <strong className="text-[#ff7b54]">{storyFlags.shardsCollected}/6</strong>
             </span>
             <span>
               FALLS: <strong className="text-[#9bc4e2]">{storyFlags.deaths}</strong>
@@ -828,10 +828,10 @@ export function NarrativeOverlay({
             </button>
             <button
               type="button"
-              onClick={() => onStartAct1Run(4)}
+              onClick={() => onStartAct1Run(7)}
               className="px-3 py-1.5 bg-[#1f1612] hover:bg-[#30211a] text-[#ffba78] font-mono-num text-[11px] uppercase border border-[#b86b28]/50 cursor-pointer"
             >
-              CH.5: VRIKODARA
+              CH.8: VRIKODARA
             </button>
             <button
               type="button"
@@ -996,7 +996,7 @@ export function NarrativeOverlay({
                   <strong className="text-[#5ce6ff] font-mono-num uppercase mr-2">
                     THE PRESERVER:
                   </strong>
-                  “I shattered the Mani into seven shards to free the forty thousand souls you
+                  “I shattered the Mani into six shards to free the forty thousand souls you
                   burned. Instead, they clung to the shards—and to your blood-brother Vrikodara.”
                 </div>
               </div>
@@ -1039,15 +1039,22 @@ export function NarrativeOverlay({
               </h3>
             </div>
           </div>
-          <div className="relative h-28 border border-[#d4a548]/50 overflow-hidden bg-black">
+          <div className="relative h-32 border border-[#d4a548]/60 overflow-hidden bg-[#140e0a]">
+            <img
+              src={GAME_ASSETS.chambers.dundubhiMandapa}
+              alt="Mandapa of the Bronze War-Drum"
+              className="absolute inset-0 w-full h-full object-cover opacity-90"
+            />
             <video
               autoPlay
               loop
               muted
               playsInline
+              poster={GAME_ASSETS.chambers.dundubhiMandapa}
               src={GAME_ASSETS.arenaVideos.dundubhiMandapa}
-              className="w-full h-full object-cover opacity-85"
+              className="relative w-full h-full object-cover opacity-80"
             />
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#0e0b0f]/75 via-transparent to-[#0e0b0f]/35" />
           </div>
           <div className="space-y-3">
             {DUNDUBHI_DIALOGUE.preFight.map((line, i) => (
@@ -1163,15 +1170,22 @@ export function NarrativeOverlay({
               </h3>
             </div>
           </div>
-          <div className="relative h-28 border border-[#ff7b54]/50 overflow-hidden bg-black">
+          <div className="relative h-32 border border-[#ff7b54]/60 overflow-hidden bg-[#180a08]">
+            <img
+              src={GAME_ASSETS.chambers.bossSanctumPhase1}
+              alt="Vrikodara's Starving Furnace Sanctum"
+              className="absolute inset-0 w-full h-full object-cover opacity-90"
+            />
             <video
               autoPlay
               loop
               muted
               playsInline
+              poster={GAME_ASSETS.chambers.bossSanctumPhase1}
               src={GAME_ASSETS.arenaVideos.furnacesSlagEclipse}
-              className="w-full h-full object-cover opacity-85"
+              className="relative w-full h-full object-cover opacity-80"
             />
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#0e0b0f]/75 via-transparent to-[#0e0b0f]/35" />
           </div>
           <div className="space-y-3">
             {VRIKODARA_DIALOGUE.preFight.map((line, i) => (
@@ -1229,7 +1243,7 @@ export function NarrativeOverlay({
               </h2>
             </div>
             <span className="px-3 py-1 bg-[#261416] border border-[#ff6b78] text-xs font-mono-num text-[#ff9ea8]">
-              SHARD 1 OF 7 RECLAIMED
+              SHARD 1 OF 6 RECLAIMED
             </span>
           </div>
 
@@ -1503,7 +1517,7 @@ export function NarrativeOverlay({
               The Whole Mani Hums a Lullaby
             </h2>
             <p className="text-sm md:text-base text-[#d8ccb8] leading-relaxed">
-              The seven shards fuse in your fist. The Mani holds every soul you burned in the
+              The six shards fuse in your fist. The Mani holds every soul you burned in the
               Shishira—and the mother you never met, <strong>Suvarna</strong>. It can bring her
               back, but only by using all forty thousand of them up. Or it can free them all, by
               letting her go.

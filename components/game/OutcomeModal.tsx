@@ -34,6 +34,8 @@ const PAUSE_SHORTCUTS = [
   { key: '[SPACE]', label: 'Agni-Step Dash (Invulnerable Frames)' },
   { key: '[SHIFT]', label: 'Kalaripayattu Parry & Riposte' },
   { key: '[Q / E / R]', label: 'Agneyastra / Vayavyastra / Vajrastra' },
+  { key: '[4]', label: 'Varuna Water Dragon (Constant Flux)' },
+  { key: '[Z]', label: 'Kala-Bhairava Susanoo Rage (रौद्र)' },
   { key: '[H]', label: 'Kalasha Heal (+1 Charge Each Chamber)' },
   { key: '[F / L]', label: 'Lethal Execute / Blood-Shard Cast' },
   { key: '[1/2/3] / [Alt+1-3]', label: 'Cycle Stance / Switch Weapon' },
@@ -54,9 +56,9 @@ function getBuildInsight(
   const boons = recap?.boons || [];
   const hasSet = new Set<CelestialBoonId>(boons);
 
-  let standoutTitle = 'CORE WEAPON STANCE MASTERY';
+  let standoutTitle = 'CORE PARASHU STANCE MASTERY';
   let standoutDetail =
-    'Your Broken Gada strikes and stance switches carried the fight without relying on a Duo Pact.';
+    'Your Bloodforged Parashu strikes and stance switches carried the fight without relying on a Duo Pact.';
 
   if (hasSet.has('duo_agni_indra_cataclysm')) {
     standoutTitle = 'DUO SYNERGY: PACT OF THE BURNING SABHA';
@@ -129,6 +131,7 @@ export default function OutcomeModal({
   onReturnTitle,
 }: OutcomeModalProps) {
   const [showControls, setShowControls] = useState(false);
+  const [supportCopied, setSupportCopied] = useState(false);
 
   if (mode === 'none') return null;
 
@@ -429,17 +432,17 @@ export default function OutcomeModal({
           {mode === 'victory' && (
             <>
               <div className="text-xs font-mono-num tracking-[0.26em] text-[#d4a548] uppercase mb-1.5">
-                ACT ONE COMPLETE · SHARD I OF VII RECLAIMED
+                ACT ONE COMPLETE · SHARD I OF VI RECLAIMED · प्रथम खण्ड पूर्ण
               </div>
               <h2 className="font-display text-3xl md:text-4xl font-bold tracking-[0.12em] text-[#f9e79f] mb-1.5 leading-tight uppercase">
                 TO BE CONTINUED
               </h2>
               <div className="text-xs font-mono-num tracking-[0.2em] text-[#ff9e6b] uppercase mb-3">
-                END OF ACT I VERTICAL SLICE · SIX SHARDS OF THE MANI REMAIN
+                END OF ACT I VERTICAL SLICE · FIVE SHARDS OF THE MANI REMAIN
               </div>
               <p className="text-xs md:text-sm text-[#d8ccb8] max-w-lg mx-auto leading-relaxed mb-4">
                 Dundubhi’s bronze war-drum is split and Vrikodara’s furnace is finally quiet. In
-                your fist rests the First Shard of the Bleeding Crown—and on Sanjaya’s chronicle,
+                your fist rests the First of Six Mani Shards—and on Sanjaya’s chronicle,
                 the first royal lie has been struck through:{' '}
                 <em className="text-[#f5c451]">it was a camp, not a fortress</em>.
               </p>
@@ -525,6 +528,35 @@ export default function OutcomeModal({
                     <div className="text-[#f5c451] font-mono-num">{insight.nextRunTip}</div>
                   </div>
                 )}
+              </div>
+
+              {/* Indie Vertical Slice Community Support Panel */}
+              <div className="text-left bg-[#140e0b] border border-[#d4a548]/65 p-3.5 mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <div className="text-[10px] font-mono-num tracking-[0.2em] text-[#f5c451] uppercase font-bold mb-0.5">
+                    SUPPORT KALIYUGA · INDIE VERTICAL SLICE ROADMAP
+                  </div>
+                  <p className="text-xs text-[#dfd3be] leading-snug">
+                    Help fund Steam Direct release, the Samudra Manthan animated Prologue, Lord
+                    Vishnu boss duel, and Acts II–VI of Rudra&apos;s redemption.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                      navigator.clipboard
+                        .writeText(
+                          'I just cleared Act I of Kaliyuga: The Bleeding Crown! Support the indie vertical slice & Steam launch.'
+                        )
+                        .catch(() => {});
+                    }
+                    setSupportCopied(true);
+                  }}
+                  className="px-4 py-2 bg-[#b81d2a] hover:bg-[#cf2534] text-[#fff6e8] border border-[#f5c451]/75 font-display font-bold text-[11px] tracking-[0.14em] uppercase cursor-pointer shrink-0"
+                >
+                  {supportCopied ? 'SHARE MESSAGE COPIED ✓' : 'BACK & SHARE SLICE'}
+                </button>
               </div>
 
               <div className="flex flex-wrap items-center justify-center gap-3">

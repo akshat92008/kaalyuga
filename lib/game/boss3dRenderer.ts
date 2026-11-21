@@ -554,23 +554,23 @@ export class Boss3DRenderer {
         normalMap: dunNorm,
         roughnessMap: dunRough,
         metalnessMap: dunMetal,
-        fallbackRoughness: 0.86,
-        fallbackMetalness: 0.12,
+        fallbackRoughness: 0.84,
+        fallbackMetalness: 0.14,
         normalScale: 0.35,
-        emissiveHex: 0x262220,
-        emissiveIntensity: 0.24,
-        rimColorHex: 0xfdba74,
-        rimStrength: 0.34,
+        emissiveHex: 0x362a20,
+        emissiveIntensity: 0.34,
+        rimColorHex: 0xffd27d,
+        rimStrength: 0.46,
       });
       dundubhiMaterials.push(dunCharMat);
 
       bindTexturedGeometryToSkeleton(dundubhiGroup, dundubhiTexGroup, dunCharMat);
       applyHadesCelShadingToHierarchy(dundubhiGroup, {
-        rimColor: 0xfdba74,
-        rimIntensity: 0.34,
-        emissiveTint: 0x262220,
-        emissiveStrength: 0.24,
-        outlineRatio: 0.0054,
+        rimColor: 0xffd27d,
+        rimIntensity: 0.46,
+        emissiveTint: 0x362a20,
+        emissiveStrength: 0.34,
+        outlineRatio: 0.0058,
       });
 
       const dunStandingHipY = extractStandingHipY(dundubhiGroup);

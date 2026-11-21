@@ -48,6 +48,16 @@ import {
 } from '@/lib/game/spriteProcessor';
 import { Rudra3DRenderer } from '@/lib/game/rudra3dRenderer';
 import { Boss3DRenderer } from '@/lib/game/boss3dRenderer';
+import CholaBrassHud from '@/components/game/CholaBrassHud';
+import {
+  DevanagariStampSpec,
+  KALA_BHAIRAVA_DAMAGE_MULT,
+  KALA_BHAIRAVA_DURATION_SEC,
+  computeNormalizedAttackProgress,
+  createDevanagariStamp,
+  renderDevanagariCombatStamps,
+  renderKalaBhairavaSusanooAvatar,
+} from '@/lib/game/kalaBhairavaSusanoo';
 import { Enemy3DRenderer, RegularEnemy3DKind } from '@/lib/game/enemy3dRenderer';
 import {
   BASE_CAMERA_ZOOM,
@@ -796,6 +806,7 @@ export default function KaliyugaArena() {
     fps: 60,
     frameCounter: 0,
     fpsAccum: 0,
+    devanagariStamps: [] as DevanagariStampSpec[],
     afterimageSpawnAccum: 0,
 
     player: {
@@ -815,6 +826,7 @@ export default function KaliyugaArena() {
       dashRechargeTimer: 0,
       dashStrikeWindowTimer: 0,
       weaponSwingProgress: 0,
+      attackSerial: 0,
       facing: 1 as 1 | -1,
       hp: 250,
       maxHp: 250,
@@ -1489,11 +1501,11 @@ export default function KaliyugaArena() {
           vx: 0,
           vy: 0,
           facing: -1,
-          hp: 2650,
-          maxHp: 2650,
-          displayHp: 2650,
-          posture: 2250,
-          maxPosture: 2250,
+          hp: 1950,
+          maxHp: 1950,
+          displayHp: 1950,
+          posture: 1850,
+          maxPosture: 1850,
           postureBrokenTimer: 0,
           immobilizedTimer: 0,
           hitFlashTimer: 0,
@@ -1539,11 +1551,11 @@ export default function KaliyugaArena() {
           vx: 0,
           vy: 0,
           facing: -1,
-          hp: 3450,
-          maxHp: 3450,
-          displayHp: 3450,
-          posture: 2950,
-          maxPosture: 2950,
+          hp: 2600,
+          maxHp: 2600,
+          displayHp: 2600,
+          posture: 2450,
+          maxPosture: 2450,
           postureBrokenTimer: 0,
           immobilizedTimer: 0,
           hitFlashTimer: 0,
@@ -1716,72 +1728,72 @@ export default function KaliyugaArena() {
         charnel_ghoul: {
           name: pickedVariant.name,
           sanskrit: pickedVariant.sanskrit,
-          hp: 490,
-          posture: 420,
+          hp: 370,
+          posture: 340,
           radius: 76,
           sheet: pickedVariant.sheet,
         },
         ashen_oracle: {
           name: pickedVariant.name,
           sanskrit: pickedVariant.sanskrit,
-          hp: 540,
-          posture: 450,
+          hp: 400,
+          posture: 360,
           radius: 82,
           sheet: pickedVariant.sheet,
         },
         ironmaw_gladiator: {
           name: pickedVariant.name,
           sanskrit: pickedVariant.sanskrit,
-          hp: 780,
-          posture: 680,
+          hp: 600,
+          posture: 540,
           radius: 86,
           sheet: pickedVariant.sheet,
         },
         bloodmaw_brute: {
           name: pickedVariant.name,
           sanskrit: pickedVariant.sanskrit,
-          hp: 1040,
-          posture: 860,
+          hp: 790,
+          posture: 680,
           radius: 96,
           sheet: pickedVariant.sheet,
         },
         semi_boss_bloodforge: {
           name: pickedVariant.name,
           sanskrit: pickedVariant.sanskrit,
-          hp: 1320,
-          posture: 1080,
+          hp: 1020,
+          posture: 860,
           radius: 104,
           sheet: pickedVariant.sheet,
         },
         preta_bowman: {
           name: pickedVariant.name,
           sanskrit: pickedVariant.sanskrit,
-          hp: 520,
-          posture: 420,
+          hp: 390,
+          posture: 340,
           radius: 80,
           sheet: pickedVariant.sheet,
         },
         ash_cyclone_warden: {
           name: pickedVariant.name,
           sanskrit: pickedVariant.sanskrit,
-          hp: 880,
-          posture: 720,
+          hp: 690,
+          posture: 580,
           radius: 112,
           sheet: pickedVariant.sheet,
         },
         molten_titan_warden: {
           name: pickedVariant.name,
           sanskrit: pickedVariant.sanskrit,
-          hp: 1180,
-          posture: 960,
+          hp: 890,
+          posture: 760,
           radius: 124,
           sheet: pickedVariant.sheet,
         },
         eternal_wheel_warden: {
           name: pickedVariant.name,
           sanskrit: pickedVariant.sanskrit,
-          hp: 790,
-          posture: 640,
+          hp: 620,
+          posture: 520,
           radius: 96,
           sheet: pickedVariant.sheet,
         },
@@ -2023,6 +2035,10 @@ export default function KaliyugaArena() {
           if (spec.phase2VideoUrl && sim.videoBgEnabled) {
             prewarmArenaVideo(spec.phase2VideoUrl);
           }
+          const nextChamberVideo = CHAMBERS[clampedIdx + 1]?.videoUrl;
+          if (nextChamberVideo && sim.videoBgEnabled) {
+            prewarmArenaVideo(nextChamberVideo);
+          }
         }
       }
       const hasSemiBossInChamber = spec.spawns.some((s) => s.type === 'semi_boss_bloodforge');
@@ -2171,6 +2187,7 @@ export default function KaliyugaArena() {
       sim.slagFissures = [];
       sim.sonicZones = [];
       sim.activeAstraZones = [];
+      sim.devanagariStamps = [];
       sim.narayanastraTrial = createInitialNarayanastraTrial();
       sim.slagTickAccum = 0;
       sim.nearestLookObject = null;
@@ -4208,16 +4225,26 @@ export default function KaliyugaArena() {
     if (sim.state !== 'playing' || p.transformCd > 0) return;
     const boonMods = computeBoonModifiers(sim.activeBoons);
     p.transformCd = Number((18.0 * boonMods.spellCooldownMultiplier).toFixed(2));
-    p.transformTimer = 10.0;
-    p.invulnTimer = Math.max(p.invulnTimer, 0.8);
-    sim.cameraShakeTrauma = Math.min(1, sim.cameraShakeTrauma + 0.45);
-    sim.cameraZoom = BASE_CAMERA_ZOOM + 0.06;
-    // v7 Section 13 & 27: Using Rudra-Kopa Rage dims Savitri's Lantern on the boat
+    p.transformTimer = KALA_BHAIRAVA_DURATION_SEC;
+    p.invulnTimer = Math.max(p.invulnTimer, 0.9);
+    sim.cameraShakeTrauma = Math.min(1, sim.cameraShakeTrauma + 0.52);
+    sim.cameraZoom = BASE_CAMERA_ZOOM + 0.07;
+    sim.screenFlashAlpha = 0.24;
+    sim.screenFlashColor = '#ff4a1c';
+    // v7 Section 13 & 27: Using Kala-Bhairava Susanoo Rage dims Savitri's Lantern on the boat & HUD
     updateStoryFlags({ rageUses: sim.storyFlags.rageUses + 1 });
     soundEngine.playSpell('transform');
-    spawnShockwave(p.x, p.y, 195, '#ff5924', 0.45);
-    spawnParticles(p.x, p.y - 30, 32, '#ff5924', 210, 5.5, 60);
-    spawnFloatingText(p.x, p.y - 88, 'RUDRA-KOPA AWAKENED! · LANTERN FLAME FLICKERS', '#ff6a33', 1.15);
+    spawnShockwave(p.x, p.y, 235, '#ff5924', 0.48);
+    webglDemonSlayerVfxRef.current?.spawnShockwaveRing({
+      x: p.x,
+      y: p.y,
+      radius: 215,
+      palette: 'hinokami',
+      duration: 0.46,
+    });
+    spawnParticles(p.x, p.y - 36, 36, '#ff5924', 220, 5.5, 65);
+    sim.devanagariStamps.push(createDevanagariStamp('rage', p.x - p.facing * 104, p.y - 178));
+    spawnFloatingText(p.x, p.y - 88, 'KALA-BHAIRAVA AWAKENED! · SAVITRI LANTERN DIMS', '#ff6a33', 1.15);
   }, [spawnFloatingText, spawnParticles, spawnShockwave, updateStoryFlags]);
 
   const triggerExecuteBrokenTarget = useCallback(() => {
@@ -4565,6 +4592,7 @@ export default function KaliyugaArena() {
     p.scaleX = p.stance === 'thrust' ? 1.18 : 0.92;
     p.scaleY = p.stance === 'thrust' ? 0.86 : 1.09;
     p.weaponSwingProgress = 0.0;
+    p.attackSerial += 1;
     p.elevationY = 0;
     p.invulnTimer = Math.max(p.invulnTimer, seeThroughRes.invulnDurationSec);
     addStylePoints(
@@ -4912,7 +4940,7 @@ export default function KaliyugaArena() {
         }
         const lodgedCastMult = 1 + (e.lodgedCasts || 0) * boonMods.castLodgedDamageBonus;
         const mult =
-          (p.transformTimer > 0 ? 1.3 : 1.0) *
+          (p.transformTimer > 0 ? KALA_BHAIRAVA_DAMAGE_MULT : 1.0) *
           boonMods.heavyBonusMultiplier *
           backstabMult *
           bossVuln.damageMultiplier *
@@ -4957,7 +4985,10 @@ export default function KaliyugaArena() {
           p.guaranteedCritTimer = 0;
         }
         sim.runDamageDealt += heavyHitRes.hpLost;
-        sim.hitstopTimer = Math.max(sim.hitstopTimer, heavyHitRes.hitstopSec);
+        // Tactile 45ms+ heavy hit-stop + subtle 2-frame Sumi-e impact flash
+        sim.hitstopTimer = Math.max(sim.hitstopTimer, Math.max(0.045, heavyHitRes.hitstopSec));
+        sim.screenFlashAlpha = Math.max(sim.screenFlashAlpha, orbsUsed >= 1 || brokeGuard ? 0.16 : 0.09);
+        sim.screenFlashColor = brokeGuard ? '#ffd46b' : '#fff0d6';
         sim.cameraShakeTrauma = heavyHitRes.clampedCameraTrauma;
         sim.cameraKickX += heavyHitRes.cameraKickX;
         sim.cameraKickY += heavyHitRes.cameraKickY;
@@ -4966,6 +4997,12 @@ export default function KaliyugaArena() {
 
         if (boonMods.scorchDps > 0) {
           e.scorchTimer = 3.0;
+        }
+
+        if (heavyHitRes.triggeredPostureBreak || brokeGuard) {
+          sim.devanagariStamps.push(createDevanagariStamp('break', e.x, e.y - 102));
+        } else if (orbsUsed >= 1) {
+          sim.devanagariStamps.push(createDevanagariStamp('heavy', e.x, e.y - 94));
         }
 
         if (heavyHitRes.triggeredPostureBreak) {
@@ -5137,6 +5174,17 @@ export default function KaliyugaArena() {
     p.scaleX = isRiposteStrike || isDashStrike ? 1.15 : p.comboStep === 4 ? 1.08 : 1.04;
     p.scaleY = isRiposteStrike || isDashStrike ? 0.89 : p.comboStep === 4 ? 0.93 : 0.97;
     p.weaponSwingProgress = 0.0;
+    p.attackSerial += 1;
+    if (p.transformTimer > 0) {
+      // Kala-Bhairava Susanoo colossal spectral Parashu shockwave on every swing
+      spawnShockwave(
+        p.x + Math.cos(p.slashAngle) * 58,
+        p.y + Math.sin(p.slashAngle) * 34,
+        138,
+        '#ff5226',
+        0.28
+      );
+    }
     if (isRiposteStrike) {
       p.invulnTimer = Math.max(p.invulnTimer, 0.72);
     }
@@ -5482,7 +5530,7 @@ export default function KaliyugaArena() {
           styleMult *
           aspectBonuses.damageMultiplier *
           relicSetRes.setDamageBonusMultiplier *
-          (p.transformTimer > 0 ? 1.3 : 1.0) *
+          (p.transformTimer > 0 ? KALA_BHAIRAVA_DAMAGE_MULT : 1.0) *
           (isDashStrike ? boonMods.dashStrikeMultiplier : 1.0) *
           gladiatorBackstabMult *
           (isCrit && p.comboStep !== 4 && !isRiposteStrike ? boonMods.critMultiplier : 1.0) *
@@ -5996,6 +6044,7 @@ export default function KaliyugaArena() {
         1,
         'screen'
       );
+      sim.devanagariStamps.push(createDevanagariStamp('perfect_dash', p.x, p.y - 94));
       spawnFloatingText(
         p.x,
         p.y - 78,
@@ -6705,7 +6754,18 @@ export default function KaliyugaArena() {
         p.dashStrikeWindowTimer = Math.max(0, p.dashStrikeWindowTimer - simDt);
         p.slashArcAlpha = Math.max(0, p.slashArcAlpha - simDt * 4.8);
         p.dashStreakAlpha = Math.max(0, p.dashStreakAlpha - simDt * 4.2);
-        p.weaponSwingProgress = Math.min(1, p.weaponSwingProgress + simDt * 5.2);
+        p.weaponSwingProgress = computeNormalizedAttackProgress(
+          p.action,
+          p.actionTimer,
+          p.actionDuration,
+          Math.min(0.99, p.weaponSwingProgress + simDt * 3.8)
+        );
+        for (let si = sim.devanagariStamps.length - 1; si >= 0; si--) {
+          sim.devanagariStamps[si].life += simDt;
+          if (sim.devanagariStamps[si].life >= sim.devanagariStamps[si].maxLife) {
+            sim.devanagariStamps.splice(si, 1);
+          }
+        }
 
         // Input buffer decay & auto-execution when returning to idle
         if (sim.input.bufferTimer > 0) {
@@ -10834,7 +10894,26 @@ export default function KaliyugaArena() {
               elevationY: 0,
               stateProgress: rudraStateProgress,
               finisherVariant: p.finisherVariant,
+              attackSerial: p.attackSerial,
+              susanooActive: p.transformTimer > 0,
             });
+
+          // Render Towering Kala-Bhairava Astral Avatar (Susanoo) directly embracing Rudra when Rage is active
+          if (p.transformTimer > 0) {
+            renderKalaBhairavaSusanooAvatar(ctx, {
+              x: p.x,
+              y: p.y,
+              facing: p.facing,
+              slashAngle: p.slashAngle,
+              weaponSwingProgress: p.weaponSwingProgress,
+              isAttacking:
+                p.action === 'light_attack' ||
+                p.action === 'heavy_unleash' ||
+                p.action === 'execute',
+              transformTimer: p.transformTimer,
+              nowMs: now,
+            });
+          }
 
           if (rendered3D && rudra3d) {
             drawGrounded3DContactShadow(ctx, {
@@ -10843,7 +10922,7 @@ export default function KaliyugaArena() {
               baseRadius: 14,
               elevationY: 0,
               lightSourceX: primaryLightX,
-              accentColor: '#eab308',
+              accentColor: p.transformTimer > 0 ? '#ff5226' : '#eab308',
               isPlayer: true,
             });
 
@@ -11137,6 +11216,9 @@ export default function KaliyugaArena() {
         }
         ctx.restore();
       });
+
+      // 9.5. Render Calligraphic Devanagari Combat Impact Stamps (रौद्र / प्रहार / विच्छेद / अवहेलना)
+      renderDevanagariCombatStamps(ctx, sim.devanagariStamps);
 
       // End World-Space Camera Pass (-sim.camX, -sim.camY)
       ctx.restore();
@@ -12326,6 +12408,8 @@ export default function KaliyugaArena() {
                     <div><strong className="text-[#d4a548]">SHIFT:</strong> Vajra Parry</div>
                     <div><strong className="text-[#d4a548]">F / L:</strong> Execute / Cast</div>
                     <div><strong className="text-[#d4a548]">Q / E / R:</strong> Invoke Astras</div>
+                    <div><strong className="text-[#d4a548]">4:</strong> Water Dragon</div>
+                    <div><strong className="text-[#d4a548]">Z:</strong> Susanoo Rage</div>
                     <div><strong className="text-[#d4a548]">H:</strong> Sip Kalasha</div>
                     <div><strong className="text-[#d4a548]">1 / 2 / 3:</strong> Switch Stance</div>
                     <div><strong className="text-[#d4a548]">ESC:</strong> Pause Menu</div>
@@ -12410,165 +12494,35 @@ export default function KaliyugaArena() {
           </div>
         )}
 
-        {/* BOTTOM-LEFT HADES-STYLE COMPACT VITALS CREST (Matching Title Screen Palette: Obsidian #0c0a0e, Antique Gold #d4a548, Blood Crimson #b81d2a, Warm Ivory #f5ebd6) */}
+        {/* BOTTOM-LEFT KALIYUGA-ORIGINAL CHOLA BRASS & TALA-PATRA COMBAT HUD */}
         {gameState === 'playing' && sliceStage === 'combat_arena' && (
-          <div
-            data-testid="pc-combat-hotbar"
-            className="pointer-events-auto self-start mb-1 px-3 py-2 bg-[#0c0a0e]/95 border-2 border-[#d4a548]/80 shadow-[0_12px_32px_rgba(0,0,0,0.95)] flex flex-col gap-1.5 text-[11px] font-mono-num text-[#f5ebd6] max-w-[460px]"
-          >
-            {/* Row 1: Savitri's Lantern Crest + Crimson HP Bar + Bronze-Gold Stamina + Blazing Gold Astra */}
-            {(() => {
-              const lantern = getLanternLightState(storyFlags);
-              return (
-                <div className="flex flex-wrap items-center gap-2.5">
-                  <div
-                    className="flex items-center gap-1.5 px-1.5 py-0.5 bg-[#161219] border border-[#d4a548]/50"
-                    title={`Savitri's Lantern: ${lantern.label} (${lantern.savitriVoiceTone})`}
-                  >
-                    <span
-                      className="w-2 h-2 rounded-full shrink-0"
-                      style={{
-                        backgroundColor: lantern.flameColor,
-                        boxShadow: `0 0 8px ${lantern.flameColor}`,
-                      }}
-                    />
-                    <span className="font-display font-bold text-[10px] tracking-wider text-[#d4a548]">
-                      CH {hud.chamberId}/{CHAMBERS.length}
-                    </span>
-                  </div>
-
-                  {/* Hades Blood-Crimson / Amber-Ruby Health Bar */}
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-display font-bold text-[#d4a548] text-[10px]">HP</span>
-                    <div className="w-24 sm:w-28 h-2.5 bg-[#1c0c10] border border-[#d4a548]/65 relative overflow-hidden">
-                      <div
-                        className="h-full bg-gradient-to-r from-[#8c1622] via-[#b81d2a] to-[#e03846]"
-                        style={{
-                          width: `${Math.max(0, Math.min(100, (hud.playerHp / hud.playerMaxHp) * 100))}%`,
-                        }}
-                      />
-                    </div>
-                    <span className="text-[#f5ebd6] font-bold text-[11px]">
-                      {hud.playerHp}/{hud.playerMaxHp}
-                    </span>
-                  </div>
-
-                  {/* Muted Bronze-Gold Stamina Bar */}
-                  <div className="flex items-center gap-1" title="Stamina & Dash Charges [SPACE]">
-                    <span className="text-[10px] text-[#d4a548] font-bold">STA</span>
-                    <div className="w-14 h-2 bg-[#1c160e] border border-[#d4a548]/55 relative overflow-hidden">
-                      <div
-                        className="h-full bg-gradient-to-r from-[#8f6824] via-[#c89d46] to-[#ebd18a]"
-                        style={{
-                          width: `${Math.max(0, Math.min(100, (hud.stamina / hud.maxStamina) * 100))}%`,
-                        }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Blazing Gold Astra Energy Crest */}
-                  <div
-                    className="flex items-center gap-1"
-                    title="Astra Energy (Built in combat)"
-                  >
-                    <span className="text-[10px] text-[#d4a548] font-bold">ASTRA</span>
-                    <div className="w-14 h-2 bg-[#211708] border border-[#d4a548]/70 relative overflow-hidden">
-                      <div
-                        className="h-full bg-gradient-to-r from-[#b87314] via-[#e6a832] to-[#fff0a8]"
-                        style={{
-                          width: `${Math.max(0, Math.min(100, (hud.astraEnergy / hud.maxAstraEnergy) * 100))}%`,
-                        }}
-                      />
-                    </div>
-                    <span className="text-[#d4a548] font-bold text-[10px]">{hud.astraEnergy}</span>
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* Row 2: Compact Single-Row Kalasha [H], Stance [1-3], Water Dragon [4], & 3 Astra Icons [Q / E / R] */}
-            <div className="flex flex-nowrap items-center gap-1.5 pt-1 border-t border-[#d4a548]/25 text-[10px] whitespace-nowrap">
-              <button
-                type="button"
-                data-testid="pc-skill-heal"
-                onClick={triggerGourdHeal}
-                className="flex items-center gap-1 px-1.5 py-0.5 bg-[#171114] border border-[#d4a548]/55 hover:border-[#f5ebd6] cursor-pointer"
-                title="Sip Kalasha Nectar [H]"
-              >
-                <span className="text-[#d4a548] font-bold">[H]</span>
-                <span className={hud.gourdSips > 0 ? 'font-bold text-[#f5ebd6]' : 'text-[#7a6f5d]'}>
-                  {hud.gourdSips}/{hud.maxGourdSips}
-                </span>
-              </button>
-
-              <button
-                type="button"
-                data-testid="hud-cycle-stance-btn"
-                onClick={() => triggerSwitchStance()}
-                className="flex items-center gap-1 px-1.5 py-0.5 bg-[#17130e] border border-[#d4a548]/55 hover:border-[#f5ebd6] cursor-pointer"
-                title="Cycle Combat Stance [1 / 2 / 3]"
-              >
-                <span className="text-[#d4a548] font-bold">[1-3]</span>
-                <span className="font-bold text-[#f5ebd6]">{STANCE_CONFIGS[hud.stance].sanskritName}</span>
-              </button>
-
-              {/* [4] VARUNA WATER DRAGON */}
-              <button
-                type="button"
-                onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Digit4' }))}
-                className="px-1.5 py-0.5 border font-bold cursor-pointer bg-[#0b1f30] border-[#38e8ff]/75 text-[#8cf2ff] hover:border-[#ffffff]"
-                title="Varuna Tenth Form: Constant Flux Water Dragon [4]"
-              >
-                [4] WATER
-              </button>
-
-              {/* [Q] AGNEYASTRA */}
-              <button
-                type="button"
-                onClick={() => triggerAstraInvocation('agneyastra')}
-                className={`px-1.5 py-0.5 border font-bold cursor-pointer ${
-                  hud.activeUpasamharaZones.includes('agneyastra')
-                    ? 'bg-[#3b150c] border-[#f5ebd6] text-[#f5ebd6]'
-                    : hud.astraEnergy >= 35 && hud.agneyastraCd <= 0
-                    ? 'bg-[#261012] border-[#b81d2a] text-[#f5ebd6]'
-                    : 'bg-[#141116] border-[#d4a548]/30 text-[#7a6f5d]'
-                }`}
-                title="Agneyastra [Q] (35 Astra)"
-              >
-                [Q] {hud.activeUpasamharaZones.includes('agneyastra') ? 'RECALL' : 'AGNI'}
-              </button>
-
-              {/* [E] VAYAVYASTRA */}
-              <button
-                type="button"
-                onClick={() => triggerAstraInvocation('vayavyastra')}
-                className={`px-1.5 py-0.5 border font-bold cursor-pointer ${
-                  hud.activeUpasamharaZones.includes('vayavyastra')
-                    ? 'bg-[#2b2010] border-[#f5ebd6] text-[#f5ebd6]'
-                    : hud.astraEnergy >= 30 && hud.vayavyastraCd <= 0
-                    ? 'bg-[#1f180e] border-[#d4a548] text-[#f5ebd6]'
-                    : 'bg-[#141116] border-[#d4a548]/30 text-[#7a6f5d]'
-                }`}
-                title="Vayavyastra [E] (30 Astra)"
-              >
-                [E] {hud.activeUpasamharaZones.includes('vayavyastra') ? 'RECALL' : 'VAYU'}
-              </button>
-
-              {/* [R] VAJRASTRA */}
-              <button
-                type="button"
-                onClick={() => triggerAstraInvocation('vajrastra')}
-                className={`px-1.5 py-0.5 border font-bold cursor-pointer ${
-                  hud.astraEnergy >= 45 && hud.vajrastraCd <= 0
-                    ? 'bg-[#291e0c] border-[#d4a548] text-[#d4a548]'
-                    : 'bg-[#141116] border-[#d4a548]/30 text-[#7a6f5d]'
-                }`}
-                title="Vajrastra [R] (45 Astra)"
-              >
-                [R] VAJRA
-              </button>
-            </div>
-          </div>
+          <CholaBrassHud
+            chamberId={hud.chamberId}
+            playerHp={hud.playerHp}
+            playerMaxHp={hud.playerMaxHp}
+            stamina={hud.stamina}
+            maxStamina={hud.maxStamina}
+            astraEnergy={hud.astraEnergy}
+            maxAstraEnergy={hud.maxAstraEnergy}
+            focusOrbs={hud.focusOrbs}
+            gourdSips={hud.gourdSips}
+            maxGourdSips={hud.maxGourdSips}
+            stance={hud.stance}
+            agneyastraCd={hud.agneyastraCd}
+            vayavyastraCd={hud.vayavyastraCd}
+            vajrastraCd={hud.vajrastraCd}
+            transformCd={hud.transformCd}
+            transformActiveTimer={hud.transformActiveTimer}
+            activeUpasamharaZones={hud.activeUpasamharaZones}
+            rageUses={storyFlags.rageUses}
+            onHeal={triggerGourdHeal}
+            onCycleStance={() => triggerSwitchStance()}
+            onWaterDragon={() =>
+              window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Digit4' }))
+            }
+            onTriggerSusanoo={triggerRedTidesTransform}
+            onTriggerAstra={(a) => triggerAstraInvocation(a)}
+          />
         )}
       </div>
 

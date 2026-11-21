@@ -55,6 +55,8 @@ export interface RudraRenderInput {
   elevationY: number;
   stateProgress?: number;
   finisherVariant?: 'downward_crush' | 'spin_360_cleave' | 'impaling_lunge' | null;
+  attackSerial?: number;
+  susanooActive?: boolean;
 }
 
 export function isNormalizedRudraActionState(state: RudraAnimState): boolean {
@@ -179,6 +181,20 @@ const PARASHU_WEAPON_FBX_URL =
 const PARASHU_DIFFUSE_URL =
   '/models/Meshy_AI_Bloodforged_Trident_A_1025041928_texture_fbx/Meshy_AI_Bloodforged_Trident_A_1025041928_texture.png';
 
+// Fast local FBX clips in /public/kaalyuga/anims/rudra/ with Pro Melee Axe Pack fallback
+const RUDRA_LOCAL_ANIM_URLS: Record<RudraAnimState, string> = {
+  idle: '/kaalyuga/anims/rudra/idle.fbx',
+  run: '/kaalyuga/anims/rudra/run.fbx',
+  dash: '/kaalyuga/anims/rudra/dodge.fbx',
+  attack1: '/kaalyuga/anims/rudra/attack1.fbx',
+  attack2: '/kaalyuga/anims/rudra/attack2.fbx',
+  attack3: '/kaalyuga/anims/rudra/attack3.fbx',
+  heavy: '/kaalyuga/anims/rudra/heavy.fbx',
+  cast: '/kaalyuga/anims/rudra/cast.fbx',
+  block: '/kaalyuga/anims/rudra/block.fbx',
+  hurt: '/kaalyuga/anims/rudra/hurt.fbx',
+};
+
 const RUDRA_ANIM_URLS: Record<RudraAnimState, string> = {
   idle: '/new_3d_assets/Animations/Pro Melee Axe Pack/standing idle.fbx',
   run: '/new_3d_assets/Animations/Pro Melee Axe Pack/standing run forward.fbx',
@@ -207,6 +223,7 @@ export class Rudra3DRenderer {
   private elapsedSec = 0;
   private stateElapsedSec = 0;
   private lastAnimState: RudraAnimState = 'idle';
+  private lastAttackSerial = -1;
   private frameCache: Map<string, HTMLCanvasElement> = new Map();
   private celMaterials: THREE.Material[] = [];
   private parashuAuraMat: THREE.ShaderMaterial | null = null;
@@ -270,14 +287,20 @@ export class Rudra3DRenderer {
     const loadFbx = (url: string): Promise<THREE.Group | null> =>
       loadFbxCached(url, true).catch(() => null);
 
+    const loadAnimWithLocalFirst = async (state: RudraAnimState): Promise<THREE.Group | null> => {
+      const localGrp = await loadFbx(RUDRA_LOCAL_ANIM_URLS[state]);
+      if (localGrp?.animations?.length) return localGrp;
+      return loadFbx(RUDRA_ANIM_URLS[state]);
+    };
+
     Promise.all([
       loadFbx(RUDRA_RIGGED_FBX_URL),
       loadFbx(RUDRA_TEXTURE_FBX_URL),
       loadFbx(PARASHU_WEAPON_FBX_URL),
       loadTex(RUDRA_DIFFUSE_URL),
       loadTex(PARASHU_DIFFUSE_URL),
-      loadFbx(RUDRA_ANIM_URLS.idle),
-      loadFbx(RUDRA_ANIM_URLS.run),
+      loadAnimWithLocalFirst('idle'),
+      loadAnimWithLocalFirst('run'),
     ]).then(
       ([
         riggedGroup,
@@ -421,27 +444,30 @@ export class Rudra3DRenderer {
         this.loadProgress = 1.0;
         this.prewarmCoreAtlas();
 
-        const secondaryStates = (Object.keys(RUDRA_ANIM_URLS) as RudraAnimState[]).filter(
-          (state) => state !== 'idle' && state !== 'run' && state !== 'dash'
-        );
-        if (this.actions.run) {
+        // Eagerly preload ALL combat & dodge clips from local public/kaalyuga/anims/rudra/ (no 14s stall!)
+        const secondaryStates: RudraAnimState[] = [
+          'attack1',
+          'attack2',
+          'attack3',
+          'heavy',
+          'dash',
+          'cast',
+          'block',
+          'hurt',
+        ];
+        if (this.actions.run && !this.actions.dash) {
           this.actions.dash = this.actions.run;
         }
         const isSoft = isSoftwareWebGLRenderer();
         secondaryStates.forEach((state, idx) => {
-          const delayMs = isSoft
-            ? state === 'attack1'
-              ? 400
-              : 14000 + idx * 2000
-            : 250 + idx * 350;
+          const delayMs = isSoft ? 60 + idx * 90 : 30 + idx * 55;
           const schedule =
             typeof window !== 'undefined'
               ? (fn: () => void) => window.setTimeout(fn, delayMs)
               : (fn: () => void) => fn();
           schedule(() => {
             if (this.disposed) return;
-            const url = RUDRA_ANIM_URLS[state];
-            loadFbx(url).then((animGroup) => {
+            loadAnimWithLocalFirst(state).then((animGroup) => {
               if (
                 this.disposed ||
                 !animGroup ||
@@ -543,9 +569,14 @@ export class Rudra3DRenderer {
     this.elapsedSec += stepDt;
 
     const nextState = resolveRudraDesiredState(input, this.actions);
-    if (nextState !== this.lastAnimState) {
+    const serialChanged =
+      typeof input.attackSerial === 'number' && input.attackSerial !== this.lastAttackSerial;
+    if (nextState !== this.lastAnimState || serialChanged) {
       this.stateElapsedSec = 0;
       this.lastAnimState = nextState;
+      if (typeof input.attackSerial === 'number') {
+        this.lastAttackSerial = input.attackSerial;
+      }
     } else {
       this.stateElapsedSec += stepDt;
     }
@@ -562,7 +593,14 @@ export class Rudra3DRenderer {
         ? input.slashAngle
         : Math.atan2(input.facingY || 0, input.facingX || 1);
 
-    const baked = this.renderFrame(state, animClock, facingAngle, input.isHurt, input.stance);
+    const baked = this.renderFrame(
+      state,
+      animClock,
+      facingAngle,
+      input.isHurt,
+      input.stance,
+      Boolean(input.susanooActive)
+    );
     if (baked) {
       this.canvas = baked;
       return true;
@@ -575,12 +613,13 @@ export class Rudra3DRenderer {
     animTimeSec: number,
     facingAngleRad: number,
     hitFlash = false,
-    stance = 'smash'
+    stance = 'smash',
+    susanooActive = false
   ): HTMLCanvasElement | null {
     if (!this.isReady || !this.model || !this.mixer) return null;
 
     const isSoft = isSoftwareWebGLRenderer();
-    const yawBuckets = isSoft ? 4 : 12;
+    const yawBuckets = isSoft ? 6 : 12;
     const normalizedYaw = ((facingAngleRad % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
     const yawIndex = Math.round((normalizedYaw / (Math.PI * 2)) * yawBuckets) % yawBuckets;
     const quantizedYaw = (yawIndex / yawBuckets) * Math.PI * 2;
@@ -598,17 +637,20 @@ export class Rudra3DRenderer {
       (isAttack ? this.actions.attack1 || this.actions.run : undefined) ||
       this.actions.idle;
 
-    const clipDur = action ? Math.max(0.4, action.getClip().duration) : 1.0;
-    const steps = isSoft ? 4 : isAttack ? 12 : 10;
+    const clipDur = action ? Math.max(0.32, action.getClip().duration) : 1.0;
+    // Higher swing frame density (8 software / 18 GPU) eliminates frozen-pose steps during combo spam
+    const steps = isSoft ? 8 : isAttack ? 18 : 12;
 
-    // For action states (attacks, cast, dash, block, hurt), animTimeSec is normalized progress [0..1];
-    // for locomotion (idle, run), it's continuous elapsed seconds.
     const stepIndex = isAction
       ? Math.min(steps - 1, Math.floor(Math.max(0, Math.min(0.999, animTimeSec)) * steps))
       : Math.floor(((Math.max(0, animTimeSec) % clipDur) / clipDur) * steps);
     const quantizedTime = (stepIndex / steps) * clipDur;
 
-    const stanceTag = isAttack || state === 'dash' || state === 'block' ? stance : 'base';
+    const stanceTag = susanooActive
+      ? 'susanoo'
+      : isAttack || state === 'dash' || state === 'block'
+        ? stance
+        : 'base';
     const flashTag = hitFlash ? 'flash' : 'norm';
     const cacheKey = `rudra:${state}:${stanceTag}:y${yawIndex}:f${stepIndex}:${flashTag}`;
 
@@ -625,28 +667,51 @@ export class Rudra3DRenderer {
       this.mixer.setTime(quantizedTime);
     }
 
-    // Stance-synced Demon Slayer anime rim & upward floor bounce light on Rudra's 3D cel model
+    // Stance-synced + Kala-Bhairava Susanoo molten rim & under-glow on Rudra's 3D cel model
     const isPillar = stance === 'pillar';
     const isThrust = stance === 'thrust';
-    const stanceRimHex = isPillar ? 0x6ee7b7 : isThrust ? 0x7dd3fc : 0xffd27d;
-    const stanceGlowHex = isPillar ? 0x10b981 : isThrust ? 0x38e8ff : 0xff6a18;
-    const activeBoost = state === 'cast' || state === 'heavy' ? 1.0 : isAttack ? 0.72 : state === 'block' ? 0.55 : 0.0;
+    const stanceRimHex = susanooActive
+      ? 0xff7038
+      : isPillar
+        ? 0x6ee7b7
+        : isThrust
+          ? 0x7dd3fc
+          : 0xffd27d;
+    const stanceGlowHex = susanooActive
+      ? 0xff3b18
+      : isPillar
+        ? 0x10b981
+        : isThrust
+          ? 0x38e8ff
+          : 0xff6a18;
+    const activeBoost = susanooActive
+      ? 1.0
+      : state === 'cast' || state === 'heavy'
+        ? 1.0
+        : isAttack
+          ? 0.72
+          : state === 'block'
+            ? 0.55
+            : 0.0;
 
     if (this.celMaterials.length > 0) {
       setCelRimStyle(
         this.celMaterials,
         activeBoost > 0 ? stanceRimHex : 0xffe4b8,
-        activeBoost > 0 ? 0.34 + activeBoost * 0.24 : 0.28
+        activeBoost > 0 ? 0.36 + activeBoost * 0.28 : 0.28
       );
-      setCelUnderGlow(this.celMaterials, stanceGlowHex, activeBoost * 0.44);
+      setCelUnderGlow(this.celMaterials, stanceGlowHex, activeBoost * 0.52);
     }
     if (this.studioRimLight) {
       this.studioRimLight.color.setHex(activeBoost > 0 ? stanceRimHex : 0xffe8c2);
-      this.studioRimLight.intensity = activeBoost > 0 ? 1.25 : 1.05;
+      this.studioRimLight.intensity = susanooActive ? 1.55 : activeBoost > 0 ? 1.25 : 1.05;
     }
     if (this.parashuAuraMat) {
       this.parashuAuraMat.uniforms.uTime.value = quantizedTime * 3.5;
-      if (isPillar) {
+      if (susanooActive) {
+        this.parashuAuraMat.uniforms.uMidColor.value.setHex(0xff4a1c);
+        this.parashuAuraMat.uniforms.uOuterColor.value.setHex(0x990f1a);
+      } else if (isPillar) {
         this.parashuAuraMat.uniforms.uMidColor.value.setHex(0x26f78d);
         this.parashuAuraMat.uniforms.uOuterColor.value.setHex(0x047857);
       } else if (isThrust) {
@@ -663,8 +728,9 @@ export class Rudra3DRenderer {
 
     renderer.render(this.scene, this.camera);
 
-    const rimRgba =
-      activeBoost > 0
+    const rimRgba = susanooActive
+      ? 'rgba(255, 92, 42, 0.52)'
+      : activeBoost > 0
         ? isPillar
           ? 'rgba(52, 245, 165, 0.36)'
           : isThrust
@@ -676,12 +742,12 @@ export class Rudra3DRenderer {
       role: 'rudra',
       rimColor: rimRgba,
       outlineColor: SHARED_STUDIO_OUTLINE_COLOR,
-      outlineThickness: 1.85,
+      outlineThickness: susanooActive ? 2.15 : 1.85,
       hitFlash,
       cacheFrame: false,
     });
 
-    if (this.frameCache.size > 960) {
+    if (this.frameCache.size > 1100) {
       const oldest = this.frameCache.keys().next().value;
       if (oldest) this.frameCache.delete(oldest);
     }
