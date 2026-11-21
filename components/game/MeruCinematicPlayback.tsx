@@ -45,6 +45,7 @@ export default function MeruCinematicPlayback({scene,onFinish,muted=false}:MeruC
     let hasRig=false;
     let isReady=false;
     let audio:Record<string,HTMLAudioElement>={};
+    let watchdogId:ReturnType<typeof setTimeout>|null=null;
     const timeline=new MeruTimelinePlayer(scene);
     const quality=new MeruAdaptiveQuality('balanced',60);
     timelineRef.current=timeline;
@@ -64,7 +65,8 @@ export default function MeruCinematicPlayback({scene,onFinish,muted=false}:MeruC
       }catch{/* Audio is optional; never block gameplay. */}
     }
     const start=()=>{
-      if(disposed||finishOnceRef.current)return;
+      if(disposed||finishOnceRef.current||isReady)return;
+      if(watchdogId!==null)clearTimeout(watchdogId);
       isReady=true;
       setReady(true);
       setStatus(hasRig?'Original Dundubhi 3D rig active':'Using original character portrait fallback');
@@ -83,9 +85,16 @@ export default function MeruCinematicPlayback({scene,onFinish,muted=false}:MeruC
       start();
     }
 
+    // Never let a slow/missing rig indefinitely lock the arena in cinematic mode.
+    // Start with the original portrait fallback if loading does not settle promptly.
+    watchdogId=setTimeout(start,6500);
+
     const loop=(now:number)=>{
       if(disposed||finishOnceRef.current)return;
-      const dt=lastNow?Math.min(0.05,Math.max(0,(now-lastNow)/1000)):0.016;
+      // Cinematic tracks advance using wall-clock elapsed time, independent
+      // of low GPU FPS. The former 50ms clamp caused 8s scenes to stall
+      // for 30+ seconds on software WebGL / headless environments.
+      const dt=lastNow?Math.min(0.75,Math.max(0,(now-lastNow)/1000)):0.016;
       lastNow=now;
       const result=timeline.tick(dt);
       quality.sample(Math.max(1,dt*1000));
@@ -136,6 +145,7 @@ export default function MeruCinematicPlayback({scene,onFinish,muted=false}:MeruC
     skipRef.current?.focus();
     return ()=>{
       disposed=true;
+      if(watchdogId!==null)clearTimeout(watchdogId);
       window.removeEventListener('keydown',onKey,true);
       cancelAnimationFrame(frameId);
       timeline.pause();
@@ -180,7 +190,7 @@ export default function MeruCinematicPlayback({scene,onFinish,muted=false}:MeruC
           <div className="h-1 flex-1 overflow-hidden rounded bg-[#30221f]" aria-hidden="true">
             <div className="h-full bg-[#d08c56]" style={{width:Math.min(100,seconds/scene.duration*100)+'%'}}/>
           </div>
-          <span className="font-mono text-xs text-[#b7a797]">{seconds.toFixed(1)}s / {scene.duration}s</span>
+          <span data-testid="meru-cinematic-clock" className="font-mono text-xs text-[#b7a797]">{seconds.toFixed(1)}s / {scene.duration}s</span>
           <button
             ref={skipRef}
             type="button"
