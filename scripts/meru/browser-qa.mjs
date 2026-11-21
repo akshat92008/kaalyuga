@@ -31,6 +31,12 @@ try{
   console.log('MERU_BROWSER_QA: HTTP=200; play/pause/restart=OK; inspector=OK; export JSON=OK; screenshot=OK');
   console.log('MERU_BROWSER_QA: page errors:',errors.length, errors.slice(0,4));
   if(errors.length)throw new Error('Unhandled browser exceptions: '+errors.join(' | ').slice(0,1000));
+  // Real project round trip: a validated Studio-authored scene must be loaded
+  // by the actual combat arena, not merely export as JSON.
+  data.title='Dundubhi QA Authored Entrance';
+  await page.evaluate(serialized=>{
+    window.localStorage.setItem('meru.studio.cinematic.v1',serialized);
+  },JSON.stringify(data));
   // Real Act I integration: start directly at Chamber IV, then skip the cinematic.
   // We verify the game actually gives control back, not merely an isolated preview.
   const gamePage=await context.newPage();
@@ -42,6 +48,7 @@ try{
   assert.equal(gameResponse?.status(),200,'Main Kaliyuga route should load');
   const dialog=gamePage.getByTestId('meru-boss-cinematic');
   await dialog.waitFor({timeout:90000});
+  await gamePage.getByRole('dialog',{name:'Dundubhi QA Authored Entrance cinematic'}).waitFor();
   await gamePage.screenshot({path:join(out,'meru-ingame-dundubhi-intro.png'),animations:'disabled'});
   await gamePage.getByRole('button',{name:'Skip boss cinematic and begin combat'}).click();
   await dialog.waitFor({state:'detached',timeout:15000});
@@ -49,5 +56,18 @@ try{
   console.log('MERU_GAMEPLAY_QA: page errors:',gameErrors.length,gameErrors.slice(0,4));
   if(gameErrors.length)throw new Error('Game page exceptions: '+gameErrors.join(' | ').slice(0,1200));
   await gamePage.close();
+  // A second visit verifies natural completion also unfreezes gameplay without
+  // requiring the player to press Skip.
+  const naturalPage=await context.newPage();
+  naturalPage.on('pageerror',e=>gameErrors.push(e.message));
+  await naturalPage.goto('http://127.0.0.1:3000/?chamber=4&cinematic=1',{
+    waitUntil:'domcontentloaded',timeout:120000,
+  });
+  const naturalDialog=naturalPage.getByTestId('meru-boss-cinematic');
+  await naturalDialog.waitFor({timeout:60000});
+  await naturalDialog.waitFor({state:'detached',timeout:35000});
+  console.log('MERU_GAMEPLAY_QA: natural completion releases cinematic and gameplay; authored Studio scene loaded');
+  assert.equal(gameErrors.length,0,'Game QA should not throw unhandled browser errors');
+  await naturalPage.close();
 
 }finally{await browser.close();}
