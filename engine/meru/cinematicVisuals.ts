@@ -19,6 +19,7 @@ export function makeMeruBossParams(frame:CinematicFrame,dt:number,kind:'dundubhi
     attackKind:'shockwave',attackPattern:4,
     windupProgress:frame.actor.state==='windup'?clamp(phase>1?(frame.time-0.8)/1.3:(frame.time-3.4)/1.6,0,1):0,
     phase,armorCracked:phase>1,isPostureBroken:false,isHitFlash:false,bypassSoftwareThrottle:false,
+    ...(frame.pose ? {cinematicPose:frame.pose} : {}),
   };
 }
 export function paintMeruFrame(
