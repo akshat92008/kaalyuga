@@ -188,7 +188,7 @@ export default function MeruCinematicStudio(){
   const updateAtCursor=(track:'camera'|'actor'|'lighting',prop:string,number:number)=>{
     const current=sceneRef.current;
     const sampled=sampleCinematic(current,timelineRef.current.time);
-    const source=(current[track] as Array<{time:number;value:Record<string,unknown>;ease?:string}>);
+    const source=(current[track] as unknown as Array<{time:number;value:Record<string,unknown>;ease?:string}>);
     const nearby=source.findIndex(k=>Math.abs(k.time-timelineRef.current.time)<0.02);
     const keys=source.map(k=>({...k,value:{...k.value}}));
     const val=nearby>=0?{...keys[nearby].value}:{...(sampled[track] as unknown as Record<string,unknown>)};
