@@ -112,13 +112,22 @@ const base = process.env.GAME_URL || 'http://127.0.0.1:3100';
       await capture('09-' + attack.name + '-heavy-contact');
       report.checks.push('real ' + attack.element + ' heavy: stance, animation contact and screenshot');
     }
-    await fixture();
-    await page.waitForTimeout(950);
-    const lightBefore = await countEvent('light-contact');
-    await page.keyboard.press('j');
-    await assertEvent('light-contact', 'thrust', lightBefore);
-    await capture('10-light-parashu');
-    report.checks.push('real light Parashu active-frame contact and screenshot');
+    // Every stance must produce its own live light-attack contact. Previously
+    // only Thrust was captured, leaving two weapon-combo styles unverified.
+    for (const light of [
+      { key: '1', stance: 'smash', screenshot: '10-smash-light-parashu' },
+      { key: '2', stance: 'pillar', screenshot: '10-pillar-light-parashu' },
+      { key: '3', stance: 'thrust', screenshot: '10-light-parashu' },
+    ]) {
+      await fixture();
+      await page.waitForTimeout(950);
+      await page.keyboard.press(light.key);
+      const lightBefore = await countEvent('light-contact');
+      await page.keyboard.press('j');
+      await assertEvent('light-contact', light.stance, lightBefore);
+      await capture(light.screenshot);
+      report.checks.push('real ' + light.stance + ' light Parashu active-frame contact and screenshot');
+    }
 
     for (const astra of [
       { key: 'q', name: 'agneyastra-fire', id: 'agneyastra' },
