@@ -41,7 +41,7 @@ test('cues trigger exactly once, irrespective of frame delta; seek and pause are
   p.pause();assert.deepEqual(p.tick(4).cues,[]);
   p.seek(4);assert.deepEqual(p.tick(0.1).cues,[]);
   p.play();
-  assert.deepEqual(p.tick(2.5).cues.map(c=>c.id),['earth-impact','reveal-title']);
+  assert.deepEqual(p.tick(2.5).cues.map(c=>c.id),['earth-impact','earth-sunder','reveal-title']);
   assert.deepEqual(p.tick(100).cues,[]);
   assert.equal(p.playing,false);
   assert.deepEqual(cuesBetween(scene,5.2,4),[]);
