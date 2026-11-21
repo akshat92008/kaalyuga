@@ -544,6 +544,7 @@ export default function KaliyugaArena() {
   if (!act1FrameProfilerRef.current) act1FrameProfilerRef.current = new Act1FrameProfiler(1200);
   const act1CameraRef = useRef<Act1CinematicCamera | null>(null);
   if (!act1CameraRef.current) act1CameraRef.current = new Act1CinematicCamera();
+  const pendingBossEntranceRef = useRef<{ x: number; y: number } | null>(null);
   const [cameraPreset, setCameraPreset] = useState<HadesCameraPreset>('dynamic_action');
   const [enemyRenderMode, setEnemyRenderMode] = useState<EnemyRenderMode>('all_3d');
   const [activeHubDialogueNpc, setActiveHubDialogueNpc] = useState<HubNpcId | null>(null);
@@ -2156,14 +2157,10 @@ export default function KaliyugaArena() {
         ? spec.spawns.find((e) => e.type === 'dundubhi' || e.type === 'vrikodara')
         : null;
       if (entrance) {
-        act1CameraRef.current?.start({
-          kind: 'boss_entrance',
-          focusX: entrance.x * CANONICAL_WORLD_W,
-          focusY: entrance.y * CANONICAL_WORLD_H - 18,
-          durationSec: 1.3,
-          focusWeight: 0.30,
-          zoomBoost: -0.035,
-        });
+        pendingBossEntranceRef.current = {
+          x: entrance.x * CANONICAL_WORLD_W,
+          y: entrance.y * CANONICAL_WORLD_H - 18,
+        };
       }
       // React's modal-pausing effect owns the final pause state, including boss intro cutscenes.
     } else {
@@ -2179,6 +2176,7 @@ export default function KaliyugaArena() {
       const spec = CHAMBERS[clampedIdx];
       const isTitleMode = sim.state === 'title';
       act1CameraRef.current?.cancel();
+      pendingBossEntranceRef.current = null;
       // Release old chamber's live rigs before loading the next wave of distinct models.
       // This prevents scenes from retaining every boss and enemy encountered in Act I.
       if (!isTitleMode && lastRigChamberRef.current >= 0 && lastRigChamberRef.current !== clampedIdx) {
@@ -6932,6 +6930,14 @@ export default function KaliyugaArena() {
       );
       const isHubCamera =
         sliceStageRef.current === 'vaitarani_hub' || sliceStageRef.current === 'opening_wake';
+      if (pendingBossEntranceRef.current && sim.state === 'playing' && !sim.modalPaused && !isHubCamera) {
+        const entrance = pendingBossEntranceRef.current;
+        pendingBossEntranceRef.current = null;
+        act1CameraRef.current?.start({
+          kind: 'boss_entrance', focusX: entrance.x, focusY: entrance.y,
+          durationSec: 1.3, focusWeight: 0.30, zoomBoost: -0.035,
+        });
+      }
       const cinematicCue = act1CameraRef.current!.step(dt, sim.modalPaused || sim.state !== 'playing' || isHubCamera);
       if (sim.cameraPreset === 'dynamic_action') {
         const activeBossKind: 'dundubhi' | 'vrikodara' | 'semi_boss' | null = activeBoss
@@ -12235,6 +12241,7 @@ export default function KaliyugaArena() {
         act1FrameProfilerRef.current?.reset();
       }
       act1CameraRef.current?.cancel();
+      pendingBossEntranceRef.current = null;
     };
   }, [
     createEnemyFromSpec,
