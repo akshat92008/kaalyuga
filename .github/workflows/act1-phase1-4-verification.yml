@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: act1-phase1-4-verification
+  group: act1-phase1-4-verification-${{ github.ref_name }}
   cancel-in-progress: true
 
 jobs:
