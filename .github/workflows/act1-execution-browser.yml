@@ -1,4 +1,4 @@
-name: Act I real-browser Downward Crush execution proof
+name: Act I real-browser three Parashu execution proofs
 on:
   pull_request:
     paths:
@@ -15,7 +15,7 @@ concurrency:
 jobs:
   real-execution:
     runs-on: ubuntu-24.04
-    timeout-minutes: 17
+    timeout-minutes: 40
     steps:
       - name: Checkout actual game and production media
         uses: actions/checkout@v4
@@ -58,15 +58,22 @@ jobs:
           done
           tail -n 130 /tmp/act1-execution-next.log
           exit 1
-      - name: Execute F-key Downward Crush on a real staged target
-        env:
-          ACT1_QA_OUTPUT: artifacts/act1-execution
-        run: node scripts/act1-execution-browser.mjs
+      - name: Execute three canonical F-key finishers on real staged targets
+        run: |
+          failed=0
+          for variant in downward_crush spin_360_cleave impaling_lunge; do
+            echo "::group::Execution rehearsal $variant"
+            ACT1_QA_FINISHER="$variant" \
+            ACT1_QA_OUTPUT="artifacts/act1-execution/$variant" \
+            node scripts/act1-execution-browser.mjs || failed=1
+            echo "::endgroup::"
+          done
+          exit "$failed"
       - name: Preserve exact execution active frame and recovery evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: act1-downward-crush-browser-proof
+          name: act1-three-execution-browser-proof
           path: artifacts/act1-execution/
           if-no-files-found: warn
           retention-days: 14
