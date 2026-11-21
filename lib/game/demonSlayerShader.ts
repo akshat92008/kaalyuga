@@ -239,6 +239,10 @@ export interface CelMaterialOptions {
   shadowTintHex?: number;
   shadowTintStrength?: number;
   useDemonContrastRamp?: boolean;
+  normalMap?: THREE.Texture | null;
+  normalScale?: THREE.Vector2;
+  transparent?: boolean;
+  opacity?: number;
 }
 
 export interface CelShaderUniforms {
@@ -268,7 +272,13 @@ export function createDemonSlayerCelMaterial(
       : getDemonSlayerToonGradient(),
     emissive: new THREE.Color(opts.emissiveHex ?? 0x262220),
     emissiveIntensity: opts.emissiveIntensity ?? 0.24,
+    transparent: opts.transparent ?? false,
+    opacity: opts.opacity ?? 1,
   };
+  if (opts.normalMap) {
+    matOpts.normalMap = opts.normalMap;
+    if (opts.normalScale) matOpts.normalScale = opts.normalScale;
+  }
   if (opts.map) {
     matOpts.map = opts.map;
     matOpts.emissiveMap = opts.map;
@@ -445,6 +455,9 @@ export interface HierarchyCelStyleOptions {
   outlineHeightRatio?: number;
   outlineColorHex?: number;
   attachOutlines?: boolean;
+  brightnessLift?: number;
+  saturationBoost?: number;
+  useDemonContrastRamp?: boolean;
 }
 
 /**
@@ -463,7 +476,7 @@ export function applyDemonSlayerCelShadingToHierarchy(
     const srcMat = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
     const stdMat = srcMat as THREE.MeshStandardMaterial | THREE.MeshToonMaterial | undefined;
     const srcMap = stdMat && 'map' in stdMat ? stdMat.map ?? null : null;
-    const lifted = liftTextureToAnimeVibrancy(srcMap, 1.18, 1.12);
+    const lifted = liftTextureToAnimeVibrancy(srcMap, opts.brightnessLift ?? 1.18, opts.saturationBoost ?? 1.12);
     const tintHex =
       stdMat && 'color' in stdMat && stdMat.color && !lifted ? stdMat.color.getHex() : 0xffffff;
 
@@ -475,6 +488,7 @@ export function applyDemonSlayerCelShadingToHierarchy(
       rimColorHex: opts.rimColorHex ?? 0xffe4b8,
       rimStrength: opts.rimStrength ?? 0.34,
       rimPower: opts.rimPower ?? 3.0,
+      useDemonContrastRamp: opts.useDemonContrastRamp ?? false,
     });
     mesh.material = celMat;
     mesh.frustumCulled = false;
@@ -564,7 +578,7 @@ export function setCelHitFlash(
  * Procedural Ufotable Hinokami flame aura material for Rudra's Parashu axe blade edge.
  * Kept crisp golden-amber with dark Sumi-e ink licks so it never turns Rudra into a red blob.
  */
-export function createParashuAuraMaterial(colorHex = 0xff9f2e): THREE.ShaderMaterial {
+export function createParashuAuraMaterial(colorHex = 0xff9f2e, auraIntensity = 1): THREE.ShaderMaterial {
   const baseCol = new THREE.Color(colorHex);
   const outerCol = baseCol.clone().multiplyScalar(0.75);
   return new THREE.ShaderMaterial({
@@ -575,6 +589,7 @@ export function createParashuAuraMaterial(colorHex = 0xff9f2e): THREE.ShaderMate
       uMidColor: { value: baseCol },
       uOuterColor: { value: colorHex === 0xff9f2e ? new THREE.Color(0xe64d1c) : outerCol },
       uInkColor: { value: new THREE.Color(0x120806) },
+      uAuraIntensity: { value: Math.max(0, Math.min(2, auraIntensity)) },
     },
     vertexShader: `
       varying vec2 vUv;
@@ -590,6 +605,7 @@ export function createParashuAuraMaterial(colorHex = 0xff9f2e): THREE.ShaderMate
       uniform vec3 uMidColor;
       uniform vec3 uOuterColor;
       uniform vec3 uInkColor;
+      uniform float uAuraIntensity;
 
       void main() {
         vec2 p = vUv * 2.0 - 1.0;
@@ -602,7 +618,7 @@ export function createParashuAuraMaterial(colorHex = 0xff9f2e): THREE.ShaderMate
         // Crisp dark Sumi-e ink edge around outer flame tongue
         float inkEdge = smoothstep(0.08, 0.18, mask) * (1.0 - smoothstep(0.18, 0.30, mask));
         col = mix(col, uInkColor, inkEdge * 0.75);
-        gl_FragColor = vec4(col, mask * 0.48);
+        gl_FragColor = vec4(col, min(1.0, mask * 0.48 * uAuraIntensity));
       }
     `,
     transparent: true,
