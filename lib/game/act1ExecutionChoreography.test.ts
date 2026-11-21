@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   resolveAct1FinisherContactAnchor,
   sampleAct1ExecutionVictimPose,
+  sampleAct1ExecutionHeroRoot,
   type Act1ExecutionChoreographyToken,
 } from './act1ExecutionChoreography';
 
@@ -72,4 +73,34 @@ test('Blended hit flashes stay on enemy if tracked blade is absent or implausibl
  assert.equal(aligned.source,'blade');
  assert.equal(aligned.x,312);
  assert.equal(aligned.y,397.6);
+});
+
+test('Rudra executes a bounded, facing-aware stride that returns before idle',()=>{
+ for(const variant of ['downward_crush','spin_360_cleave','impaling_lunge'] as const){
+   const token={...base,variant};
+   const sample=(t:number,side:1|-1=1)=>sampleAct1ExecutionHeroRoot(
+     {...token,facing:side},
+     {action:'execute',attackSerial:11,chamberIndex:0,progress:t}
+   );
+   const early=sample(.13), contact=sample(.36), finish=sample(.92);
+   assert.ok(Math.abs(contact.offsetX)>Math.abs(early.offsetX));
+   assert.equal(finish.offsetX,0);
+   assert.equal(finish.offsetY,0);
+   assert.ok(Math.abs(contact.offsetX)<=18);
+   assert.ok(Math.abs(contact.offsetY)<=3);
+   assert.equal(sample(.36,-1).offsetX,-contact.offsetX);
+   assert.equal(sampleAct1ExecutionHeroRoot({...token},{
+      action:'dodge',attackSerial:11,chamberIndex:0,progress:.36,
+   }).offsetX,0);
+   assert.equal(sampleAct1ExecutionHeroRoot({...token},{
+      action:'execute',attackSerial:12,chamberIndex:0,progress:.36,
+   }).offsetX,0);
+ }
+ const down=sampleAct1ExecutionHeroRoot({...base,variant:'downward_crush'},{
+     action:'execute',attackSerial:11,chamberIndex:0,progress:.36,
+ });
+ const lunge=sampleAct1ExecutionHeroRoot({...base,variant:'impaling_lunge'},{
+     action:'execute',attackSerial:11,chamberIndex:0,progress:.36,
+ });
+ assert.ok(lunge.offsetX>down.offsetX);
 });
