@@ -20,6 +20,7 @@ jobs:
           sparse-checkout: |
             scripts/act1-finisher-pose-preview.py
             new 3D assets and animations/Animations/Pro Melee Axe Pack
+            new 3D assets and animations/3D Models/Weapons/Bloodforged_Trident_Axe_20261025
             public/kaalyuga/anims/rudra
           sparse-checkout-cone-mode: false
       - name: Install headless Blender
@@ -33,6 +34,7 @@ jobs:
             --heavy "public/kaalyuga/anims/rudra/heavy.fbx" \
             --spin "public/kaalyuga/anims/rudra/cast.fbx" \
             --lunge "public/kaalyuga/anims/rudra/attack3.fbx" \
+            --weapon "new 3D assets and animations/3D Models/Weapons/Bloodforged_Trident_Axe_20261025/Meshy_AI_Bloodforged_Trident_Axe_20261025_texture.fbx" \
             --output "artifacts/act1-finisher-pose-preview"
       - name: Preserve real Blender evidence, not release assets
         if: always()
