@@ -207,6 +207,9 @@ export class Susanoo3DRenderer {
   private camera: THREE.PerspectiveCamera;
   private modelPivot: THREE.Group;
   private meshGroup: THREE.Group | null = null;
+  // Real animated striking fist, not an invented screen-space slash origin.
+  private strikeHandBone: THREE.Bone | null = null;
+  private readonly strikeHandPos = new THREE.Vector3();
   private chakraMaterial: THREE.ShaderMaterial;
   private haloRing: THREE.Mesh;
 
@@ -296,6 +299,10 @@ export class Susanoo3DRenderer {
       clone.traverse((child) => {
         if ((child as THREE.Bone).isBone || (child as THREE.SkinnedMesh).isSkinnedMesh) {
           foundBones = true;
+        }
+        if ((child as THREE.Bone).isBone &&
+            /right[._:-]?hand$/i.test(child.name.replace(/\s/g,''))) {
+          this.strikeHandBone = child as THREE.Bone;
         }
         if ((child as THREE.Mesh).isMesh) {
           const mesh = child as THREE.Mesh;
@@ -417,6 +424,24 @@ export class Susanoo3DRenderer {
     return this.canvas;
   }
 
+  /**
+   * Project the physically skinned right-hand animation pose into this
+   * renderer's actual baked 3D sprite UVs. Optional because source FBX rigs
+   * can have missing bones; never fabricate a spectral fist position.
+   */
+  public getProjectedStrikeHand(): {x:number;y:number}|null {
+    if(!this.isLoaded || this.disposed || !this.strikeHandBone)return null;
+    this.modelPivot.updateWorldMatrix(true,true);
+    this.camera.updateWorldMatrix(true,false);
+    const p=this.strikeHandBone.getWorldPosition(this.strikeHandPos)
+      .project(this.camera);
+    if(!Number.isFinite(p.x)||!Number.isFinite(p.y)||p.z>1||p.z< -1)
+      return null;
+    const x=p.x*0.5+0.5,y=0.5-p.y*0.5;
+    if(x<0||x>1||y<0||y>1)return null;
+    return {x,y};
+  }
+
   public renderFrame(input: Susanoo3DRenderInput): HTMLCanvasElement | null {
     if (this.disposed || !this.isLoaded || !this.ctx2d || input.transformTimer <= 0) {
       this.roarPlayedForSummon = false;
@@ -536,6 +561,7 @@ export class Susanoo3DRenderer {
     this.actions = {};
     this.meshGroup?.removeFromParent();
     this.meshGroup = null;
+    this.strikeHandBone = null;
     this.modelPivot.clear();
     this.scene.clear();
     this.chakraMaterial.dispose();
