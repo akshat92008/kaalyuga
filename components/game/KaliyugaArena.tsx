@@ -4528,6 +4528,14 @@ export default function KaliyugaArena() {
     p.slashArcAlpha = 1.0;
     p.weaponSwingProgress = 0.0;
 
+    // Execute attack remains responsive and invulnerable at startup, but damage,
+    // reward, impact sound, hit-stop and elemental VFX now occur at the visible
+    // Parashu contact frame rather than before the axe has moved.
+    const executionChamber = sim.chamberIndex;
+    const performExecutionContact = () => {
+      if (simRef.current !== sim || sim.chamberIndex !== executionChamber ||
+          sim.state !== 'playing' || !sim.enemies.includes(brokenEnemy) ||
+          brokenEnemy.aiState === 'ko') return;
     const stats = computeDerivedPlayerStats(sim.ranks);
     const execDmg = Math.round(
       (brokenEnemy.isBoss ? 360 : 290) * stats.damageMultiplier * finisherSpec.damageMultiplier
@@ -4772,6 +4780,12 @@ export default function KaliyugaArena() {
       1.25,
       finisherSpec.subtitle
     );
+    };
+    pendingStrikeVfxRef.current = {
+      expectedAction: 'execute', fired: false,
+      triggerThreshold: 0.35,
+      execute: performExecutionContact,
+    };
   }, [gainAstraEnergy, recordQuestEvent, spawnAfterimage, spawnFlipbookVfx, spawnFloatingText, spawnParticles, spawnShockwave]);
 
   const triggerStanceHeavyUnleash = useCallback(() => {
