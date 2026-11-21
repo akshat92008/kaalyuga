@@ -38,6 +38,8 @@ jobs:
           assert r["mesh_count"]>=1 and r["triangles"]>0
           assert r["sampled_vertices"]>=16
           assert not r["errors"]
+          assert r["head_end"]=="positive", "Original FBX blade head must be upper positive Z"
+          assert r["head_width"]>r["pommel_width"]*1.4, "Blade width calibration ambiguous"
           assert Path("artifacts/act1-parashu/head-audit.png").is_file()
           print("Parashu geometry candidate:",r["dominant_axis"],r["suggested_blade_surface_vertex_blender_world"])
           PY
