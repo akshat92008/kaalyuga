@@ -102,8 +102,8 @@ export class CinematicCameraTrack {
     return {
       zoom,
       // Horizontal/vertical pan stay inside the modest framing safety envelope.
-      offsetX: (CINEMATIC_CAMERA_REST.focusX - focusX) * safeW,
-      offsetY: (CINEMATIC_CAMERA_REST.focusY - focusY) * safeH,
+      offsetX: Math.max(-safeW * 0.15, Math.min(safeW * 0.15, (CINEMATIC_CAMERA_REST.focusX - focusX) * safeW)),
+      offsetY: Math.max(-safeH * 0.17, Math.min(safeH * 0.17, (CINEMATIC_CAMERA_REST.focusY - focusY) * safeH)),
       focusX,
       focusY,
       completed: false,
