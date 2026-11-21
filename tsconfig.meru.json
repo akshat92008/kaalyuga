@@ -9,6 +9,7 @@
     "engine/meru/**/*.ts",
     "components/game/MeruCinematicStudio.tsx",
     "components/game/MeruCinematicPlayback.tsx",
+    "components/game/MeruPortalTravel.tsx",
     "app/meru-studio/page.tsx",
     "lib/game/chamberGeometry.ts"
   ],
