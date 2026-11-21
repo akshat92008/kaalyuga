@@ -142,7 +142,15 @@ export function resolveRudraAnimStateAndClock(
     };
   }
 
-  if (state === 'attack1' || state === 'attack2' || state === 'attack3' || state === 'heavy') {
+  // The spinning execution deliberately borrows the cast/360° axe clip.
+  // It is still a WEAPON action, not an Astra cast: drive that clip from the
+  // very same normalized attack clock that gates damage, sound and impact VFX.
+  // Using elapsed render time here made its blade arrive late/early after
+  // hitstop or irregular frames, while the other two executions stayed in sync.
+  const isFinisherCast = state === 'cast' && Boolean(input.finisherVariant) &&
+    (input.isHeavyAttack || input.isAttacking);
+  if (state === 'attack1' || state === 'attack2' || state === 'attack3' ||
+      state === 'heavy' || isFinisherCast) {
     const prog = Number.isFinite(input.attackProgress)
       ? input.attackProgress
       : stateElapsedSec / 0.44;
