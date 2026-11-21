@@ -21,6 +21,7 @@ import {
 } from './demonSlayerShader';
 import { loadFbxCached, simplifyBufferGeometry } from './meshSimplifier';
 import { calibrateParashuBladeHead, type WeaponVertex3 } from './act1WeaponHeadCalibration';
+import { rudraPoseBlendAlpha, rudraPoseTransitionDurationSec } from './act1RudraTransition';
 import {
   computeCameraFootAnchorRatio,
   computeTrimmedCleaveClock,
@@ -228,6 +229,14 @@ export class Rudra3DRenderer {
   private elapsedSec = 0;
   private stateElapsedSec = 0;
   private lastAnimState: RudraAnimState = 'idle';
+  // Two 256px canvases, allocated lazily. Crossfade baked poses, never GPU
+  // meshes or skeletons. A captured source is needed if a dash/parry interrupts
+  // an unfinished transition; otherwise the source canvas mutates underneath.
+  private poseBlendSource: HTMLCanvasElement | null = null;
+  private poseBlendTarget: HTMLCanvasElement | null = null;
+  private lastDisplayedFrame: HTMLCanvasElement | null = null;
+  private poseBlendDurationSec = 0;
+  private poseBlendElapsedSec = 0;
   private lastAttackSerial = -1;
   private frameCache: Map<string, HTMLCanvasElement> = new Map();
   private celMaterials: THREE.Material[] = [];
@@ -623,6 +632,26 @@ export class Rudra3DRenderer {
     const serialChanged =
       typeof input.attackSerial === 'number' && input.attackSerial !== this.lastAttackSerial;
     if (nextState !== this.lastAnimState || serialChanged) {
+      const duration = rudraPoseTransitionDurationSec(this.lastAnimState, nextState);
+      // Only true animation state changes blend; replaying the same state
+      // after a new attack serial must start at frame zero without a ghost.
+      this.poseBlendDurationSec = nextState !== this.lastAnimState ? duration : 0;
+      this.poseBlendElapsedSec = 0;
+      if (this.poseBlendDurationSec > 0 && this.lastDisplayedFrame &&
+          typeof document !== 'undefined') {
+        const source = this.poseBlendSource || document.createElement('canvas');
+        source.width = this.size; source.height = this.size;
+        const ctx = source.getContext('2d');
+        if (ctx) {
+          ctx.clearRect(0, 0, this.size, this.size);
+          ctx.drawImage(this.lastDisplayedFrame, 0, 0, this.size, this.size);
+          this.poseBlendSource = source;
+        } else {
+          this.poseBlendDurationSec = 0;
+        }
+      } else {
+        this.poseBlendDurationSec = 0;
+      }
       this.stateElapsedSec = 0;
       this.lastAnimState = nextState;
       if (typeof input.attackSerial === 'number') {
@@ -653,7 +682,37 @@ export class Rudra3DRenderer {
       Boolean(input.susanooActive)
     );
     if (baked) {
+      if (this.poseBlendDurationSec > 0 && this.poseBlendSource &&
+          typeof document !== 'undefined') {
+        this.poseBlendElapsedSec += stepDt;
+        const alpha = rudraPoseBlendAlpha(
+          this.poseBlendElapsedSec, this.poseBlendDurationSec
+        );
+        if (alpha < 1) {
+          const target = this.poseBlendTarget || document.createElement('canvas');
+          if (target.width !== this.size) target.width = this.size;
+          if (target.height !== this.size) target.height = this.size;
+          const ctx = target.getContext('2d');
+          if (ctx) {
+            ctx.clearRect(0, 0, this.size, this.size);
+            ctx.globalAlpha = 1;
+            ctx.drawImage(this.poseBlendSource, 0, 0, this.size, this.size);
+            ctx.globalAlpha = alpha;
+            ctx.drawImage(baked, 0, 0, this.size, this.size);
+            ctx.globalAlpha = 1;
+            this.poseBlendTarget = target;
+            this.canvas = target;
+            this.lastDisplayedFrame = target;
+            // A partially blended blade has no single physically valid
+            // socket. Resume measured trails after the new pose dominates.
+            if (alpha < 0.8) this.projectedParashuHead = null;
+            return true;
+          }
+        }
+        this.poseBlendDurationSec = 0;
+      }
       this.canvas = baked;
+      this.lastDisplayedFrame = baked;
       return true;
     }
     return false;
@@ -856,6 +915,10 @@ export class Rudra3DRenderer {
     this.parashuHeadFrameCache.clear();
     this.parashuHeadMarker = null;
     this.projectedParashuHead = null;
+    this.lastDisplayedFrame = null;
+    this.poseBlendSource = null;
+    this.poseBlendTarget = null;
+    this.poseBlendDurationSec = 0;
   }
 }
 
