@@ -17,6 +17,13 @@ export function getAct1FinisherCameraShot(variant: ParashuFinisherVariant): Pick
   }
 }
 
+/** Contact hit-stop must never snap the camera *out* of a finisher close-up. */
+export function preserveAct1ExecutionContactZoom(currentZoom: number, baseZoom: number): number {
+  const current = Number.isFinite(currentZoom) ? currentZoom : 0.94;
+  const base = Number.isFinite(baseZoom) ? baseZoom : 0.94;
+  return Math.max(0.72, Math.min(1.20, Math.max(current, base + 0.055)));
+}
+
 /** The sample has its own eased fade envelope: never multiply it by dt again. */
 export function composeAct1CinematicZoom(baseZoom: number, cueZoomBoost: number): number {
   if (!Number.isFinite(baseZoom)) return 1;
