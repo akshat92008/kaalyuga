@@ -4976,76 +4976,75 @@ export default function KaliyugaArena() {
         const syncImpactX = curP.x + Math.cos(heavySlashAngle) * (curP.stance === 'thrust' ? 74 : 46);
         const syncImpactY = curP.y + Math.sin(heavySlashAngle) * (curP.stance === 'thrust' ? 46 : 28);
 
-        // Tier 2 Heavy Unleash: Explosive AAA Stance Spectacle + Heavy Iron Swing SFX
+        // Tier 2: each heavy invocation stays on the *actual axe* and
+        // verified contact point. The 3D Parashu-tip trail supplies the
+        // sweeping blade itself; never add a second 112–200px free-floating
+        // generic arc, fire wheel or skyward zigzag far from Rudra.
         soundEngine.playHeavyIronSwing();
+        const physicalBlade = projectWeaponHeadToWorld({
+          uv: rudra3dRef.current?.getProjectedParashuHead() ?? null,
+          actorX: curP.x, actorY: curP.y,
+          drawSize: HEROIC_DRAW_SIZES.rudra,
+          footAnchorRatio: rudra3dRef.current?.footAnchorRatio ?? 0.8,
+        });
+        const bladeNearImpact = Boolean(physicalBlade &&
+          Math.hypot(physicalBlade.x-syncImpactX,physicalBlade.y-(syncImpactY-22)) < 68);
+        const bladeHitX = bladeNearImpact && physicalBlade
+          ? syncImpactX * 0.55 + physicalBlade.x * 0.45 : syncImpactX;
+        const bladeHitY = bladeNearImpact && physicalBlade
+          ? (syncImpactY-22) * 0.55 + physicalBlade.y * 0.45 : syncImpactY-22;
         if (heavyStyleId === 'pralaya_earth_shatter') {
-          // A normal smash is a directional AXE HIT, not a giant circular
-          // super-move hiding Rudra. Focus-3/4 legitimately earns a brief
-          // elemental flourish, while the blade and target remain legible.
           const heavyVisual = getSmashHeavyVfxPresentation(orbsUsed);
-          webglDemonSlayerVfxRef.current?.spawnSlashRibbon({
-            x: curP.x + Math.cos(heavySlashAngle) * 18,
-            y: curP.y - 26,
-            angle: heavySlashAngle,
-            radius: heavyVisual.slashRadius,
-            width: heavyVisual.slashWidth,
-            arcSpan: heavyVisual.slashArc,
-            direction: curP.facing,
-            palette: 'hinokami',
-            duration: 0.28,
-            tiltX: 0.50,
-            spinRate: 0,
+          const radius = Math.min(130, heavyVisual.floorRingRadius);
+          webglDemonSlayerVfxRef.current?.spawnShockwaveRing({
+            x: bladeHitX, y: syncImpactY,
+            radius, palette: 'hinokami', duration: 0.29,
           });
           if (heavyVisual.createUltimateWheel) {
+            // An earned high-focus flourish is a compact energy ignition
+            // at the blade hit, not another ring orbiting the whole arena.
             webglDemonSlayerVfxRef.current?.spawnSolarFlameWheel({
-              x: syncImpactX, y: syncImpactY - 16,
-              angle: heavySlashAngle,
-              radius: 145,
-              palette: 'hinokami',
-              duration: 0.42,
+              x: bladeHitX, y: bladeHitY,
+              angle: heavySlashAngle, radius: 58,
+              palette: 'hinokami', duration: 0.24,
             });
           }
-          webglDemonSlayerVfxRef.current?.spawnShockwaveRing({
-            x: syncImpactX,
-            y: syncImpactY,
-            radius: heavyVisual.floorRingRadius,
-            palette: 'hinokami',
-            duration: 0.34,
-          });
           webglDemonSlayerVfxRef.current?.spawnClashStarburst({
-            x: syncImpactX, y: syncImpactY - 24,
-            scale: 0.98 + Math.min(0.30, orbsUsed * 0.08),
-            palette: 'hinokami',
-            duration: 0.22,
+            x: bladeHitX, y: bladeHitY,
+            scale: 0.82 + Math.min(0.20, orbsUsed * 0.05),
+            palette: 'hinokami', duration: 0.20,
           });
-          spawnShockwave(syncImpactX, syncImpactY, heavyVisual.floorRingRadius, '#ff5418', 0.34);
-          spawnParticles(syncImpactX, syncImpactY - 18, 15 + orbsUsed * 3, '#ff7b24', 235, 4.0, 92);
-          simRef.current.hitstopTimer = Math.max(simRef.current.hitstopTimer, 0.068);
+          spawnShockwave(syncImpactX,syncImpactY,radius,'#ff5418',0.30);
+          spawnParticles(bladeHitX,bladeHitY,11+orbsUsed*2,'#ff7b24',220,3.6,75);
+          simRef.current.hitstopTimer=Math.max(simRef.current.hitstopTimer,0.065);
         } else if (heavyStyleId === 'sudarshana_vortex') {
-          webglDemonSlayerVfxRef.current?.spawnWindGaleCrescents({
-            x: curP.x,
-            y: curP.y - 20,
-            angle: heavySlashAngle,
-            radius: heavyCleaveRadius * 1.12,
-            duration: 0.62,
+          // The wind coils around the axe impact, not a second floating
+          // crescent disconnected from the player's animated arms.
+          webglDemonSlayerVfxRef.current?.spawnCycloneVortex({
+            x: bladeHitX, y: bladeHitY, radius: 60,
+            palette: 'wind', duration: 0.32, ringCount: 2,
           });
-          spawnShockwave(curP.x, curP.y, heavyCleaveRadius * 1.02, '#10b981', 0.36);
+          spawnShockwave(syncImpactX,syncImpactY,108,'#10b981',0.29);
         } else {
-          // Thrust Heavy: Rebuilt GLSL Plasma Thunderclap Bolt + crisp electric slash
-          webglDemonSlayerVfxRef.current?.spawnThunderZigzag({
-            x1: curP.x,
-            y1: curP.y - 22,
-            x2: syncImpactX + Math.cos(heavySlashAngle) * 195,
-            y2: syncImpactY - 22 + Math.sin(heavySlashAngle) * 140,
-            palette: 'thunder',
-            duration: 0.62,
-            width: 28,
-            withFloorRing: true,
+          // One short lightning bridge from physical Parashu blade to the
+          // contact point. A 195px endpoint beyond the enemy looked detached.
+          const startX = physicalBlade?.x ?? curP.x + Math.cos(heavySlashAngle)*23;
+          const startY = physicalBlade?.y ?? curP.y - 27;
+          const boltLength=Math.hypot(bladeHitX-startX,bladeHitY-startY);
+          if (boltLength>=7 && boltLength<=105) {
+            webglDemonSlayerVfxRef.current?.spawnThunderZigzag({
+              x1:startX,y1:startY,x2:bladeHitX,y2:bladeHitY,
+              palette:'thunder',duration:0.24,width:11,withFloorRing:false,
+            });
+          }
+          webglDemonSlayerVfxRef.current?.spawnClashStarburst({
+            x:bladeHitX,y:bladeHitY,scale:0.72,
+            palette:'thunder',duration:0.18,
           });
         }
         webglDemonSlayerVfxRef.current?.spawnSparkBurst({
-          x: syncImpactX,
-          y: syncImpactY - 22,
+          x: bladeHitX,
+          y: bladeHitY,
           count: 12 + orbsUsed * 2,
           speed: 410,
           palette: primaryHeavyPalette,
