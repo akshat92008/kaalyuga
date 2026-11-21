@@ -539,6 +539,8 @@ export default function KaliyugaArena() {
   const [enemyRenderMode, setEnemyRenderMode] = useState<EnemyRenderMode>('all_3d');
   const [activeHubDialogueNpc, setActiveHubDialogueNpc] = useState<HubNpcId | null>(null);
   const [chamberLoadingLabel, setChamberLoadingLabel] = useState<string | null>(null);
+  const [chamberLoadError, setChamberLoadError] = useState<string | null>(null);
+  const [chamberLoadPercent, setChamberLoadPercent] = useState(0);
   const [isDebugMode] = useState<boolean>(() =>
     typeof window !== 'undefined'
       ? new URLSearchParams(window.location.search).get('debug') === '1'
@@ -2058,9 +2060,71 @@ export default function KaliyugaArena() {
     [spawnFlipbookVfx, spawnFloatingText, spawnParticles, spawnShockwave]
   );
 
+  // Shared gate for ALL chamber transitions, not just the title-screen start.
+  // Crucially, a timeout is a *failure* and must never be treated as readiness.
+  const verifyChamberAssets = useCallback(async (chamberIndex: number) => {
+    const sim = simRef.current;
+    const seq = ++chamberLoadSeqRef.current;
+    const spec = CHAMBERS[chamberIndex];
+    if (!spec) return;
+    setChamberLoadingLabel(`CHAMBER ${spec.id} · ${spec.name.toUpperCase()}`);
+    setChamberLoadError(null);
+    setChamberLoadPercent(0);
+    sim.modalPaused = true;
+    const requirements: Array<() => Promise<boolean>> = [];
+    const enemySlots = [
+      ...sim.enemies.filter((e) => !e.isBoss && e.type !== 'semi_boss_bloodforge')
+        .map((e) => ({ id: e.id, kind: e.type as RegularEnemy3DKind, wardenRigKey: e.wardenRigKey, trait: e.trait })),
+      ...spec.spawns.filter((e) => e.type !== 'dundubhi' && e.type !== 'vrikodara' && e.type !== 'semi_boss_bloodforge')
+        .map((e, i) => ({ id: 10000 + i, kind: e.type as RegularEnemy3DKind, wardenRigKey: e.wardenRigKey, trait: e.trait })),
+    ];
+    if (enemySlots.length) {
+      requirements.push(async () => Boolean(await enemy3dRef.current?.waitForChamberSlots(enemySlots, 20000)));
+    }
+    const bossKind = chamberIndex === 3 ? 'dundubhi'
+      : chamberIndex === 7 ? 'vrikodara'
+      : spec.spawns.some((e) => e.type === 'semi_boss_bloodforge') ? 'semi_boss' : null;
+    if (bossKind) {
+      requirements.push(async () => Boolean(await boss3dRef.current?.waitForBossReady(bossKind, 20000)));
+    }
+    // Paint and music should be available before combat, without blocking on optional voice clips.
+    if (spec.backgroundUrl) {
+      requirements.push(async () => {
+        const img = bgImagesRef.current.get(spec.backgroundUrl) || new Image();
+        if (!img.src) img.src = spec.backgroundUrl;
+        bgImagesRef.current.set(spec.backgroundUrl, img);
+        if (img.complete) return img.naturalWidth > 0;
+        return await new Promise<boolean>((resolve) => {
+          const timer = window.setTimeout(() => { cleanup(); resolve(false); }, 10000);
+          const success = () => { cleanup(); resolve(true); };
+          const failure = () => { cleanup(); resolve(false); };
+          const cleanup = () => {
+            window.clearTimeout(timer);
+            img.removeEventListener('load', success);
+            img.removeEventListener('error', failure);
+          };
+          img.addEventListener('load', success, { once: true });
+          img.addEventListener('error', failure, { once: true });
+        });
+      });
+    }
+    const results = await Promise.all(requirements.map(async (verify) => {
+      try { return await verify(); } catch { return false; }
+    }));
+    if (seq !== chamberLoadSeqRef.current) return;
+    setChamberLoadPercent(100);
+    if (results.every(Boolean)) {
+      setChamberLoadingLabel(null);
+      setChamberLoadError(null);
+      sim.modalPaused = false;
+    } else {
+      setChamberLoadError('One or more chamber assets could not load. Retry to avoid invisible or placeholder enemies.');
+    }
+  }, []);
+
   // Load a specific chamber (0-indexed: 0..11)
   const loadChamber = useCallback(
-    (index: number, resetFullRun: boolean = false) => {
+    (index: number, resetFullRun: boolean = false, skipAssetGate = false) => {
       const sim = simRef.current;
       const clampedIdx = Math.max(0, Math.min(CHAMBERS.length - 1, index));
       const spec = CHAMBERS[clampedIdx];
@@ -2470,6 +2534,9 @@ export default function KaliyugaArena() {
         );
       }
 
+      if (!isTitleMode && !skipAssetGate) {
+        void verifyChamberAssets(clampedIdx);
+      }
       soundEngine.playGong('chamber');
       soundEngine.syncBgmState(
         sim.state === 'title' ? 'title' : 'playing',
@@ -2477,7 +2544,7 @@ export default function KaliyugaArena() {
         spec.isBossChamber
       );
     },
-    [createEnemyFromSpec]
+    [createEnemyFromSpec, verifyChamberAssets]
   );
 
   // Enter walkable Vaitarani Simple Ash Hub (spawns Rudra by Savitri's Boat with 3D Lotus_Empress Savitri & interactive stations)
@@ -2498,7 +2565,10 @@ export default function KaliyugaArena() {
     setSliceStage('vaitarani_hub');
     sliceStageRef.current = 'vaitarani_hub';
 
-    loadChamber(0, true);
+    loadChamber(0, true, true);
+    chamberLoadSeqRef.current += 1;
+    setChamberLoadingLabel(null);
+    setChamberLoadError(null);
     sim.enemies = [];
     sim.pendingSpawns = [];
     sim.summoningRifts = [];
@@ -2574,45 +2644,7 @@ export default function KaliyugaArena() {
       loadChamber(clampedTargetIdx, true);
       soundEngine.startMusic();
 
-      // Fast Pre-Chamber Asset Loader: await 3D enemy/boss rigs briefly so models appear cleanly with zero fallback silhouettes
-      const seqId = ++chamberLoadSeqRef.current;
-      const enemySlots = sim.enemies
-        .filter((e) => !e.isBoss && e.type !== 'semi_boss_bloodforge')
-        .map((e) => ({
-          id: e.id,
-          kind: e.type as RegularEnemy3DKind,
-          wardenRigKey: e.wardenRigKey,
-          trait: e.trait,
-        }));
-      const hasSemiBoss = sim.enemies.some((e) => e.type === 'semi_boss_bloodforge');
-      const bossKind: 'dundubhi' | 'vrikodara' | 'semi_boss' | null =
-        clampedTargetIdx === 3
-          ? 'dundubhi'
-          : clampedTargetIdx === CHAMBERS.length - 1
-          ? 'vrikodara'
-          : hasSemiBoss
-          ? 'semi_boss'
-          : null;
-
-      if (enemySlots.length > 0 || bossKind !== null) {
-        const label = `CHAMBER ${targetSpec.id} · ${targetSpec.name.toUpperCase()}`;
-        setChamberLoadingLabel(label);
-        sim.modalPaused = true;
-        const waits: Promise<unknown>[] = [];
-        if (enemySlots.length > 0 && enemy3dRef.current) {
-          waits.push(enemy3dRef.current.waitForChamberSlots(enemySlots, 2400));
-        }
-        if (bossKind && boss3dRef.current) {
-          waits.push(boss3dRef.current.waitForBossReady(bossKind, 3000));
-        }
-        Promise.all(waits)
-          .catch(() => {})
-          .finally(() => {
-            if (chamberLoadSeqRef.current === seqId) {
-              setChamberLoadingLabel(null);
-            }
-          });
-      }
+      // Asset verification is now shared by loadChamber for every transition.
     },
     [ensure3DRenderersBooted, loadChamber]
   );
@@ -13121,8 +13153,17 @@ export default function KaliyugaArena() {
               {chamberLoadingLabel}
             </div>
             <div className="w-64 h-1.5 bg-[#1f161a] border border-[#d4a548]/40 mx-auto overflow-hidden">
-              <div className="h-full w-2/3 bg-gradient-to-r from-[#b81d2a] via-[#d4a548] to-[#f5ebd6] animate-pulse" />
+              <div className="h-full bg-gradient-to-r from-[#b81d2a] via-[#d4a548] to-[#f5ebd6] transition-all duration-300" style={{ width: `${chamberLoadPercent}%` }} />
             </div>
+            {chamberLoadError ? (
+              <div role="alert" className="mt-4 text-sm text-[#ffb4a2]">
+                <p>{chamberLoadError}</p>
+                <button type="button" onClick={() => void verifyChamberAssets(simRef.current.chamberIndex)} className="mt-3 border border-[#d4a548] px-5 py-2 text-[#f5ebd6]">RETRY ASSETS</button>
+                <button type="button" onClick={() => enterVaitaraniHub()} className="mt-3 ml-2 border border-[#7e7772] px-5 py-2 text-[#f5ebd6]">RETURN TO HUB</button>
+              </div>
+            ) : (
+              <p className="mt-3 text-xs text-[#d4a548]">Verifying character rigs and arena painting…</p>
+            )}
           </div>
         </div>
       )}
