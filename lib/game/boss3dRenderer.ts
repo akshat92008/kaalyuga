@@ -56,6 +56,9 @@ export interface Boss3DUpdateParams {
   aiState: 'idle' | 'chase' | 'windup' | 'attack' | 'recover' | 'ko';
   attackKind: 'cone' | 'corridor' | 'shockwave';
   attackPattern?: number;
+  // The staged horn charge has a one-tick impact handoff; keep the same
+  // running clip instead of restarting its animation on that handoff.
+  chargeImpactReady?: boolean;
   windupProgress: number;
   phase: 1 | 2 | 3;
   armorCracked: boolean;
@@ -1706,7 +1709,8 @@ export class Boss3DRenderer {
       targetTimeScale = 0.45;
     }
 
-    const forceRestart = enteredWindup || (enteredAttack && prevAiState !== 'windup');
+    const forceRestart = (enteredWindup && !params.chargeImpactReady) ||
+      (enteredAttack && prevAiState !== 'windup');
     const startOffset = enteredWindup ? 0.08 : 0;
 
     if (forceRestart || rig.activeKey !== desiredClip) {
