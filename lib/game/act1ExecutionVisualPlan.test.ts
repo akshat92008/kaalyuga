@@ -18,9 +18,11 @@ test('Sweeping and impaling executions have distinct silhouettes and VFX budgets
  const thrust=getAct1ExecutionVisualPlan('impaling_lunge');
  assert.equal(spin.useGroundedOverheadContact,false);
  assert.equal(thrust.useGroundedOverheadContact,false);
- assert.equal(spin.allowSpectralSkyBolts,true);
+ assert.equal(spin.allowSpectralSkyBolts,false);
  assert.equal(thrust.allowSpectralSkyBolts,false);
  assert.ok(spin.slashArcSpan>Math.PI);
+ assert.ok(spin.groundShockwaveRadius<200);
+ assert.ok(spin.flipbookSize<220);
  assert.ok(thrust.slashArcSpan<1);
  assert.ok(thrust.slashWidth<spin.slashWidth/2);
  assert.ok(thrust.groundShockwaveRadius<spin.groundShockwaveRadius/2);
