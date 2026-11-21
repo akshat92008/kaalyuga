@@ -8,12 +8,12 @@ import {useCallback,useEffect,useRef,useState} from 'react';
 import {Boss3DRenderer} from '@/lib/game/boss3dRenderer';
 import {GAME_ASSETS} from '@/lib/game/assets';
 import {
-  createDundubhiScene, MeruTimelinePlayer, sampleCinematic,
+  createDundubhiScene, createBossPhaseScene, MeruTimelinePlayer, sampleCinematic,
   validateCinematic, type MeruCinematic, type BossCharacter,
 } from '@/engine/meru/cinematicTimeline';
 import {GRAPHICS_PRESETS,type GraphicsTier} from '@/engine/meru/adaptiveQuality';
 import {makeMeruBossParams,paintMeruFrame} from '@/engine/meru/cinematicVisuals';
-import {meruStorageKey,readBossIntro,defaultBossIntro} from '@/engine/meru/runtimePolicy';
+import {meruSceneStorageKey,readBossPhase,readBossIntro,defaultBossIntro} from '@/engine/meru/runtimePolicy';
 
 const W=960,H=540;
 function fmt(n:number){return Number.isFinite(n)?n.toFixed(2):'0.00';}
@@ -57,7 +57,7 @@ export default function MeruCinematicStudio(){
   },[loadScene]);
   useEffect(()=>{
     if(!hydrated)return;
-    try{localStorage.setItem(meruStorageKey(scene.boss),JSON.stringify(scene));}
+    try{localStorage.setItem(meruSceneStorageKey(scene),JSON.stringify(scene));}
     catch{/* Storage may be disabled */ }
   },[scene,hydrated]);
   useEffect(()=>{
@@ -96,7 +96,7 @@ export default function MeruCinematicStudio(){
       const boss=bossRef.current;
       if(ctx){
         if(readyRef.current&&boss){
-          try{boss.updateAndRender(makeMeruBossParams(t,Math.max(0.015,dt),sceneRef.current.boss));}
+          try{boss.updateAndRender(makeMeruBossParams(t,Math.max(0.015,dt),sceneRef.current.boss,sceneRef.current.bossPhase??1));}
           catch{readyRef.current=false;setStatus('3D renderer failed: portrait fallback');}
         }
         paintMeruFrame(ctx,t,sceneRef.current,boss,readyRef.current,portraitRef.current);
@@ -286,11 +286,21 @@ export default function MeruCinematicStudio(){
           <div className="rounded-lg border border-[#43352e] bg-[#171216] p-4 space-y-3">
             <h2 className="font-semibold">Project and export</h2>
             <label className="block text-xs">Act I boss cinematic
-              <select aria-label="Select boss cinematic" value={scene.boss}
-                onChange={e=>loadScene(readBossIntro(e.target.value as BossCharacter))}
+              <select aria-label="Select boss cinematic"
+                value={scene.bossPhase && scene.bossPhase>1 ? scene.boss+'-phase'+scene.bossPhase : scene.boss}
+                onChange={e=>{
+                  const id=e.target.value;
+                  const match=/^(dundubhi|vrikodara)-phase([23])$/.exec(id);
+                  if(match)loadScene(readBossPhase(match[1] as BossCharacter,Number(match[2]) as 2|3));
+                  else loadScene(readBossIntro(id as BossCharacter));
+                }}
                 className="mt-1 block w-full rounded bg-[#2d2529] p-2 text-sm">
-                <option value="dundubhi">Dundubhi · Chamber IV</option>
-                <option value="vrikodara">Vrikodara · Chamber VIII</option>
+                <option value="dundubhi">Dundubhi · Chamber IV (Entrance)</option>
+                <option value="vrikodara">Vrikodara · Chamber VIII (Entrance)</option>
+                <option value="dundubhi-phase2">Dundubhi · Phase II</option>
+                <option value="dundubhi-phase3">Dundubhi · Phase III</option>
+                <option value="vrikodara-phase2">Vrikodara · Phase II</option>
+                <option value="vrikodara-phase3">Vrikodara · Phase III</option>
               </select>
             </label>
             <label className="block text-xs">Graphics target
@@ -303,7 +313,7 @@ export default function MeruCinematicStudio(){
               <input type="file" accept=".json,.meru.json,application/json" onChange={e=>void upload(e.target.files?.[0])}
                 className="mt-2 block w-full text-xs text-[#cdb196]"/>
             </label>
-            <button onClick={()=>loadScene(defaultBossIntro(scene.boss))} className="w-full rounded border border-[#665043] px-4 py-2 text-sm">Restore original scene</button>
+            <button onClick={()=>loadScene(scene.bossPhase && scene.bossPhase>1 ? createBossPhaseScene(scene.boss,scene.bossPhase) : defaultBossIntro(scene.boss))} className="w-full rounded border border-[#665043] px-4 py-2 text-sm">Restore original scene</button>
             <p className="text-xs text-[#998879]">Changes autosave locally in this browser. Import/export never changes your combat saves.</p>
           </div>
         </aside>
