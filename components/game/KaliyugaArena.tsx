@@ -4905,6 +4905,9 @@ export default function KaliyugaArena() {
     const heavyStyleId = heavySpec.styleId;
     const heavySlashAngle = p.slashAngle;
     const heavyCleaveRadius = heavySpec.cleaveRadiusPx;
+    // Anticipation audio stays at input, while impacts wait for blade contact.
+    soundEngine.playSwing('heavy', p.stance);
+    soundEngine.playVoiceBark('rudra_heavy', { cooldownMs: 8000 });
 
     pendingStrikeVfxRef.current = {
       fired: false,
@@ -4974,10 +4977,19 @@ export default function KaliyugaArena() {
           speed: 410,
           palette: primaryHeavyPalette,
         });
+        resolveHeavyHitAtContact();
       },
     };
 
-    if (heavySpec.styleId === 'sudarshana_vortex') {
+    // Deferred heavy collision is owned by this exact attack and chamber.
+    // A dash, stagger or room transition must not release ghost damage.
+    const capturedHeavySerial = p.attackSerial;
+    const capturedHeavyChamber = sim.chamberIndex;
+    const resolveHeavyHitAtContact = () => {
+      if (simRef.current !== sim || sim.state !== 'playing' ||
+          sim.chamberIndex !== capturedHeavyChamber ||
+          p.action !== 'heavy_unleash' || p.attackSerial !== capturedHeavySerial) return;
+      if (heavySpec.styleId === 'sudarshana_vortex') {
       sim.enemies.forEach((e) => {
         if (e.aiState === 'ko') return;
         const vDist = Math.hypot(e.x - p.x, e.y - p.y);
@@ -5109,9 +5121,7 @@ export default function KaliyugaArena() {
       });
     }
 
-    soundEngine.playSwing('heavy', p.stance);
     soundEngine.playParashuHeavy();
-    soundEngine.playVoiceBark('rudra_heavy', { cooldownMs: 8000 });
     soundEngine.playBreathingStyle(primaryHeavyPalette);
     let hitAny = false;
 
@@ -5411,6 +5421,7 @@ export default function KaliyugaArena() {
         110
       );
     }
+    };
   }, [addStylePoints, damagePropsNearPoint, gainAstraEnergy, recordQuestEvent, spawnAfterimage, spawnFlipbookVfx, spawnFloatingText, spawnParticles, spawnShockwave]);
 
   const triggerLightAttack = useCallback(() => {
