@@ -136,3 +136,20 @@ test('scene URL whitelist rejects external URLs and parent traversal for both bo
     assert.throws(()=>validateCinematic({...v,posterUrl:bad}),/URL/);
   }
 });
+
+test('editor-authored cue at zero fires once on play, not on pause or seek',()=>{
+  const base=createDundubhiScene();
+  const scene=validateCinematic({...base,cues:[
+    ...base.cues,{id:'opening-sound',time:0,kind:'drum'},
+  ]});
+  const p=new MeruTimelinePlayer(scene);
+  p.play();
+  assert.deepEqual(p.tick(0.015).cues.map(c=>c.id),['opening-sound']);
+  assert.deepEqual(p.tick(0.015).cues,[]);
+  p.pause();
+  assert.deepEqual(p.tick(3).cues,[]);
+  p.play(); // Resuming from t>0 cannot re-fire the start sound.
+  assert.deepEqual(p.tick(0.015).cues,[]);
+  p.seek(0);p.pause();p.play();
+  assert.deepEqual(p.tick(0.015).cues.map(c=>c.id),['opening-sound']);
+});
