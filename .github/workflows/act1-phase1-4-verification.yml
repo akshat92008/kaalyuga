@@ -86,7 +86,7 @@ jobs:
       - name: Install real Blender on runner
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y blender
+          sudo apt-get install -y blender python3-numpy
           blender --version
       - name: Import all ten FBX clips, validate bones, export GLB, render preview
         run: |
