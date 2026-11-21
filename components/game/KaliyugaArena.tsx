@@ -7076,6 +7076,7 @@ export default function KaliyugaArena() {
       progress: number;
       threshold: number;
       damageDelta: number;
+      finisherVariant: ParashuFinisherVariant | null;
       atMs: number;
     }> = [];
     const traceStrikeCue = (
@@ -7088,7 +7089,10 @@ export default function KaliyugaArena() {
       damageDelta = 0
     ) => {
       if (!perfTelemetryEnabled) return;
-      strikeCueTrace.push({ kind, action, attackSerial, progress, threshold, damageDelta, atMs });
+      strikeCueTrace.push({ kind, action, attackSerial, progress, threshold, damageDelta,
+        finisherVariant: action === 'execute'
+          ? simRef.current.player.finisherVariant
+          : null, atMs });
       if (strikeCueTrace.length > 24) strikeCueTrace.shift();
     };
 
@@ -7149,6 +7153,7 @@ export default function KaliyugaArena() {
             combat: {
               action: sim.player.action,
               attackSerial: sim.player.attackSerial,
+              finisherVariant: sim.player.finisherVariant,
               hp: sim.player.hp,
               astraEnergy: sim.player.astraEnergy,
               damageDealt: sim.runDamageDealt,
