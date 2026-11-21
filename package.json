@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint .",
     "clean": "next clean",
-    "test:phase1-4": "tsx --test lib/game/cinematicCamera.test.ts lib/game/elementalImpactDirector.test.ts lib/game/rudraAnimationTiming.test.ts lib/game/rudraAssetPaths.test.ts"
+    "test:phase1-4": "tsx --test lib/game/cinematicCamera.test.ts lib/game/elementalImpactDirector.test.ts lib/game/rudraAnimationTiming.test.ts lib/game/rudraAssetPaths.test.ts lib/game/executionChoreography.test.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
