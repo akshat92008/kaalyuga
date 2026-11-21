@@ -932,7 +932,9 @@ export class UnifiedWorld3DStage {
         return matched;
       };
 
-      if (slot.weaponKind !== 'none') {
+      // The shared FBX weapon library only contains these three melee props.
+      // Longbow and dharma-chakram archetypes use their own rig / VFX pipeline.
+      if (slot.weaponKind === 'minotaur_axe' || slot.weaponKind === 'trident_axe' || slot.weaponKind === 'crescent_reaver') {
         const rightHand = findBone(['mixamorigRightHand', 'RightHand']);
         const wepTemplate = await this.getSharedWeaponTemplate(slot.weaponKind);
         if (rightHand && wepTemplate) {
