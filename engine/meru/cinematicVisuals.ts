@@ -63,6 +63,40 @@ export function paintMeruFrame(
   ctx.restore();
   if(ready && boss?.canvas.width){
     ctx.drawImage(boss.canvas,x,y,bw,bh);
+    // True weapon-socket registration: use the boss FBX animation's projected
+    // sword/claw tip as the effect origin, not a guessed point on a sprite.
+    // Ink arcs are deliberately transient and fully transparent outside strokes.
+    const weapon=boss.getCinematicWeaponAnchor();
+    const beat=scene.cues.find(c=>c.kind==='vfx' &&
+      frame.time>=c.time-0.30 && frame.time<=c.time+0.65);
+    if(weapon && beat){
+      const diff=frame.time-beat.time;
+      const strength=diff<0?clamp(1+diff/0.3,0,1):clamp(1-diff/0.65,0,1);
+      const hot=beat.payload==='blood-furnace';
+      const color=hot?'255,111,43':beat.payload==='earth-sunder'?'252,81,101':'255,208,135';
+      const tx=x+weapon.x*bw;
+      const ty=y+weapon.y*bh;
+      const radius=(55+85*(1-strength))*frame.actor.scale;
+      ctx.save();
+      ctx.globalCompositeOperation='screen';
+      for(let i=0;i<3;i++){
+        ctx.beginPath();
+        ctx.lineCap='round';
+        ctx.lineWidth=(6-i*1.7)*frame.actor.scale;
+        ctx.strokeStyle='rgba('+color+',1)';
+        ctx.globalAlpha=strength*(0.54-i*0.12);
+        const sweep=frame.time*3.5+i*0.16;
+        ctx.arc(tx,ty,radius+i*12,sweep-2.1,sweep+0.45);
+        ctx.stroke();
+      }
+      // Light central glint only; no opaque off-screen render rectangle.
+      ctx.beginPath();
+      ctx.globalAlpha=strength*0.78;
+      ctx.fillStyle='#fff0c8';
+      ctx.arc(tx,ty,Math.max(1.5,5.5*strength),0,Math.PI*2);
+      ctx.fill();
+      ctx.restore();
+    }
   } else if(portrait?.complete && portrait.naturalWidth>0){
     ctx.drawImage(portrait,x+50,y+30,bw-100,bh-80);
   }
