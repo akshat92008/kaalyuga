@@ -8,6 +8,15 @@
 import type { WeaponTrailSample } from './act1WeaponPoseTrail';
 
 export type Act1HeavyBreathingStance = 'smash'|'pillar'|'thrust';
+export type Act1BreathingElement = 'fire'|'wind'|'thunder'|'water'|'susanoo';
+export function resolveAct1BreathingElement(
+  stance:Act1HeavyBreathingStance,waterInfusion=false,susanooActive=false
+):Act1BreathingElement{
+  if(susanooActive)return 'susanoo';
+  if(waterInfusion)return 'water';
+  return stance==='pillar'?'wind':stance==='thrust'?'thunder':'fire';
+}
+
 
 export interface Act1HeavyBreathingPalette {
   soot: string;
@@ -28,13 +37,18 @@ export interface Act1HeavyBreathingFlame {
   reach: number;
   t: number;
 }
-const INK: Record<Act1HeavyBreathingStance,Act1HeavyBreathingPalette> = {
-  smash: {soot:'#210914',ember:'#e4381f',pigment:'#ff8b26',hot:'#fff1b6',rim:'#ff501e'},
-  pillar: {soot:'#061c1b',ember:'#03766c',pigment:'#34efab',hot:'#f3ffcc',rim:'#47ffbb'},
-  thrust: {soot:'#07162b',ember:'#295ac1',pigment:'#3cd5fd',hot:'#f0f9ff',rim:'#a87aff'},
+const INK: Record<Act1BreathingElement,Act1HeavyBreathingPalette> = {
+  fire: {soot:'#210914',ember:'#e4381f',pigment:'#ff8b26',hot:'#fff1b6',rim:'#ff501e'},
+  wind: {soot:'#061c1b',ember:'#03766c',pigment:'#34efab',hot:'#f3ffcc',rim:'#47ffbb'},
+  thunder: {soot:'#07162b',ember:'#295ac1',pigment:'#3cd5fd',hot:'#f0f9ff',rim:'#a87aff'},
+  water: {soot:'#07192a',ember:'#0669a5',pigment:'#38dffa',hot:'#e2feff',rim:'#90eaff'},
+  susanoo: {soot:'#1b0c32',ember:'#792ee0',pigment:'#cb71ff',hot:'#fff1c1',rim:'#a65bea'},
 };
-export function act1HeavyBreathingPalette(stance:Act1HeavyBreathingStance):Act1HeavyBreathingPalette {
-  return INK[stance];
+export function act1HeavyBreathingPalette(
+  stance:Act1HeavyBreathingStance,
+  element:Act1BreathingElement=resolveAct1BreathingElement(stance),
+):Act1HeavyBreathingPalette {
+  return INK[element];
 }
 const clamp=(x:number,a:number,b:number):number=>Number.isFinite(x)?Math.max(a,Math.min(b,x)):a;
 
@@ -52,12 +66,15 @@ export function buildAct1HeavyBladeFlames(
     stance:Act1HeavyBreathingStance;
     focus:number;
     alpha:number;
-    action:'heavy_unleash'|'execute';
+    action:'light_attack'|'heavy_unleash'|'execute';
+    element?:Act1BreathingElement;
   }
 ):Act1HeavyBreathingFlame[] {
   if (!samples || samples.length<2 || opts.alpha<=0.02) return [];
   const focus=clamp(opts.focus,0,4);
   const alpha=clamp(opts.alpha,0,1);
+  const light=opts.action==='light_attack';
+  const element=opts.element??resolveAct1BreathingElement(opts.stance);
   const valid=samples.filter(s=>Number.isFinite(s.x)&&Number.isFinite(s.y)&&Number.isFinite(s.atMs));
   if(valid.length<2)return [];
   // Keep the hottest filaments near the leading edge, rather than filling
@@ -74,11 +91,12 @@ export function buildAct1HeavyBladeFlames(
     const age=(i)/(source.length-1);
     // 58px at 0 focus, up to 145px when fully charged.
     const reach=Math.min(145,(58+focus*18)*(0.72+0.28*age)*
-      (opts.action==='execute'?0.88:1));
-    const width=Math.min(30,9+focus*3.2+age*4);
-    const sides: Array<-1|1>=opts.stance==='thrust'?[1,-1]:[-1,1];
+      (light?0.45:opts.action==='execute'?0.88:1));
+    const width=Math.min(30,(9+focus*3.2+age*4)*(light?0.68:1));
+    const sides: Array<-1|1>=
+      element==='thunder'? [1,-1] : [-1,1];
     for(const side of sides){
-      const sideReach=side===1?1:0.62;
+      const sideReach=side===1?1:element==='water'?0.84:0.62;
       const r=reach*sideReach;
       const root={x:cur.x,y:cur.y}; // exact measured blade vertex
       const tip={
@@ -99,11 +117,11 @@ export function buildAct1HeavyBladeFlames(
         rightBase:{x:root.x-nx*width*0.42,y:root.y-ny*width*0.42},
         width,
         t:age,
-        opacity:alpha*(0.18+0.40*age)*(side===1?1:0.68),
+        opacity:alpha*(0.18+0.40*age)*(side===1?1:0.68)*(light?0.72:1),
       });
     }
   }
-  return flames.slice(-8);
+  return flames.slice(light?-4:-8);
 }
 
 export function getAct1HeavyContactSpectacle(stance:Act1HeavyBreathingStance,focus:number):{
