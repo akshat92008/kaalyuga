@@ -39,6 +39,13 @@ import {
 } from '@/lib/game/rules';
 import { soundEngine } from '@/lib/game/audio';
 import { heavyElementFromStance, spawnHeavyElementalRelease } from '@/lib/game/elementalImpactDirector';
+import { CinematicCameraTrack } from '@/lib/game/cinematicCamera';
+import {
+  createBossEntranceCameraTrack,
+  createExecutionCameraTrack,
+  getExecutionBeat,
+  shouldCommitExecutionImpact,
+} from '@/lib/game/executionChoreography';
 import {
   loadAndProcessSprite,
   getProcessedSpriteSync,
@@ -530,6 +537,16 @@ export default function KaliyugaArena() {
     fired: boolean;
     triggerThreshold: number;
     execute: () => void;
+  } | null>(null);
+  const pendingExecutionRef = useRef<{
+    variant: ParashuFinisherVariant;
+    fired: boolean;
+    execute: () => void;
+  } | null>(null);
+  const liveCameraRef = useRef<{
+    kind: 'boss' | 'execution';
+    elapsedSec: number;
+    track: CinematicCameraTrack;
   } | null>(null);
   const bloodDemonArtsRef = useRef<BloodDemonArtPool>(createBloodDemonArtPool());
   const enemyVariantCounterRef = useRef<number>(0);
@@ -2123,6 +2140,10 @@ export default function KaliyugaArena() {
       sim.chamberClearTimer = 0;
       sim.bossPhaseBanner = null;
       sim.cameraZoom = BASE_CAMERA_ZOOM;
+      pendingStrikeVfxRef.current = null;
+      pendingExecutionRef.current = null;
+      liveCameraRef.current?.track.interrupt();
+      liveCameraRef.current = null;
       sim.cameraKickX = 0;
       sim.cameraKickY = 0;
       sim.delayedFaultLines = [];
@@ -2184,6 +2205,12 @@ export default function KaliyugaArena() {
 
       // Trigger Boss Intro Painted Story Cutscenes when entering Chamber 4 (Dundubhi) or Chamber 8 (Vrikodara) during a run
       if (!resetFullRun && sim.state === 'playing') {
+        if (clampedIdx === 3 || clampedIdx === 7) {
+          liveCameraRef.current = {
+            kind: 'boss', elapsedSec: 0,
+            track: createBossEntranceCameraTrack(clampedIdx === 3 ? 'dundubhi' : 'vrikodara'),
+          };
+        }
         if (clampedIdx === 3) {
           setSliceStage('dundubhi_intro');
         } else if (clampedIdx === 7) {
@@ -4392,6 +4419,7 @@ export default function KaliyugaArena() {
     const sim = simRef.current;
     const p = sim.player;
     if (sim.state !== 'playing') return;
+    if (p.action === 'execute' || pendingExecutionRef.current) return;
 
     const brokenEnemy = sim.enemies.find(
       (e) => e.aiState !== 'ko' && e.postureBrokenTimer > 0
@@ -4443,7 +4471,26 @@ export default function KaliyugaArena() {
     p.slashAngle = p.facing === 1 ? 0 : Math.PI;
     p.slashArcAlpha = 1.0;
     p.weaponSwingProgress = 0.0;
-
+    p.attackSerial += 1;
+    // During choreography the broken foe holds its stagger; the blade actually
+    // deals damage and launches particles ONLY when the animation crosses contact.
+    brokenEnemy.aiState = 'recover';
+    brokenEnemy.aiTimer = Math.max(brokenEnemy.aiTimer, finisherSpec.durationSec);
+    brokenEnemy.vx = 0;
+    brokenEnemy.vy = 0;
+    pendingStrikeVfxRef.current = null;
+    liveCameraRef.current = {
+      kind: 'execution',
+      elapsedSec: 0,
+      track: createExecutionCameraTrack(finisherSpec.variant, finisherSpec.durationSec),
+    };
+    pendingExecutionRef.current = {
+      variant: finisherSpec.variant,
+      fired: false,
+      execute: () => {
+        if (sim.state !== 'playing' || p.action !== 'execute') return;
+        // Existing finisher damage, enemy reaction, rewards, audio, dual-element
+        // ribbons, starbursts and shards now share this contact frame.
     const stats = computeDerivedPlayerStats(sim.ranks);
     const execDmg = Math.round(
       (brokenEnemy.isBoss ? 360 : 290) * stats.damageMultiplier * finisherSpec.damageMultiplier
@@ -4687,6 +4734,8 @@ export default function KaliyugaArena() {
       1.25,
       finisherSpec.subtitle
     );
+      },
+    };
   }, [gainAstraEnergy, recordQuestEvent, spawnAfterimage, spawnFlipbookVfx, spawnFloatingText, spawnParticles, spawnShockwave]);
 
   const triggerStanceHeavyUnleash = useCallback(() => {
@@ -6232,6 +6281,12 @@ export default function KaliyugaArena() {
 
       if (e.code === 'Escape' || e.code === 'KeyP') {
         e.preventDefault();
+        // Escape skips an active live-camera shot instead of accidentally pausing the fight.
+        if (e.code === 'Escape' && liveCameraRef.current) {
+          liveCameraRef.current.track.skip();
+          liveCameraRef.current = null;
+          return;
+        }
         if (partyModalOpen) {
           setPartyModalOpen(false);
           return;
@@ -6760,6 +6815,16 @@ export default function KaliyugaArena() {
         sim.fpsAccum = 0;
       }
 
+      // Run non-destructive cinematic camera in real time even while story input is paused.
+      // Auto-release always resets framing: no persistent zoom or stuck lock.
+      if (liveCameraRef.current) {
+        const running = liveCameraRef.current;
+        running.elapsedSec += Math.min(0.05, Math.max(0, rawDt));
+        if (running.track.sample(running.elapsedSec, cw, ch).completed) {
+          liveCameraRef.current = null;
+        }
+      }
+
       // Hitstop, slow-mo, camera zoom, and screen shake decay in real dt
       if (sim.hitstopTimer > 0) {
         sim.hitstopTimer = Math.max(0, sim.hitstopTimer - dt);
@@ -7240,6 +7305,19 @@ export default function KaliyugaArena() {
         if (p.action !== 'idle') {
           const prevAction = p.action;
           p.actionTimer -= simDt;
+          const execution = pendingExecutionRef.current;
+          if (execution) {
+            if (p.action !== 'execute') {
+              pendingExecutionRef.current = null;
+            } else {
+              const progress = 1 - Math.max(0, p.actionTimer) / Math.max(0.05, p.actionDuration);
+              if (shouldCommitExecutionImpact(execution.variant, progress, execution.fired) || p.actionTimer <= 0) {
+                execution.fired = true;
+                pendingExecutionRef.current = null;
+                execution.execute();
+              }
+            }
+          }
 
           // Synchronize melee slash VFX with Rudra's physical Parashu axe cleave active frame!
           const pendingStrike = pendingStrikeVfxRef.current;
@@ -9794,13 +9872,17 @@ export default function KaliyugaArena() {
       // Step 1: Render Deep Parallax Underworld Abyss (0.38x camera parallax lava/blood chasm & sunken pillars)
       renderParallaxAbyss(ctx, cw, ch, sim.camX, sim.camY, now, sim.chamberIndex);
 
-      // Apply dynamic camera zoom & high-impact directional + rotational trauma shake around viewport center
+      // Combine existing battle camera with bounded authored boss/execution framing.
+      const liveShot = liveCameraRef.current?.track.sample(liveCameraRef.current.elapsedSec, cw, ch);
+      const composedZoom = sim.cameraZoom * (liveShot?.zoom ?? 1);
       ctx.translate(cw * 0.5, ch * 0.5);
-      if (Math.abs(sim.cameraZoom - 1) > 0.0005) {
-        ctx.scale(sim.cameraZoom, sim.cameraZoom);
+      if (Math.abs(composedZoom - 1) > 0.0005) {
+        ctx.scale(composedZoom, composedZoom);
       }
-      if (Math.abs(sim.cameraKickX) > 0.05 || Math.abs(sim.cameraKickY) > 0.05) {
-        ctx.translate(sim.cameraKickX, sim.cameraKickY);
+      const cinematicOffsetX = liveShot?.offsetX ?? 0;
+      const cinematicOffsetY = liveShot?.offsetY ?? 0;
+      if (Math.abs(sim.cameraKickX + cinematicOffsetX) > 0.05 || Math.abs(sim.cameraKickY + cinematicOffsetY) > 0.05) {
+        ctx.translate(sim.cameraKickX + cinematicOffsetX, sim.cameraKickY + cinematicOffsetY);
       }
       if (sim.cameraShakeTrauma > 0) {
         const traumaSq = sim.cameraShakeTrauma * sim.cameraShakeTrauma;
