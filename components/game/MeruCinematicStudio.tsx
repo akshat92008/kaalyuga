@@ -313,7 +313,7 @@ export default function MeruCinematicStudio(){
               <input type="file" accept=".json,.meru.json,application/json" onChange={e=>void upload(e.target.files?.[0])}
                 className="mt-2 block w-full text-xs text-[#cdb196]"/>
             </label>
-            <button onClick={()=>loadScene(scene.bossPhase && scene.bossPhase>1 ? createBossPhaseScene(scene.boss,scene.bossPhase) : defaultBossIntro(scene.boss))} className="w-full rounded border border-[#665043] px-4 py-2 text-sm">Restore original scene</button>
+            <button onClick={()=>loadScene((scene.bossPhase === 2 || scene.bossPhase === 3) ? createBossPhaseScene(scene.boss,scene.bossPhase) : defaultBossIntro(scene.boss))} className="w-full rounded border border-[#665043] px-4 py-2 text-sm">Restore original scene</button>
             <p className="text-xs text-[#998879]">Changes autosave locally in this browser. Import/export never changes your combat saves.</p>
           </div>
         </aside>
