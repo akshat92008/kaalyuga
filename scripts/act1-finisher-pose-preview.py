@@ -160,6 +160,10 @@ def render_pose(target, action, out_path: Path):
     scene.render.engine = "CYCLES"
     scene.cycles.device = "CPU"
     scene.cycles.samples = 4
+    # Ubuntu's stock Blender is compiled without OpenImageDenoiser.
+    scene.cycles.use_denoising = False
+    for view_layer in scene.view_layers:
+        view_layer.cycles.use_denoising = False
     scene.render.resolution_x = 480
     scene.render.resolution_y = 480
     scene.render.resolution_percentage = 100
