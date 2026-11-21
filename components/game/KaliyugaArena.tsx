@@ -39,7 +39,7 @@ import {
 } from '@/lib/game/rules';
 import { soundEngine } from '@/lib/game/audio';
 import { Act1FrameProfiler } from '@/lib/game/act1Performance';
-import { Act1CinematicCamera, composeAct1CinematicZoom, getAct1FinisherCameraShot, preserveAct1ExecutionContactZoom } from '@/lib/game/act1CinematicCamera';
+import { Act1CinematicCamera, composeAct1CinematicZoom, getAct1FinisherCameraShot, preserveAct1ExecutionContactZoom, removePreviousAct1CinematicZoom } from '@/lib/game/act1CinematicCamera';
 import {
   DUNDUBHI_CHARGE_TRAVEL_SEC,
   advanceDundubhiCharge,
@@ -587,6 +587,7 @@ export default function KaliyugaArena() {
   if (!act1FrameProfilerRef.current) act1FrameProfilerRef.current = new Act1FrameProfiler(1200);
   const act1CameraRef = useRef<Act1CinematicCamera | null>(null);
   if (!act1CameraRef.current) act1CameraRef.current = new Act1CinematicCamera();
+  const lastCinematicZoomOverlayRef = useRef(0);
   const pendingBossEntranceRef = useRef<{ x: number; y: number } | null>(null);
   const [cameraPreset, setCameraPreset] = useState<HadesCameraPreset>('dynamic_action');
   const [enemyRenderMode, setEnemyRenderMode] = useState<EnemyRenderMode>('all_3d');
@@ -2226,6 +2227,7 @@ export default function KaliyugaArena() {
       const spec = CHAMBERS[clampedIdx];
       const isTitleMode = sim.state === 'title';
       act1CameraRef.current?.cancel();
+      lastCinematicZoomOverlayRef.current = 0;
       pendingStrikeVfxRef.current = null;
       pendingBossEntranceRef.current = null;
       // Release old chamber's live rigs before loading the next wave of distinct models.
@@ -7239,7 +7241,9 @@ export default function KaliyugaArena() {
         });
       }
       const cinematicCue = act1CameraRef.current!.step(dt, sim.modalPaused || sim.state !== 'playing' || isHubCamera);
-      let cameraZoomWithoutCue = sim.cameraZoom;
+      let cameraZoomWithoutCue = removePreviousAct1CinematicZoom(
+        sim.cameraZoom, lastCinematicZoomOverlayRef.current
+      );
       if (sim.cameraPreset === 'dynamic_action') {
         const activeBossKind: 'dundubhi' | 'vrikodara' | 'semi_boss' | null = activeBoss
           ? activeBoss.type === 'semi_boss_bloodforge'
@@ -7253,15 +7257,18 @@ export default function KaliyugaArena() {
           hasActiveBoss: Boolean(activeBoss),
           bossKind: activeBossKind,
           susanooActive: sim.player.transformTimer > 0,
-          currentZoom: sim.cameraZoom,
+          currentZoom: cameraZoomWithoutCue,
           dt,
         });
         if (cw < 640) nextZoom *= 0.82;
         cameraZoomWithoutCue = nextZoom;
-        // The camera cue already fades itself over time. The old extra dt
-        // multiplier nearly erased its execution close-up at 60 Hz.
+        // Apply the eased cue once, then remove that precise overlay on the
+        // next frame before updating the normal gameplay camera again.
         sim.cameraZoom = composeAct1CinematicZoom(nextZoom, cinematicCue.zoomBoost);
+        lastCinematicZoomOverlayRef.current = sim.cameraZoom - nextZoom;
       } else {
+        sim.cameraZoom = cameraZoomWithoutCue;
+        lastCinematicZoomOverlayRef.current = 0;
         const rawPresetZoom = sim.cameraPreset === 'tactical_wide' ? 0.82 : 0.98;
         const presetBaseZoom = cw < 640 ? rawPresetZoom * 0.78 : rawPresetZoom;
         const targetZoom =
@@ -12783,6 +12790,7 @@ export default function KaliyugaArena() {
         act1FrameProfilerRef.current?.reset();
       }
       act1CameraRef.current?.cancel();
+      lastCinematicZoomOverlayRef.current = 0;
       pendingBossEntranceRef.current = null;
     };
   }, [
