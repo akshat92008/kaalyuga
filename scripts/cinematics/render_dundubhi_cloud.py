@@ -184,7 +184,7 @@ def build(out_dir):
     scene.frame_end = FRAMES
     scene.render.filepath = str(out_dir / "frames" / "")
     scene.render.filepath = str(out_dir / "frames" / "frame_")
-    scene.render.file_extension = True
+    scene.render.use_file_extension = True
     scene.camera = None
     scene.world.color = (0.01, 0.01, 0.015)
 
