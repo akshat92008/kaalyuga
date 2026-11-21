@@ -108,7 +108,7 @@ def export_one(source, output, packer):
     if packer:
         try:
             # -kn retains bone/node names used by the engine's clip retargeting.
-            subprocess.run([packer, "-i", str(raw), "-o", str(output), "-kn", "-km"],
+            subprocess.run([packer, "-i", str(raw), "-o", str(output), "-kn", "-km", "-cc"],
                            check=True, timeout=300)
         finally:
             raw.unlink(missing_ok=True)
