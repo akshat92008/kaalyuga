@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createDundubhiScene, createVrikodaraScene, createBossPhaseScene, validateCinematic, sampleCinematic, cuesBetween, MeruTimelinePlayer} from './cinematicTimeline';
+import {createDundubhiScene, createVrikodaraScene, createBossPhaseScene, validateCinematic, sampleCinematic, retimeCinematic, cuesBetween, MeruTimelinePlayer} from './cinematicTimeline';
 import {MeruAdaptiveQuality,GRAPHICS_PRESETS} from './adaptiveQuality';
 import {MeruFrameProbe} from './performanceProbe';
 import {beginPortalTransition,advancePortalTransition,portalPalette} from './portalDirector';
@@ -263,4 +263,21 @@ test('offline target-device frame report is bounded, truthful, and excludes inva
   assert.ok(r.estimatedFps>0);
   p.reset();assert.equal(p.report().sampleCount,0);
   assert.throws(()=>new MeruFrameProbe(1),/sample window/);
+});
+
+test('retiming a cinematic rescales sound and visual beats together with character pose',()=>{
+  for(const original of [createDundubhiScene(),createVrikodaraScene(),createBossPhaseScene('vrikodara',3)]){
+    const next=retimeCinematic(original,12);
+    assert.equal(next.duration,12);
+    const ratio=12/original.duration;
+    assert.ok(Math.abs(next.camera[1].time-original.camera[1].time*ratio)<0.000001);
+    assert.ok(Math.abs(next.actor[2].time-original.actor[2].time*ratio)<0.000001);
+    assert.ok(Math.abs(next.pose![2].time-original.pose![2].time*ratio)<0.000001);
+    const oldCue=original.cues.find(c=>c.kind==='impact')!;
+    const newCue=next.cues.find(c=>c.id===oldCue.id)!;
+    assert.ok(Math.abs(newCue.time-oldCue.time*ratio)<0.000001);
+    assert.equal(original.duration,original.bossPhase?4.2:original.boss==='dundubhi'?8:8.5);
+    assert.equal(validateCinematic(next).duration,12);
+  }
+  assert.throws(()=>retimeCinematic(createDundubhiScene(),-1),/duration/);
 });
