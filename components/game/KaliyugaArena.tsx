@@ -4751,8 +4751,11 @@ export default function KaliyugaArena() {
       const aim = p.slashAngle;
       const contactX = brokenEnemy.x;
       const contactY = brokenEnemy.y - 24;
-      const startX = contactX - Math.cos(aim) * 36;
-      const startY = contactY - Math.sin(aim) * 36;
+      // The ribbon is a radial arc anchored at +radius along its aim axis;
+      // offset its origin by that radius so the visible blade cut crosses the
+      // *actual* contact point rather than floating a body-width away.
+      const startX = contactX - Math.cos(aim) * executionVisual.slashRadius;
+      const startY = contactY - Math.sin(aim) * executionVisual.slashRadius;
       spawnShockwave(
         brokenEnemy.x, brokenEnemy.y,
         executionVisual.groundShockwaveRadius, '#a75b42', 0.23
@@ -11934,7 +11937,8 @@ export default function KaliyugaArena() {
           const poseTrail = parashuPoseTrailRef.current;
           const activeParashuAction =
             !coreLock.isSusanooActive &&
-            (p.action === 'light_attack' || p.action === 'heavy_unleash');
+            (p.action === 'light_attack' || p.action === 'heavy_unleash' ||
+             p.action === 'execute');
           if (!activeParashuAction) {
             poseTrail.samples = [];
           } else {
