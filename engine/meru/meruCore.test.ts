@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createDundubhiScene, createVrikodaraScene, createBossPhaseScene, validateCinematic, sampleCinematic, cuesBetween, MeruTimelinePlayer} from './cinematicTimeline';
 import {MeruAdaptiveQuality,GRAPHICS_PRESETS} from './adaptiveQuality';
+import {MeruFrameProbe} from './performanceProbe';
 import {beginPortalTransition,advancePortalTransition,portalPalette} from './portalDirector';
 import {shouldStartDundubhiIntro,shouldStartBossIntro,shouldStartBossPhase,meruStorageKey,meruSceneStorageKey,defaultBossIntro} from './runtimePolicy';
 
@@ -247,4 +248,19 @@ test('step easing makes a direct movie-camera cut, not a false video parallax mo
   const scene=validateCinematic({...original,camera:[{...start,ease:'step'},stop,...original.camera.slice(2)]});
   assert.equal(sampleCinematic(scene,stop.time-0.001).camera.zoom,start.value.zoom);
   assert.equal(sampleCinematic(scene,stop.time).camera.zoom,stop.value.zoom);
+});
+
+test('offline target-device frame report is bounded, truthful, and excludes invalid samples',()=>{
+  const p=new MeruFrameProbe(4);
+  assert.equal(p.report().sampleCount,0);
+  for(const ms of [16,16.5,48,24,19])p.sample(ms);
+  for(const invalid of [0,NaN,Infinity,-5,1500])p.sample(invalid);
+  const r=p.report();
+  assert.equal(r.sampleCount,4);
+  assert.equal(r.worstMs,48);
+  assert.ok(r.p95Ms>=r.medianMs);
+  assert.equal(r.jankOver33MsPercent,25);
+  assert.ok(r.estimatedFps>0);
+  p.reset();assert.equal(p.report().sampleCount,0);
+  assert.throws(()=>new MeruFrameProbe(1),/sample window/);
 });
