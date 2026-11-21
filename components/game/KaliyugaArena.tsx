@@ -4948,12 +4948,17 @@ export default function KaliyugaArena() {
 
     // Startup Windup Anticipation: crisp Parashu blade-edge glint immediately on input,
     // while the heavy cleave VFX fires at the exact physical axe impact frame (~28% swing)!
-    webglDemonSlayerVfxRef.current?.spawnBladeGlint({
-      x: p.x + Math.cos(p.slashAngle) * 20,
-      y: p.y - 40,
-      palette: primaryHeavyPalette,
-      scale: 0.92,
+    const windupBladePoint=projectWeaponHeadToWorld({
+      uv:rudra3dRef.current?.getProjectedParashuHead()??null,
+      actorX:p.x,actorY:p.y,drawSize:HEROIC_DRAW_SIZES.rudra,
+      footAnchorRatio:rudra3dRef.current?.footAnchorRatio??0.8,
     });
+    if(windupBladePoint){
+      webglDemonSlayerVfxRef.current?.spawnBladeGlint({
+        x:windupBladePoint.x,y:windupBladePoint.y,
+        palette:primaryHeavyPalette,scale:1.02,
+      });
+    }
 
     const heavyStyleId = heavySpec.styleId;
     const heavySlashAngle = p.slashAngle;
@@ -4990,38 +4995,43 @@ export default function KaliyugaArena() {
           ? syncImpactX * 0.55 + physicalBlade.x * 0.45 : syncImpactX;
         const bladeHitY = bladeNearImpact && physicalBlade
           ? (syncImpactY-22) * 0.55 + physicalBlade.y * 0.45 : syncImpactY-22;
+        const heavySpectacle=getAct1HeavyContactSpectacle(curP.stance,orbsUsed);
         if (heavyStyleId === 'pralaya_earth_shatter') {
           const heavyVisual = getSmashHeavyVfxPresentation(orbsUsed);
-          const radius = Math.min(130, heavyVisual.floorRingRadius);
+          const radius=heavySpectacle.shockwaveRadius;
           webglDemonSlayerVfxRef.current?.spawnShockwaveRing({
             x: bladeHitX, y: syncImpactY,
-            radius, palette: 'hinokami', duration: 0.29,
+            radius, palette: 'hinokami', duration: heavySpectacle.duration,
           });
           if (heavyVisual.createUltimateWheel) {
             // An earned high-focus flourish is a compact energy ignition
             // at the blade hit, not another ring orbiting the whole arena.
             webglDemonSlayerVfxRef.current?.spawnSolarFlameWheel({
               x: bladeHitX, y: bladeHitY,
-              angle: heavySlashAngle, radius: 58,
-              palette: 'hinokami', duration: 0.24,
+              angle: heavySlashAngle, radius: Math.min(98,68+orbsUsed*7),
+              palette: 'hinokami', duration: 0.31,
             });
           }
           webglDemonSlayerVfxRef.current?.spawnClashStarburst({
             x: bladeHitX, y: bladeHitY,
-            scale: 0.82 + Math.min(0.20, orbsUsed * 0.05),
-            palette: 'hinokami', duration: 0.20,
+            scale: 0.56 + Math.min(0.22, orbsUsed * 0.055),
+            palette: 'hinokami', duration: 0.22,
           });
-          spawnShockwave(syncImpactX,syncImpactY,radius,'#ff5418',0.30);
-          spawnParticles(bladeHitX,bladeHitY,11+orbsUsed*2,'#ff7b24',220,3.6,75);
+          spawnShockwave(bladeHitX,syncImpactY,radius,'#ff5418',0.34);
+          spawnParticles(bladeHitX,bladeHitY,heavySpectacle.sparkCount,'#ff7b24',260,3.6,105);
           simRef.current.hitstopTimer=Math.max(simRef.current.hitstopTimer,0.065);
         } else if (heavyStyleId === 'sudarshana_vortex') {
           // The wind coils around the axe impact, not a second floating
           // crescent disconnected from the player's animated arms.
           webglDemonSlayerVfxRef.current?.spawnCycloneVortex({
-            x: bladeHitX, y: bladeHitY, radius: 60,
-            palette: 'wind', duration: 0.32, ringCount: 2,
+            x: bladeHitX,y: bladeHitY,
+            radius: heavySpectacle.energyRadius,
+            palette:'wind',duration:heavySpectacle.duration,
+            ringCount:orbsUsed>=2?3:2,
           });
-          spawnShockwave(syncImpactX,syncImpactY,108,'#10b981',0.29);
+          // The large jade mandala erupts at blade impact, with the *swing*
+          // itself still tethered to the actual measured weapon-head trail.
+          spawnShockwave(bladeHitX,syncImpactY,heavySpectacle.shockwaveRadius,'#10b981',0.32);
         } else {
           // One short lightning bridge from physical Parashu blade to the
           // contact point. A 195px endpoint beyond the enemy looked detached.
@@ -5035,15 +5045,36 @@ export default function KaliyugaArena() {
             });
           }
           webglDemonSlayerVfxRef.current?.spawnClashStarburst({
-            x:bladeHitX,y:bladeHitY,scale:0.72,
-            palette:'thunder',duration:0.18,
+            x:bladeHitX,y:bladeHitY,scale:0.64,
+            palette:'thunder',duration:0.20,
+          });
+          // Radiating electric forks all START at physical blade contact;
+          // not a sky lightning strike detached from Rudra's weapon.
+          const arcCount=orbsUsed>=3?3:2;
+          for(let fork=0;fork<arcCount;fork++){
+            const fan=(fork-(arcCount-1)*0.5)*0.68;
+            const forkAngle=heavySlashAngle+fan;
+            const length=Math.min(145,heavySpectacle.energyRadius*
+              (fork===1?0.84:0.60));
+            webglDemonSlayerVfxRef.current?.spawnThunderZigzag({
+              x1:bladeHitX,y1:bladeHitY,
+              x2:bladeHitX+Math.cos(forkAngle)*length,
+              y2:bladeHitY+Math.sin(forkAngle)*length*0.72,
+              palette:'thunder',duration:heavySpectacle.duration,
+              width:orbsUsed>=2?17:12,withFloorRing:false,
+            });
+          }
+          webglDemonSlayerVfxRef.current?.spawnShockwaveRing({
+            x:bladeHitX,y:syncImpactY,
+            radius:Math.min(150,heavySpectacle.energyRadius),
+            palette:'thunder',duration:0.29,
           });
         }
         webglDemonSlayerVfxRef.current?.spawnSparkBurst({
           x: bladeHitX,
           y: bladeHitY,
-          count: 12 + orbsUsed * 2,
-          speed: 410,
+          count: heavySpectacle.sparkCount,
+          speed: 420+orbsUsed*40,
           palette: primaryHeavyPalette,
         });
         resolveHeavyHitAtContact();
