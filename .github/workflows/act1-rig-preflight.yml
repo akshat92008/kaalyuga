@@ -5,6 +5,9 @@ on:
       - ".github/workflows/act1-rig-preflight.yml"
       - "scripts/act1-rig-audit.py"
   workflow_dispatch:
+concurrency:
+  group: act1-blender-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   inspect-rudra-rig:
     runs-on: ubuntu-24.04
