@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feature/phase1-4-cinematic-combat-20261121
+      - qa/act1-phase1-4-frozen-20261121
   workflow_dispatch:
 
 permissions:
