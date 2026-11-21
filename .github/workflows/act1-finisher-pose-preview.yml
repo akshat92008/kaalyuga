@@ -1,0 +1,44 @@
+name: Act I Blender three-finisher contact pose preview
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/act1-finisher-pose-preview.yml"
+      - "scripts/act1-finisher-pose-preview.py"
+      - "lib/game/rudra3dRenderer.ts"
+  workflow_dispatch:
+concurrency:
+  group: act1-finisher-pose-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  pose-previews:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout canonical runtime rig and source clips (leave them untouched)
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            scripts/act1-finisher-pose-preview.py
+            new 3D assets and animations/Animations/Pro Melee Axe Pack
+            public/kaalyuga/anims/rudra
+          sparse-checkout-cone-mode: false
+      - name: Install headless Blender
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y blender python3-numpy
+      - name: Render three original Rudra finisher contact pose references
+        run: |
+          blender -b --python scripts/act1-finisher-pose-preview.py -- \
+            --rig "new 3D assets and animations/Animations/Pro Melee Axe Pack/Meshy_AI_Ashen_Warborn_20261025_generate.fbx" \
+            --heavy "public/kaalyuga/anims/rudra/heavy.fbx" \
+            --spin "public/kaalyuga/anims/rudra/cast.fbx" \
+            --lunge "public/kaalyuga/anims/rudra/attack3.fbx" \
+            --output "artifacts/act1-finisher-pose-preview"
+      - name: Preserve real Blender evidence, not release assets
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: act1-finisher-three-blender-qa-previews
+          path: artifacts/act1-finisher-pose-preview/
+          if-no-files-found: warn
+          retention-days: 14
