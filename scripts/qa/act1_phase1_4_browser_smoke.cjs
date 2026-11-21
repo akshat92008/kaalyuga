@@ -45,57 +45,90 @@ const base = process.env.GAME_URL || 'http://127.0.0.1:3100';
     await capture('02-live-game-after-start');
     report.checks.push('live-game start click and render');
 
-    // Real combat, not the isolated cinematic-lab. Use the game's existing direct
-    // chamber debug route and assert the production WebGL director fired each element.
-    await page.goto(base + '/?debug=1&chamber=1', { waitUntil: 'domcontentloaded', timeout: 60000 });
+    // Direct live combat with deterministic TEST-ONLY resources and frozen opponents.
+    // This is still the production keyboard/weapon/Astra pipeline, not mock effects.
+    await page.goto(base + '/?debug=1&qaFixtures=1&chamber=1', { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.waitForFunction(() => {
-      const qa = window.__kaliyugaPhaseQA;
-      return qa && qa.state === 'playing' && qa.chamber === 1;
+      const q = window.__kaliyugaPhaseQA;
+      return q?.state === 'playing' && q.chamber === 1 && Boolean(window.__kaliyugaPhaseQAFixture);
     }, null, { timeout: 35000 });
-    await page.waitForTimeout(2600);
-    await capture('08-live-combat-entry');
-    report.checks.push('real combat arena loaded with debug QA snapshot');
     const qa = () => page.evaluate(() => window.__kaliyugaPhaseQA);
-    const awaitIdle = async () => {
-      await page.waitForFunction(() => {
-        const snap = window.__kaliyugaPhaseQA;
-        return snap && snap.action === 'idle';
-      }, null, { timeout: 12000 });
-      await page.waitForTimeout(90);
+    const fixture = () => page.evaluate(() => window.__kaliyugaPhaseQAFixture.grantResources());
+    const countEvent = async (name) => (await qa()).recentEvents.filter(e => e.name === name).length;
+    const assertEvent = async (name, meta, before) => {
+      await page.waitForFunction(({ name, meta, before }) => {
+        const arr = window.__kaliyugaPhaseQA?.recentEvents || [];
+        return arr.filter(e => e.name === name).length > before &&
+          arr.some(e => e.name === name && e.meta === meta);
+      }, { name, meta, before }, { timeout: 16000 });
     };
+    await fixture();
+    await page.waitForTimeout(1200);
+    await capture('08-live-combat-entry');
+    report.checks.push('real WebGL combat loaded, deterministic resources available');
     for (const attack of [
-      { key: '1', name: 'agni-smash', element: 'agni' },
-      { key: '2', name: 'vayu-green-gale', element: 'vayu' },
-      { key: '3', name: 'vajra-thunder', element: 'vajra' },
+      { key: '1', name: 'agni-smash', element: 'agni', stance: 'smash' },
+      { key: '2', name: 'vayu-green-gale', element: 'vayu', stance: 'pillar' },
+      { key: '3', name: 'vajra-thunder', element: 'vajra', stance: 'thrust' },
     ]) {
-      await awaitIdle();
+      await fixture();
+      await page.waitForTimeout(1000); // visual cooldown isolates individual element silhouettes
       await page.keyboard.press(attack.key);
-      await page.waitForTimeout(100);
       const pre = await qa();
-      assert.equal(pre.stance, attack.key === '1' ? 'smash' : attack.key === '2' ? 'pillar' : 'thrust');
-      const previous = pre.recentEvents.filter(e => e.name === 'heavy-contact').length;
+      assert.equal(pre.stance, attack.stance, 'Stance switch did not reach gameplay');
+      const before = await countEvent('heavy-contact');
       await page.keyboard.press('k');
-      await page.waitForFunction(({ element, previous }) => {
-        const q = window.__kaliyugaPhaseQA;
-        return q && q.recentEvents.filter(e => e.name === 'heavy-contact').length > previous &&
-          q.recentEvents.some(e => e.name === 'heavy-contact' && e.meta === element);
-      }, { element: attack.element, previous }, { timeout: 12000 });
+      await assertEvent('heavy-contact', attack.element, before);
       await capture('09-' + attack.name + '-heavy-contact');
-      report.checks.push('actual ' + attack.element + ' heavy contact event observed');
+      report.checks.push('real ' + attack.element + ' heavy: stance, animation contact and screenshot');
     }
-    for (const attack of [
-      { key: 'j', name: 'light-parashu' },
-      { key: 'q', name: 'agneyastra-fire' },
-      { key: 'e', name: 'vayavyastra-wind' },
-      { key: 'r', name: 'vajrastra-thunder' },
-      { key: '4', name: 'varuna-water-dragon' },
-      { key: 'z', name: 'guardian-summon' },
+    await fixture();
+    await page.waitForTimeout(950);
+    await page.keyboard.press('j');
+    await page.waitForFunction(() => window.__kaliyugaPhaseQA?.action === 'light_attack', null, { timeout: 12000 });
+    await capture('10-light-parashu');
+    report.checks.push('real light Parashu action and screenshot');
+
+    for (const astra of [
+      { key: 'q', name: 'agneyastra-fire', id: 'agneyastra' },
+      { key: 'e', name: 'vayavyastra-wind', id: 'vayavyastra' },
+      { key: 'r', name: 'vajrastra-thunder', id: 'vajrastra' },
     ]) {
-      await awaitIdle();
-      await page.keyboard.press(attack.key);
-      await page.waitForTimeout(110);
-      await capture('10-' + attack.name);
-      report.checks.push('visual capture during ' + attack.name);
+      await fixture();
+      await page.waitForTimeout(980);
+      const before = await countEvent('astra-invoked');
+      await page.keyboard.press(astra.key);
+      await assertEvent('astra-invoked', astra.id, before);
+      await capture('10-' + astra.name);
+      report.checks.push('real ' + astra.id + ' meter-spending Astra and screenshot');
+    }
+
+    await fixture();
+    await page.waitForTimeout(950);
+    const waterBefore = await countEvent('varuna-water-dragon');
+    await page.keyboard.press('4');
+    await assertEvent('varuna-water-dragon', 'varuna', waterBefore);
+    await capture('10-varuna-water-dragon');
+    report.checks.push('real Varuna water-dragon input, VFX dispatch and screenshot');
+
+    await fixture();
+    await page.waitForTimeout(1100);
+    await page.keyboard.press('z');
+    await page.waitForFunction(() => window.__kaliyugaPhaseQA?.transformRemaining > 0, null, { timeout: 9000 });
+    const guardianBefore = await countEvent('heavy-contact');
+    await page.keyboard.press('k');
+    await assertEvent('heavy-contact', 'guardian', guardianBefore);
+    await capture('10-guardian-heavy-contact');
+    report.checks.push('real guardian transformation and guardian-element heavy contact');
+
+    for (const variant of ['downward_crush', 'spin_360_cleave', 'impaling_lunge']) {
+      await page.evaluate(v => window.__kaliyugaPhaseQAFixture.prepareExecution(v), variant);
+      await page.waitForTimeout(750);
+      const before = await countEvent('execution-contact');
+      await page.keyboard.press('f');
+      await assertEvent('execution-contact', variant, before);
+      await capture('13-execution-' + variant);
+      report.checks.push('real execution ' + variant + ' contact, damage frame and camera screenshot');
     }
     // A new direct boss room must start an actual game-world camera track.
     await page.goto(base + '/?debug=1&chamber=4', { waitUntil: 'domcontentloaded', timeout: 60000 });
