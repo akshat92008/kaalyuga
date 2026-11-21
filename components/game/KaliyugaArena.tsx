@@ -196,6 +196,10 @@ import {
   type WeaponTrailSample,
 } from '@/lib/game/act1WeaponPoseTrail';
 import { getAct1ExecutionVisualPlan } from '@/lib/game/act1ExecutionVisualPlan';
+import {
+  sampleAct1ExecutionVictimPose, resolveAct1FinisherContactAnchor,
+  type Act1ExecutionChoreographyToken,
+} from '@/lib/game/act1ExecutionChoreography';
 import { shouldSpawnCombatCallout } from '@/lib/game/act1CombatCalloutPolicy';
 import { getBossEntranceVisualPlan } from '@/lib/game/act1BossEntranceVisuals';
 import { getRareBossStrikeRitualBudget, shouldSpawnRareBossStrikeRitual } from '@/lib/game/act1BossAttackRitual';
@@ -569,6 +573,7 @@ export default function KaliyugaArena() {
     chamberIndex: number;
     samples: WeaponTrailSample[];
   }>({attackSerial: -1, chamberIndex: -1, samples: []});
+  const finisherChoreographyRef = useRef<Act1ExecutionChoreographyToken | null>(null);
   const pendingStrikeVfxRef = useRef<{
     fired: boolean;
     expectedAction: Act1StrikeAction;
@@ -2229,6 +2234,7 @@ export default function KaliyugaArena() {
       act1CameraRef.current?.cancel();
       lastCinematicZoomOverlayRef.current = 0;
       pendingStrikeVfxRef.current = null;
+      finisherChoreographyRef.current = null;
       pendingBossEntranceRef.current = null;
       // Release old chamber's live rigs before loading the next wave of distinct models.
       // This prevents scenes from retaining every boss and enemy encountered in Act I.
@@ -4581,6 +4587,11 @@ export default function KaliyugaArena() {
     p.action = 'execute';
     p.attackSerial += 1;
     p.finisherVariant = finisherSpec.variant;
+    finisherChoreographyRef.current = {
+      enemyId: brokenEnemy.id, chamberIndex: sim.chamberIndex,
+      attackSerial: p.attackSerial, variant: finisherSpec.variant,
+      facing: p.facing, contactRegistered: false,
+    };
     p.actionTimer = finisherSpec.durationSec;
     p.actionDuration = finisherSpec.durationSec;
     // Extended Invulnerability Frames (1.15s) so Rudra can NEVER take swarm damage during or right after an Execute!
@@ -4616,6 +4627,12 @@ export default function KaliyugaArena() {
     // runDamageDealt, leaving post-run analytics and active-contact QA at zero.
     // Recording the actual HP lost fixes stats without changing combat balance.
     sim.runDamageDealt += execHit.hpLost;
+    const choreography = finisherChoreographyRef.current;
+    if (choreography?.attackSerial === p.attackSerial &&
+        choreography.enemyId === brokenEnemy.id &&
+        choreography.chamberIndex === sim.chamberIndex) {
+      choreography.contactRegistered = true;
+    }
     brokenEnemy.postureBrokenTimer = 0;
     brokenEnemy.posture = brokenEnemy.maxPosture;
     brokenEnemy.scaleX = 1.06;
@@ -4701,12 +4718,22 @@ export default function KaliyugaArena() {
     soundEngine.playHit('execute');
     soundEngine.playVoiceBark('rudra_execute', { priority: 'high', cooldownMs: 7000 });
     const executionVisual = getAct1ExecutionVisualPlan(finisherSpec.variant);
+    const bladePoint = projectWeaponHeadToWorld({
+      uv: rudra3dRef.current?.getProjectedParashuHead() ?? null,
+      actorX: p.x, actorY: p.y,
+      drawSize: HEROIC_DRAW_SIZES.rudra,
+      footAnchorRatio: rudra3dRef.current?.footAnchorRatio ?? 0.8,
+    });
+    const actualContact = resolveAct1FinisherContactAnchor({
+      enemyX: brokenEnemy.x, enemyY: brokenEnemy.y,
+      bladeX: bladePoint?.x, bladeY: bladePoint?.y,
+    });
     if (executionVisual.useGroundedOverheadContact) {
       // Downward Parashu Crush: physical overhead blade, local impact cone,
       // grounded dust + ink. NO floating water-dragon / full-circle solar
       // wheel / giant sky lightning unrelated to the axe's travel.
-      const contactX = brokenEnemy.x - p.facing * 4;
-      const contactY = brokenEnemy.y - 23;
+      const contactX = actualContact.x - p.facing * 4;
+      const contactY = actualContact.y;
       spawnShockwave(
         brokenEnemy.x, brokenEnemy.y,
         executionVisual.groundShockwaveRadius, '#ff713d', 0.32
@@ -4752,8 +4779,8 @@ export default function KaliyugaArena() {
       // the aim and enemy contact; do not layer a sun wheel, water dragon or
       // sky lightning over a narrow physical lunge.
       const aim = p.slashAngle;
-      const contactX = brokenEnemy.x;
-      const contactY = brokenEnemy.y - 24;
+      const contactX = actualContact.x;
+      const contactY = actualContact.y;
       // The ribbon is a radial arc anchored at +radius along its aim axis;
       // offset its origin by that radius so the visible blade cut crosses the
       // *actual* contact point rather than floating a body-width away.
@@ -4811,12 +4838,12 @@ export default function KaliyugaArena() {
         duration: 0.36, tiltX: 0.45,
       });
       webglDemonSlayerVfxRef.current?.spawnClashStarburst({
-        x: brokenEnemy.x, y: brokenEnemy.y - 24,
+        x: actualContact.x, y: actualContact.y,
         scale: executionVisual.impactBurstScale,
         palette: 'sun', duration: 0.22,
       });
       webglDemonSlayerVfxRef.current?.spawnSparkBurst({
-        x: brokenEnemy.x, y: brokenEnemy.y - 24,
+        x: actualContact.x, y: actualContact.y,
         count: executionVisual.sparkCount,
         speed: 410, palette: 'sun',
       });
@@ -7092,6 +7119,10 @@ export default function KaliyugaArena() {
       zoom: number; unboostedZoom: number; boost: number;
       focusWeight: number; atMs: number;
     }> = [];
+    const executionVictimTrace: Array<{
+      enemyId: number; variant: ParashuFinisherVariant; attackSerial: number;
+      forceHurt: boolean; offsetX: number; offsetY: number; progress: number;
+    }> = [];
     const strikeCueTrace: Array<{
       kind: 'fired' | 'cancelled';
       action: Act1StrikeAction;
@@ -7172,6 +7203,7 @@ export default function KaliyugaArena() {
             },
             weaponPoseTrace: weaponPoseTrace.slice(),
             cameraShotTrace: cameraShotTrace.slice(),
+            executionVictimTrace: executionVictimTrace.slice(),
             // Production-safe opt-in read-only combat evidence for the real
             // browser QA runner. No gameplay mutation or per-frame allocations.
             combat: {
@@ -7744,6 +7776,9 @@ export default function KaliyugaArena() {
           }
 
           if (p.actionTimer <= 0) {
+            if (prevAction === 'execute') {
+              finisherChoreographyRef.current = null;
+            }
             if (prevAction === 'dodge') {
               // Lightweight grounded arrival sparks (zero heavy shockwave clutter on dodge)
               spawnParticles(p.x, p.y - 6, 6, '#ffd86b', 88, 2.6, 36);
@@ -11230,6 +11265,37 @@ export default function KaliyugaArena() {
           ctx.restore();
         } else if (act.kind === 'enemy') {
           const e = act.enemy;
+          const p = sim.player;
+          const victimPose = sampleAct1ExecutionVictimPose(finisherChoreographyRef.current, {
+            enemyId: e.id, chamberIndex: sim.chamberIndex,
+            attackSerial: p.attackSerial, action: p.action,
+            progress: p.weaponSwingProgress,
+            isBoss: e.isBoss, isDead: e.aiState === 'ko',
+          });
+          const victimMoving = Math.abs(victimPose.offsetX) > 0.01 ||
+            Math.abs(victimPose.offsetY) > 0.01 ||
+            Math.abs(victimPose.rotationRad) > 0.001 ||
+            Math.abs(victimPose.scaleX - 1) > 0.001 ||
+            Math.abs(victimPose.scaleY - 1) > 0.001;
+          if (victimMoving) {
+            // Render transform only. AI movement, collisions, navmesh, health,
+            // physics knockback and foot-ground anchor remain untouched.
+            ctx.save();
+            ctx.translate(e.x + victimPose.offsetX, e.y + victimPose.offsetY);
+            ctx.rotate(victimPose.rotationRad);
+            ctx.scale(victimPose.scaleX, victimPose.scaleY);
+            ctx.translate(-e.x, -e.y);
+          }
+          if (perfTelemetryEnabled && victimMoving && finisherChoreographyRef.current) {
+            const v = finisherChoreographyRef.current;
+            executionVictimTrace.push({
+              enemyId:e.id,variant:v.variant,attackSerial:v.attackSerial,
+              forceHurt:victimPose.forceHurt,
+              offsetX:victimPose.offsetX,offsetY:victimPose.offsetY,
+              progress:p.weaponSwingProgress,
+            });
+            if (executionVictimTrace.length > 80) executionVictimTrace.shift();
+          }
           const isFlash = e.hitFlashTimer > 0;
           const bob = 0;
           const enemySkewX = 0;
@@ -11244,7 +11310,8 @@ export default function KaliyugaArena() {
             const bossAnimState: 'idle' | 'walk' | 'windup' | 'attack' | 'special' | 'hurt' | 'death' =
               e.aiState === 'ko'
                 ? 'death'
-                : e.postureBrokenTimer > 0 || (e.tuskLodgedTimer && e.tuskLodgedTimer > 0)
+                : e.postureBrokenTimer > 0 || victimPose.forceHurt ||
+                  (e.tuskLodgedTimer && e.tuskLodgedTimer > 0)
                 ? 'hurt'
                 : e.aiState === 'attack'
                 ? e.attackKind === 'shockwave' || e.phase >= 2
@@ -11342,7 +11409,7 @@ export default function KaliyugaArena() {
                       : 0,
                   phase: e.phase,
                   armorCracked: Boolean(e.armorCracked),
-                  isPostureBroken: e.postureBrokenTimer > 0,
+                  isPostureBroken: e.postureBrokenTimer > 0 || victimPose.forceHurt,
                   isHitFlash: isFlash,
                   isParrying: e.parryStanceTimer > 0,
                 });
@@ -11512,7 +11579,7 @@ export default function KaliyugaArena() {
             const enemyAnimState: 'idle' | 'walk' | 'windup' | 'attack' | 'special' | 'hurt' | 'death' =
               e.aiState === 'ko'
                 ? 'death'
-                : e.postureBrokenTimer > 0
+                : e.postureBrokenTimer > 0 || victimPose.forceHurt
                 ? 'hurt'
                 : e.aiState === 'attack'
                 ? e.attackKind === 'shockwave' || e.trait === 'agni_aura'
@@ -11590,7 +11657,9 @@ export default function KaliyugaArena() {
                 wardenRigKey: e.wardenRigKey,
                 trait: e.trait,
                 animTime: e.animTime,
-                stateProgress: enemyStateProgress,
+                stateProgress: victimPose.forceHurt
+                  ? Math.min(0.99, Math.max(0, (p.weaponSwingProgress - 0.35) / 0.43))
+                  : enemyStateProgress,
                 vx: e.vx,
                 vy: e.vy,
                 facing: e.facing,
@@ -11600,7 +11669,7 @@ export default function KaliyugaArena() {
                   e.aiState === 'windup'
                     ? Math.min(1, Math.max(0, 1 - e.aiTimer / Math.max(0.01, e.windupDuration)))
                     : 0,
-                isPostureBroken: e.postureBrokenTimer > 0,
+                isPostureBroken: e.postureBrokenTimer > 0 || victimPose.forceHurt,
                 isHitFlash: isFlash,
                 isParrying: e.parryStanceTimer > 0,
               });
@@ -11790,6 +11859,7 @@ export default function KaliyugaArena() {
             ctx.fillStyle = '#f2c45a';
             ctx.fillRect(bx, by + 2.0, bw * Math.max(0, e.posture / e.maxPosture), 1.2);
           }
+          if (victimMoving) ctx.restore();
         } else if (act.kind === 'player') {
           const p = sim.player;
           const speedMag = Math.hypot(p.vx, p.vy);
