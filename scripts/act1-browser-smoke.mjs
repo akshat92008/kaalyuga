@@ -52,8 +52,11 @@ try {
       ready=true;
       // Drive the same player-visible quality control used in the actual game.
       // Initial saved tier in a fresh headless context is ultra (cinematic).
+      // Hold movement while opening Controls to detect sticky key leakage
+      // when focus changes and the keyup could be missed.
+      await page.keyboard.down('d');
+      await page.getByTestId('hud-controls-btn').click({timeout:20000});
       if (preset !== 'ultra') {
-        await page.getByTestId('hud-controls-btn').click({timeout:20000});
         const qaButton = page.getByTestId('act1-quality-profile');
         const clicks = preset === 'performance' ? 1 : 2;
         for (let j=0;j<clicks;j++) await qaButton.click({timeout:20000});
@@ -66,9 +69,11 @@ try {
       // Actual input-isolation check: the Controls popover pauses the game.
       // With it open, J/K/Q MUST NOT change combat actions or spend Astra.
       await page.waitForFunction(
-        () => window.__KALIYUGA_ACT1_PERF__?.combat?.modalPaused === true,
+        () => window.__KALIYUGA_ACT1_PERF__?.combat?.modalPaused === true &&
+          window.__KALIYUGA_ACT1_PERF__?.combat?.heldKeys === 0,
         null, {timeout:20000}
       );
+      await page.keyboard.up('d');
       const beforeMenu = await page.evaluate(() => window.__KALIYUGA_ACT1_PERF__.combat);
       for (const key of ['j','k','q']) await page.keyboard.press(key);
       await page.waitForTimeout(750);
@@ -98,8 +103,8 @@ try {
         beforeMenu.attackSerial, {timeout:20000}
       );
       inputGate={blockedKeysChecked:['j','k','q'], modalPaused:true,
-        escapeRestoredPlay:true, lightAttackAcceptedAfterClose:true,
-        delayedSlashCueFired:true};
+        heldMovementFlushedOnOpen:true, escapeRestoredPlay:true,
+        lightAttackAcceptedAfterClose:true, delayedSlashCueFired:true};
       await page.keyboard.down('d');
       await page.waitForTimeout(300);
       await page.keyboard.up('d');
