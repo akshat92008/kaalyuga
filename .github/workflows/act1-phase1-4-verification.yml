@@ -52,7 +52,14 @@ jobs:
       - name: Install isolated Playwright browser test dependency
         run: npm install --no-save --ignore-scripts --no-audit --no-fund --legacy-peer-deps playwright@1.58.2
       - name: Install Chromium with headless WebGL software driver
-        run: npx playwright install --with-deps chromium
+        run: |
+          # ubuntu-24.04 images already supply browser runtime libraries.
+          # Optional font package mirrors can temporarily omit legacy names;
+          # do NOT confuse apt mirror failure with a game/browser test failure.
+          if ! npx playwright install --with-deps chromium; then
+            echo "::warning::Optional Playwright OS dependency install failed; using runner libraries"
+            npx playwright install chromium
+          fi
       - name: Run and capture live browser gameplay and cinematic
         run: node scripts/qa/act1_phase1_4_browser_smoke.cjs
       - name: Configure Python for rendered screenshot validation
