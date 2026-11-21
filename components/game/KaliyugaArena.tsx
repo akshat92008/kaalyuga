@@ -7239,6 +7239,7 @@ export default function KaliyugaArena() {
         });
       }
       const cinematicCue = act1CameraRef.current!.step(dt, sim.modalPaused || sim.state !== 'playing' || isHubCamera);
+      let cameraZoomWithoutCue = sim.cameraZoom;
       if (sim.cameraPreset === 'dynamic_action') {
         const activeBossKind: 'dundubhi' | 'vrikodara' | 'semi_boss' | null = activeBoss
           ? activeBoss.type === 'semi_boss_bloodforge'
@@ -7256,6 +7257,7 @@ export default function KaliyugaArena() {
           dt,
         });
         if (cw < 640) nextZoom *= 0.82;
+        cameraZoomWithoutCue = nextZoom;
         // The camera cue already fades itself over time. The old extra dt
         // multiplier nearly erased its execution close-up at 60 Hz.
         sim.cameraZoom = composeAct1CinematicZoom(nextZoom, cinematicCue.zoomBoost);
@@ -7267,14 +7269,17 @@ export default function KaliyugaArena() {
           (sim.player.action === 'heavy_unleash' || sim.player.action === 'execute' ? 0.03 : 0) -
           (activeBoss && activeBoss.phase >= 2 ? 0.04 : 0) +
           cinematicCue.zoomBoost;
-        sim.cameraZoom += (targetZoom - sim.cameraZoom) * (1 - Math.exp(-6.5 * dt));
+        const zoomLerp = 1 - Math.exp(-6.5 * dt);
+        cameraZoomWithoutCue = sim.cameraZoom +
+          ((targetZoom - cinematicCue.zoomBoost) - sim.cameraZoom) * zoomLerp;
+        sim.cameraZoom += (targetZoom - sim.cameraZoom) * zoomLerp;
       }
       const zoom = sim.cameraZoom;
       if (perfTelemetryEnabled && cinematicCue.active &&
           sim.player.action === 'execute') {
         cameraShotTrace.push({
           action: sim.player.action, variant: sim.player.finisherVariant,
-          zoom, unboostedZoom: zoom - cinematicCue.zoomBoost,
+          zoom, unboostedZoom: cameraZoomWithoutCue,
           boost: cinematicCue.zoomBoost,
           focusWeight: cinematicCue.focusWeight, atMs: now,
         });
