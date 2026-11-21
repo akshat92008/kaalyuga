@@ -150,4 +150,34 @@ try{
   console.log('MERU_GAMEPLAY_QA: Chamber VIII loads authored Vrikodara cinematic; Skip releases combat; browser errors=0');
   await vrikodaraPage.close();
 
+  // Exercise the ACTUAL walkable ferry portal, not a mocked Meru component.
+  // Keep the movement key held until Rudra enters the northern gate. The UI
+  // must stop input, preload its next chamber poster and return playable state.
+  const ferryPage=await context.newPage();
+  const ferryErrors=[];
+  ferryPage.on('pageerror',e=>ferryErrors.push(e.message));
+  const ferryResponse=await ferryPage.goto('http://127.0.0.1:3000/?hub=1&cinematic=0',{
+    waitUntil:'domcontentloaded',timeout:120000,
+  });
+  assert.equal(ferryResponse?.status(),200,'Walkable Vaitarani hub must load');
+  await ferryPage.waitForFunction(()=>document.body.dataset.state==='playing',null,{timeout:45000});
+  const journey=ferryPage.getByTestId('meru-portal-travel');
+  await ferryPage.keyboard.down('w');
+  try{
+    await journey.waitFor({timeout:60000});
+  }finally{
+    await ferryPage.keyboard.up('w');
+  }
+  assert.match(await journey.getAttribute('aria-label')||'',/CHAR(NEL|NEL PLAINS)/i);
+  const initialSwitched=await journey.getAttribute('data-meru-portal-switched');
+  assert.equal(initialSwitched,'no','Destination must not swap before the portal begins');
+  await ferryPage.screenshot({path:join(out,'meru-hub-portal-journey.png'),animations:'disabled'});
+  await ferryPage.getByRole('button',{name:'Accelerate portal passage when ready'}).click();
+  await journey.waitFor({state:'detached',timeout:30000});
+  await ferryPage.waitForFunction(()=>document.body.dataset.state==='playing',null,{timeout:30000});
+  assert.equal(ferryErrors.length,0,
+    'Walking into Vaitarani gate and completing portal cannot throw browser errors');
+  console.log('MERU_PORTAL_QA: Vaitarani walk-to-gate, poster gate, Skip, real chamber handoff, input release PASS');
+  await ferryPage.close();
+
 }finally{await browser.close();}
