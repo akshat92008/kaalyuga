@@ -69,7 +69,8 @@ export function sampleKeyframes<T extends object>(
   const p = ease((at - a.time) / (b.time - a.time), a.ease ?? 'smooth');
   const frame: Record<string, string | number> = {};
   for (const key of Object.keys(a.value)) {
-    const v0 = a.value[key], v1 = b.value[key];
+    const v0 = (a.value as Record<string, number | string>)[key];
+    const v1 = (b.value as Record<string, number | string>)[key];
     frame[key] = typeof v0 === 'number' && typeof v1 === 'number'
       ? lerp(v0, v1, p) : p < 1 ? v0 : v1;
   }
