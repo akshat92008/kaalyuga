@@ -185,6 +185,10 @@ import {
   selectConsumeAbility,
 } from '@/lib/game/bossEncounters';
 import {
+  computeParashuSwingVisual,
+  getSmashHeavyVfxPresentation,
+} from '@/lib/game/act1BreathingVisuals';
+import {
   MAX_CLAMPED_CAMERA_TRAUMA,
   ParashuFinisherVariant,
   formatCleanDamageNumber,
@@ -3968,53 +3972,23 @@ export default function KaliyugaArena() {
     p.invulnTimer = Math.max(p.invulnTimer, 0.32);
     recordQuestEvent('kalaripayattu_parries', 1);
     soundEngine.playSpell('parry');
-    spawnShockwave(p.x, p.y, 148, '#ffd86b', 0.34);
-    spawnSunHaloRing(bloodDemonArtsRef.current, {
-      x: p.x,
-      y: p.y - 20,
-      radius: 112,
+    // The guard startup is restrained: do not fire a full-screen ultimate
+    // merely for pressing parry. Its successful contact response below still
+    // owns the bright gold inversion, metal sparks, hit-stop and shockwave.
+    webglDemonSlayerVfxRef.current?.spawnBladeGlint({
+      x: p.x + p.facing * 19,
+      y: p.y - 32,
       palette: 'thunder',
-    });
-    spawnTengenClashSparks(bloodDemonArtsRef.current, p.x + p.facing * 18, p.y - 24, 16, 360);
-    webglDemonSlayerVfxRef.current?.spawnSlashRibbon({
-      x: p.x + p.facing * 12,
-      y: p.y - 24,
-      angle: p.facing > 0 ? 0 : Math.PI,
-      radius: 132,
-      width: 56,
-      arcSpan: 2.5,
-      direction: 1,
-      palette: 'thunder',
-      duration: 0.30,
-      tiltX: 0.52,
-    });
-    webglDemonSlayerVfxRef.current?.spawnClashStarburst({
-      x: p.x + p.facing * 18,
-      y: p.y - 24,
-      scale: 1.15,
-      palette: 'thunder',
-      duration: 0.24,
-    });
-    webglDemonSlayerVfxRef.current?.spawnSparkBurst({
-      x: p.x + p.facing * 18,
-      y: p.y - 24,
-      count: 20,
-      speed: 440,
-      palette: 'thunder',
+      scale: 0.42,
     });
     spawnFlipbookVfx(
       PHASE2_VFX_SHEETS.parryAndHitSparks4x2.url,
-      p.x + p.facing * 18,
-      p.y - 24,
-      188,
-      0.28,
-      0,
-      1,
-      'screen',
+      p.x + p.facing * 18, p.y - 29,
+      66, 0.17, 0, 0.52, 'screen',
       PHASE2_VFX_SHEETS.parryAndHitSparks4x2,
       PARRY_SPARKS_FLIPBOOK_ROWS.VEDIC_PARRY_FLASH
     );
-    spawnParticles(p.x, p.y - 28, 28, '#ffd86b', 185, 4.6, 80);
+    spawnParticles(p.x + p.facing * 18, p.y - 25, 5, '#e8cc88', 125, 2.2, 56);
 
     // Proactive God-of-War / Sekiro Instant Golden Deflect if an enemy is winding up a parriable strike within 215px!
     let instantDeflected = false;
@@ -4938,30 +4912,47 @@ export default function KaliyugaArena() {
         // Tier 2 Heavy Unleash: Explosive AAA Stance Spectacle + Heavy Iron Swing SFX
         soundEngine.playHeavyIronSwing();
         if (heavyStyleId === 'pralaya_earth_shatter') {
-          webglDemonSlayerVfxRef.current?.spawnSolarFlameWheel({
-            x: syncImpactX,
-            y: syncImpactY - 20,
+          // A normal smash is a directional AXE HIT, not a giant circular
+          // super-move hiding Rudra. Focus-3/4 legitimately earns a brief
+          // elemental flourish, while the blade and target remain legible.
+          const heavyVisual = getSmashHeavyVfxPresentation(orbsUsed);
+          webglDemonSlayerVfxRef.current?.spawnSlashRibbon({
+            x: curP.x + Math.cos(heavySlashAngle) * 18,
+            y: curP.y - 26,
             angle: heavySlashAngle,
-            radius: 215 + orbsUsed * 18,
+            radius: heavyVisual.slashRadius,
+            width: heavyVisual.slashWidth,
+            arcSpan: heavyVisual.slashArc,
+            direction: curP.facing,
             palette: 'hinokami',
-            duration: 0.72,
+            duration: 0.28,
+            tiltX: 0.50,
+            spinRate: 0,
           });
+          if (heavyVisual.createUltimateWheel) {
+            webglDemonSlayerVfxRef.current?.spawnSolarFlameWheel({
+              x: syncImpactX, y: syncImpactY - 16,
+              angle: heavySlashAngle,
+              radius: 145,
+              palette: 'hinokami',
+              duration: 0.42,
+            });
+          }
           webglDemonSlayerVfxRef.current?.spawnShockwaveRing({
             x: syncImpactX,
             y: syncImpactY,
-            radius: 195 + orbsUsed * 20,
+            radius: heavyVisual.floorRingRadius,
             palette: 'hinokami',
-            duration: 0.46,
+            duration: 0.34,
           });
           webglDemonSlayerVfxRef.current?.spawnClashStarburst({
-            x: syncImpactX,
-            y: syncImpactY - 24,
-            scale: 1.55,
+            x: syncImpactX, y: syncImpactY - 24,
+            scale: 0.98 + Math.min(0.30, orbsUsed * 0.08),
             palette: 'hinokami',
-            duration: 0.4,
+            duration: 0.22,
           });
-          spawnShockwave(syncImpactX, syncImpactY, 165 + orbsUsed * 20, '#ff5418', 0.42);
-          spawnParticles(syncImpactX, syncImpactY - 18, 28, '#ff7b24', 285, 5.2, 110);
+          spawnShockwave(syncImpactX, syncImpactY, heavyVisual.floorRingRadius, '#ff5418', 0.34);
+          spawnParticles(syncImpactX, syncImpactY - 18, 15 + orbsUsed * 3, '#ff7b24', 235, 4.0, 92);
           simRef.current.hitstopTimer = Math.max(simRef.current.hitstopTimer, 0.068);
         } else if (heavyStyleId === 'sudarshana_vortex') {
           webglDemonSlayerVfxRef.current?.spawnWindGaleCrescents({
@@ -5630,19 +5621,9 @@ export default function KaliyugaArena() {
         const originY = curP.y - 24;
 
         if (!isComboFinisher) {
-          // Tier 1 Light Attack (Combo 1-3): ONE crisp, razor-clean breathing ribbon + sparse sparks ONLY!
-          webglDemonSlayerVfxRef.current?.spawnSlashRibbon({
-            x: originX,
-            y: originY,
-            angle: capturedAngle,
-            radius: arcRadius,
-            width: arcWidth,
-            arcSpan: capturedStep === 3 ? 2.35 : 2.05,
-            direction: arcDir,
-            palette: lightSlashPalette,
-            duration: 0.24,
-            tiltX: capturedStep === 2 ? -0.45 : 0.58,
-          });
+          // The primary three-band breathing trail is now swept from Rudra's
+          // active weapon pose in the world-space render, not an extra static
+          // WebGL crescent spawned once at impact.
           webglDemonSlayerVfxRef.current?.spawnSparkBurst({
             x: originX + Math.cos(capturedAngle) * 44,
             y: originY + Math.sin(capturedAngle) * 28,
@@ -11777,7 +11758,29 @@ export default function KaliyugaArena() {
             );
           }
 
-          // Player combat slashes render exclusively through the from-scratch Ufotable WebGL Battle VFX Engine (legacy repo PNG flipbooks & bespokeSlashArc disabled)
+          // Physically anchored, frame-driven Parashu breathing crescent.
+          // Rendered after Rudra's skinned character so the weapon arc is
+          // readable even on dark chambers; no ring when not attacking.
+          if (!coreLock.isSusanooActive) {
+            const bladeVisual = computeParashuSwingVisual(
+              p.action, p.weaponSwingProgress, p.comboStep
+            );
+            if (bladeVisual.active) {
+              const bladeMesh = computeWeaponSlashRibbon({
+                originX: p.x + Math.cos(p.slashAngle) * 13,
+                originY: p.y - 28,
+                aimAngle: p.slashAngle,
+                swingProgress: p.weaponSwingProgress,
+                radius: bladeVisual.radius,
+                stance: p.stance,
+                isHeavy: bladeVisual.isHeavy,
+                isRiposte: p.riposteWindowTimer > 0,
+                comboStep: bladeVisual.comboStep,
+              });
+              renderWeaponBoneSlashRibbon(ctx, bladeMesh, bladeVisual.alpha);
+            }
+          }
+          // Other elemental and boss effects remain in the layered WebGL pass.
         }
       });
 
