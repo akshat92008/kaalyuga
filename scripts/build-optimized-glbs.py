@@ -89,7 +89,15 @@ def export_one(source, output, packer):
             bpy.data.actions.remove(action)
     # Blender 5.0 removed the legacy use_anim FBX-import option. Keep this
     # script compatible with different runner/desktop Blender versions.
-    bpy.ops.import_scene.fbx(filepath=str(source), ignore_leaf_bones=False)
+    import_options = {
+        "filepath": str(source),
+        "use_anim": True,
+        "ignore_leaf_bones": False,
+    }
+    available_import = {prop.identifier for prop in bpy.ops.import_scene.fbx.get_rna_type().properties}
+    bpy.ops.import_scene.fbx(**{
+        key: value for key, value in import_options.items() if key in available_import
+    })
     if not bpy.context.scene.objects:
         raise ValueError("No objects imported from FBX")
     has_skin = any(obj.type == "MESH" and any(mod.type == "ARMATURE" for mod in obj.modifiers)
