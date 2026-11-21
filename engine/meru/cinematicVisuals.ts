@@ -40,7 +40,9 @@ export function paintMeruFrame(
   ctx.scale(frame.camera.zoom,frame.camera.zoom);
   ctx.translate(-W/2,-H/2);
   ctx.globalAlpha=frame.actor.opacity;
-  const bw=400*frame.actor.scale,bh=440*frame.actor.scale;
+  // More deliberate boss scale in a widescreen cinematic: the original 400x440
+  // compositing box left these huge mythic opponents too small to read.
+  const bw=480*frame.actor.scale,bh=530*frame.actor.scale;
   const x=W/2-bw/2+frame.actor.x;
   const y=H-bh-52+frame.actor.y;
   // Anchored ambient/contact shadows sell weight against a flat arena MP4
