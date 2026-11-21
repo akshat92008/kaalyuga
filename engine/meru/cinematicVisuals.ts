@@ -17,7 +17,7 @@ export function makeMeruBossParams(frame:CinematicFrame,dt:number,kind:'dundubhi
     dt: clamp(dt,0.001,0.04), vx:0,vy:0,facing:-1,
     aimAngle:Math.PI*0.1,aiState:frame.actor.state,
     attackKind:'shockwave',attackPattern:4,
-    windupProgress:frame.actor.state==='windup'?clamp((frame.time-3.4)/1.6,0,1):0,
+    windupProgress:frame.actor.state==='windup'?clamp(phase>1?(frame.time-0.8)/1.3:(frame.time-3.4)/1.6,0,1):0,
     phase,armorCracked:phase>1,isPostureBroken:false,isHitFlash:false,bypassSoftwareThrottle:false,
   };
 }
@@ -43,12 +43,64 @@ export function paintMeruFrame(
   const bw=400*frame.actor.scale,bh=440*frame.actor.scale;
   const x=W/2-bw/2+frame.actor.x;
   const y=H-bh-52+frame.actor.y;
+  // Anchored ambient/contact shadows sell weight against a flat arena MP4
+  // without inventing unsupported ground mesh, parallax or ray-traced light.
+  ctx.save();
+  ctx.translate(x+bw*0.5,y+bh-3);
+  ctx.scale(1,0.28);
+  const contact=ctx.createRadialGradient(0,0,bw*0.03,0,0,bw*0.44);
+  contact.addColorStop(0,'rgba(0,0,0,0.78)');
+  contact.addColorStop(0.5,'rgba(0,0,0,0.38)');
+  contact.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.globalAlpha=clamp(frame.actor.opacity,0,1);
+  ctx.fillStyle=contact;
+  ctx.beginPath();
+  ctx.ellipse(0,0,bw*0.44,bw*0.44,0,0,Math.PI*2);
+  ctx.fill();
+  ctx.restore();
   if(ready && boss?.canvas.width){
     ctx.drawImage(boss.canvas,x,y,bw,bh);
   } else if(portrait?.complete && portrait.naturalWidth>0){
     ctx.drawImage(portrait,x+50,y+30,bw-100,bh-80);
   }
   ctx.restore();
+
+  // Precise authored impact cues: a short-lived chakra fracture and ink-spark
+  // eruption at the boss's feet. This does not run when merely scrubbing before
+  // the cue, does not invent hit/damage events, and is bounded for the M3 Air.
+  const pulse=scene.cues.filter(c=>c.kind==='vfx'&&frame.time>=c.time&&frame.time<c.time+0.72)
+    .map(c=>clamp(1-(frame.time-c.time)/0.72,0,1));
+  if(pulse.length){
+    const power=Math.max(...pulse);
+    const impactX=W/2+frame.actor.x;
+    const impactY=H*0.77+frame.actor.y;
+    const color=scene.boss==='vrikodara'?'255,84,43':'242,90,110';
+    ctx.save();
+    ctx.globalCompositeOperation='screen';
+    for(let ring=0;ring<3;ring++){
+      const radius=(1-power)*115+30+ring*18;
+      ctx.globalAlpha=power*(0.55-ring*0.13);
+      ctx.strokeStyle='rgba('+color+',1)';
+      ctx.lineWidth=6-ring*1.35;
+      ctx.beginPath();
+      ctx.ellipse(impactX,impactY,radius,radius*0.34,0,0,Math.PI*2);
+      ctx.stroke();
+    }
+    for(let i=0;i<20;i++){
+      const ang=i*Math.PI*2/20+(i%3)*0.16;
+      const reach=(1-power)*(35+(i%5)*19);
+      const sx=impactX+Math.cos(ang)*reach;
+      const sy=impactY+Math.sin(ang)*reach*0.45;
+      ctx.globalAlpha=power*0.8;
+      ctx.strokeStyle='rgba('+color+',1)';
+      ctx.lineWidth=1.1+(i%3);
+      ctx.beginPath();
+      ctx.moveTo(sx,sy);
+      ctx.lineTo(sx+Math.cos(ang)*(8+power*24),sy+Math.sin(ang)*9);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
 
   // Deterministic atmosphere: no per-frame allocations for new image textures.
   for(let i=0;i<Math.round(40*clamp(particleMultiplier,0.15,1));i++){
