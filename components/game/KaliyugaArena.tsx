@@ -198,6 +198,7 @@ import {
 import { getAct1ExecutionVisualPlan } from '@/lib/game/act1ExecutionVisualPlan';
 import { shouldSpawnCombatCallout } from '@/lib/game/act1CombatCalloutPolicy';
 import { getBossEntranceVisualPlan } from '@/lib/game/act1BossEntranceVisuals';
+import { getRareBossStrikeRitualBudget, shouldSpawnRareBossStrikeRitual } from '@/lib/game/act1BossAttackRitual';
 import {
   MAX_CLAMPED_CAMERA_TRAUMA,
   ParashuFinisherVariant,
@@ -9241,18 +9242,22 @@ export default function KaliyugaArena() {
                   duration: enemyTier === 'boss' ? 0.42 : 0.28,
                 });
               }
-              if (
-                (enemyBudget.spawnMandala || enemyBudget.spawnBloodCage) &&
-                (e.attackKind === 'shockwave' || e.phase >= 2 || e.type === 'vrikodara' || e.type === 'dundubhi')
-              ) {
+              // The old condition spawned a 220px+ 12-16 strand MAGENTA
+              // CAGE on EVERY Dundubhi/Vrikodara strike, hiding the charge,
+              // pillars and Rudra. Reserve an actually distinct, bounded
+              // elemental ritual for each boss's named final-phase move.
+              // Phase transitions retain their own one-off cinematic.
+              if (shouldSpawnRareBossStrikeRitual({
+                enemyType: e.type, isBoss: e.isBoss, phase: e.phase,
+                attackKind: e.attackKind,
+                activeBossMoveId: e.activeBossMoveId,
+              })) {
+                const ritual = getRareBossStrikeRitualBudget(e.type);
                 soundEngine.playBloodDemonArt();
-                webglDemonSlayerVfxRef.current?.spawnBloodThreadCage({
-                  x: e.x,
-                  y: e.y - 14,
-                  radius: Math.max(220, e.telegraphRadius * 1.15),
-                  palette: e.type === 'vrikodara' || e.type === 'dundubhi' ? 'void' : 'blood',
-                  duration: 1.15,
-                  threadCount: e.isBoss ? 16 : 12,
+                webglDemonSlayerVfxRef.current?.spawnCycloneVortex({
+                  x: e.x, y: e.y - 16, radius: ritual.radius,
+                  palette: ritual.palette, duration: ritual.duration,
+                  ringCount: ritual.ringCount,
                 });
               }
 
