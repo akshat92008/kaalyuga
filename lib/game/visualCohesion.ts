@@ -10,6 +10,7 @@
 // ============================================================================
 
 import type { StaffStance } from './rules';
+import { buildWeaponPoseTrailBands, type WeaponTrailSample } from './act1WeaponPoseTrail';
 import {
   drawAdditiveFlipbookCell,
   PHASE2_VFX_SHEETS,
@@ -561,6 +562,50 @@ export function drawGrounded3DContactShadow(
   }
 
   ctx.restore();
+}
+
+/**
+ * Three.js head-socket path renderer. These are the very same XY positions
+ * projected from the cached Parashu frame baked for Rudra's game sprite;
+ * no unrelated screen-space circle, GPU readback, or copied texture needed.
+ */
+export function renderWeaponPoseTrail(
+  ctx: CanvasRenderingContext2D,
+  samples: WeaponTrailSample[],
+  alpha: number,
+  colors: { coreColor: string; plasmaColor: string; outerGlowColor: string },
+  isHeavy: boolean
+): boolean {
+  const bands = buildWeaponPoseTrailBands(samples, isHeavy ? 21 : 14);
+  if (bands.length < 2 || alpha <= 0.01) return false;
+  ctx.save();
+  ctx.globalCompositeOperation = 'source-over';
+  const clampedAlpha = Math.max(0, Math.min(1, alpha));
+  const fillBand = (scale: number, color: string, opacity: number) => {
+    ctx.globalAlpha = clampedAlpha * opacity;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    for (let i = 0; i < bands.length; i++) {
+      const b = bands[i];
+      const x = b.x + (b.leftX-b.x)*scale;
+      const y = b.y + (b.leftY-b.y)*scale;
+      if (i === 0) ctx.moveTo(x,y);
+      else ctx.lineTo(x,y);
+    }
+    for (let i = bands.length-1; i >= 0; i--) {
+      const b = bands[i];
+      ctx.lineTo(b.x+(b.rightX-b.x)*scale,b.y+(b.rightY-b.y)*scale);
+    }
+    ctx.closePath();
+    ctx.fill();
+  };
+  // Ink > vivid pigment > amber-white core, without bloom on the actor's face.
+  fillBand(1.26, '#13070d', 0.89);
+  fillBand(1.0, colors.outerGlowColor, 0.85);
+  fillBand(0.68, colors.plasmaColor, 0.94);
+  fillBand(0.24, colors.coreColor, 0.98);
+  ctx.restore();
+  return true;
 }
 
 export function renderWeaponBoneSlashRibbon(
