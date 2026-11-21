@@ -7174,12 +7174,6 @@ export default function KaliyugaArena() {
         p.dashStrikeWindowTimer = Math.max(0, p.dashStrikeWindowTimer - simDt);
         p.slashArcAlpha = Math.max(0, p.slashArcAlpha - simDt * 4.8);
         p.dashStreakAlpha = Math.max(0, p.dashStreakAlpha - simDt * 4.2);
-        p.weaponSwingProgress = computeNormalizedAttackProgress(
-          p.action,
-          p.actionTimer,
-          p.actionDuration,
-          Math.min(0.99, p.weaponSwingProgress + simDt * 3.8)
-        );
         for (let si = sim.devanagariStamps.length - 1; si >= 0; si--) {
           sim.devanagariStamps[si].life += simDt;
           if (sim.devanagariStamps[si].life >= sim.devanagariStamps[si].maxLife) {
@@ -7427,6 +7421,15 @@ export default function KaliyugaArena() {
         if (p.action !== 'idle') {
           const prevAction = p.action;
           p.actionTimer -= simDt;
+          // One authoritative action clock for Rudra's weapon pose AND VFX
+          // contact gates. Previously this was sampled before subtracting
+          // simDt, leaving the blade behind the impact by one simulation frame.
+          p.weaponSwingProgress = computeNormalizedAttackProgress(
+            p.action,
+            p.actionTimer,
+            p.actionDuration,
+            Math.min(0.99, p.weaponSwingProgress + simDt * 3.8)
+          );
           const execution = pendingExecutionRef.current;
           if (execution) {
             if (p.action !== 'execute') {
