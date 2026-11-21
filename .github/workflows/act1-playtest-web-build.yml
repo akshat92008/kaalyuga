@@ -9,7 +9,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   compile-playtest:
-    runs-on: macos-15-arm64
+    runs-on: macos-15
     timeout-minutes: 25
     steps:
       - name: Checkout production app code and compact built-in audio/UI media
