@@ -19,7 +19,8 @@ test('higher priority execution camera cannot be stolen by phase cue; Escape ski
   camera.start({kind: 'execution',focusX: 500,focusY: 250,durationSec: 0.6,focusWeight: 0.25,zoomBoost: 0.06});
   assert.equal(camera.start({kind: 'boss_phase',focusX: 0,focusY: 0,durationSec: 0.6,focusWeight: 0.25,zoomBoost: 0.02}), false);
   assert.equal(camera.step(0.1).focusX, 500);
-  camera.skip();
+  assert.equal(camera.skip(), true);
+  assert.equal(camera.skip(), false);
   assert.equal(camera.step(0.01).active, false);
 });
 test('blocks invalid camera cues and cancels on modal/pause interruption', () => {
