@@ -614,7 +614,7 @@ export function renderWeaponPoseTrail(
   const filaments = [
     {normal: -0.20, width: 1.65, opacity: 0.85, color: colors.coreColor},
     {normal:  0.32, width: 1.35, opacity: 0.64, color: colors.plasmaColor},
-    {normal:  0.78, width: 0.90, opacity: 0.46, color: colors.coreColor},
+    {normal:  0.38, width: 0.90, opacity: 0.46, color: colors.coreColor},
   ];
   for (const filament of filaments) {
     ctx.beginPath();
