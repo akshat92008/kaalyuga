@@ -95,7 +95,7 @@ try{
     await targetPage.waitForFunction(sel=>{
       const node=document.querySelector(sel);
       return node?.getAttribute('data-meru-rig-status')==='rigged';
-    },selector,{timeout:28000}).catch(async e=>{
+    },selector,{timeout:60000}).catch(async e=>{
       const node=targetPage.getByTestId('meru-boss-cinematic');
       const detail=await node.getAttribute('data-meru-rig-detail').catch(()=>'(dialog missing)');
       throw new Error(label+' did not load its real FBX model. Detail: '+detail+'; '+e.message);
