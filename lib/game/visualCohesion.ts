@@ -588,6 +588,8 @@ export function renderAct1HeavyParashuBreathing(
   const tongues=buildAct1HeavyBladeFlames(samples,params);
   if(!tongues.length)return false;
   const colors=act1HeavyBreathingPalette(params.stance,params.element);
+  const element=params.element??(params.stance==='thrust'?'thunder':
+    params.stance==='pillar'?'wind':'fire');
   ctx.save();
   ctx.globalCompositeOperation='source-over';
   ctx.lineJoin='round';
@@ -598,8 +600,30 @@ export function renderAct1HeavyParashuBreathing(
     const paintPath=()=>{
       ctx.beginPath();
       ctx.moveTo(leftBase.x,leftBase.y);
-      ctx.quadraticCurveTo(bendOut.x,bendOut.y,tip.x,tip.y);
-      ctx.quadraticCurveTo(bendIn.x,bendIn.y,rightBase.x,rightBase.y);
+      if(element==='water'){
+        // Hokusai curl: a slow broad flowing crest folding toward the root,
+        // plus a narrow white foam tip along the *actual* weapon trajectory.
+        ctx.bezierCurveTo(bendOut.x,bendOut.y,
+          tip.x+(bendOut.x-root.x)*0.22,tip.y+(bendOut.y-root.y)*0.22,
+          tip.x,tip.y);
+        ctx.quadraticCurveTo(bendIn.x,bendIn.y,rightBase.x,rightBase.y);
+      }else if(element==='thunder'){
+        // Zigzag, faceted lightning, never the same rounded fire tongue.
+        ctx.lineTo(bendOut.x,bendOut.y);
+        ctx.lineTo(tip.x,tip.y);
+        ctx.lineTo(bendIn.x,bendIn.y);
+        ctx.lineTo(rightBase.x,rightBase.y);
+      }else if(element==='susanoo'){
+        // Monumental sharp-edged spectral rib/petal, bronze-white core.
+        ctx.lineTo(bendOut.x,bendOut.y);
+        ctx.quadraticCurveTo(tip.x,tip.y,tip.x,tip.y);
+        ctx.lineTo(bendIn.x,bendIn.y);
+        ctx.lineTo(rightBase.x,rightBase.y);
+      }else{
+        // Fire rises as a broad fang; jade wind curls into lotus leaves.
+        ctx.quadraticCurveTo(bendOut.x,bendOut.y,tip.x,tip.y);
+        ctx.quadraticCurveTo(bendIn.x,bendIn.y,rightBase.x,rightBase.y);
+      }
       ctx.quadraticCurveTo(root.x,root.y,leftBase.x,leftBase.y);
       ctx.closePath();
     };
@@ -625,7 +649,11 @@ export function renderAct1HeavyParashuBreathing(
     ctx.lineWidth=1.5;
     ctx.beginPath();
     ctx.moveTo(root.x,root.y);
-    ctx.quadraticCurveTo(bendOut.x,bendOut.y,tip.x,tip.y);
+    if(element==='water'){
+      ctx.bezierCurveTo(bendOut.x,bendOut.y,bendIn.x,bendIn.y,tip.x,tip.y);
+    }else if(element==='thunder'||element==='susanoo'){
+      ctx.lineTo(bendOut.x,bendOut.y);ctx.lineTo(tip.x,tip.y);
+    }else ctx.quadraticCurveTo(bendOut.x,bendOut.y,tip.x,tip.y);
     ctx.stroke();
 
     // Hand-inked hot vein, not random sprites floating in the arena.
@@ -634,7 +662,11 @@ export function renderAct1HeavyParashuBreathing(
     ctx.lineWidth=0.95;
     ctx.beginPath();
     ctx.moveTo(root.x,root.y);
-    ctx.quadraticCurveTo(bendIn.x,bendIn.y,tip.x,tip.y);
+    if(element==='thunder'){
+      ctx.lineTo(bendIn.x,bendIn.y);ctx.lineTo(tip.x,tip.y);
+    }else if(element==='water'){
+      ctx.bezierCurveTo(bendIn.x,bendIn.y,bendOut.x,bendOut.y,tip.x,tip.y);
+    }else ctx.quadraticCurveTo(bendIn.x,bendIn.y,tip.x,tip.y);
     ctx.stroke();
   }
   ctx.restore();
