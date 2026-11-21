@@ -548,6 +548,7 @@ export default function KaliyugaArena() {
     elapsedSec: number;
     track: CinematicCameraTrack;
   } | null>(null);
+  const qaRecentEventsRef = useRef<Array<{ name: string; frameTime: number; meta?: string }>>([]);
   const bloodDemonArtsRef = useRef<BloodDemonArtPool>(createBloodDemonArtPool());
   const enemyVariantCounterRef = useRef<number>(0);
   const chamberLoadSeqRef = useRef<number>(0);
@@ -1104,6 +1105,37 @@ export default function KaliyugaArena() {
       bufferTimer: 0,
     },
   });
+
+  // Read-only testing snapshot. Enabled ONLY via the existing ?debug=1 switch.
+  // Browser QA can assert actual action states, contact commits and camera resets
+  // instead of claiming screenshots alone prove combat worked.
+  useEffect(() => {
+    if (!isDebugMode || typeof window === 'undefined') return;
+    Object.defineProperty(window, '__kaliyugaPhaseQA', {
+      configurable: true,
+      get: () => {
+        const sim = simRef.current;
+        return {
+          state: sim.state,
+          sliceStage: sliceStageRef.current,
+          chamber: sim.chamberIndex + 1,
+          action: sim.player.action,
+          stance: sim.player.stance,
+          attackProgress: sim.player.weaponSwingProgress,
+          focusOrbs: sim.player.focusOrbs,
+          astraEnergy: sim.player.astraEnergy,
+          cameraKind: liveCameraRef.current?.kind ?? null,
+          cameraZoom: sim.cameraZoom,
+          rudra3dReady: rudra3dRef.current?.isReady ?? false,
+          webglVfxReady: Boolean(webglDemonSlayerVfxRef.current),
+          recentEvents: qaRecentEventsRef.current.slice(-36),
+        };
+      },
+    });
+    return () => {
+      delete (window as Window & { __kaliyugaPhaseQA?: unknown }).__kaliyugaPhaseQA;
+    };
+  }, [isDebugMode]);
 
   const cycleGraphicsTier = useCallback(() => {
     setGraphicsSettings((prev) => {
@@ -2203,14 +2235,16 @@ export default function KaliyugaArena() {
         }
       });
 
-      // Trigger Boss Intro Painted Story Cutscenes when entering Chamber 4 (Dundubhi) or Chamber 8 (Vrikodara) during a run
+      // Start safe boss camera even for direct-chamber QA / quick-start runs.
+      // Painted story overlay remains controlled by the original narrative condition.
+      if (!isTitleMode && sim.state === 'playing' && (clampedIdx === 3 || clampedIdx === 7)) {
+        liveCameraRef.current = {
+          kind: 'boss', elapsedSec: 0,
+          track: createBossEntranceCameraTrack(clampedIdx === 3 ? 'dundubhi' : 'vrikodara'),
+        };
+      }
+      // Trigger Boss Intro Painted Story Cutscenes when entering Chamber 4 or 8.
       if (!resetFullRun && sim.state === 'playing') {
-        if (clampedIdx === 3 || clampedIdx === 7) {
-          liveCameraRef.current = {
-            kind: 'boss', elapsedSec: 0,
-            track: createBossEntranceCameraTrack(clampedIdx === 3 ? 'dundubhi' : 'vrikodara'),
-          };
-        }
         if (clampedIdx === 3) {
           setSliceStage('dundubhi_intro');
         } else if (clampedIdx === 7) {
@@ -4876,6 +4910,10 @@ export default function KaliyugaArena() {
           energyOrbs: orbsUsed,
           element: heavyElement,
         });
+        if (isDebugMode) {
+          qaRecentEventsRef.current.push({ name: 'heavy-contact', frameTime: performance.now(), meta: heavyElement });
+          if (qaRecentEventsRef.current.length > 50) qaRecentEventsRef.current.shift();
+        }
         const impactColor =
           heavyElement === 'vayu' ? '#10b981' :
           heavyElement === 'vajra' ? '#fde047' :
@@ -7314,6 +7352,10 @@ export default function KaliyugaArena() {
               if (shouldCommitExecutionImpact(execution.variant, progress, execution.fired) || p.actionTimer <= 0) {
                 execution.fired = true;
                 pendingExecutionRef.current = null;
+                if (isDebugMode) {
+                  qaRecentEventsRef.current.push({ name: 'execution-contact', frameTime: performance.now(), meta: execution.variant });
+                  if (qaRecentEventsRef.current.length > 50) qaRecentEventsRef.current.shift();
+                }
                 execution.execute();
               }
             }
