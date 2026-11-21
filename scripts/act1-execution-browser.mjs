@@ -61,6 +61,13 @@ try{
     return (t.strikeCues||[]).some(e=>
       e.action==='execute'&&e.kind==='fired');
   },null,{timeout:110000,polling:250});
+  // The rendered hero must travel toward the victim during this finisher
+  // without modifying the simulation position or adding another damage event.
+  await page.waitForFunction((requiredVariant)=>{
+    const samples=window.__KALIYUGA_ACT1_PERF__?.executionHeroTrace||[];
+    return samples.some(s=>s.variant===requiredVariant &&
+      s.progress>0.20 && Math.abs(s.offsetX)>2);
+  },variant,{timeout:45000,polling:250});
   // Also prove the enemy is visibly animated by the same real action.
   // The trace is read-only opt-in telemetry, not a mocked hit or keyframe.
   await page.waitForFunction((requiredVariant)=>{
@@ -85,7 +92,8 @@ try{
       gameState:t.gameState,combat:t.combat,
       strikeCues:t.strikeCues,weaponPoseTrace:t.weaponPoseTrace,
       cameraShotTrace:t.cameraShotTrace,
-      executionVictimTrace:t.executionVictimTrace,frameSamples:t.samples,
+      executionVictimTrace:t.executionVictimTrace,
+      executionHeroTrace:t.executionHeroTrace,frameSamples:t.samples,
     };
   });
   report.evidence.after=after;
