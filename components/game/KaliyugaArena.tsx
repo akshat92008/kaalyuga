@@ -40,6 +40,7 @@ import {
 import { soundEngine } from '@/lib/game/audio';
 import { Act1FrameProfiler } from '@/lib/game/act1Performance';
 import { Act1CinematicCamera } from '@/lib/game/act1CinematicCamera';
+import { canDispatchAct1GameplayKey } from '@/lib/game/act1InputGate';
 import { canFirePendingStrike, shouldCancelPendingStrike, type Act1StrikeAction } from '@/lib/game/act1ActionTimeline';
 import {
   loadAndProcessSprite,
@@ -6382,6 +6383,18 @@ export default function KaliyugaArena() {
           setStoryOpen(false);
           return;
         }
+        if (activeHubDialogueNpc !== null) {
+          setActiveHubDialogueNpc(null);
+          return;
+        }
+        if (hubBoatDrawerOpen) {
+          setHubBoatDrawerOpen(false);
+          return;
+        }
+        if (controlsOpen) {
+          setControlsOpen(false);
+          return;
+        }
         if (sim.state === 'playing') {
           sim.state = 'paused';
           document.body.dataset.state = 'paused';
@@ -6406,13 +6419,19 @@ export default function KaliyugaArena() {
         return;
       }
 
+      // Modal pause stops simulation AND input. Never queue an attack, dash, spell
+      // or party action under a menu: it could fire on the frame the menu closes.
+      // Read current UI flags as well as the ref to cover the pre-effect frame.
+      const blockingUiOpen = shrineOpen || storyOpen || controlsOpen ||
+        boonModalOpen || partyModalOpen || hubBoatDrawerOpen ||
+        activeHubDialogueNpc !== null || chamberLoadingLabel !== null;
+      if (!canDispatchAct1GameplayKey(sim.state, sim.modalPaused, blockingUiOpen)) return;
+
       if (e.code === 'KeyI' || e.code === 'KeyC') {
         e.preventDefault();
         setPartyModalOpen((prev) => !prev);
         return;
       }
-
-      if (sim.state !== 'playing') return;
 
       if (!sim.input.keysHeld.has(e.code)) {
         sim.input.justPressed.add(e.code);
@@ -6627,6 +6646,10 @@ export default function KaliyugaArena() {
     boonModalOpen,
     boonChoices,
     partyModalOpen,
+    controlsOpen,
+    hubBoatDrawerOpen,
+    activeHubDialogueNpc,
+    chamberLoadingLabel,
     handleSelectBoon,
     handleRerollBoons,
     openBoonAltar,
@@ -6904,6 +6927,17 @@ export default function KaliyugaArena() {
             gameState: sim.state,
             boss: sim.enemies.find((e) => e.isBoss && e.aiState !== 'ko')?.type ?? null,
             graphicsTier: sim.graphicsSettings.tier,
+            // Production-safe opt-in read-only combat evidence for the real
+            // browser QA runner. No gameplay mutation or per-frame allocations.
+            combat: {
+              action: sim.player.action,
+              attackSerial: sim.player.attackSerial,
+              hp: sim.player.hp,
+              astraEnergy: sim.player.astraEnergy,
+              damageDealt: sim.runDamageDealt,
+              enemiesAlive: sim.enemies.filter((e) => e.aiState !== 'ko').length,
+              modalPaused: sim.modalPaused,
+            },
             recordedAtMs: now,
           };
         }
