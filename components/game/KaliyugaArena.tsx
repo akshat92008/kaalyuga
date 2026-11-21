@@ -2150,6 +2150,21 @@ export default function KaliyugaArena() {
     if (results.every(Boolean)) {
       setChamberLoadingLabel(null);
       setChamberLoadError(null);
+      // The existing rig and painted mandapa are guaranteed ready. Use a subtle
+      // non-blocking, skippable 2.5D arrival shot instead of unrelated video.
+      const entrance = spec.isBossChamber
+        ? spec.spawns.find((e) => e.type === 'dundubhi' || e.type === 'vrikodara')
+        : null;
+      if (entrance) {
+        act1CameraRef.current?.start({
+          kind: 'boss_entrance',
+          focusX: entrance.x * CANONICAL_WORLD_W,
+          focusY: entrance.y * CANONICAL_WORLD_H - 18,
+          durationSec: 1.3,
+          focusWeight: 0.30,
+          zoomBoost: -0.035,
+        });
+      }
       // React's modal-pausing effect owns the final pause state, including boss intro cutscenes.
     } else {
       setChamberLoadError('One or more chamber assets could not load. Retry to avoid invisible or placeholder enemies.');
