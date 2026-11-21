@@ -12079,7 +12079,8 @@ export default function KaliyugaArena() {
               if(spectralAction&&bladeVisual.active&&spectralTrail.samples.length>=2){
                 renderAct1HeavyParashuBreathing(ctx,spectralTrail.samples,{
                   stance:p.stance,focus:p.action==='heavy_unleash'?4:2,
-                  alpha:bladeVisual.alpha,element:'susanoo',action:p.action,
+                  alpha:bladeVisual.alpha,element:'susanoo',
+                  action:p.action==='heavy_unleash'?'heavy_unleash':'light_attack',
                 });
               }
               ctx.save();
