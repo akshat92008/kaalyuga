@@ -135,13 +135,37 @@ def main():
         cam.data.type="ORTHO"
         cam.data.ortho_scale=max(float(dims[long_axis])*1.75,.01)
         scene=bpy.context.scene
-        scene.render.engine="BLENDER_WORKBENCH"
+        # GitHub's Linux headless runner has no EGL display. Render using
+        # Blender Cycles CPU instead of Workbench/OpenGL to produce a genuine,
+        # stable FBX geometry preview on stock build agents.
+        clay=bpy.data.materials.new("QA_CLAY_GEOMETRY_ONLY")
+        clay.diffuse_color=(.39,.31,.27,1.0)
+        clay.use_nodes=True
+        clay.node_tree.nodes.get("Principled BSDF").inputs["Base Color"].default_value=(.39,.31,.27,1.0)
+        for mesh in meshes:
+            mesh.data.materials.clear()
+            mesh.data.materials.append(clay)
+        red.use_nodes=True
+        red.node_tree.nodes.get("Principled BSDF").inputs["Base Color"].default_value=(.95,.09,.07,1.0)
+        light_data=bpy.data.lights.new("QA_softbox","AREA")
+        light=bpy.data.objects.new("QA_softbox",light_data)
+        bpy.context.scene.collection.objects.link(light)
+        light.location=center+Vector((2.4,-3.5,4.2)).normalized()*max(float(dims[long_axis])*2.0,1.)
+        light.rotation_euler=(center-light.location).to_track_quat("-Z","Y").to_euler()
+        light_data.energy=950
+        light_data.shape="DISK"
+        light_data.size=max(float(dims[long_axis])*1.4,.1)
+        scene.render.engine="CYCLES"
+        scene.cycles.device="CPU"
+        scene.cycles.samples=8
+        scene.cycles.use_denoising=False
+        for view_layer in scene.view_layers:
+            view_layer.cycles.use_denoising=False
         scene.render.resolution_x=640
         scene.render.resolution_y=640
         scene.render.resolution_percentage=100
         scene.render.image_settings.file_format="PNG"
-        scene.display.shading.color_type="MATERIAL"
-        scene.display.shading.light="STUDIO"
+        scene.render.film_transparent=True
         scene.render.filepath=str(args.output.with_suffix(".png").resolve())
         bpy.ops.render.render(write_still=True)
         report["preview_png"]=str(args.output.with_suffix(".png"))
