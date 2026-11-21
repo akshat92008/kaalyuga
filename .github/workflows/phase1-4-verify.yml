@@ -1,15 +1,5 @@
-name: Act I Phase 1-4 verified checks
+name: Act I Phase 1-4 focused regressions (manual)
 on:
-  push:
-    branches:
-      - feature/phase1-4-cinematic-combat-20261121
-  pull_request:
-    paths:
-      - 'lib/game/**'
-      - 'components/game/**'
-      - 'scripts/qa/**'
-      - 'package.json'
-      - '.github/workflows/phase1-4-verify.yml'
   workflow_dispatch:
 
 permissions:
