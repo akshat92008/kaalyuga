@@ -25,6 +25,7 @@ export default function MeruCinematicStudio(){
   const [status,setStatus]=useState('Initializing original Dundubhi rig…');
   const [error,setError]=useState('');
   const [hydrated,setHydrated]=useState(false);
+  const [videoDecoded,setVideoDecoded]=useState(false);
   const [tier,setTier]=useState<GraphicsTier>('balanced');
   const canvasRef=useRef<HTMLCanvasElement>(null);
   const videoRef=useRef<HTMLVideoElement>(null);
@@ -43,7 +44,7 @@ export default function MeruCinematicStudio(){
       sceneRef.current=parsed;
       const next=new MeruTimelinePlayer(parsed);
       timelineRef.current=next;
-      setScene(parsed);setTime(0);setPlaying(false);setError('');
+      setScene(parsed);setTime(0);setPlaying(false);setVideoDecoded(false);setError('');
       videoRef.current?.pause();
     }catch(e){setError(e instanceof Error?e.message:'Invalid scene file');}
   },[]);
@@ -195,7 +196,7 @@ export default function MeruCinematicStudio(){
         <section className="space-y-3">
           <div className="relative aspect-video overflow-hidden rounded-xl border border-[#63472c] bg-[#100c0b]">
             <div className="absolute inset-0 bg-center bg-cover" style={{backgroundImage:'url('+scene.posterUrl+')'}}/>
-            <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover" src={scene.backgroundUrl} poster={scene.posterUrl} muted loop playsInline preload="metadata" aria-label="Scene background video"/>
+            <video ref={videoRef} className={'absolute inset-0 w-full h-full object-cover transition-opacity duration-700 '+(videoDecoded?'opacity-100':'opacity-0')} src={scene.backgroundUrl} poster={scene.posterUrl} muted loop playsInline preload="metadata" onLoadedData={()=>setVideoDecoded(true)} onError={()=>setVideoDecoded(false)} data-meru-video-status={videoDecoded?'decoded':'poster'} aria-label="Scene background video"/>
             <canvas ref={canvasRef} width={W} height={H} className="pointer-events-none absolute inset-0 w-full h-full" aria-label="Live cinematic character preview"/>
             <div className="absolute left-4 top-3 text-xs uppercase tracking-widest text-[#edc08d]">Camera A · {scene.title}</div>
             <div className="absolute bottom-3 left-4 rounded bg-black/60 px-2 py-1 text-xs">Preview quality: {Math.round(resolution*100)}% budget</div>
