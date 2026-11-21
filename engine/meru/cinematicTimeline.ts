@@ -50,7 +50,7 @@ function ease(t: number, mode: Ease) {
   const x = clamp(t, 0, 1);
   return mode === 'step' ? 0 : mode === 'smooth' ? x * x * (3 - 2 * x) : x;
 }
-export function sampleKeyframes<T extends Record<string, number | string>>(
+export function sampleKeyframes<T extends object>(
   keys: Keyframe<T>[], at: number
 ): T {
   if (!keys.length) throw new Error('Empty cinematic track');
