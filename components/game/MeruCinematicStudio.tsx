@@ -7,6 +7,7 @@
 import {useCallback,useEffect,useRef,useState} from 'react';
 import {Boss3DRenderer} from '@/lib/game/boss3dRenderer';
 import {GAME_ASSETS} from '@/lib/game/assets';
+import {isSoftwareWebGLRenderer} from '@/lib/game/hadesSpriteBaker';
 import {
   createDundubhiScene, createBossPhaseScene, MeruTimelinePlayer, sampleCinematic,
   validateCinematic, type MeruCinematic, type BossCharacter,
@@ -74,7 +75,7 @@ export default function MeruCinematicStudio(){
       const audio=new Audio(url);audio.preload='auto';audioRef.current[kind]=audio;
     }
     try{
-      const boss=new Boss3DRenderer(384);
+      const boss=new Boss3DRenderer(isSoftwareWebGLRenderer()?384:512);
       bossRef.current=boss;
       // A slow machine should not be permanently stuck on portrait mode just
       // because FBX + PBR textures take more than twelve seconds to download.
