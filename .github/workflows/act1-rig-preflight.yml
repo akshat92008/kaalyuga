@@ -21,6 +21,7 @@ jobs:
             public/kaalyuga/anims/rudra
             public/animations/lite_magic
             new 3D assets and animations/Animations/Creature Pack (4)
+            new 3D assets and animations/Animations/Pro Melee Axe Pack
             new 3D assets and animations/Animations/Pro Melee Axe Pack (5)
             new 3D assets and animations/Animations/Pro Magic Pack
           sparse-checkout-cone-mode: false
@@ -34,6 +35,14 @@ jobs:
             --rig "public/models/Meshy_AI_Ashen_Warborn_biped/Meshy_AI_Ashen_Warborn_biped_Meshy_Merged_Animations.fbx" \
             --clip "public/animations/lite_magic/Standing 1H Magic Attack 01.fbx" \
             --output "artifacts/act1-rudra-rig-audit.json"
+          # The runtime loads this DIFFERENT Ashen Warborn FBX: audit the
+          # exact on-screen armature before transferring any finisher curves.
+          blender -b --python scripts/act1-rig-audit.py -- \
+            --rig "new 3D assets and animations/Animations/Pro Melee Axe Pack/Meshy_AI_Ashen_Warborn_20261025_generate.fbx" \
+            --clip "public/kaalyuga/anims/rudra/heavy.fbx" \
+            --clip "public/kaalyuga/anims/rudra/cast.fbx" \
+            --clip "public/kaalyuga/anims/rudra/attack3.fbx" \
+            --output "artifacts/act1-rudra-runtime-finisher-rig-audit.json"
           # Actual local runtime clips, not generic external example animations.
           # Full inventory is report-only: incompatible clip bone names must be
           # fixed deliberately, not blindly retargeted or silently discarded.
@@ -74,6 +83,11 @@ jobs:
           python3 - <<'PY'
           import json
           r=json.load(open("artifacts/act1-rudra-local-clip-audit.json"))
+          runtime=json.load(open("artifacts/act1-rudra-runtime-finisher-rig-audit.json"))
+          assert runtime["canonical"]["bone_count"]>0, "Runtime Rudra armature missing"
+          assert runtime["canonical"]["skinned_meshes"]>0, "Runtime Rudra model is not skinned"
+          assert len(runtime["clips"])==3, "Missing three runtime finisher source clips"
+          print("Runtime Rudra bindable:",[c["compatible_for_direct_binding"] for c in runtime["clips"]])
           assert len(r["clips"])==10, "Expected all ten local Rudra FBX clips"
           print("Rudra local animation coverage:")
           for c in r["clips"]:
