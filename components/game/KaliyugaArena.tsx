@@ -197,6 +197,7 @@ import {
 } from '@/lib/game/act1WeaponPoseTrail';
 import { getAct1ExecutionVisualPlan } from '@/lib/game/act1ExecutionVisualPlan';
 import { shouldSpawnCombatCallout } from '@/lib/game/act1CombatCalloutPolicy';
+import { getBossEntranceVisualPlan } from '@/lib/game/act1BossEntranceVisuals';
 import {
   MAX_CLAMPED_CAMERA_TRAUMA,
   ParashuFinisherVariant,
@@ -2637,14 +2638,27 @@ export default function KaliyugaArena() {
           boss3dRef.current.prewarmBossAtlas(bossKind);
           const bossUnit = sim.enemies.find((en) => en.isBoss || en.type === 'semi_boss_bloodforge');
           if (bossUnit) {
-            // Purple-Crimson Blood Demon Art Entrance Cage (Zero cyan Akaza compass on Dundubhi!)
-            webglDemonSlayerVfxRef.current?.spawnBloodThreadCage({
+            // Character silhouette first. The previous 275px/16-thread
+            // screen-filling magenta cage obscured Dundubhi's horns, Rudra,
+            // pillars and the arena floor even before the player could move.
+            // Distinct, low-lying bronze / furnace signatures preserve the
+            // recognizable model and avoid copying anime-specific symbols.
+            const entranceKind = bossUnit.type === 'dundubhi'
+              ? 'dundubhi'
+              : bossUnit.type === 'vrikodara' ? 'vrikodara' : 'semi_boss';
+            const entranceVisual = getBossEntranceVisualPlan(entranceKind);
+            webglDemonSlayerVfxRef.current?.spawnShockwaveRing({
+              x: bossUnit.x, y: bossUnit.y + 6,
+              radius: entranceVisual.ringRadius,
+              palette: entranceVisual.palette,
+              duration: entranceVisual.ringDuration,
+            });
+            webglDemonSlayerVfxRef.current?.spawnSparkBurst({
               x: bossUnit.x,
-              y: bossUnit.y - 12,
-              radius: bossUnit.isBoss ? 275 : 215,
-              palette: bossUnit.type === 'dundubhi' || bossUnit.type === 'vrikodara' ? 'void' : 'blood',
-              duration: 1.65,
-              threadCount: 16,
+              y: bossUnit.y - 34,
+              count: entranceVisual.sparkCount,
+              speed: entranceVisual.sparkSpeed,
+              palette: entranceVisual.palette,
             });
             soundEngine.playBloodDemonArt();
             if (bossUnit.type === 'dundubhi') {
