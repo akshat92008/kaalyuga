@@ -61,15 +61,25 @@ try{
     return (t.strikeCues||[]).some(e=>
       e.action==='execute'&&e.kind==='fired');
   },null,{timeout:110000,polling:250});
+  // Prove the real dynamic camera actually received the eased cinematic
+  // boost. The previous implementation multiplied that boost by frame dt.
+  await page.waitForFunction((requiredVariant)=>{
+    const samples=window.__KALIYUGA_ACT1_PERF__?.cameraShotTrace||[];
+    return samples.some(s=>s.variant===requiredVariant &&
+      s.boost>=0.035 && s.zoom>s.unboostedZoom+0.03 &&
+      s.focusWeight>=0.2);
+  },variant,{timeout:45000,polling:250});
   const after=await page.evaluate(()=>{
     const t=window.__KALIYUGA_ACT1_PERF__||{};
     return {
       gameState:t.gameState,combat:t.combat,
       strikeCues:t.strikeCues,weaponPoseTrace:t.weaponPoseTrace,
-      frameSamples:t.samples,
+      cameraShotTrace:t.cameraShotTrace,frameSamples:t.samples,
     };
   });
   report.evidence.after=after;
+  report.evidence.cameraPeakBoost=Math.max(0,...(after.cameraShotTrace||[])
+    .filter(s=>s.variant===variant).map(s=>s.boost));
   const cue=after.strikeCues?.find(e=>e.action==='execute'&&e.kind==='fired');
   if(!cue)throw new Error('No real execution active-frame cue');
   if(cue.finisherVariant!==variant)
