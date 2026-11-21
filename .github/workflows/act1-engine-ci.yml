@@ -49,6 +49,6 @@ jobs:
       - name: TypeScript
         run: npx tsc --noEmit --incremental false
       - name: Existing engine regression tests
-        run: npx tsx --test lib/game/part1Fixes.test.ts lib/game/act1AaaPolish.test.ts lib/game/p1RenderingAndRigging.test.ts lib/game/p2ArchitectureAndHub.test.ts lib/game/optimizedAssetPipeline.test.ts lib/game/audioWiring.test.ts lib/game/act1Performance.test.ts lib/game/act1CinematicCamera.test.ts lib/game/act1QualityProfiles.test.ts lib/game/act1QualityBudget.test.ts lib/game/act1ActionTimeline.test.ts lib/game/act1InputGate.test.ts lib/game/act1BossCharge.test.ts lib/game/act1BreathingVisuals.test.ts lib/game/act1WeaponPoseTrail.test.ts
+        run: npx tsx --test lib/game/part1Fixes.test.ts lib/game/act1AaaPolish.test.ts lib/game/p1RenderingAndRigging.test.ts lib/game/p2ArchitectureAndHub.test.ts lib/game/optimizedAssetPipeline.test.ts lib/game/audioWiring.test.ts lib/game/act1Performance.test.ts lib/game/act1CinematicCamera.test.ts lib/game/act1QualityProfiles.test.ts lib/game/act1QualityBudget.test.ts lib/game/act1ActionTimeline.test.ts lib/game/act1InputGate.test.ts lib/game/act1BossCharge.test.ts lib/game/act1BreathingVisuals.test.ts lib/game/act1WeaponPoseTrail.test.ts lib/game/act1WeaponHeadCalibration.test.ts
       - name: Build Next.js
         run: npm run build
