@@ -176,6 +176,26 @@ const base = process.env.GAME_URL || 'http://127.0.0.1:3100';
       );
       report.checks.push('live execution ' + variant + ': one contact and safe camera recovery');
     }
+    // Skipping an authored execution camera must NOT skip damage or leave
+    // Rudra input/camera permanently locked. Test against the real F key path.
+    await page.evaluate(() => window.__kaliyugaPhaseQAFixture.prepareExecution('downward_crush'));
+    const skipImpactBefore = await countEvent('execution-contact');
+    await page.keyboard.press('f');
+    await page.waitForFunction(
+      () => window.__kaliyugaPhaseQA?.cameraKind === 'execution',
+      null, { timeout: 8000 }
+    );
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() =>
+      window.__kaliyugaPhaseQA?.cameraKind === null &&
+      window.__kaliyugaPhaseQA?.state === 'playing',
+      null, { timeout: 8000 }
+    );
+    await assertEvent('execution-contact', 'downward_crush', skipImpactBefore);
+    await page.waitForFunction(() => window.__kaliyugaPhaseQA?.action === 'idle',
+      null, { timeout: 16000 });
+    report.checks.push('Escape skips execution camera while preserving once-only finisher damage and input recovery');
+
     // A new direct boss room must start an actual game-world camera track.
     await page.goto(base + '/?debug=1&chamber=4', { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.waitForFunction(() => window.__kaliyugaPhaseQA?.cameraKind === 'boss', null, { timeout: 30000 });
