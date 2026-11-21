@@ -159,6 +159,7 @@ import {
   drawGrounded3DContactShadow,
   renderBattleScarsOnFloor,
   renderWeaponBoneSlashRibbon,
+  renderWeaponPoseTrail,
   renderWeaponTipStarburstGlint,
   spawnBattleScar,
   updateBattleScars,
@@ -188,6 +189,11 @@ import {
   computeParashuSwingVisual,
   getSmashHeavyVfxPresentation,
 } from '@/lib/game/act1BreathingVisuals';
+import {
+  advanceWeaponPoseTrail,
+  projectWeaponHeadToWorld,
+  type WeaponTrailSample,
+} from '@/lib/game/act1WeaponPoseTrail';
 import {
   MAX_CLAMPED_CAMERA_TRAUMA,
   ParashuFinisherVariant,
@@ -550,6 +556,14 @@ export default function KaliyugaArena() {
   const enemy3dRef = useRef<Enemy3DRenderer | null>(null);
   const susanoo3dRef = useRef<Susanoo3DRenderer | null>(null);
   const webglDemonSlayerVfxRef = useRef<WebglDemonSlayerVfxOverlay | null>(null);
+  // Actual Parashu 3D-head motion captured only during the active swing.
+  // The attack serial and chamber own the trail, so no ghost streak can
+  // persist through a dodge cancel or a room transition.
+  const parashuPoseTrailRef = useRef<{
+    attackSerial: number;
+    chamberIndex: number;
+    samples: WeaponTrailSample[];
+  }>({attackSerial: -1, chamberIndex: -1, samples: []});
   const pendingStrikeVfxRef = useRef<{
     fired: boolean;
     expectedAction: Act1StrikeAction;
@@ -11758,15 +11772,38 @@ export default function KaliyugaArena() {
             );
           }
 
-          // Physically anchored, frame-driven Parashu breathing crescent.
-          // Rendered after Rudra's skinned character so the weapon arc is
-          // readable even on dark chambers; no ring when not attacking.
-          if (!coreLock.isSusanooActive) {
+          // Physically grounded, frame-driven Parashu breathing crescent:
+          // follow the head of the actual FBX weapon parented to the right
+          // hand and projected through the SAME camera/pose as the baked sprite.
+          const poseTrail = parashuPoseTrailRef.current;
+          const activeParashuAction =
+            !coreLock.isSusanooActive &&
+            (p.action === 'light_attack' || p.action === 'heavy_unleash');
+          if (!activeParashuAction) {
+            poseTrail.samples = [];
+          } else {
+            if (poseTrail.attackSerial !== p.attackSerial ||
+                poseTrail.chamberIndex !== sim.chamberIndex) {
+              poseTrail.attackSerial = p.attackSerial;
+              poseTrail.chamberIndex = sim.chamberIndex;
+              poseTrail.samples = [];
+            }
             const bladeVisual = computeParashuSwingVisual(
               p.action, p.weaponSwingProgress, p.comboStep
             );
             if (bladeVisual.active) {
-              const bladeMesh = computeWeaponSlashRibbon({
+              const bladeHead = rendered3D && rudra3d
+                ? projectWeaponHeadToWorld({
+                    uv: rudra3d.getProjectedParashuHead(),
+                    actorX: p.x, actorY: p.y,
+                    drawSize: HEROIC_DRAW_SIZES.rudra,
+                    footAnchorRatio: rudra3d.footAnchorRatio,
+                  })
+                : null;
+              poseTrail.samples = advanceWeaponPoseTrail({
+                previous: poseTrail.samples, point: bladeHead, atMs: now,
+              });
+              const fallbackMesh = computeWeaponSlashRibbon({
                 originX: p.x + Math.cos(p.slashAngle) * 13,
                 originY: p.y - 28,
                 aimAngle: p.slashAngle,
@@ -11777,7 +11814,15 @@ export default function KaliyugaArena() {
                 isRiposte: p.riposteWindowTimer > 0,
                 comboStep: bladeVisual.comboStep,
               });
-              renderWeaponBoneSlashRibbon(ctx, bladeMesh, bladeVisual.alpha);
+              const renderedRealPose = renderWeaponPoseTrail(
+                ctx, poseTrail.samples, bladeVisual.alpha, fallbackMesh,
+                bladeVisual.isHeavy
+              );
+              if (!renderedRealPose) {
+                // Fallback for an unloaded/unsupported rig, or the very first
+                // frame before there are two distinct blade-head samples.
+                renderWeaponBoneSlashRibbon(ctx, fallbackMesh, bladeVisual.alpha);
+              }
             }
           }
           // Other elemental and boss effects remain in the layered WebGL pass.
