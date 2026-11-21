@@ -18,6 +18,25 @@ export interface CinematicActor {
 export interface CinematicLighting {
   warmth: number; exposure: number; vignette: number; ash: number;
 }
+/** Additive offsets applied to the existing loaded FBX skeleton after its animation
+ * mixer. These are deliberately bounded: no joint translation, retargeting,
+ * skeleton replacement, or gameplay attack changes. Values are radians. */
+export interface CinematicPose {
+  rootYaw: number;
+  torsoYaw: number;
+  torsoLean: number;
+  rightArmLift: number;
+  rightElbowBend: number;
+  leftArmLift: number;
+}
+export const NEUTRAL_CINEMATIC_POSE: CinematicPose = {
+  rootYaw: 0, torsoYaw: 0, torsoLean: 0,
+  rightArmLift: 0, rightElbowBend: 0, leftArmLift: 0,
+};
+export const CINEMATIC_POSE_LIMITS: Record<keyof CinematicPose, number> = {
+  rootYaw: 0.9, torsoYaw: 0.55, torsoLean: 0.45,
+  rightArmLift: 0.9, rightElbowBend: 1.0, leftArmLift: 0.9,
+};
 export interface Keyframe<T> {
   time: number; value: T; ease?: Ease;
 }
@@ -37,6 +56,8 @@ export interface MeruCinematic {
   camera: Keyframe<CinematicCamera>[];
   actor: Keyframe<CinematicActor>[];
   lighting: Keyframe<CinematicLighting>[];
+  /** Optional for backward-compatible v1 scenes already stored in browsers. */
+  pose?: Keyframe<CinematicPose>[];
   cues: CinematicCue[];
 }
 export interface CinematicFrame {
@@ -44,6 +65,7 @@ export interface CinematicFrame {
   camera: CinematicCamera;
   actor: CinematicActor;
   lighting: CinematicLighting;
+  pose?: CinematicPose;
 }
 const finite = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x);
 const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
@@ -81,6 +103,7 @@ export function sampleKeyframes<T extends object>(
 const CAMERA_KEYS: (keyof CinematicCamera)[] = ['x','y','zoom','roll','shake'];
 const ACTOR_NUMBERS: (keyof CinematicActor)[] = ['x','y','scale','opacity'];
 const LIGHT_KEYS: (keyof CinematicLighting)[] = ['warmth','exposure','vignette','ash'];
+const POSE_KEYS = Object.keys(NEUTRAL_CINEMATIC_POSE) as (keyof CinematicPose)[];
 const SAFE_KINDS: CueKind[] = ['drum','roar','impact','subtitle','vfx','marker'];
 const SAFE_STATES: AnimationState[] = ['idle','windup','attack','chase'];
 const SAFE_EASINGS: Ease[] = ['linear','smooth','step'];
@@ -102,7 +125,7 @@ export function validateCinematic(input: unknown): MeruCinematic {
     }
   }
   const duration = value.duration;
-  const track = (name: 'camera' | 'actor' | 'lighting', numeric: string[]) => {
+  const track = (name: 'camera' | 'actor' | 'lighting' | 'pose', numeric: string[]) => {
     const data = value[name];
     if (!Array.isArray(data) || !data.length || data.length > 300) throw new Error(name + ' requires 1-300 keyframes');
     let prev = -1;
@@ -125,6 +148,14 @@ export function validateCinematic(input: unknown): MeruCinematic {
   track('camera', CAMERA_KEYS);
   track('actor', ACTOR_NUMBERS);
   track('lighting', LIGHT_KEYS);
+  if (value.pose !== undefined) track('pose', POSE_KEYS);
+  const pose = value.pose as Keyframe<CinematicPose>[] | undefined;
+  for (const key of pose ?? []) {
+    for (const field of POSE_KEYS) {
+      if (Math.abs(key.value[field]) > CINEMATIC_POSE_LIMITS[field])
+        throw new Error('Cinematic joint offset exceeds safe range: ' + field);
+    }
+  }
   const actor = value.actor as Keyframe<CinematicActor>[];
   const camera = value.camera as Keyframe<CinematicCamera>[];
   const lighting = value.lighting as Keyframe<CinematicLighting>[];
@@ -152,6 +183,7 @@ export function validateCinematic(input: unknown): MeruCinematic {
     camera: scene.camera.map(k => ({...k,value:{...k.value}})),
     actor: scene.actor.map(k => ({...k,value:{...k.value}})),
     lighting: scene.lighting.map(k => ({...k,value:{...k.value}})),
+    ...(scene.pose ? {pose:scene.pose.map(k=>({...k,value:{...k.value}}))} : {}),
     cues: scene.cues.map(k => ({...k})).sort((a,b)=>a.time-b.time || a.id.localeCompare(b.id)),
   };
 }
@@ -162,6 +194,7 @@ export function sampleCinematic(scene: MeruCinematic, t: number): CinematicFrame
     camera: sampleKeyframes(scene.camera, time),
     actor: sampleKeyframes(scene.actor, time),
     lighting: sampleKeyframes(scene.lighting, time),
+    ...(scene.pose ? {pose:sampleKeyframes(scene.pose,time)} : {}),
   };
 }
 /** Inclusive after 0, exclusive of previous t: no events repeat on pause or seek. */
@@ -226,6 +259,13 @@ export function createDundubhiScene(): MeruCinematic {
       {time:6.1,value:{x:0,y:0,scale:1.08,opacity:1,state:'idle'}},
       {time:8,value:{x:0,y:0,scale:1,opacity:1,state:'idle'}}
     ],
+    pose:[
+      {time:0,value:{...NEUTRAL_CINEMATIC_POSE}},
+      {time:3.6,value:{rootYaw:-0.1,torsoYaw:-0.25,torsoLean:-0.16,rightArmLift:-0.48,rightElbowBend:0.34,leftArmLift:0.25}},
+      {time:5.2,value:{rootYaw:0.16,torsoYaw:0.32,torsoLean:0.24,rightArmLift:0.68,rightElbowBend:-0.44,leftArmLift:-0.4}},
+      {time:6.1,value:{...NEUTRAL_CINEMATIC_POSE}},
+      {time:8,value:{...NEUTRAL_CINEMATIC_POSE}},
+    ],
     lighting:[
       {time:0,value:{warmth:0.65,exposure:0.7,vignette:0.85,ash:0.45}},
       {time:3,value:{warmth:0.8,exposure:0.85,vignette:0.70,ash:0.25}},
@@ -264,6 +304,13 @@ export function createVrikodaraScene(): MeruCinematic {
       {time:4.8,value:{x:0,y:0,scale:1.14,opacity:1,state:'attack'}},
       {time:6,value:{x:0,y:0,scale:1.10,opacity:1,state:'idle'}},
       {time:8.5,value:{x:0,y:0,scale:1,opacity:1,state:'idle'}}
+    ],
+    pose:[
+      {time:0,value:{...NEUTRAL_CINEMATIC_POSE}},
+      {time:3.6,value:{rootYaw:-0.22,torsoYaw:-0.3,torsoLean:-0.18,rightArmLift:-0.58,rightElbowBend:0.3,leftArmLift:0.18}},
+      {time:4.8,value:{rootYaw:0.18,torsoYaw:0.38,torsoLean:0.27,rightArmLift:0.8,rightElbowBend:-0.62,leftArmLift:0.44}},
+      {time:6,value:{...NEUTRAL_CINEMATIC_POSE}},
+      {time:8.5,value:{...NEUTRAL_CINEMATIC_POSE}},
     ],
     lighting:[
       {time:0,value:{warmth:0.15,exposure:0.68,vignette:0.94,ash:0.15}},
@@ -316,6 +363,13 @@ export function createBossPhaseScene(boss: BossCharacter, phase: 2 | 3): MeruCin
       {time:2.1,value:{x:0,y:0,scale:1.16,opacity:1,state:'attack'}},
       {time:3.1,value:{x:0,y:0,scale:1.11,opacity:1,state:'idle'}},
       {time:duration,value:{x:0,y:0,scale:1,opacity:1,state:'idle'}},
+    ],
+    pose: [
+      {time:0,value:{...NEUTRAL_CINEMATIC_POSE}},
+      {time:0.8,value:{rootYaw:-0.12,torsoYaw:-0.3,torsoLean:-0.2,rightArmLift:-0.63,rightElbowBend:0.33,leftArmLift:0.12}},
+      {time:2.1,value:{rootYaw:0.2,torsoYaw:0.4,torsoLean:0.26,rightArmLift:0.72,rightElbowBend:-0.5,leftArmLift:0.53}},
+      {time:3.1,value:{...NEUTRAL_CINEMATIC_POSE}},
+      {time:duration,value:{...NEUTRAL_CINEMATIC_POSE}},
     ],
     lighting: [
       {time:0,value:{warmth:0.45,exposure:0.65,vignette:0.85,ash:0.25}},
