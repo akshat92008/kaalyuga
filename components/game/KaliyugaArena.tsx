@@ -50,7 +50,7 @@ import { Rudra3DRenderer } from '@/lib/game/rudra3dRenderer';
 import { Boss3DRenderer } from '@/lib/game/boss3dRenderer';
 import MeruCinematicPlayback from '@/components/game/MeruCinematicPlayback';
 import type { MeruCinematic } from '@/engine/meru/cinematicTimeline';
-import { shouldStartDundubhiIntro, readDundubhiIntro } from '@/engine/meru/runtimePolicy';
+import { shouldStartBossIntro, readBossIntro } from '@/engine/meru/runtimePolicy';
 import { renderMeruPortal } from '@/engine/meru/portalDirector';
 import { Susanoo3DRenderer } from '@/lib/game/susanoo3dRenderer';
 import CholaBrassHud from '@/components/game/CholaBrassHud';
@@ -2431,20 +2431,22 @@ export default function KaliyugaArena() {
         }
       }
 
-      // Meru Director: enter a real boss cinematic only for a live normal Dundubhi
-      // encounter. Never interrupt title/hub, direct phase-2 debug tests, or cleared scenes.
-      const meruDundubhiIntro = shouldStartDundubhiIntro({
+      // Meru Director: both major Act I boss entrances now share the same
+      // authorable timeline, real FBX boss renderer and safe combat handoff.
+      const meruBossKind = clampedIdx === 3 ? 'dundubhi'
+        : clampedIdx === CHAMBERS.length - 1 ? 'vrikodara' : null;
+      const meruBossIntro = meruBossKind !== null && shouldStartBossIntro({
+        boss: meruBossKind,
         chamberIndex: clampedIdx,
         stage: sim.state,
-        hasDundubhi: sim.enemies.some(e => e.type === 'dundubhi' && e.hp > 0),
+        hasBoss: sim.enemies.some(e => e.type === meruBossKind && e.hp > 0),
         query: typeof window !== 'undefined' ? window.location.search : '',
       });
-      if (meruDundubhiIntro) {
-        // Pause immediately; state-sync effect maintains pause during the overlay.
+      if (meruBossIntro && meruBossKind !== null) {
         sim.modalPaused = true;
         sim.input.keysHeld.clear();
         sim.input.justPressed.clear();
-        setActiveMeruScene(readDundubhiIntro());
+        setActiveMeruScene(readBossIntro(meruBossKind));
       } else {
         setActiveMeruScene(null);
       }
@@ -2464,7 +2466,7 @@ export default function KaliyugaArena() {
                 : 'semi_boss';
           boss3dRef.current.prewarmBossAtlas(bossKind);
           const bossUnit = sim.enemies.find((en) => en.isBoss || en.type === 'semi_boss_bloodforge');
-          if (bossUnit && !meruDundubhiIntro) {
+          if (bossUnit && !meruBossIntro) {
             // Purple-Crimson Blood Demon Art Entrance Cage (Zero cyan Akaza compass on Dundubhi!)
             webglDemonSlayerVfxRef.current?.spawnBloodThreadCage({
               x: bossUnit.x,
@@ -13159,7 +13161,7 @@ export default function KaliyugaArena() {
             sim.input.justPressed.clear();
             sim.player.invulnTimer = Math.max(sim.player.invulnTimer, 0.8);
             if (reason === 'completed') {
-              const boss = sim.enemies.find(e => e.type === 'dundubhi' && e.hp > 0);
+              const boss = sim.enemies.find(e => e.type === activeMeruScene.boss && e.hp > 0);
               if (boss) {
                 webglDemonSlayerVfxRef.current?.spawnBloodThreadCage({
                   x: boss.x,
