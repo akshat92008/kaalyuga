@@ -168,11 +168,20 @@ export class MeruTimelinePlayer {
   readonly scene: MeruCinematic;
   time = 0;
   playing = false;
+  private startCuesPending = false;
   constructor(scene: MeruCinematic) { this.scene = validateCinematic(scene); }
-  play() { if (this.time >= this.scene.duration) this.time = 0; this.playing = true; }
+  play() {
+    if (this.playing) return;
+    if (this.time >= this.scene.duration) this.time = 0;
+    this.startCuesPending = this.time === 0;
+    this.playing = true;
+  }
   pause() { this.playing = false; }
-  seek(t: number) { this.time = clamp(Number.isFinite(t) ? t : 0, 0, this.scene.duration); }
-  reset() { this.time = 0; this.playing = false; }
+  seek(t: number) {
+    this.time = clamp(Number.isFinite(t) ? t : 0, 0, this.scene.duration);
+    this.startCuesPending = false;
+  }
+  reset() { this.time = 0; this.playing = false; this.startCuesPending = false; }
   /** Frame-rate-independent advance; large dt crosses all cues once. */
   tick(dt: number): { frame: CinematicFrame; cues: CinematicCue[]; ended: boolean } {
     if (!this.playing || !finite(dt) || dt <= 0) {
@@ -181,6 +190,11 @@ export class MeruTimelinePlayer {
     const previous = this.time;
     this.time = clamp(this.time + dt, 0, this.scene.duration);
     const cues = cuesBetween(this.scene, previous, this.time);
+    // Editor-authored sound cues at the first frame must not be silently lost.
+    if (this.startCuesPending && previous === 0) {
+      cues.unshift(...this.scene.cues.filter(c => c.time === 0));
+      this.startCuesPending = false;
+    }
     const ended = this.time >= this.scene.duration;
     if (ended) this.playing = false;
     return {frame:sampleCinematic(this.scene,this.time),cues,ended};
