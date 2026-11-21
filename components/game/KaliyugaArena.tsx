@@ -303,6 +303,7 @@ import {
   getChamberGeometry,
   getOrStartArenaVideo,
   prewarmArenaVideo,
+  releaseArenaVideos,
   renderParallaxAbyss,
   renderIsometricChamberPlatform,
   updateAndRenderPressureTraps,
@@ -533,12 +534,15 @@ export default function KaliyugaArena() {
   const bloodDemonArtsRef = useRef<BloodDemonArtPool>(createBloodDemonArtPool());
   const enemyVariantCounterRef = useRef<number>(0);
   const chamberLoadSeqRef = useRef<number>(0);
+  const lastRigChamberRef = useRef<number>(-1);
   const gamepadPrevButtonsRef = useRef<boolean[]>([]);
   const [preloadProgress, setPreloadProgress] = useState<number>(18);
   const [cameraPreset, setCameraPreset] = useState<HadesCameraPreset>('dynamic_action');
   const [enemyRenderMode, setEnemyRenderMode] = useState<EnemyRenderMode>('all_3d');
   const [activeHubDialogueNpc, setActiveHubDialogueNpc] = useState<HubNpcId | null>(null);
   const [chamberLoadingLabel, setChamberLoadingLabel] = useState<string | null>(null);
+  const [chamberLoadError, setChamberLoadError] = useState<string | null>(null);
+  const [chamberLoadPercent, setChamberLoadPercent] = useState(0);
   const [isDebugMode] = useState<boolean>(() =>
     typeof window !== 'undefined'
       ? new URLSearchParams(window.location.search).get('debug') === '1'
@@ -1158,20 +1162,13 @@ export default function KaliyugaArena() {
       ensure3DRenderersBooted();
     }
 
-    let ticks = 0;
+    // Title screen may start instantly, but gameplay assets never display a fake timed 100%.
+    // The proper per-chamber gate separately checks hero, enemies, boss and the painted arena.
     const preloadTimer = window.setInterval(() => {
-      ticks += 1;
       const r3d = rudra3dRef.current;
-      const rProg =
-        r3d && (r3d.isReady || r3d.loadProgress >= 1)
-          ? 100
-          : Math.min(95, Math.round((r3d?.loadProgress || 0.45) * 100));
-      const timeFloor = Math.min(100, 32 + ticks * 16);
-      const combined = Math.min(100, Math.max(timeFloor, rProg));
-      setPreloadProgress(combined);
-      if (combined >= 100) {
-        window.clearInterval(preloadTimer);
-      }
+      const progress = r3d ? (r3d.isReady ? 100 : Math.min(95, Math.round(r3d.loadProgress * 100))) : 100;
+      setPreloadProgress(progress);
+      if (progress >= 100) window.clearInterval(preloadTimer);
     }, 150);
 
     // Load persisted Ashen Karma & Homa Fire Shrine upgrade ranks from localStorage
@@ -1216,9 +1213,12 @@ export default function KaliyugaArena() {
       rudra3dRef.current?.dispose();
       enemy3dRef.current?.dispose();
       boss3dRef.current?.dispose();
+      susanoo3dRef.current?.dispose();
+      releaseArenaVideos();
       webglDemonSlayerVfxRef.current?.dispose();
       rudra3dRef.current = null;
       boss3dRef.current = null;
+      susanoo3dRef.current = null;
       enemy3dRef.current = null;
       webglDemonSlayerVfxRef.current = null;
     };
@@ -2058,13 +2058,105 @@ export default function KaliyugaArena() {
     [spawnFlipbookVfx, spawnFloatingText, spawnParticles, spawnShockwave]
   );
 
+  // Shared gate for ALL chamber transitions, not just the title-screen start.
+  // Crucially, a timeout is a *failure* and must never be treated as readiness.
+  const verifyChamberAssets = useCallback(async (chamberIndex: number) => {
+    const sim = simRef.current;
+    const seq = ++chamberLoadSeqRef.current;
+    const spec = CHAMBERS[chamberIndex];
+    if (!spec) return;
+    setChamberLoadingLabel(`CHAMBER ${spec.id} · ${spec.name.toUpperCase()}`);
+    setChamberLoadError(null);
+    setChamberLoadPercent(0);
+    sim.modalPaused = true;
+    const requirements: Array<() => Promise<boolean>> = [];
+    // Hero rig is mandatory: never reveal combat with Rudra still missing.
+    requirements.push(async () => {
+      const hero = rudra3dRef.current;
+      if (!hero) return false;
+      if (hero.isReady) return true;
+      const deadline = Date.now() + 20000;
+      while (Date.now() < deadline && seq === chamberLoadSeqRef.current) {
+        await new Promise<void>((resolve) => window.setTimeout(resolve, 120));
+        if (hero.isReady) return true;
+      }
+      return false;
+    });
+    const enemySlots = [
+      ...sim.enemies.filter((e) => !e.isBoss && e.type !== 'semi_boss_bloodforge')
+        .map((e) => ({ id: e.id, kind: e.type as RegularEnemy3DKind, wardenRigKey: e.wardenRigKey, trait: e.trait })),
+      ...spec.spawns.filter((e) => e.type !== 'dundubhi' && e.type !== 'vrikodara' && e.type !== 'semi_boss_bloodforge')
+        .map((e, i) => ({ id: 10000 + i, kind: e.type as RegularEnemy3DKind, wardenRigKey: e.wardenRigKey, trait: e.trait })),
+    ];
+    if (enemySlots.length) {
+      requirements.push(async () => Boolean(await enemy3dRef.current?.waitForChamberSlots(enemySlots, 20000)));
+    }
+    const bossKind = chamberIndex === 3 ? 'dundubhi'
+      : chamberIndex === 7 ? 'vrikodara'
+      : spec.spawns.some((e) => e.type === 'semi_boss_bloodforge') ? 'semi_boss' : null;
+    if (bossKind) {
+      requirements.push(async () => Boolean(await boss3dRef.current?.waitForBossReady(bossKind, 20000)));
+    }
+    // Paint and music should be available before combat, without blocking on optional voice clips.
+    if (spec.backgroundUrl) {
+      requirements.push(async () => {
+        const img = bgImagesRef.current.get(spec.backgroundUrl) || new Image();
+        if (!img.src) img.src = spec.backgroundUrl;
+        bgImagesRef.current.set(spec.backgroundUrl, img);
+        if (img.complete) return img.naturalWidth > 0;
+        return await new Promise<boolean>((resolve) => {
+          const timer = window.setTimeout(() => { cleanup(); resolve(false); }, 10000);
+          const success = () => { cleanup(); resolve(true); };
+          const failure = () => { cleanup(); resolve(false); };
+          const cleanup = () => {
+            window.clearTimeout(timer);
+            img.removeEventListener('load', success);
+            img.removeEventListener('error', failure);
+          };
+          img.addEventListener('load', success, { once: true });
+          img.addEventListener('error', failure, { once: true });
+        });
+      });
+    }
+    let completed = 0;
+    const results = await Promise.all(requirements.map(async (verify) => {
+      let result = false;
+      try { result = await verify(); } catch { /* A missing asset must keep the gate closed. */ }
+      completed += 1;
+      if (seq === chamberLoadSeqRef.current) {
+        setChamberLoadPercent(Math.round((completed / Math.max(1, requirements.length)) * 100));
+      }
+      return result;
+    }));
+    if (seq !== chamberLoadSeqRef.current) return;
+    if (results.every(Boolean)) {
+      setChamberLoadingLabel(null);
+      setChamberLoadError(null);
+      // React's modal-pausing effect owns the final pause state, including boss intro cutscenes.
+    } else {
+      setChamberLoadError('One or more chamber assets could not load. Retry to avoid invisible or placeholder enemies.');
+    }
+  }, []);
+
   // Load a specific chamber (0-indexed: 0..11)
   const loadChamber = useCallback(
-    (index: number, resetFullRun: boolean = false) => {
+    (index: number, resetFullRun: boolean = false, skipAssetGate = false) => {
       const sim = simRef.current;
       const clampedIdx = Math.max(0, Math.min(CHAMBERS.length - 1, index));
       const spec = CHAMBERS[clampedIdx];
       const isTitleMode = sim.state === 'title';
+      // Release old chamber's live rigs before loading the next wave of distinct models.
+      // This prevents scenes from retaining every boss and enemy encountered in Act I.
+      if (!isTitleMode && lastRigChamberRef.current >= 0 && lastRigChamberRef.current !== clampedIdx) {
+        enemy3dRef.current?.dispose();
+        boss3dRef.current?.dispose();
+        enemy3dRef.current = new Enemy3DRenderer(256);
+        boss3dRef.current = new Boss3DRenderer(256);
+      }
+      if (!isTitleMode) lastRigChamberRef.current = clampedIdx;
+      // Animated arena MP4 streaming is retired during gameplay. Static paintings stay stable.
+      sim.videoBgEnabled = false;
+      releaseArenaVideos();
       // Flush stale 3D baked frame caches between chambers to prevent Chamber 4 Dundubhi memory buildup/lag
       enemy3dRef.current?.clearFrameCache();
       boss3dRef.current?.clearFrameCache();
@@ -2470,6 +2562,9 @@ export default function KaliyugaArena() {
         );
       }
 
+      if (!isTitleMode && !skipAssetGate) {
+        void verifyChamberAssets(clampedIdx);
+      }
       soundEngine.playGong('chamber');
       soundEngine.syncBgmState(
         sim.state === 'title' ? 'title' : 'playing',
@@ -2477,7 +2572,7 @@ export default function KaliyugaArena() {
         spec.isBossChamber
       );
     },
-    [createEnemyFromSpec]
+    [createEnemyFromSpec, verifyChamberAssets]
   );
 
   // Enter walkable Vaitarani Simple Ash Hub (spawns Rudra by Savitri's Boat with 3D Lotus_Empress Savitri & interactive stations)
@@ -2498,7 +2593,10 @@ export default function KaliyugaArena() {
     setSliceStage('vaitarani_hub');
     sliceStageRef.current = 'vaitarani_hub';
 
-    loadChamber(0, true);
+    loadChamber(0, true, true);
+    chamberLoadSeqRef.current += 1;
+    setChamberLoadingLabel(null);
+    setChamberLoadError(null);
     sim.enemies = [];
     sim.pendingSpawns = [];
     sim.summoningRifts = [];
@@ -2574,45 +2672,7 @@ export default function KaliyugaArena() {
       loadChamber(clampedTargetIdx, true);
       soundEngine.startMusic();
 
-      // Fast Pre-Chamber Asset Loader: await 3D enemy/boss rigs briefly so models appear cleanly with zero fallback silhouettes
-      const seqId = ++chamberLoadSeqRef.current;
-      const enemySlots = sim.enemies
-        .filter((e) => !e.isBoss && e.type !== 'semi_boss_bloodforge')
-        .map((e) => ({
-          id: e.id,
-          kind: e.type as RegularEnemy3DKind,
-          wardenRigKey: e.wardenRigKey,
-          trait: e.trait,
-        }));
-      const hasSemiBoss = sim.enemies.some((e) => e.type === 'semi_boss_bloodforge');
-      const bossKind: 'dundubhi' | 'vrikodara' | 'semi_boss' | null =
-        clampedTargetIdx === 3
-          ? 'dundubhi'
-          : clampedTargetIdx === CHAMBERS.length - 1
-          ? 'vrikodara'
-          : hasSemiBoss
-          ? 'semi_boss'
-          : null;
-
-      if (enemySlots.length > 0 || bossKind !== null) {
-        const label = `CHAMBER ${targetSpec.id} · ${targetSpec.name.toUpperCase()}`;
-        setChamberLoadingLabel(label);
-        sim.modalPaused = true;
-        const waits: Promise<unknown>[] = [];
-        if (enemySlots.length > 0 && enemy3dRef.current) {
-          waits.push(enemy3dRef.current.waitForChamberSlots(enemySlots, 2400));
-        }
-        if (bossKind && boss3dRef.current) {
-          waits.push(boss3dRef.current.waitForBossReady(bossKind, 3000));
-        }
-        Promise.all(waits)
-          .catch(() => {})
-          .finally(() => {
-            if (chamberLoadSeqRef.current === seqId) {
-              setChamberLoadingLabel(null);
-            }
-          });
-      }
+      // Asset verification is now shared by loadChamber for every transition.
     },
     [ensure3DRenderersBooted, loadChamber]
   );
@@ -2766,14 +2826,6 @@ export default function KaliyugaArena() {
         ? Math.min(CHAMBERS.length - 1, rawStartCh - 1)
         : 0;
     const initialChamber = CHAMBERS[initialChIdx] || CHAMBERS[0];
-    const isDirectGameplay = Boolean(
-      startParams &&
-        (startParams.get('autostart') === '1' ||
-          startParams.get('autostart') === 'true' ||
-          startParams.get('hub') === '1' ||
-          startParams.get('hub') === 'true' ||
-          (Number.isFinite(rawStartCh) && rawStartCh >= 1))
-    );
     if (initialChamber) {
       loadBgWithRetry(initialChamber.backgroundUrl);
       if (initialChamber.unlockedBackgroundUrl) {
@@ -2782,16 +2834,7 @@ export default function KaliyugaArena() {
       if (initialChamber.phase2BackgroundUrl) {
         loadBgWithRetry(initialChamber.phase2BackgroundUrl);
       }
-      if (initialChamber.videoUrl) {
-        if (isDirectGameplay) {
-          getOrStartArenaVideo(initialChamber.videoUrl, false);
-        } else {
-          prewarmArenaVideo(initialChamber.videoUrl);
-        }
-      }
-      if (initialChamber.phase2VideoUrl) {
-        prewarmArenaVideo(initialChamber.phase2VideoUrl);
-      }
+      // Do not preload any 1080p arena MP4 (title and narrative cutscenes are unaffected).
     }
     loadBgWithRetry(GAME_ASSETS.titleBackdrop);
 
@@ -4232,6 +4275,7 @@ export default function KaliyugaArena() {
     sim.hitstopTimer = 0.07;
     sim.cameraShakeTrauma = Math.min(1, sim.cameraShakeTrauma + 0.58);
     soundEngine.playHit('execute');
+    soundEngine.playVoiceBark('rudra_execute', { priority: 'high', cooldownMs: 7000 });
     spawnShockwave(target.x, target.y, 145, '#ffd86b', 0.38);
     spawnParticles(target.x, target.y - 26, 28, '#ffb833', 220, 4.8, 90);
     spawnParticles(target.x, target.y - 26, 18, '#ff2a4b', 195, 4.4, 80);
@@ -4538,6 +4582,7 @@ export default function KaliyugaArena() {
     gainAstraEnergy(ASTRA_ENERGY_GAINS.EXECUTION);
 
     soundEngine.playHit('execute');
+    soundEngine.playVoiceBark('rudra_execute', { priority: 'high', cooldownMs: 7000 });
     spawnShockwave(brokenEnemy.x, brokenEnemy.y, 290, '#ff4d3b', 0.48);
     spawnSunHaloRing(bloodDemonArtsRef.current, {
       x: brokenEnemy.x,
@@ -5001,6 +5046,8 @@ export default function KaliyugaArena() {
     }
 
     soundEngine.playSwing('heavy', p.stance);
+    soundEngine.playParashuHeavy();
+    soundEngine.playVoiceBark('rudra_heavy', { cooldownMs: 8000 });
     soundEngine.playBreathingStyle(primaryHeavyPalette);
     let hitAny = false;
 
@@ -5076,6 +5123,7 @@ export default function KaliyugaArena() {
             e.vacuumActiveTimer = 0;
             e.activeBossMoveId = undefined;
             spawnShockwave(e.x, e.y, 155, '#ffd86b', 0.38);
+            soundEngine.playVoiceBark('vrikodara_stagger', { priority: 'high', cooldownMs: 6500 });
             spawnFloatingText(e.x, e.y - 96, interruptRes.calloutText, '#ffd86b', 1.18);
           }
         }
@@ -6041,6 +6089,7 @@ export default function KaliyugaArena() {
 
     // Split Dash into crisp distance (160ms duration) + strict i-frame window (130ms)
     p.action = 'dodge';
+    soundEngine.playVoiceBark('rudra_dash', { cooldownMs: 9500 });
     p.actionDuration = DASH_DURATION_SEC;
     p.actionTimer = DASH_DURATION_SEC;
     p.invulnTimer = Math.max(p.invulnTimer, DASH_IFRAME_SEC);
@@ -7940,6 +7989,8 @@ export default function KaliyugaArena() {
               recordQuestEvent('vanquish_wardens', 1);
             }
             soundEngine.playHit('heavy');
+            if (e.type === 'dundubhi') soundEngine.playVoiceBark('dundubhi_death', { priority: 'high' });
+            if (e.type === 'vrikodara') soundEngine.playVoiceBark('vrikodara_death', { priority: 'high' });
 
             // Trigger dramatic Hades Final-Blow Slow-Motion if Boss or last foe in chamber!
             const remainingAlive = sim.enemies.filter((foe) => foe.aiState !== 'ko' && foe.hp > 0).length;
@@ -8028,6 +8079,7 @@ export default function KaliyugaArena() {
               }
               spawnShockwave(e.x, e.y, 240, '#a855f7', 0.48);
               triggerImpactInversionFlash(bloodDemonArtsRef.current, e.x, e.y - 38, 0.06, '#c026d3');
+              const bossPhasePalette: DemonSlayerVfxPalette = e.type === 'vrikodara' ? 'void' : 'bronze';
               // Purple-Crimson Blood Demon Art Cage + Thorny Floor Vines (no cyan Akaza compass on Dundubhi!)
               webglDemonSlayerVfxRef.current?.spawnBloodThreadCage({
                 x: e.x,
@@ -8530,6 +8582,7 @@ export default function KaliyugaArena() {
 
                 // Step 24: Distinct audio telegraph cues for Vrikodara's 3 signature phase moves!
                 if (e.type === 'vrikodara') {
+                  if (sigMove.id === 'vaitarani_slag_eruption') soundEngine.playVoiceBark('vrikodara_slag', { cooldownMs: 9000 });
                   if (sigMove.id === 'agni_furnace_inhale') {
                     soundEngine.playVrikodaraVacuumTelegraph();
                   } else if (sigMove.id === 'vaitarani_slag_eruption') {
@@ -8538,6 +8591,7 @@ export default function KaliyugaArena() {
                     soundEngine.playVrikodaraEclipseSweepTelegraph();
                   }
                 } else {
+                  if (e.attackKind === 'corridor') soundEngine.playVoiceBark('dundubhi_charge', { cooldownMs: 7500 });
                   soundEngine.playTelegraph();
                 }
               }
@@ -8736,7 +8790,7 @@ export default function KaliyugaArena() {
               const enemyTier = classifyEnemyVfxTier({
                 type: e.type,
                 isBoss: e.isBoss,
-                isSemiBoss: e.isSemiBoss,
+                isSemiBoss: e.type === 'semi_boss_bloodforge',
               });
               const enemyBudget = getEnemySlashVfxBudget(enemyTier, e.telegraphRadius, e.attackKind);
               const enemyVfxPal: DemonSlayerVfxPalette =
@@ -9893,13 +9947,6 @@ export default function KaliyugaArena() {
         : (chamberSpec.braziers[0]?.x ?? 0.5) * worldW;
 
       // Step 2: Render Full-Color 1080p Animated MP4 Arena (or Painted Fallback), Exit Gate Archways & Surface Scars
-      const resolvedChamberVideoUrl = isRenderHubMode
-        ? GAME_ASSETS.arenaVideos.ashHubRiver
-        : activeBoss && activeBoss.phase >= 2 && chamberSpec.phase2VideoUrl
-        ? chamberSpec.phase2VideoUrl
-        : isChamberCleared && chamberSpec.unlockedVideoUrl
-        ? chamberSpec.unlockedVideoUrl
-        : chamberSpec.videoUrl;
       renderIsometricChamberPlatform(
         ctx,
         worldW,
@@ -9921,8 +9968,8 @@ export default function KaliyugaArena() {
           void impactsAsset;
           void brazierFlameAsset;
         },
-        resolvedChamberVideoUrl,
-        !sim.videoBgEnabled
+        undefined,
+        true
       );
 
       // Step 2.2: Interactive Hand-Painted 4-Stage Floor Traps (zhy8c6zhy8c6zhy8_5d2df495.png)
@@ -12922,17 +12969,13 @@ export default function KaliyugaArena() {
                   </button>
                 </div>
                 <div className="flex items-center gap-1.5 pt-2 mt-2 border-t border-[#d4a548]/25">
-                  <button
-                    type="button"
-                    data-testid="toggle-video-bg-btn"
-                    onClick={() => {
-                      simRef.current.videoBgEnabled = !simRef.current.videoBgEnabled;
-                      setControlsOpen(false);
-                    }}
-                    className="flex-1 py-1.5 px-2 border border-[#d4a548]/45 text-[10px] font-mono-num text-[#f5ebd6] bg-[#141116] hover:border-[#d4a548] cursor-pointer"
+                  <div
+                    data-testid="static-arena-bg-mode"
+                    className="flex-1 py-1.5 px-2 border border-[#d4a548]/45 text-[10px] font-mono-num text-[#f5ebd6] bg-[#141116]"
+                    title="Painted chamber backgrounds stay consistent throughout combat; HD video is reserved for cutscenes"
                   >
-                    {(hud.videoBgEnabled ?? true) ? 'HD VIDEO BG: ON' : 'HD VIDEO BG: OFF'}
-                  </button>
+                    PAINTED ARENAS · STABLE
+                  </div>
                   {isDebugMode && (
                     <button
                       type="button"
@@ -13121,8 +13164,17 @@ export default function KaliyugaArena() {
               {chamberLoadingLabel}
             </div>
             <div className="w-64 h-1.5 bg-[#1f161a] border border-[#d4a548]/40 mx-auto overflow-hidden">
-              <div className="h-full w-2/3 bg-gradient-to-r from-[#b81d2a] via-[#d4a548] to-[#f5ebd6] animate-pulse" />
+              <div className="h-full bg-gradient-to-r from-[#b81d2a] via-[#d4a548] to-[#f5ebd6] transition-all duration-300" style={{ width: `${chamberLoadPercent}%` }} />
             </div>
+            {chamberLoadError ? (
+              <div role="alert" className="mt-4 text-sm text-[#ffb4a2]">
+                <p>{chamberLoadError}</p>
+                <button type="button" onClick={() => void verifyChamberAssets(simRef.current.chamberIndex)} className="mt-3 border border-[#d4a548] px-5 py-2 text-[#f5ebd6]">RETRY ASSETS</button>
+                <button type="button" onClick={() => enterVaitaraniHub()} className="mt-3 ml-2 border border-[#7e7772] px-5 py-2 text-[#f5ebd6]">RETURN TO HUB</button>
+              </div>
+            ) : (
+              <p className="mt-3 text-xs text-[#d4a548]">Verifying character rigs and arena painting…</p>
+            )}
           </div>
         </div>
       )}

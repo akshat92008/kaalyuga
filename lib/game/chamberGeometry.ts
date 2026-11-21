@@ -463,6 +463,18 @@ export function getOrStartArenaVideo(videoUrl: string | undefined, paused: boole
   return video;
 }
 
+/** Stop decoder activity and release MP4 buffers when gameplay uses static paintings. */
+export function releaseArenaVideos(): void {
+  for (const video of arenaVideoPool.values()) {
+    video.pause();
+    video.removeAttribute('src');
+    video.load();
+  }
+  arenaVideoPool.clear();
+  arenaVideoPlayPending.clear();
+  currentPlayingVideoUrl = null;
+}
+
 // Render Seamless Vast 2.5D Hand-Painted Isometric Sanctuary + HD Animated Video Arena + Surface Craters + Exit Gates
 export function renderIsometricChamberPlatform(
   ctx: CanvasRenderingContext2D,

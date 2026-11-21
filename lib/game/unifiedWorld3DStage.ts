@@ -414,7 +414,7 @@ interface EnemySlotTemplate {
   generateFbxUrl: string;
   textureFbxUrl: string;
   diffuseUrl: string;
-  weaponKind: 'minotaur_axe' | 'trident_axe' | 'crescent_reaver' | 'none';
+  weaponKind: 'minotaur_axe' | 'trident_axe' | 'crescent_reaver' | 'longbow' | 'dharma_chakram' | 'none';
   leftBucklerKind?: 'iron_buckler' | 'none';
   animUrls: Record<Enemy3DAnimState, string>;
   rimColor: number;
@@ -932,7 +932,9 @@ export class UnifiedWorld3DStage {
         return matched;
       };
 
-      if (slot.weaponKind !== 'none') {
+      // The shared FBX weapon library only contains these three melee props.
+      // Longbow and dharma-chakram archetypes use their own rig / VFX pipeline.
+      if (slot.weaponKind === 'minotaur_axe' || slot.weaponKind === 'trident_axe' || slot.weaponKind === 'crescent_reaver') {
         const rightHand = findBone(['mixamorigRightHand', 'RightHand']);
         const wepTemplate = await this.getSharedWeaponTemplate(slot.weaponKind);
         if (rightHand && wepTemplate) {

@@ -25,7 +25,8 @@ export function resolveAtomicEnemyAnimState(
   if (input.isPostureBroken) return 'hurt';
   if (input.aiState === 'attack') return 'attack';
   if (input.aiState === 'windup') return 'windup';
-  if (input.isHitFlash && input.aiState !== 'chase') return 'hurt';
+  // Light hits are a shader flash only: never change the actual animation state.
+  // Posture breaks, parries (handled by gameplay state transitions), and death may interrupt.
   if (input.aiState === 'chase' || input.speed > 12) return 'chase';
   return 'idle';
 }
@@ -49,8 +50,8 @@ export interface EnemyRecoveryWatchdogResult {
 
 /**
  * Hard Enemy AI Freeze Watchdog:
- * Guarantees NO enemy or boss can ever stall in `recover`, `idle`, or `postureBroken`
- * for minutes. Strictly caps recovery timers (<= 2.6s regular, <= 3.4s boss) and
+ * Prevents enemies stalling in `recover`, `idle`, or `postureBroken`.
+ * Caps recovery timers (<= 2.2s regular, <= 2.5s boss) and
  * auto-recovers any stalled enemy back into active `chase`.
  */
 export function stepEnemyRecoveryWatchdog(
@@ -66,8 +67,8 @@ export function stepEnemyRecoveryWatchdog(
     };
   }
 
-  const maxRecoverSec = input.isBoss ? 3.4 : 2.6;
-  const maxFreezeWatchdogSec = input.isBoss ? 4.0 : 3.2;
+  const maxRecoverSec = input.isBoss ? 2.5 : 2.2;
+  const maxFreezeWatchdogSec = input.isBoss ? 3.0 : 2.7;
 
   const clampedPosture = Math.min(maxRecoverSec, Math.max(0, input.postureBrokenTimer));
   let nextAiTimer = Number.isFinite(input.aiTimer) ? input.aiTimer : 0;

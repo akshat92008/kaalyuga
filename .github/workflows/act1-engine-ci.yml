@@ -1,0 +1,54 @@
+name: Act I engine quality gate
+on:
+  pull_request:
+    paths:
+      - "components/**"
+      - "lib/**"
+      - "app/**"
+      - "scripts/**"
+      - "package.json"
+      - "tsconfig.json"
+      - ".github/workflows/act1-engine-ci.yml"
+  push:
+    branches:
+      - "fix/act1-loading-susanoo-stability-20261121"
+concurrency:
+  group: act1-engine-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  engine-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Sparse checkout application code (skip multi-GB raw assets)
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            .github
+            app
+            components
+            lib
+            hooks
+            engine
+            scripts
+            package.json
+            tsconfig.json
+            next-env.d.ts
+            next.config.ts
+            postcss.config.mjs
+            eslint.config.mjs
+            .eslintrc.json
+            vite.config.ts
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install dependencies
+        run: npm install --ignore-scripts --no-fund --no-audit
+      - name: TypeScript
+        run: npx tsc --noEmit --incremental false
+      - name: Existing engine regression tests
+        run: npx tsx --test lib/game/part1Fixes.test.ts lib/game/act1AaaPolish.test.ts lib/game/p1RenderingAndRigging.test.ts lib/game/p2ArchitectureAndHub.test.ts lib/game/optimizedAssetPipeline.test.ts lib/game/audioWiring.test.ts
+      - name: Build Next.js
+        run: npm run build
