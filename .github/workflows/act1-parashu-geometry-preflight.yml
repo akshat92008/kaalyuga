@@ -22,7 +22,7 @@ jobs:
       - name: Install open-source Blender
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y blender python3-numpy
+          sudo apt-get install -y blender python3-numpy libegl1 libgl1-mesa-dri
       - name: Check Python script
         run: python3 -m py_compile scripts/act1-parashu-geometry-preflight.py
       - name: Inspect real Parashu source vertices and render a head marker preview
