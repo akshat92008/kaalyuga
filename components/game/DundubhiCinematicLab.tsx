@@ -77,6 +77,34 @@ function drawDust(ctx: CanvasRenderingContext2D, t: number) {
     ctx.fill();
   }
 }
+/** A restrained contact shadow and amber bounce light ground the FBX feet in
+ * the actual painted Mandapa rather than letting the sprite float over video. */
+function drawBossGrounding(ctx: CanvasRenderingContext2D, t: number) {
+  const emergence = smoothstep(0.9, 2.35, t);
+  if (emergence <= 0) return;
+  ctx.save();
+  ctx.translate(480, 441);
+  ctx.scale(1, 0.29);
+  const shadow = ctx.createRadialGradient(0, 0, 9, 0, 0, 132);
+  shadow.addColorStop(0, 'rgba(7, 3, 2, 0.72)');
+  shadow.addColorStop(0.57, 'rgba(14, 5, 4, 0.45)');
+  shadow.addColorStop(1, 'rgba(14, 5, 4, 0)');
+  ctx.fillStyle = shadow;
+  ctx.globalAlpha = emergence;
+  ctx.fillRect(-145, -145, 290, 290);
+  ctx.restore();
+
+  // A small lantern-colored pool of reflected light, especially on the roar.
+  const bounce = emergence * (0.10 + smoothstep(3.5, 5.3, t) * 0.10);
+  const glow = ctx.createRadialGradient(480, 426, 14, 480, 426, 127);
+  glow.addColorStop(0, 'rgba(241, 109, 37, ' + bounce.toFixed(3) + ')');
+  glow.addColorStop(1, 'rgba(241, 109, 37, 0)');
+  ctx.save();
+  ctx.fillStyle = glow;
+  ctx.fillRect(348, 295, 264, 264);
+  ctx.restore();
+}
+
 function drawShockwave(ctx: CanvasRenderingContext2D, t: number) {
   const pulse = smoothstep(5.13, 5.32, t) * (1 - smoothstep(5.32, 6.25, t));
   if (pulse <= 0) return;
@@ -119,6 +147,7 @@ function makeBossParams(t: number, dt: number): Boss3DUpdateParams {
 export default function DundubhiCinematicLab() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const arenaLayerRef = useRef<HTMLDivElement>(null);
   const bossRef = useRef<Boss3DRenderer | null>(null);
   const portraitRef = useRef<HTMLImageElement | null>(null);
   const playingRef = useRef(false);
@@ -234,6 +263,18 @@ export default function DundubhiCinematicLab() {
         const shakeX = impact.x;
         const shakeY = impact.y;
 
+        // The underlying painted MP4 and the animated boss MUST share the
+        // same framing. Moving only the FBX sprite creates a cardboard-cutout
+        // effect and breaks contact alignment with the arena.
+        const arenaLayer = arenaLayerRef.current;
+        if (arenaLayer) {
+          arenaLayer.style.transformOrigin = '50% 56.4815%'; // x=480, y=305
+          arenaLayer.style.transform =
+            'translate(' + (((cameraFrame?.offsetX ?? 0) + shakeX) / W * 100).toFixed(4) +
+            '%, ' + (((cameraFrame?.offsetY ?? 0) + shakeY) / H * 100).toFixed(4) +
+            '%) scale(' + zoom.toFixed(5) + ')';
+        }
+
         ctx.save();
         // Dolly around Dundubhi's upper torso instead of the floor line.
         // The old 435px pivot pushed his head above the matte at impact zoom.
@@ -242,6 +283,7 @@ export default function DundubhiCinematicLab() {
         ctx.scale(zoom, zoom);
         ctx.translate(-W / 2, -305);
         ctx.globalAlpha = opacity;
+        drawBossGrounding(ctx, t);
         if (boss && modelReadyRef.current) {
           if (now - lastBossRender > 32) {
             lastBossRender = now;
@@ -263,9 +305,11 @@ export default function DundubhiCinematicLab() {
             (portraitRef.current.naturalWidth || 0) > 0) {
           ctx.drawImage(portraitRef.current, 330, 108, 300, 300);
         }
+        // Shockwave is anchored to Dundubhi's feet and moves with the same
+        // camera as the arena and animated body; screen overlays stay fixed.
+        drawShockwave(ctx, t);
         ctx.restore();
         drawDust(ctx, t);
-        drawShockwave(ctx, t);
         drawVignette(ctx, t);
         drawCinematicText(ctx, t);
         setSeconds(Math.floor(t * 10) / 10);
@@ -344,20 +388,27 @@ export default function DundubhiCinematicLab() {
 
         <div className="relative aspect-video w-full overflow-hidden rounded-lg border border-[#563321] bg-[#110a0b] shadow-[0_18px_70px_rgba(0,0,0,0.75)]">
           <div
-            className="absolute inset-0 bg-cover bg-center"
-            style={{ backgroundImage: 'url(' + GAME_ASSETS.chambers.dundubhiMandapa + ')' }}
-          />
-          <video
-            ref={videoRef}
-            src={GAME_ASSETS.arenaVideos.dundubhiMandapa}
-            poster={GAME_ASSETS.chambers.dundubhiMandapa}
-            className="absolute inset-0 h-full w-full object-cover"
-            muted
-            loop
-            playsInline
-            preload="metadata"
-            aria-hidden="true"
-          />
+            ref={arenaLayerRef}
+            data-testid="dundubhi-camera-arena-layer"
+            className="pointer-events-none absolute inset-0"
+            style={{ transformOrigin: '50% 56.4815%' }}
+          >
+            <div
+              className="absolute inset-0 bg-cover bg-center"
+              style={{ backgroundImage: 'url(' + GAME_ASSETS.chambers.dundubhiMandapa + ')' }}
+            />
+            <video
+              ref={videoRef}
+              src={GAME_ASSETS.arenaVideos.dundubhiMandapa}
+              poster={GAME_ASSETS.chambers.dundubhiMandapa}
+              className="absolute inset-0 h-full w-full object-cover"
+              muted
+              loop
+              playsInline
+              preload="metadata"
+              aria-hidden="true"
+            />
+          </div>
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/40 via-[#120703]/20 to-black/50" />
           <canvas
             ref={canvasRef}
