@@ -22,7 +22,6 @@ import {
 import { loadFbxCached, simplifyBufferGeometry } from './meshSimplifier';
 import {
   computeCameraFootAnchorRatio,
-  computeTrimmedCleaveClock,
 } from './kalaBhairavaSusanoo';
 
 export type RudraAnimState =
@@ -193,7 +192,7 @@ export function computeRudraBakedFrameTime(
   return {
     frame,
     timeSec: isAttack
-      ? computeTrimmedCleaveClock(phase, 0.14, 0.88) * duration
+      ? (0.14 + phase * (0.88 - 0.14)) * duration
       : (frame / count) * duration,
   };
 }
