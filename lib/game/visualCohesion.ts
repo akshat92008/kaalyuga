@@ -576,7 +576,8 @@ export function renderWeaponPoseTrail(
   colors: { coreColor: string; plasmaColor: string; outerGlowColor: string },
   isHeavy: boolean
 ): boolean {
-  const bands = buildWeaponPoseTrailBands(samples, isHeavy ? 21 : 14);
+  // Round abrupt sampled corners while retaining the true blade endpoints.
+  const bands = buildWeaponPoseTrailBands(samples, isHeavy ? 21 : 14, true);
   if (bands.length < 2 || alpha <= 0.01) return false;
   ctx.save();
   ctx.globalCompositeOperation = 'source-over';
