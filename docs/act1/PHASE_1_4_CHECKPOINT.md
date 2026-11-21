@@ -87,6 +87,32 @@ reported explicitly.
 
 Status: implementation work in progress; **not** 100% complete or AAA certified.
 
+## Latest verified status — 22 November 2026
+
+**Verified branch commit:** `3429336d0d06784406f374ba14c28367f4f762f1`  
+**GitHub Actions evidence:** https://github.com/akshat92008/kaalyuga/actions/runs/44940706905
+
+The latest full CI run completed successfully with both jobs green:
+
+- **Full TypeScript check and production Next.js build:** passed.
+- **Gameplay Chromium run with real WebGL software rendering:** passed. Opened the title, loaded the playable room, served the actual axe/rig/animation FBX assets, and executed the game input pipeline.
+- **Light and heavy Parashu, Agni, Vayu, Vajra, all three Astras, Varuna water, and transformed Guardian:** contact events and relevant screenshots recorded.
+- **Downward Crush, Spin 360 Cleave, Impaling Lunge:** once-only damage contact and camera recovery confirmed. Escape during execution camera did not cancel damage or lock input.
+- **Dundubhi:** entrance camera stays paused while narrative dialogue is visible, resumes after ENGAGE, skips safely; separate 16:9 cinematic synchronized arena+boss zoom, video restored after skip, replay works.
+- **Visual presence:** all **12** pixel-based color signature checks passed for the expected element within the combat focus area (this verifies liveness, not visual artistry).
+- **Browser evidence:** 22 successful frame captures (including JPEG fallback for stalled PNG readback); no uncaught errors and no missing captures.
+- **Blender:** imported the actual Rudra FBX rig and ten clips, exported a skinned animated GLB, rendered a preview and passed output verification.
+
+### Release gates that STILL require human/gameplay acceptance
+
+1. Frame-by-frame observation of the actual blade/head-to-effect alignment; the live sprite renderer uses approximate world-space contact positions, not a continuously sampled Parashu bone-tip socket.
+2. True authored three-clip execution choreography and matching enemy reactions. The current system reuses existing FBX actions with authored contact beats/camera/VFX; code-level differences alone do not make a bespoke cinematic execution.
+3. Visual direction review: Agni still has significant ring-like silhouette, water can read as a blue loop, characters appear small at some standard gameplay zooms, and fighting effects can obscure animation posing.
+4. Measured frame-time / thermal / memory testing on the target **MacBook M3 Air** in extended fights with overlapping boss effects. Software WebGL CI proves render correctness, not 60 FPS on target hardware.
+5. A complete human-played Act I sequence across arena changes, boss phases, transitions, Save/Load, and cutscenes.
+
+**Conclusion:** Phase 1–4 is functionally implemented and verified under the defined automated checks. It is **not yet accepted as 100% AAA-quality or performance-certified**. Do not merge the draft PR to main solely because CI is green.
+
 ## Verification evidence update — 21 November 2026
 
 A headless Chromium pass has actually exercised the game's start button and
