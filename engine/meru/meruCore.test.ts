@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createDundubhiScene, createVrikodaraScene, validateCinematic, sampleCinematic, cuesBetween, MeruTimelinePlayer} from './cinematicTimeline';
+import {createDundubhiScene, createVrikodaraScene, createBossPhaseScene, validateCinematic, sampleCinematic, cuesBetween, MeruTimelinePlayer} from './cinematicTimeline';
 import {MeruAdaptiveQuality,GRAPHICS_PRESETS} from './adaptiveQuality';
 import {beginPortalTransition,advancePortalTransition,portalPalette} from './portalDirector';
-import {shouldStartDundubhiIntro,shouldStartBossIntro,meruStorageKey,defaultBossIntro} from './runtimePolicy';
+import {shouldStartDundubhiIntro,shouldStartBossIntro,shouldStartBossPhase,meruStorageKey,meruSceneStorageKey,defaultBossIntro} from './runtimePolicy';
 
 test('canonical Dundubhi sequence validates and produces finite frames at every sample',()=>{
   const scene=createDundubhiScene();
@@ -152,4 +152,43 @@ test('editor-authored cue at zero fires once on play, not on pause or seek',()=>
   assert.deepEqual(p.tick(0.015).cues,[]);
   p.seek(0);p.pause();p.play();
   assert.deepEqual(p.tick(0.015).cues.map(c=>c.id),['opening-sound']);
+});
+
+test('all four phase reveals are validated, distinct, animated using the real rig and MP4 artwork',()=>{
+  for(const kind of ['dundubhi','vrikodara'] as const){
+    const intro=defaultBossIntro(kind);
+    for(const phase of [2,3] as const){
+      const scene=createBossPhaseScene(kind,phase);
+      assert.equal(scene.boss,kind);
+      assert.equal(scene.bossPhase,phase);
+      assert.equal(validateCinematic(scene).id,scene.id);
+      assert.ok(scene.duration>=3&&scene.duration<=5);
+      assert.notEqual(scene.id,intro.id);
+      assert.notEqual(meruSceneStorageKey(scene),meruStorageKey(kind));
+      assert.ok(scene.cues.some(c=>c.kind==='impact'));
+      assert.ok(scene.cues.some(c=>c.kind==='subtitle'));
+      assert.ok(scene.backgroundUrl.startsWith('/videos/'));
+      for(let t=0;t<=scene.duration;t+=0.05){
+        const f=sampleCinematic(scene,t);
+        assert.ok(f.camera.zoom>=0.2&&f.camera.zoom<=4);
+        assert.ok(f.actor.opacity>=0&&f.actor.opacity<=1);
+      }
+      assert.throws(()=>validateCinematic({...scene,bossPhase:4}),/boss phase/);
+      assert.throws(()=>validateCinematic({...scene,bossPhase:'2'}),/boss phase/);
+    }
+  }
+  const eclipse=createBossPhaseScene('vrikodara',2);
+  assert.equal(eclipse.backgroundUrl,'/videos/Furnaces_spewing_flames_and_slag_baeefd93_1080p.mp4');
+  assert.equal(eclipse.posterUrl,'/arenas/Gemini_Generated_Image_3ay6rk3ay6rk3ay6.png');
+});
+test('boss phase reveals never launch on title, wrong chamber, dead rig or debug phase',()=>{
+  const active={boss:'vrikodara' as const,phase:2 as const,chamberIndex:7,stage:'playing',hasBoss:true};
+  assert.equal(shouldStartBossPhase(active),true);
+  assert.equal(shouldStartBossPhase({...active,stage:'title'}),false);
+  assert.equal(shouldStartBossPhase({...active,hasBoss:false}),false);
+  assert.equal(shouldStartBossPhase({...active,chamberIndex:3}),false);
+  assert.equal(shouldStartBossPhase({...active,query:'?cinematic=0'}),false);
+  assert.equal(shouldStartBossPhase({...active,query:'?phase=2'}),false);
+  assert.equal(shouldStartBossPhase({...active,query:'?cleared=1'}),false);
+  assert.equal(meruSceneStorageKey(createDundubhiScene()),meruStorageKey('dundubhi'));
 });
