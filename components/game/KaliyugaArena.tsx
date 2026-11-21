@@ -6947,6 +6947,16 @@ export default function KaliyugaArena() {
       });
       if (bossChargeTrace.length > 96) bossChargeTrace.shift();
     };
+    const weaponPoseTrace: Array<{
+      mode: 'socket' | 'fallback';
+      action: 'light_attack' | 'heavy_unleash';
+      attackSerial: number;
+      chamber: number;
+      sampleCount: number;
+      headX: number | null;
+      headY: number | null;
+      atMs: number;
+    }> = [];
     const strikeCueTrace: Array<{
       kind: 'fired' | 'cancelled';
       action: Act1StrikeAction;
@@ -7017,6 +7027,7 @@ export default function KaliyugaArena() {
             graphicsTier: sim.graphicsSettings.tier,
             strikeCues: strikeCueTrace.slice(),
             bossChargeTrace: bossChargeTrace.slice(),
+            weaponPoseTrace: weaponPoseTrace.slice(),
             // Production-safe opt-in read-only combat evidence for the real
             // browser QA runner. No gameplay mutation or per-frame allocations.
             combat: {
@@ -11822,6 +11833,21 @@ export default function KaliyugaArena() {
                 // Fallback for an unloaded/unsupported rig, or the very first
                 // frame before there are two distinct blade-head samples.
                 renderWeaponBoneSlashRibbon(ctx, fallbackMesh, bladeVisual.alpha);
+              }
+              // QA only: capture the actual baked-frame projection versus
+              // fallback, so screenshots alone cannot conceal a missing rig.
+              if (perfTelemetryEnabled && bladeVisual.alpha >= 0.6) {
+                weaponPoseTrace.push({
+                  mode: renderedRealPose ? 'socket' : 'fallback',
+                  action: p.action as 'light_attack' | 'heavy_unleash',
+                  attackSerial: p.attackSerial,
+                  chamber: sim.chamberIndex + 1,
+                  sampleCount: poseTrail.samples.length,
+                  headX: bladeHead?.x ?? null,
+                  headY: bladeHead?.y ?? null,
+                  atMs: now,
+                });
+                if (weaponPoseTrace.length > 64) weaponPoseTrace.shift();
               }
             }
           }
