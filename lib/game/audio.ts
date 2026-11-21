@@ -535,7 +535,7 @@ class SoundEngine {
   ) {
     if (this.muted || typeof window === 'undefined') return;
     const nowMs = performance.now();
-    const lastMs = this.sfxLastPlayedAt.get(url) ?? 0;
+    const lastMs = this.sfxLastPlayedAt.get(url) ?? Number.NEGATIVE_INFINITY;
     if (nowMs - lastMs < minCooldownMs) return;
     this.sfxLastPlayedAt.set(url, nowMs);
 
@@ -624,7 +624,7 @@ class SoundEngine {
 
     const nowMs = performance.now();
     const cooldownMs = options?.cooldownMs ?? (key.includes('intro') || key.includes('death') ? 1500 : 3800);
-    const lastMs = this.voiceLastPlayedAt.get(key) ?? 0;
+    const lastMs = this.voiceLastPlayedAt.get(key) ?? Number.NEGATIVE_INFINITY;
     if (nowMs - lastMs < cooldownMs) return;
 
     const priority = options?.priority ?? (key.includes('intro') || key.includes('death') || key.includes('phase2') || key.includes('susanoo') ? 'high' : 'normal');
