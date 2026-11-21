@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { computeRudraBakedFrameTime } from './rudra3dRenderer';
+import { computeRudraBakedFrameTime, getRudraTransitionBlendSeconds } from './rudra3dRenderer';
 
 test('Rudra Parashu clip keeps full intentionally trimmed [14%, 88%] contact range', () => {
   const start = computeRudraBakedFrameTime(0, 1.6, 24, true, true);
@@ -26,4 +26,15 @@ test('Rudra idle/run loops, action clips clamp, and invalid clocks do not corrup
   const bad = computeRudraBakedFrameTime(NaN, NaN, NaN, true, true);
   assert.equal(bad.frame, 0);
   assert.ok(Number.isFinite(bad.timeSec));
+});
+
+
+test('Rudra transitions retain fast input response and never ghost critical hit/parry frames', () => {
+  assert.equal(getRudraTransitionBlendSeconds('attack1', 'attack1'), 0);
+  assert.equal(getRudraTransitionBlendSeconds('idle', 'hurt'), 0);
+  assert.equal(getRudraTransitionBlendSeconds('idle', 'block'), 0);
+  assert.equal(getRudraTransitionBlendSeconds('run', 'dash'), 0);
+  assert.ok(getRudraTransitionBlendSeconds('run', 'idle') > 0);
+  assert.ok(getRudraTransitionBlendSeconds('heavy', 'idle') < 0.08);
+  assert.ok(getRudraTransitionBlendSeconds('idle', 'attack1') < 0.05);
 });
