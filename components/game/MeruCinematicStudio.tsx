@@ -13,6 +13,7 @@ import {
   validateCinematic, NEUTRAL_CINEMATIC_POSE, type MeruCinematic, type BossCharacter,
 } from '@/engine/meru/cinematicTimeline';
 import {GRAPHICS_PRESETS,type GraphicsTier} from '@/engine/meru/adaptiveQuality';
+import {MeruFrameProbe,type MeruFrameReport} from '@/engine/meru/performanceProbe';
 import {makeMeruBossParams,paintMeruFrame} from '@/engine/meru/cinematicVisuals';
 import {meruSceneStorageKey,readBossPhase,readBossIntro,defaultBossIntro} from '@/engine/meru/runtimePolicy';
 
@@ -28,6 +29,9 @@ export default function MeruCinematicStudio(){
   const [hydrated,setHydrated]=useState(false);
   const [videoDecoded,setVideoDecoded]=useState(false);
   const [tier,setTier]=useState<GraphicsTier>('balanced');
+  const [frameReport,setFrameReport]=useState<MeruFrameReport|null>(null);
+  const frameProbeRef=useRef(new MeruFrameProbe());
+  const lastReportUiRef=useRef(0);
   const canvasRef=useRef<HTMLCanvasElement>(null);
   const videoRef=useRef<HTMLVideoElement>(null);
   const bossRef=useRef<Boss3DRenderer|null>(null);
@@ -67,6 +71,8 @@ export default function MeruCinematicStudio(){
     let disposed=false;
     readyRef.current=false;
     lastRef.current=0;
+    frameProbeRef.current.reset();
+    lastReportUiRef.current=0;
     let lastBossFrame=0;
     let slowRigTimer:number|null=null;
     setStatus('Initializing original '+scene.boss+' rig…');
@@ -99,7 +105,12 @@ export default function MeruCinematicStudio(){
     const loop=(now:number)=>{
       if(disposed)return;
       const dt=lastRef.current?clamp((now-lastRef.current)/1000,0,0.05):0.016;
+      if(lastRef.current)frameProbeRef.current.sample(now-lastRef.current);
       lastRef.current=now;
+      if(now-lastReportUiRef.current>1500){
+        lastReportUiRef.current=now;
+        setFrameReport(frameProbeRef.current.report());
+      }
       const result=timelineRef.current.tick(dt);
       const t=result.frame;
       if(timelineRef.current.playing || result.ended)setTime(t.time);
@@ -217,6 +228,52 @@ export default function MeruCinematicStudio(){
     const a=document.createElement('a');a.href=href;a.download=scene.id+'.meru.json';a.click();
     window.setTimeout(()=>URL.revokeObjectURL(href),500);
   };
+  /** A shareable 960×540 still combines the real MP4 frame (or still poster)
+   * with the same boss, ink FX, ash and subtitles drawn by the editor. */
+  const captureFrame=async()=>{
+    try{
+      const foreground=canvasRef.current;
+      if(!foreground)throw new Error('No cinematic frame yet');
+      const output=document.createElement('canvas');
+      output.width=W;output.height=H;
+      const context=output.getContext('2d');
+      if(!context)throw new Error('PNG capture canvas unavailable');
+      context.fillStyle='#090508';context.fillRect(0,0,W,H);
+      let painted=false;
+      const v=videoRef.current;
+      if(v && v.readyState>=2 && v.videoWidth>0){
+        try{context.drawImage(v,0,0,W,H);painted=true;}catch{/* Use poster. */}
+      }
+      if(!painted){
+        const image=new Image();image.src=scene.posterUrl;
+        try{await image.decode();if(image.naturalWidth>0)context.drawImage(image,0,0,W,H);}
+        catch{/* Black background remains visible rather than throwing. */}
+      }
+      context.drawImage(foreground,0,0,W,H);
+      context.save();
+      context.font='bold 13px Georgia,serif';context.fillStyle='#ffe7c6';
+      context.shadowColor='#030205';context.shadowBlur=9;
+      context.fillText('KALIYUGA  ·  '+scene.title,22,30);
+      context.restore();
+      const blob=await new Promise<Blob|null>(resolve=>output.toBlob(resolve,'image/png'));
+      if(!blob)throw new Error('Browser could not encode PNG frame');
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a');a.href=url;
+      a.download=scene.id+'-'+Math.round(time*1000)+'ms.png';a.click();
+      window.setTimeout(()=>URL.revokeObjectURL(url),500);
+    }catch(err){setError(err instanceof Error?err.message:'Cannot capture cinematic PNG');}
+  };
+  const exportFrameReport=()=>{
+    const payload={format:'meru-frame-pacing-v1',capturedAt:new Date().toISOString(),
+      sceneId:scene.id,graphicsTier:tier,renderer:isSoftwareWebGLRenderer()?'software-webgl':'hardware-or-unknown',
+      viewport:{width:window.innerWidth,height:window.innerHeight,dpr:window.devicePixelRatio},
+      note:'RAF intervals only; not direct GPU, thermal, memory, or 30-minute soak data',
+      frames:frameProbeRef.current.report()};
+    const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;a.download=scene.id+'-frame-pacing.json';a.click();
+    window.setTimeout(()=>URL.revokeObjectURL(url),500);
+  };
   const upload=async(file:File|undefined)=>{
     if(!file)return;
     if(file.size>1024*1024){setError('Scene JSON exceeds 1 MB');return;}
@@ -272,6 +329,7 @@ export default function MeruCinematicStudio(){
             </div>
           </div>
           <p role="status" className="text-xs text-[#bca183]">{status}</p>
+          <div role="status" aria-label="Live cinematic frame pacing" className="rounded border border-[#473729] bg-[#151014] px-3 py-2 text-xs text-[#d1ad8e]">Browser frame pacing: {frameReport?.estimatedFps??0} FPS · p95 {frameReport?.p95Ms??0} ms · {frameReport?.sampleCount??0} samples (RAF, not GPU telemetry)</div>
         </section>
         <aside className="space-y-4">
           <div className="rounded-lg border border-[#43352e] bg-[#171216] p-4 space-y-4">
@@ -371,6 +429,8 @@ export default function MeruCinematicStudio(){
               </select>
             </label>
             <button onClick={download} className="w-full rounded bg-[#8f5434] px-4 py-2 text-sm font-semibold">Export scene JSON</button>
+            <button onClick={()=>void captureFrame()} className="w-full rounded border border-[#9d7148] px-4 py-2 text-sm">Capture current frame PNG</button>
+            <button onClick={exportFrameReport} className="w-full rounded border border-[#665043] px-4 py-2 text-sm">Export local frame pacing report</button>
             <label className="block text-xs">Import scene JSON (max 1MB)
               <input type="file" accept=".json,.meru.json,application/json" onChange={e=>void upload(e.target.files?.[0])}
                 className="mt-2 block w-full text-xs text-[#cdb196]"/>
