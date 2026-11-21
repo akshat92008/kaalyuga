@@ -158,7 +158,9 @@ def preview_model(bpy: Any, imported_model: list[Any], out: Path) -> None:
     light_data.size = max(2, distance * 0.4)
 
     scene = bpy.context.scene
-    scene.render.engine = "CYCLES"\n    scene.cycles.samples = 8\n    scene.render.resolution_x = 960
+    scene.render.engine = "CYCLES"
+    scene.cycles.samples = 8
+    scene.render.resolution_x = 960
     scene.render.resolution_y = 540
     scene.render.resolution_percentage = 100
     scene.render.film_transparent = True
