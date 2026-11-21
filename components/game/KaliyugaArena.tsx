@@ -160,6 +160,7 @@ import {
   renderBattleScarsOnFloor,
   renderWeaponBoneSlashRibbon,
   renderWeaponPoseTrail,
+  renderParashuBladeTipGlint,
   renderWeaponTipStarburstGlint,
   spawnBattleScar,
   updateBattleScars,
@@ -196,6 +197,10 @@ import {
   type WeaponTrailSample,
 } from '@/lib/game/act1WeaponPoseTrail';
 import { getAct1ExecutionVisualPlan } from '@/lib/game/act1ExecutionVisualPlan';
+import {
+  chooseAct1BladeFxMode, getAct1FallbackBladeRadius,
+  getAct1ExecutionContactBudget, type Act1BladeFxMode,
+} from '@/lib/game/act1BladeAttachedFx';
 import {
   sampleAct1ExecutionVictimPose, sampleAct1ExecutionHeroRoot,
   resolveAct1FinisherContactAnchor,
@@ -234,7 +239,6 @@ import {
   renderBloodDemonArtWorldPass,
   spawnCycloneVortex,
   spawnExplodingBloodSeed,
-  spawnHinokamiSlashArc,
   spawnSunHaloRing,
   spawnTengenClashSparks,
   stepBloodDemonArtPool,
@@ -4733,128 +4737,39 @@ export default function KaliyugaArena() {
       enemyX: brokenEnemy.x, enemyY: brokenEnemy.y,
       bladeX: bladePoint?.x, bladeY: bladePoint?.y,
     });
+    // The *swing* is exclusively rendered by the cached 3D Parashu head
+    // trajectory (renderWeaponPoseTrail), not by an unrelated 132–206px
+    // circular WebGL ribbon projected somewhere beyond the axe. Contact
+    // can still spawn localized ink, sparks and a grounded impact pulse.
+    // This separation is essential at wide isometric gameplay framing:
+    // Demon-Slayer-style energy must originate from the actual weapon.
+    const impactBudget = getAct1ExecutionContactBudget(finisherSpec.variant);
+    const accentColor = finisherSpec.variant === 'impaling_lunge'
+      ? '#7dd8e9' : finisherSpec.variant === 'spin_360_cleave'
+      ? '#e99c55' : '#ff884b';
+    spawnShockwave(
+      brokenEnemy.x, brokenEnemy.y, impactBudget.groundRadius,
+      accentColor, finisherSpec.variant === 'spin_360_cleave' ? 0.28 : 0.23
+    );
+    webglDemonSlayerVfxRef.current?.spawnClashStarburst({
+      x: actualContact.x, y: actualContact.y,
+      scale: executionVisual.impactBurstScale,
+      palette: 'sun',
+      duration: finisherSpec.variant === 'impaling_lunge' ? 0.15 : 0.20,
+    });
+    webglDemonSlayerVfxRef.current?.spawnSparkBurst({
+      x: actualContact.x, y: actualContact.y,
+      count: executionVisual.sparkCount,
+      speed: finisherSpec.variant === 'spin_360_cleave' ? 380 : 315,
+      palette: 'sun',
+    });
+    triggerImpactInversionFlash(
+      bloodDemonArtsRef.current,
+      actualContact.x, actualContact.y, 0.025, accentColor
+    );
     if (executionVisual.useGroundedOverheadContact) {
-      // Downward Parashu Crush: physical overhead blade, local impact cone,
-      // grounded dust + ink. NO floating water-dragon / full-circle solar
-      // wheel / giant sky lightning unrelated to the axe's travel.
-      const contactX = actualContact.x - p.facing * 4;
-      const contactY = actualContact.y;
-      spawnShockwave(
-        brokenEnemy.x, brokenEnemy.y,
-        executionVisual.groundShockwaveRadius, '#ff713d', 0.32
-      );
-      webglDemonSlayerVfxRef.current?.spawnSlashRibbon({
-        x: contactX - p.facing * 20,
-        y: contactY - 22,
-        angle: p.slashAngle + p.facing * 0.22,
-        radius: executionVisual.slashRadius,
-        width: executionVisual.slashWidth,
-        arcSpan: executionVisual.slashArcSpan,
-        direction: p.facing,
-        palette: 'hinokami',
-        duration: 0.31,
-        tiltX: 0.52,
-      });
-      webglDemonSlayerVfxRef.current?.spawnClashStarburst({
-        x: contactX,
-        y: contactY,
-        scale: executionVisual.impactBurstScale,
-        palette: 'sun',
-        duration: 0.21,
-      });
-      webglDemonSlayerVfxRef.current?.spawnSparkBurst({
-        x: contactX + p.facing * 8,
-        y: contactY,
-        count: executionVisual.sparkCount,
-        speed: 315,
-        palette: 'sun',
-      });
-      // One short contact inversion is appropriate for a posture-break
-      // execution. It remains local, not a full-screen whiteout.
-      triggerImpactInversionFlash(
-        bloodDemonArtsRef.current,
-        contactX, contactY, 0.036, '#ff672e'
-      );
       spawnParticles(
-        brokenEnemy.x, brokenEnemy.y - 11, 12,
-        '#a77a56', 152, 2.9, 64
-      );
-    } else if (finisherSpec.variant === 'impaling_lunge') {
-      // A long, concentrated Parashu thrust. Align the short energy cut with
-      // the aim and enemy contact; do not layer a sun wheel, water dragon or
-      // sky lightning over a narrow physical lunge.
-      const aim = p.slashAngle;
-      const contactX = actualContact.x;
-      const contactY = actualContact.y;
-      // The ribbon is a radial arc anchored at +radius along its aim axis;
-      // offset its origin by that radius so the visible blade cut crosses the
-      // *actual* contact point rather than floating a body-width away.
-      const startX = contactX - Math.cos(aim) * executionVisual.slashRadius;
-      const startY = contactY - Math.sin(aim) * executionVisual.slashRadius;
-      spawnShockwave(
-        brokenEnemy.x, brokenEnemy.y,
-        executionVisual.groundShockwaveRadius, '#a75b42', 0.23
-      );
-      webglDemonSlayerVfxRef.current?.spawnSlashRibbon({
-        x: startX, y: startY, angle: aim,
-        radius: executionVisual.slashRadius,
-        width: executionVisual.slashWidth,
-        arcSpan: executionVisual.slashArcSpan,
-        direction: 1, palette: 'sun', duration: 0.23, tiltX: 0.32,
-      });
-      webglDemonSlayerVfxRef.current?.spawnClashStarburst({
-        x: contactX, y: contactY,
-        scale: executionVisual.impactBurstScale,
-        palette: 'sun', duration: 0.17,
-      });
-      webglDemonSlayerVfxRef.current?.spawnSparkBurst({
-        x: contactX + Math.cos(aim) * 9,
-        y: contactY + Math.sin(aim) * 9,
-        count: executionVisual.sparkCount, speed: 360,
-        palette: 'sun',
-      });
-      triggerImpactInversionFlash(
-        bloodDemonArtsRef.current,
-        contactX, contactY, 0.026, '#ffb35e'
-      );
-    } else {
-      // The 360 Parashu sweep is a *single* bronze-and-ember circular cut
-      // following Rudra's real spinning axe pose. No disconnected water
-      // dragon, giant fire wheel, additional slash rings, or sky bolt cage.
-      spawnShockwave(
-        brokenEnemy.x, brokenEnemy.y,
-        executionVisual.groundShockwaveRadius, '#e38c43', 0.35
-      );
-      spawnHinokamiSlashArc(bloodDemonArtsRef.current, {
-        x: brokenEnemy.x, y: brokenEnemy.y - 24,
-        angle: p.slashAngle,
-        arcSpan: executionVisual.slashArcSpan,
-        radius: executionVisual.slashRadius,
-        thickness: 26,
-        palette: 'sun', direction: 1,
-      });
-      webglDemonSlayerVfxRef.current?.spawnSlashRibbon({
-        x: brokenEnemy.x, y: brokenEnemy.y - 24,
-        angle: p.slashAngle,
-        radius: executionVisual.slashRadius,
-        width: executionVisual.slashWidth,
-        arcSpan: executionVisual.slashArcSpan,
-        direction: 1, palette: 'hinokami',
-        duration: 0.36, tiltX: 0.45,
-      });
-      webglDemonSlayerVfxRef.current?.spawnClashStarburst({
-        x: actualContact.x, y: actualContact.y,
-        scale: executionVisual.impactBurstScale,
-        palette: 'sun', duration: 0.22,
-      });
-      webglDemonSlayerVfxRef.current?.spawnSparkBurst({
-        x: actualContact.x, y: actualContact.y,
-        count: executionVisual.sparkCount,
-        speed: 410, palette: 'sun',
-      });
-      triggerImpactInversionFlash(
-        bloodDemonArtsRef.current,
-        brokenEnemy.x, brokenEnemy.y - 24, 0.036, '#e38c43'
+        brokenEnemy.x, brokenEnemy.y - 11, 12, '#a77a56', 152, 2.9, 64
       );
     }
     const execSlashRow =
@@ -4863,10 +4778,10 @@ export default function KaliyugaArena() {
         : PARASHU_FLIPBOOK_ROWS.DOWNWARD_CRUSH_FISSURE;
     spawnFlipbookVfx(
       PHASE2_VFX_SHEETS.parashuSlashes3x3.url,
-      brokenEnemy.x,
-      brokenEnemy.y - 22,
-      executionVisual.flipbookSize,
-      executionVisual.useGroundedOverheadContact ? 0.27 : 0.34,
+      actualContact.x,
+      actualContact.y,
+      impactBudget.impactFlipbookSize,
+      executionVisual.useGroundedOverheadContact ? 0.20 : 0.26,
       finisherSpec.variant === 'impaling_lunge' ? p.slashAngle : 0,
       finisherSpec.variant === 'spin_360_cleave' ? 0.72 : 1,
       'screen',
@@ -4875,10 +4790,10 @@ export default function KaliyugaArena() {
     );
     spawnFlipbookVfx(
       PHASE2_VFX_SHEETS.parryAndHitSparks4x2.url,
-      brokenEnemy.x,
-      brokenEnemy.y - 28,
-      142,
-      0.28,
+      actualContact.x,
+      actualContact.y,
+      impactBudget.contactSparkSize,
+      0.27,
       execHit.spray.sprayAngleRad,
       1,
       'screen',
@@ -7110,8 +7025,8 @@ export default function KaliyugaArena() {
       if (bossChargeTrace.length > 96) bossChargeTrace.shift();
     };
     const weaponPoseTrace: Array<{
-      mode: 'socket' | 'fallback';
-      action: 'light_attack' | 'heavy_unleash';
+      mode: Act1BladeFxMode;
+      action: 'light_attack' | 'heavy_unleash' | 'execute';
       attackSerial: number;
       chamber: number;
       sampleCount: number;
@@ -12100,32 +12015,50 @@ export default function KaliyugaArena() {
                 // game-time so its geometry follows the same cached 3D pose.
                 atMs: p.weaponSwingProgress * Math.max(0.01,p.actionDuration) * 1000,
               });
-              const fallbackMesh = computeWeaponSlashRibbon({
-                originX: p.x + Math.cos(p.slashAngle) * 13,
-                originY: p.y - 28,
-                aimAngle: p.slashAngle,
-                swingProgress: p.weaponSwingProgress,
-                radius: bladeVisual.radius,
-                stance: p.stance,
-                isHeavy: bladeVisual.isHeavy,
-                isRiposte: p.riposteWindowTimer > 0,
-                comboStep: bladeVisual.comboStep,
+              // A ready 3D actor with a valid head uses only its own baked
+              // weapon positions. One sample gets a close blade-tip glint.
+              // Missing data during animation crossfade suppresses the
+              // effect rather than inventing a distant 206px fire crescent.
+              const mode = chooseAct1BladeFxMode({
+                rendered3D: Boolean(rendered3D && rudra3d),
+                hasProjectedHead: bladeHead !== null,
+                sampleCount: poseTrail.samples.length,
               });
-              const renderedRealPose = renderWeaponPoseTrail(
-                ctx, poseTrail.samples, bladeVisual.alpha, fallbackMesh,
-                bladeVisual.isHeavy
-              );
-              if (!renderedRealPose) {
-                // Fallback for an unloaded/unsupported rig, or the very first
-                // frame before there are two distinct blade-head samples.
-                renderWeaponBoneSlashRibbon(ctx, fallbackMesh, bladeVisual.alpha);
+              if (mode === 'socket_trail') {
+                const stanceColors = p.stance === 'thrust'
+                  ? {coreColor:'#e9ffff',plasmaColor:'#50deed',outerGlowColor:'#0b5366'}
+                  : p.stance === 'pillar'
+                  ? {coreColor:'#fff9cf',plasmaColor:'#5eeeb0',outerGlowColor:'#17654a'}
+                  : {coreColor:'#fff3c8',plasmaColor:'#ffa648',outerGlowColor:'#9e3019'};
+                const painted = renderWeaponPoseTrail(
+                  ctx, poseTrail.samples, bladeVisual.alpha, stanceColors,
+                  bladeVisual.isHeavy
+                );
+                if (!painted && bladeHead) {
+                  renderParashuBladeTipGlint(ctx, bladeHead, bladeVisual.alpha, p.stance);
+                }
+              } else if (mode === 'socket_tip' && bladeHead) {
+                renderParashuBladeTipGlint(ctx, bladeHead, bladeVisual.alpha, p.stance);
+              } else if (mode === 'fallback_2d') {
+                // Before 3D assets have loaded, only a compact 2D hand-bound
+                // indication is allowed. Normal 3D play never shows this.
+                const fallbackMesh = computeWeaponSlashRibbon({
+                  originX: p.x + Math.cos(p.slashAngle) * 13,
+                  originY: p.y - 28, aimAngle: p.slashAngle,
+                  swingProgress: p.weaponSwingProgress,
+                  radius: getAct1FallbackBladeRadius(bladeVisual.radius),
+                  stance: p.stance, isHeavy: bladeVisual.isHeavy,
+                  isRiposte: p.riposteWindowTimer > 0,
+                  comboStep: bladeVisual.comboStep,
+                });
+                renderWeaponBoneSlashRibbon(ctx, fallbackMesh, bladeVisual.alpha * 0.64);
               }
               // QA only: capture the actual baked-frame projection versus
               // fallback, so screenshots alone cannot conceal a missing rig.
               if (perfTelemetryEnabled && bladeVisual.alpha >= 0.6) {
                 weaponPoseTrace.push({
-                  mode: renderedRealPose ? 'socket' : 'fallback',
-                  action: p.action as 'light_attack' | 'heavy_unleash',
+                  mode,
+                  action: p.action as 'light_attack' | 'heavy_unleash' | 'execute',
                   attackSerial: p.attackSerial,
                   chamber: sim.chamberIndex + 1,
                   sampleCount: poseTrail.samples.length,
