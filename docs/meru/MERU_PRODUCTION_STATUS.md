@@ -40,6 +40,19 @@ Then open `/meru-studio`. Asset URLs are existing project paths. Exported `.meru
 7. Full Act I game-playtesting, accessibility, memory, audio unlock/autoplay, video decoding, stale asset error recovery and regression at all resolutions are still required.
 8. This work does **not** implement the complete seven-phase cinematic-production engine. It is an isolated, tested foundation.
 
+
+## Second Meru milestone: actual boss assets and dual-boss authoring
+
+- The originally bundled Dundubhi scene referenced outdated `/kaalyuga/arena/...` paths, leaving its cinematic background vulnerable to a blank video/poster. The built-in scene now references the actual **Chamber IV MP4** and painterly poster through Kaliyuga's existing static-asset proxy.
+- `createVrikodaraScene()` adds an independent **Chamber VIII** camera, performance and light track, using the Vrikodara rig and the actual Phase I Sanctum artwork.
+- Both normal live boss encounters can open an authored in-game intro, with the same safe completion/skip contract and muted-audio behavior.
+- `/meru-studio` can select either boss and author camera zoom, roll, shake, X/Y; boss X/Y, scale, visibility and animation state; lighting exposure, ash, vignette and warmth; and drum/roar/impact/subtitle cues.
+- Scene edits are stored under **separate browser-local keys per boss**; hydration now finishes before autosave, preventing an unedited default from overwriting saved authoring on page load.
+- Frame-zero cues are emitted exactly once after beginning/restarting playback.
+- `scripts/meru/browser-qa.mjs` now checks the real MP4/poster URLs (via HEAD), Vrikodara scene export and the actual Chamber VIII boss introduction/Skip, in addition to Dundubhi's Skip and natural completion.
+- **Important limitation:** Studio scene edits persist only in the author's browser unless exported and incorporated into a shipped game build. Player browsers do not automatically receive another browser's scene JSON.
+- **Important visual limitation:** animations, pose believability, cinematic scale, lighting matching and screenshot review remain unverified. Automated browser tests do not establish AAA artistic fidelity.
+
 ## Release acceptance criteria (not yet met)
 
 - Real screenshot/video review of the editor at `/meru-studio`.
