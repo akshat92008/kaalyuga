@@ -11,14 +11,14 @@ export const MERU_FRAME_HEIGHT = 540;
 const W=MERU_FRAME_WIDTH,H=MERU_FRAME_HEIGHT;
 const clamp=(v:number,a:number,b:number)=>Math.max(a,Math.min(b,v));
 
-export function makeMeruBossParams(frame:CinematicFrame,dt:number,kind:'dundubhi'|'vrikodara'):Boss3DUpdateParams {
+export function makeMeruBossParams(frame:CinematicFrame,dt:number,kind:'dundubhi'|'vrikodara',phase:1|2|3=1):Boss3DUpdateParams {
   return {
     kind,
     dt: clamp(dt,0.001,0.04), vx:0,vy:0,facing:-1,
     aimAngle:Math.PI*0.1,aiState:frame.actor.state,
     attackKind:'shockwave',attackPattern:4,
     windupProgress:frame.actor.state==='windup'?clamp((frame.time-3.4)/1.6,0,1):0,
-    phase:1,armorCracked:false,isPostureBroken:false,isHitFlash:false,bypassSoftwareThrottle:false,
+    phase,armorCracked:phase>1,isPostureBroken:false,isHitFlash:false,bypassSoftwareThrottle:false,
   };
 }
 export function paintMeruFrame(
