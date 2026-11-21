@@ -66,6 +66,18 @@ export function paintMeruFrame(
   ctx.fillStyle=vignette;ctx.fillRect(0,0,W,H);
   ctx.restore();
 
+  // Art-directable scene exposure: a restrained color-grade pass that applies
+  // equally to imported MP4 and the overlaid rig, without full-screen bloom.
+  const exposureDelta=clamp(frame.lighting.exposure-1,-1,2);
+  ctx.save();
+  if(exposureDelta>=0){
+    ctx.globalCompositeOperation='screen';
+    ctx.fillStyle='rgba(252,216,172,'+clamp(exposureDelta*0.20,0,0.24)+')';
+  } else {
+    ctx.fillStyle='rgba(5,4,12,'+clamp(-exposureDelta*0.32,0,0.30)+')';
+  }
+  ctx.fillRect(0,0,W,H);
+  ctx.restore();
   ctx.save();ctx.globalCompositeOperation='screen';
   ctx.fillStyle='rgba(236,103,34,'+clamp((frame.lighting.warmth-0.5)*0.15,0,0.14)+')';
   ctx.fillRect(0,0,W,H);ctx.restore();
