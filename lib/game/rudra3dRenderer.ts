@@ -666,7 +666,12 @@ export class Rudra3DRenderer {
     const cacheKey = `rudra:${state}:${stanceTag}:y${yawIndex}:f${stepIndex}:${flashTag}`;
 
     const cached = this.frameCache.get(cacheKey);
-    if (cached) return cached;
+    if (cached) {
+      // Refresh frequently reused combat/idle frames rather than evicting hot animations.
+      this.frameCache.delete(cacheKey);
+      this.frameCache.set(cacheKey, cached);
+      return cached;
+    }
 
     const renderer = getSharedStudioWebGLRenderer(this.size);
     if (!renderer) return null;
@@ -758,9 +763,12 @@ export class Rudra3DRenderer {
       cacheFrame: false,
     });
 
-    if (this.frameCache.size > 1100) {
+    // 128 RGBA 256px frames are ~32 MB vs 1100 frames (~288 MB), excluding GPU
+    // bookkeeping. Retain a bounded hot-set across all action/stance/yaw variants.
+    while (this.frameCache.size >= 128) {
       const oldest = this.frameCache.keys().next().value;
-      if (oldest) this.frameCache.delete(oldest);
+      if (!oldest) break;
+      this.frameCache.delete(oldest);
     }
     this.frameCache.set(cacheKey, baked);
 
