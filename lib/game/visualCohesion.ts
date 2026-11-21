@@ -12,6 +12,10 @@
 import type { StaffStance } from './rules';
 import { buildWeaponPoseTrailBands, type WeaponTrailSample } from './act1WeaponPoseTrail';
 import {
+  act1HeavyBreathingPalette, buildAct1HeavyBladeFlames,
+  type Act1HeavyBreathingStance,
+} from './act1HeavyBreathingFx';
+import {
   drawAdditiveFlipbookCell,
   PHASE2_VFX_SHEETS,
   PARASHU_FLIPBOOK_ROWS,
@@ -562,6 +566,78 @@ export function drawGrounded3DContactShadow(
   }
 
   ctx.restore();
+}
+
+/**
+ * The theatrical layer BEHIND Rudra during Smash/Pillar/Thrust heavy attacks.
+ * Unlike an orbiting billboard, every sweeping fire/tide/lightning tongue is
+ * rooted at a measured 3D blade-head sample (the same pose as the hero).
+ * The brightest narrow blade core is rendered above the player separately.
+ */
+export function renderAct1HeavyParashuBreathing(
+  ctx:CanvasRenderingContext2D,
+  samples:WeaponTrailSample[],
+  params:{
+    stance:Act1HeavyBreathingStance;
+    focus:number;
+    alpha:number;
+    action:'heavy_unleash'|'execute';
+  }
+):boolean {
+  const tongues=buildAct1HeavyBladeFlames(samples,params);
+  if(!tongues.length)return false;
+  const colors=act1HeavyBreathingPalette(params.stance);
+  ctx.save();
+  ctx.globalCompositeOperation='source-over';
+  ctx.lineJoin='round';
+  // From outer ink to oversaturated pigment to near-white cutting-edge;
+  // each body tapers all the way to an individually measured-path-rooted tip.
+  for(const flame of tongues) {
+    const {root,tip,bendOut,bendIn,leftBase,rightBase,opacity}=flame;
+    const paintPath=()=>{
+      ctx.beginPath();
+      ctx.moveTo(leftBase.x,leftBase.y);
+      ctx.quadraticCurveTo(bendOut.x,bendOut.y,tip.x,tip.y);
+      ctx.quadraticCurveTo(bendIn.x,bendIn.y,rightBase.x,rightBase.y);
+      ctx.quadraticCurveTo(root.x,root.y,leftBase.x,leftBase.y);
+      ctx.closePath();
+    };
+    paintPath();
+    ctx.globalAlpha=opacity*0.82;
+    ctx.lineWidth=3;
+    ctx.strokeStyle=colors.soot;
+    ctx.stroke();
+
+    // One restrained gradient per flame, with a vivid electric/orange center
+    // and ink-suppressed edges. No full-screen blur canvas or unbounded pool.
+    const g=ctx.createLinearGradient(root.x,root.y,tip.x,tip.y);
+    g.addColorStop(0,colors.hot);
+    g.addColorStop(0.19,colors.pigment);
+    g.addColorStop(0.62,colors.ember);
+    g.addColorStop(1,colors.ember+'00');
+    ctx.globalAlpha=opacity;
+    ctx.fillStyle=g;
+    ctx.fill();
+
+    ctx.globalAlpha=opacity*0.92;
+    ctx.strokeStyle=colors.rim;
+    ctx.lineWidth=1.5;
+    ctx.beginPath();
+    ctx.moveTo(root.x,root.y);
+    ctx.quadraticCurveTo(bendOut.x,bendOut.y,tip.x,tip.y);
+    ctx.stroke();
+
+    // Hand-inked hot vein, not random sprites floating in the arena.
+    ctx.globalAlpha=opacity*0.66;
+    ctx.strokeStyle=colors.hot;
+    ctx.lineWidth=0.95;
+    ctx.beginPath();
+    ctx.moveTo(root.x,root.y);
+    ctx.quadraticCurveTo(bendIn.x,bendIn.y,tip.x,tip.y);
+    ctx.stroke();
+  }
+  ctx.restore();
+  return true;
 }
 
 /**
