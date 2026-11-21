@@ -1,0 +1,57 @@
+/**
+ * Act I execution visual-direction budgets.
+ *
+ * Data only: preserve existing damage, rewards, i-frames, and animation clip
+ * selection. The first premium execution is an OVERHEAD Parashu impact.
+ * It must not fire an unrelated full-circle fire wheel, a water dragon, and
+ * three sky lightning columns simultaneously at contact.
+ */
+import type { ParashuFinisherVariant } from './combatPipeline';
+
+export interface Act1ExecutionVisualPlan {
+  variant: ParashuFinisherVariant;
+  contactProgress: number;
+  focusXOffset: number;
+  focusYOffset: number;
+  groundShockwaveRadius: number;
+  slashRadius: number;
+  slashWidth: number;
+  slashArcSpan: number;
+  impactBurstScale: number;
+  sparkCount: number;
+  flipbookSize: number;
+  // The spin and thrust variants preserve their existing bespoke set pieces;
+  // this first milestone redesigns only the overhead execution.
+  useGroundedOverheadContact: boolean;
+  allowSpectralSkyBolts: boolean;
+}
+
+/** A stable, deterministic contact presentation for each original variant. */
+export function getAct1ExecutionVisualPlan(variant:ParashuFinisherVariant):Act1ExecutionVisualPlan {
+  if (variant === 'downward_crush') {
+    return {
+      variant, contactProgress:0.35, focusXOffset:30, focusYOffset:-24,
+      groundShockwaveRadius:148, slashRadius:132,
+      slashWidth:35, slashArcSpan:1.54,
+      impactBurstScale:1.14, sparkCount:16,
+      flipbookSize:164,
+      useGroundedOverheadContact:true,allowSpectralSkyBolts:false,
+    };
+  }
+  if (variant === 'spin_360_cleave') {
+    return {
+      variant,contactProgress:0.35,focusXOffset:0,focusYOffset:-24,
+      groundShockwaveRadius:290,slashRadius:235,
+      slashWidth:82,slashArcSpan:3.25,
+      impactBurstScale:1.75,sparkCount:28,flipbookSize:248,
+      useGroundedOverheadContact:false,allowSpectralSkyBolts:true,
+    };
+  }
+  return {
+    variant,contactProgress:0.35,focusXOffset:30,focusYOffset:-24,
+    groundShockwaveRadius:290,slashRadius:235,
+    slashWidth:82,slashArcSpan:3.25,
+    impactBurstScale:1.75,sparkCount:28,flipbookSize:248,
+    useGroundedOverheadContact:false,allowSpectralSkyBolts:true,
+  };
+}
