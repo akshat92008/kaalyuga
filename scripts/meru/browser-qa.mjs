@@ -34,6 +34,9 @@ try{
   // Real project round trip: a validated Studio-authored scene must be loaded
   // by the actual combat arena, not merely export as JSON.
   data.title='Dundubhi QA Authored Entrance';
+  // Long timeline for the manual Skip path: screenshots must not race the
+  // successful automatic completion on software-rendered CI browsers.
+  data.duration=30;
   await page.evaluate(serialized=>{
     window.localStorage.setItem('meru.studio.cinematic.v1',serialized);
   },JSON.stringify(data));
@@ -56,6 +59,12 @@ try{
   console.log('MERU_GAMEPLAY_QA: page errors:',gameErrors.length,gameErrors.slice(0,4));
   if(gameErrors.length)throw new Error('Game page exceptions: '+gameErrors.join(' | ').slice(0,1200));
   await gamePage.close();
+  // Natural completion should be checked against the original eight-second
+  // scene, not the deliberately extended Skip-test scene.
+  data.duration=8;
+  await page.evaluate(serialized=>{
+    window.localStorage.setItem('meru.studio.cinematic.v1',serialized);
+  },JSON.stringify(data));
   // A second visit verifies natural completion also unfreezes gameplay without
   // requiring the player to press Skip.
   const naturalPage=await context.newPage();
