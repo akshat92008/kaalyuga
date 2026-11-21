@@ -8113,6 +8113,10 @@ export default function KaliyugaArena() {
                 soundEngine.playVoiceBark('vrikodara_phase2', { priority: 'high' });
                 soundEngine.syncBgmState('playing', 8, true, nextPhase, p.transformTimer > 0);
               }
+              // The actual live phase transition uses a valid elemental palette;
+              // leaving this undefined crashed the first post-reveal VFX burst.
+              const bossPhasePalette: DemonSlayerVfxPalette =
+                e.type === 'vrikodara' ? 'hinokami' : 'crimson_gold';
               spawnShockwave(e.x, e.y, 240, '#a855f7', 0.48);
               triggerImpactInversionFlash(bloodDemonArtsRef.current, e.x, e.y - 38, 0.06, '#c026d3');
               // Purple-Crimson Blood Demon Art Cage + Thorny Floor Vines (no cyan Akaza compass on Dundubhi!)
