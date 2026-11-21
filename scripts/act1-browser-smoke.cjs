@@ -21,8 +21,11 @@ async function main() {
     const base = process.env.GAME_URL || 'http://127.0.0.1:3000';
     await page.goto(base + '/?chamber=1', { waitUntil: 'domcontentloaded' });
     for (let chamber = 1; chamber <= 8; chamber++) {
+      const quality = ['balanced', 'performance', 'cinematic'][(chamber - 1) % 3];
       if (chamber > 1) {
         await page.getByTestId('hud-controls-btn').click();
+        await page.getByRole('combobox', { name: 'Graphics quality' }).selectOption(quality);
+        if (chamber === 5) await page.setViewportSize({ width: 960, height: 540 });
         await page.getByRole('button', { name: new RegExp('^CH ' + chamber + '(?: |$)') }).click();
       }
       await page.locator('[data-testid="kaliyuga-canvas"][data-chamber-id="' + chamber + '"]').waitFor({ timeout: 90000 });
@@ -41,8 +44,8 @@ async function main() {
         return { medianMs: intervals[29], p95Ms: intervals[56], state: document.body.dataset.state };
       });
       if (timing.state !== 'playing') throw new Error('Room ' + chamber + ' ended in ' + timing.state);
-      result.rooms.push({ chamber, ...timing });
-      console.log('Chamber', chamber, JSON.stringify(timing));
+      result.rooms.push({ chamber, quality, resolution: page.viewportSize(), ...timing });
+      console.log('Chamber', chamber, quality, JSON.stringify(timing));
       await page.screenshot({ path: path.join(output, 'chamber-' + chamber + '.png') });
       await page.getByTestId('hud-pause-btn').click();
       await page.waitForFunction(() => document.body.dataset.state === 'paused');

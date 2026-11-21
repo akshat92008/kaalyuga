@@ -48,6 +48,7 @@ import {
 } from '@/lib/game/spriteProcessor';
 import { Rudra3DRenderer } from '@/lib/game/rudra3dRenderer';
 import { Boss3DRenderer } from '@/lib/game/boss3dRenderer';
+import { ACT1_GRAPHICS, isGraphicsQuality, type GraphicsQuality } from '@/lib/game/graphicsQuality';
 import { Susanoo3DRenderer } from '@/lib/game/susanoo3dRenderer';
 import CholaBrassHud from '@/components/game/CholaBrassHud';
 import {
@@ -662,6 +663,7 @@ export default function KaliyugaArena() {
   );
   const [shrineOpen, setShrineOpen] = useState(false);
   const [storyOpen, setStoryOpen] = useState(false);
+  const [graphicsQuality, setGraphicsQuality] = useState<GraphicsQuality>('balanced');
   const [controlsOpen, setControlsOpen] = useState(false);
   const [boonModalOpen, setBoonModalOpen] = useState(false);
   const [boonChoices, setBoonChoices] = useState<CelestialBoonSpec[]>([]);
@@ -1028,7 +1030,7 @@ export default function KaliyugaArena() {
       rowIndex: 0,
     })),
     videoBgEnabled: false,
-    lowEndMode: false,
+    graphicsQuality: 'balanced' as GraphicsQuality,
     ambientMotes: Array.from({ length: MAX_AMBIENT_MOTES }, (_, idx) => ({
       x: (idx * 97) % 1440,
       y: (idx * 67) % 900,
@@ -1293,7 +1295,7 @@ export default function KaliyugaArena() {
     ) => {
       const sim = simRef.current;
       const pool = sim.particles;
-      const effectiveCount = sim.lowEndMode ? Math.max(4, Math.ceil(count * 0.5)) : count;
+      const effectiveCount = Math.ceil(count * ACT1_GRAPHICS[sim.graphicsQuality].particleScale);
       const c = color.toLowerCase();
       let archetype: ParticleArchetype = 'ember_dust';
       if (
@@ -6754,7 +6756,7 @@ export default function KaliyugaArena() {
     const resizeCanvas = () => {
       const vw = window.innerWidth || 1440;
       const vh = window.innerHeight || 900;
-      const dpr = Math.min(window.devicePixelRatio || 1, 1.0);
+      const dpr = Math.min(window.devicePixelRatio || 1, ACT1_GRAPHICS[simRef.current.graphicsQuality].sceneScale);
       canvas.width = Math.round(vw * dpr);
       canvas.height = Math.round(vh * dpr);
       simRef.current.viewportW = vw;
@@ -6763,6 +6765,13 @@ export default function KaliyugaArena() {
       simRef.current.worldH = CANONICAL_WORLD_H;
       simRef.current.dpr = dpr;
     };
+    try {
+      const saved = window.localStorage.getItem('kaliyuga_graphics_quality');
+      if (isGraphicsQuality(saved)) {
+        simRef.current.graphicsQuality = saved;
+        setGraphicsQuality(saved);
+      }
+    } catch { /* Storage is optional. */ }
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
 
@@ -10227,6 +10236,7 @@ export default function KaliyugaArena() {
       // Rendered BEFORE characters & bosses so Dundubhi, Vrikodara, and Rudra stand cleanly ON TOP of the glowing floor mandala!
       {
         const webglFloorVfx = webglDemonSlayerVfxRef.current;
+        webglFloorVfx?.setQuality(sim.graphicsQuality);
         if (webglFloorVfx && webglFloorVfx.updateAndRenderFloorPass(dt, sim.camX, sim.camY, 1, cw, ch)) {
           ctx.save();
           ctx.globalCompositeOperation = 'source-over';
@@ -12095,7 +12105,7 @@ export default function KaliyugaArena() {
           playerX: p.x,
           playerY: p.y,
           videoBgEnabled: sim.videoBgEnabled,
-          lowEndMode: sim.lowEndMode,
+          lowEndMode: sim.graphicsQuality === 'performance',
           boss: bossEntity
             ? {
                 active: true,
@@ -12955,19 +12965,26 @@ export default function KaliyugaArena() {
                   >
                     {(hud.videoBgEnabled ?? true) ? 'HD VIDEO BG: ON' : 'HD VIDEO BG: OFF'}
                   </button>
-                  {isDebugMode && (
-                    <button
-                      type="button"
-                      data-testid="toggle-low-spec-btn"
-                      onClick={() => {
-                        simRef.current.lowEndMode = !simRef.current.lowEndMode;
-                        setControlsOpen(false);
+                  <label className="text-xs text-[#d4a548]">
+                    Graphics
+                    <select
+                      aria-label="Graphics quality"
+                      value={graphicsQuality}
+                      onChange={(event) => {
+                        const quality = event.target.value;
+                        if (!isGraphicsQuality(quality)) return;
+                        simRef.current.graphicsQuality = quality;
+                        setGraphicsQuality(quality);
+                        try { window.localStorage.setItem('kaliyuga_graphics_quality', quality); } catch {}
+                        window.dispatchEvent(new Event('resize'));
                       }}
-                      className="flex-1 py-1.5 px-2 border border-[#d4a548]/45 text-[10px] font-mono-num text-[#d4a548] bg-[#141116] hover:border-[#f5ebd6] cursor-pointer"
+                      className="ml-2 bg-[#141116] text-[#f5ebd6]"
                     >
-                      {hud.lowEndMode ? 'PERF: LOW-SPEC 60FPS' : 'PERF: ULTRA HD'}
-                    </button>
-                  )}
+                      <option value="performance">Performance</option>
+                      <option value="balanced">Balanced</option>
+                      <option value="cinematic">Cinematic</option>
+                    </select>
+                  </label>
                 </div>
               </div>
             )}

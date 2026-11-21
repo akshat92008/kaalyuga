@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { ACT1_GRAPHICS, type GraphicsQuality } from './graphicsQuality';
 import { isSoftwareWebGLRenderer } from './hadesSpriteBaker';
 
 export type DemonSlayerVfxPalette =
@@ -997,7 +998,8 @@ export class WebglDemonSlayerVfxOverlay {
 
   private sparkGeo: THREE.PlaneGeometry;
   private elapsed = 0;
-  private width = 1440;
+  private quality: GraphicsQuality = 'balanced';
+  private width = 0;
   private height = 900;
   private isSoftwareGl = false;
   private disposed = false;
@@ -1060,6 +1062,12 @@ export class WebglDemonSlayerVfxOverlay {
     }
   }
 
+  public setQuality(quality: GraphicsQuality): void {
+    if (quality === this.quality) return;
+    this.quality = quality;
+    this.width = 0;
+  }
+
   public resize(vw: number, vh: number): void {
     const safeW = Math.max(320, Math.round(vw));
     const safeH = Math.max(240, Math.round(vh));
@@ -1075,7 +1083,7 @@ export class WebglDemonSlayerVfxOverlay {
     this.camera.updateProjectionMatrix();
 
     if (this.renderer) {
-      const pr = this.isSoftwareGl ? 0.65 : Math.min(window.devicePixelRatio || 1, 1.35);
+      const pr = this.isSoftwareGl ? 0.65 : Math.min(window.devicePixelRatio || 1, ACT1_GRAPHICS[this.quality].effectScale);
       this.renderer.setPixelRatio(pr);
       this.renderer.setSize(safeW, safeH, false);
     }
@@ -2564,7 +2572,7 @@ export class WebglDemonSlayerVfxOverlay {
     }
 
     // Pass A (GPU-only): Selective HDR UnrealBloomPass into offscreen additive bloomCanvas
-    if (!this.isSoftwareGl && this.bloomComposer && this.bloomCtx) {
+    if (ACT1_GRAPHICS[this.quality].bloom && !this.isSoftwareGl && this.bloomComposer && this.bloomCtx) {
       this.renderer.setClearColor(0x000000, 1);
       this.bloomComposer.render();
       this.bloomCtx.clearRect(0, 0, this.bloomCanvas.width, this.bloomCanvas.height);
