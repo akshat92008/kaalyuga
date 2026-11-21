@@ -3,7 +3,7 @@
  * No title, hub, phase2, cleared, or non-boss encounter may trigger a cinematic.
  */
 import {
-  createDundubhiScene, createVrikodaraScene, validateCinematic,
+  createDundubhiScene, createVrikodaraScene, createBossPhaseScene, validateCinematic,
   type BossCharacter, type MeruCinematic,
 } from './cinematicTimeline';
 
@@ -54,4 +54,31 @@ export function readBossIntro(kind:BossCharacter):MeruCinematic {
 }
 export function readDundubhiIntro():MeruCinematic {
   return readBossIntro('dundubhi');
+}
+
+/** Phase scenes use separate authoring slots; intro edits are never overwritten. */
+export const meruSceneStorageKey=(scene:MeruCinematic):string=>
+  scene.bossPhase && scene.bossPhase>1
+    ? 'meru.studio.cinematic.'+scene.boss+'.phase'+scene.bossPhase+'.v1'
+    : meruStorageKey(scene.boss);
+
+/** Only live, living bosses can perform a phase reveal; no debug phase starts. */
+export function shouldStartBossPhase(ctx:BossIntroContext & {phase:2|3}):boolean {
+  if(ctx.stage!=='playing'||!(ctx.hasBoss??ctx.hasDundubhi??false))return false;
+  const boss=ctx.boss??'dundubhi';
+  if(ctx.chamberIndex!==(boss==='dundubhi'?3:7))return false;
+  const params=new URLSearchParams(ctx.query??'');
+  return params.get('cinematic')!=='0' &&
+    params.get('cleared')!=='1' && params.get('phase')!=='2';
+}
+export function readBossPhase(kind:BossCharacter,phase:2|3):MeruCinematic {
+  const fallback=createBossPhaseScene(kind,phase);
+  if(typeof localStorage==='undefined')return fallback;
+  try{
+    const raw=localStorage.getItem(meruSceneStorageKey(fallback));
+    if(!raw||raw.length>400_000)return fallback;
+    const parsed=validateCinematic(JSON.parse(raw));
+    if(parsed.id!==fallback.id||parsed.boss!==kind||parsed.bossPhase!==phase)return fallback;
+    return parsed;
+  }catch{return fallback;}
 }
