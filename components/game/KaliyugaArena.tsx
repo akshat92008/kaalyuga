@@ -1162,6 +1162,11 @@ export default function KaliyugaArena() {
         sim.hitstopTimer = 0;
         sim.slowMoTimer = 0;
         sim.activeAstraZones.length = 0;
+        // QA only: don't let the previous Astra's short-lived lightning and
+        // spark pools obscure the next stance or execution contact screenshot.
+        // Normal gameplay retains its original effect lifetime semantics.
+        sim.lightningArcs.length = 0;
+        webglDemonSlayerVfxRef.current?.clearActiveEffects();
         sim.chamberClearTimer = 0;
         for (const enemy of sim.enemies) {
           enemy.hp = Math.max(9000, enemy.hp);
