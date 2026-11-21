@@ -1,4 +1,4 @@
-name: Act I downloadable browser playtest build
+name: Act I downloadable Apple Silicon Mac browser playtest build
 on:
   pull_request:
     paths:
@@ -9,7 +9,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   compile-playtest:
-    runs-on: ubuntu-24.04
+    runs-on: macos-15-arm64
     timeout-minutes: 25
     steps:
       - name: Checkout production app code and compact built-in audio/UI media
@@ -34,10 +34,11 @@ jobs:
           node-version: "22"
       - name: Compile production Next.js standalone server
         run: |
+          test "$(uname -m)" = "arm64"
           npm install --ignore-scripts --no-fund --no-audit
           npx tsc --noEmit --incremental false
           npm run build
-      - name: Assemble a portable macOS/Windows/Linux browser-server bundle
+      - name: Assemble an Apple Silicon Mac browser playtest bundle
         shell: bash
         run: |
           set -euo pipefail
@@ -74,12 +75,12 @@ jobs:
           ===================================
           Built from GitHub PR #5 for development testing, not a final release.
 
-          MAC: With Node.js 22+ installed, open START_KALIYUGA.command.
+          MAC (Apple Silicon M1/M2/M3/M4): With Node.js 22+ installed, open START_KALIYUGA.command.
                If macOS blocks a downloaded unsigned shell script, run in
                Terminal: bash START_KALIYUGA.command
 
-          WINDOWS: In this folder, open a Terminal and run: node server.js
-                   Then open http://localhost:3000 in Chrome or Edge.
+          This build is compiled natively on macOS ARM64. It is not intended
+          for Windows or Intel Macs.
 
           IMPORTANT:
           - Internet connection required: large FBX/texture/arena assets
@@ -87,8 +88,8 @@ jobs:
           - First-time asset loading may take a while. This ZIP intentionally
             excludes several GB of source-grade media; it is NOT an offline installer.
           - No paid backend or account required to play.
-          - This is an experimental Act I build and performance on a physical
-            Mac M3 Air has not yet been benchmarked by GitHub's Linux CI.
+          - This is an experimental Act I build. A macOS ARM64 CI launch
+            smoke test is NOT a physical Mac M3 Air GPU performance benchmark.
           - To quit, close the Terminal or press Control-C.
           EOF
           echo "${GITHUB_SHA}" > artifacts/bundle/BUILD_COMMIT.txt
@@ -96,7 +97,7 @@ jobs:
           python3 - <<'PY'
           import zipfile
           from pathlib import Path
-          out=Path("artifacts/kaliyuga-act1-playtest-server.zip")
+          out=Path("artifacts/kaliyuga-act1-macos-arm64-playtest.zip")
           src=Path("artifacts/bundle")
           with zipfile.ZipFile(out,"w",zipfile.ZIP_DEFLATED,compresslevel=6) as z:
               for file in sorted(src.rglob("*")):
@@ -125,9 +126,9 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: kaliyuga-act1-browser-playtest-build
+          name: kaliyuga-act1-macos-arm64-playtest-build
           path: |
-            artifacts/kaliyuga-act1-playtest-server.zip
+            artifacts/kaliyuga-act1-macos-arm64-playtest.zip
             artifacts/playtest-server.log
           if-no-files-found: warn
           retention-days: 7
