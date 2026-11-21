@@ -14,6 +14,7 @@ Usage:
  --heavy "public/kaalyuga/anims/rudra/heavy.fbx" \
  --spin "public/kaalyuga/anims/rudra/cast.fbx" \
  --lunge "public/kaalyuga/anims/rudra/attack3.fbx" \
+ --weapon "new 3D assets and animations/3D Models/Weapons/Bloodforged_Trident_Axe_20261025/Meshy_AI_Bloodforged_Trident_Axe_20261025_texture.fbx" \
  --output "artifacts/act1-finisher-pose-preview"
 """
 from __future__ import annotations
@@ -33,6 +34,7 @@ def args():
     p.add_argument("--rig", required=True, type=Path)
     for name in ("heavy", "spin", "lunge"):
         p.add_argument("--" + name, required=True, type=Path)
+    p.add_argument("--weapon", required=True, type=Path)
     p.add_argument("--output", required=True, type=Path)
     return p.parse_args(sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else [])
 
@@ -129,6 +131,87 @@ def candidate_action(raw, source_armature, target_armature, label):
     }
 
 
+
+def attach_qa_weapon(target, path: Path):
+    """Source FBX geometry, parented to the animated right-hand *for QA only*.
+
+    Three.js normalizes Rudra to 1.48 m and the Parashu to 1.04 m. This
+    reproduces their relative size and the authored Euler offset but cannot
+    prove Blender/Three coordinate conventions match; do not export to runtime.
+    """
+    if not path.is_file():
+        raise FileNotFoundError(str(path))
+    before = set(bpy.data.objects)
+    bpy.ops.import_scene.fbx(filepath=str(path.resolve()))
+    imported = [o for o in bpy.data.objects if o not in before]
+    meshes = [o for o in imported if o.type == "MESH"]
+    if not meshes:
+        raise RuntimeError("Parashu source FBX imported with no meshes")
+    right_hand = next(
+        (b for b in target.pose.bones if norm(b.name) == "righthand"), None)
+    if right_hand is None:
+        raise RuntimeError("Runtime Rudra rig has no right-hand socket bone")
+
+    bpy.context.view_layer.update()
+    bounds = [m.matrix_world @ Vector(c) for m in meshes for c in m.bound_box]
+    lo = Vector([min(v[i] for v in bounds) for i in range(3)])
+    hi = Vector([max(v[i] for v in bounds) for i in range(3)])
+    weapon_max_dim = max(1e-5, *(float(v) for v in (hi - lo)))
+
+    character_meshes = [m for m in target.children_recursive if m.type == "MESH"]
+    character_points = [m.matrix_world @ Vector(c)
+                        for m in character_meshes for c in m.bound_box]
+    char_lo = min(float(v.z) for v in character_points)
+    char_hi = max(float(v.z) for v in character_points)
+    # Some FBX rigs are Y-up on import; use the maximum world axis extent.
+    char_size_axes = [
+        max(float(v[i]) for v in character_points) -
+        min(float(v[i]) for v in character_points) for i in range(3)]
+    char_height = max(1e-5, max(char_size_axes))
+
+    scene = bpy.context.scene
+    socket = bpy.data.objects.new("QA_ONLY_ACT1_RIGHT_HAND_SOCKET", None)
+    scene.collection.objects.link(socket)
+    socket.parent = target
+    socket.parent_type = "BONE"
+    socket.parent_bone = right_hand.name
+    socket.location = (0, 0, 0)
+    socket.rotation_euler = (0, 0, 0)
+
+    weapon = bpy.data.objects.new("QA_ONLY_ACT1_PARASHU_ROOT", None)
+    scene.collection.objects.link(weapon)
+    for node in imported:
+        if node.parent not in imported:
+            world_before = node.matrix_world.copy()
+            node.parent = weapon
+            node.matrix_world = world_before
+    for m in meshes:
+        m.name = "QA_ONLY_ACT1_WEAPON_" + m.name
+        m["act1_qa_weapon"] = True
+
+    weapon.parent = socket
+    # Reproduce runtime's weaponGroup.rotation/position/scale. No character
+    # bones or input FBX assets are modified.
+    hand_world = target.matrix_world @ right_hand.matrix
+    hand_scale = max(1e-5, abs(float(hand_world.to_scale().x)))
+    scaled_length = char_height * (1.04 / 1.48)
+    weapon_scale = scaled_length / (weapon_max_dim * hand_scale)
+    weapon.rotation_euler = (-math.pi * 0.5, 0, -math.pi * 0.5)
+    weapon.scale = (weapon_scale,) * 3
+    weapon.location = (0.26 * weapon_max_dim * weapon_scale, 0, 0)
+    bpy.context.view_layer.update()
+    return {
+        "source_fbx": str(path),
+        "mesh_count": len(meshes),
+        "right_hand_bone": right_hand.name,
+        "weapon_source_longest_dimension": round(weapon_max_dim, 3),
+        "character_source_longest_dimension": round(char_height, 3),
+        "relative_weapon_size": round(scaled_length / char_height, 4),
+        "release_approved": False,
+        "caveat": "Candidate QA socket. Runtime FBXLoader axis orientation, grip position, blade projection and swing contact still require real-game comparison."
+    }
+
+
 def render_pose(target, action, out_path: Path, gameplay_progress: float):
     scene = bpy.context.scene
     target.animation_data_create()
@@ -154,9 +237,17 @@ def render_pose(target, action, out_path: Path, gameplay_progress: float):
         shader.inputs["Base Color"].default_value = (.28, .20, .16, 1)
         shader.inputs["Metallic"].default_value = 0.0
         shader.inputs["Roughness"].default_value = .87
+    bronze = bpy.data.materials.get("QA_NONRELEASE_WEAPON_BRONZE")
+    if bronze is None:
+        bronze = bpy.data.materials.new("QA_NONRELEASE_WEAPON_BRONZE")
+        bronze.use_nodes = True
+        shader = bronze.node_tree.nodes.get("Principled BSDF")
+        shader.inputs["Base Color"].default_value = (.53, .25, .08, 1)
+        shader.inputs["Metallic"].default_value = .25
+        shader.inputs["Roughness"].default_value = .74
     for obj in meshes:
         obj.data.materials.clear()
-        obj.data.materials.append(clay)
+        obj.data.materials.append(bronze if obj.get("act1_qa_weapon") else clay)
     bounds = [obj.matrix_world @ Vector(c) for obj in meshes for c in obj.bound_box]
     lo = Vector([min(x[i] for x in bounds) for i in range(3)])
     hi = Vector([max(x[i] for x in bounds) for i in range(3)])
@@ -216,6 +307,7 @@ def main():
     }
     if mesh_count == 0:
         raise RuntimeError("Canonical Rudra runtime rig has no mesh")
+    report["qa_parashu_socket"] = attach_qa_weapon(target, a.weapon)
     for variant, source_file in (
         ("downward_crush", a.heavy),
         ("spin_360_cleave", a.spin),
