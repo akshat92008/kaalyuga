@@ -1208,10 +1208,13 @@ export class WebglDemonSlayerVfxOverlay {
 
     for (let i = 0; i < 2; i++) {
       const dir: 1 | -1 = i === 0 ? 1 : -1;
-      const r = radius * (i === 0 ? 1.0 : 0.80);
-      const w = i === 0 ? 64 : 46;
-      const geo = buildCurvedRibbonGeometry(r, w, Math.PI * 1.88, dir, 34);
-      const inkGeo = buildCurvedRibbonGeometry(r, w * 1.18, Math.PI * 1.9, dir, 30);
+      // Offset two OPEN, tapered arcs; full 360-degree neon donuts conceal the
+      // axe and read as generic rings rather than living fire brushstrokes.
+      const r = radius * (i === 0 ? 1.0 : 0.79);
+      const w = i === 0 ? 49 : 32;
+      const openArc = Math.PI * (i === 0 ? 1.59 : 1.26);
+      const geo = buildCurvedRibbonGeometry(r, w, openArc, dir, 34);
+      const inkGeo = buildCurvedRibbonGeometry(r, w * 1.16, openArc + 0.04, dir, 30);
 
       const inkMat = createRibbonMaterial(pal, 0, 0.90, true, THREE.NormalBlending, 0.25);
       inkMat.uniforms.uCoreColor.value.copy(pal.ink);
@@ -1235,9 +1238,11 @@ export class WebglDemonSlayerVfxOverlay {
       mats.push(inkMat, flameMat, glowMat);
     }
 
-    // Nine tapered, curling, ink-outlined tongues break the generic neon-ring silhouette.
+    // Thirteen staggered, tapered ink-edged flame tongues break the formerly
+    // symmetric donut into a brush-painted inferno without growing the
+    // fullscreen VFX budget; shared geometry/materials remain GPU-light.
     // Shared geometry/materials avoid unbounded GPU cost on the M3 Air.
-    const tongueGeo = buildTaperedFlameTongueGeometry(radius * 0.40, radius * 0.105, 11);
+    const tongueGeo = buildTaperedFlameTongueGeometry(radius * 0.49, radius * 0.086, 11);
     geos.push(tongueGeo);
     const tongueInk = createRibbonMaterial(pal, 0, 0.74, true, THREE.NormalBlending, 0.80);
     tongueInk.uniforms.uCoreColor.value.copy(pal.ink);
@@ -1245,12 +1250,12 @@ export class WebglDemonSlayerVfxOverlay {
     tongueInk.uniforms.uEdgeColor.value.copy(pal.ink);
     const tongueFire = createRibbonMaterial(pal, 0, 0.95, true, THREE.NormalBlending, 1.45);
     mats.push(tongueInk, tongueFire);
-    for (let d = 0; d < 9; d++) {
-      const a = (d / 9) * Math.PI * 2 + (d % 2) * 0.11;
-      const orbit = radius * (0.83 + (d % 3) * 0.035);
+    for (let d = 0; d < 13; d++) {
+      const a = (d / 13) * Math.PI * 2 + (d % 3) * 0.09;
+      const orbit = radius * (0.66 + (d % 4) * 0.087);
       const tongue = new THREE.Group();
       tongue.position.set(Math.cos(a) * orbit, Math.sin(a) * orbit * 0.86, 8 + (d % 2) * 3);
-      tongue.rotation.z = a + ((d % 3) - 1) * 0.15;
+      tongue.rotation.z = a + ((d % 4) - 1.5) * 0.19;
       const ink = new THREE.Mesh(tongueGeo, tongueInk);
       ink.position.z = -1.5;
       ink.scale.set(1.06, 1.25, 1);
