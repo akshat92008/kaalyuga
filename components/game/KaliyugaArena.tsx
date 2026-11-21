@@ -198,7 +198,12 @@ import {
   type WeaponTrailSample,
 } from '@/lib/game/act1WeaponPoseTrail';
 import { getAct1ExecutionVisualPlan } from '@/lib/game/act1ExecutionVisualPlan';
-import { getAct1HeavyContactSpectacle } from '@/lib/game/act1HeavyBreathingFx';
+import {
+  getAct1HeavyContactSpectacle,
+  resolveAct1BreathingElement,
+  act1HeavyBreathingPalette,
+  type Act1BreathingElement,
+} from '@/lib/game/act1HeavyBreathingFx';
 import {
   chooseAct1BladeFxMode, getAct1FallbackBladeRadius,
   getAct1ExecutionContactBudget, type Act1BladeFxMode,
@@ -583,6 +588,10 @@ export default function KaliyugaArena() {
   const heavyBreathingFocusRef = useRef<{
     attackSerial:number; chamberIndex:number; focus:number;
   } | null>(null);
+  // Varuna [4] keeps the original dragon ultimate, then visually infuses
+  // the existing light/heavy Parashu trail with Hokusai blue for 6.5 sec.
+  // Damage, cooldowns and original stance are unchanged.
+  const waterBladeUntilMsRef=useRef(0);
   const finisherChoreographyRef = useRef<Act1ExecutionChoreographyToken | null>(null);
   const pendingStrikeVfxRef = useRef<{
     fired: boolean;
@@ -2246,6 +2255,7 @@ export default function KaliyugaArena() {
       pendingStrikeVfxRef.current = null;
       finisherChoreographyRef.current = null;
       heavyBreathingFocusRef.current = null;
+      waterBladeUntilMsRef.current = 0;
       pendingBossEntranceRef.current = null;
       // Release old chamber's live rigs before loading the next wave of distinct models.
       // This prevents scenes from retaining every boss and enemy encountered in Act I.
@@ -6623,6 +6633,7 @@ export default function KaliyugaArena() {
           sim.input.pointerActive ? sim.input.pointerX - p.x : p.lastMoveDirX || p.facing
         );
         soundEngine.playBreathingStyle('water');
+        waterBladeUntilMsRef.current=performance.now()+6500;
         // Tier 3 Cinema Ultimate: Coiled Hokusai Water Dragon + Dual Tidal Vortex Ripples + Foam Spark Burst
         webglDemonSlayerVfxRef.current?.spawnWaterDragon({
           x: p.x,
@@ -7076,7 +7087,7 @@ export default function KaliyugaArena() {
       if (bossChargeTrace.length > 96) bossChargeTrace.shift();
     };
     const heavyBreathingTrace: Array<{
-      action:string; stance:'smash'|'pillar'|'thrust';
+      action:string; stance:'smash'|'pillar'|'thrust'; element:Act1BreathingElement;
       attackSerial:number; focus:number; sampleCount:number;
       peakReach:number; atMs:number;
     }> = [];
@@ -11981,23 +11992,28 @@ export default function KaliyugaArena() {
             hasProjectedHead:bladeHead!==null,
             sampleCount:poseTrail.samples.length,
           });
-          if(bladeVisual.active && bladeVisual.isHeavy &&
-             bladeFxMode==='socket_trail' &&
-             (p.action==='heavy_unleash'||p.action==='execute')){
+          const breathingElement=resolveAct1BreathingElement(
+            p.stance,now<waterBladeUntilMsRef.current,coreLock.isSusanooActive
+          );
+          if(bladeVisual.active && bladeFxMode==='socket_trail' &&
+             (p.action==='light_attack'||p.action==='heavy_unleash'||
+              p.action==='execute')){
             const focusInfo=heavyBreathingFocusRef.current;
             const consumedFocus=p.action==='heavy_unleash' &&
               focusInfo?.attackSerial===p.attackSerial &&
               focusInfo.chamberIndex===sim.chamberIndex
-              ? focusInfo.focus : 1;
+              ? focusInfo.focus : p.action==='light_attack'?0:1;
             const painted=renderAct1HeavyParashuBreathing(ctx,poseTrail.samples,{
               stance:p.stance,focus:consumedFocus,alpha:bladeVisual.alpha,
-              action:p.action,
+              action:p.action,element:breathingElement,
             });
             if(perfTelemetryEnabled && painted){
               heavyBreathingTrace.push({
-                action:p.action,stance:p.stance,attackSerial:p.attackSerial,
+                action:p.action,stance:p.stance,element:breathingElement,
+                attackSerial:p.attackSerial,
                 focus:consumedFocus,sampleCount:poseTrail.samples.length,
-                peakReach:Math.min(145,58+Math.max(0,Math.min(4,consumedFocus))*18),
+                peakReach:Math.min(145,58+Math.max(0,Math.min(4,consumedFocus))*18)*
+                  (p.action==='light_attack'?0.45:p.action==='execute'?0.88:1),
                 atMs:now,
               });
               if(heavyBreathingTrace.length>64)heavyBreathingTrace.shift();
@@ -12096,11 +12112,11 @@ export default function KaliyugaArena() {
           // This is the same measured weapon-head path; no screen-space ring.
           if (activeParashuAction && bladeVisual.active) {
             if (bladeFxMode === 'socket_trail') {
-              const stanceColors = p.stance === 'thrust'
-                ? {coreColor:'#e9ffff',plasmaColor:'#50deed',outerGlowColor:'#0b5366'}
-                : p.stance === 'pillar'
-                ? {coreColor:'#fff9cf',plasmaColor:'#5eeeb0',outerGlowColor:'#17654a'}
-                : {coreColor:'#fff3c8',plasmaColor:'#ffa648',outerGlowColor:'#9e3019'};
+              const elementalInk=act1HeavyBreathingPalette(p.stance,breathingElement);
+              const stanceColors={
+                coreColor:elementalInk.hot,plasmaColor:elementalInk.pigment,
+                outerGlowColor:elementalInk.ember,
+              };
               const painted=renderWeaponPoseTrail(
                 ctx,poseTrail.samples,bladeVisual.alpha,stanceColors,bladeVisual.isHeavy
               );
