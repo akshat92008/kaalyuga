@@ -230,8 +230,23 @@ const base = process.env.GAME_URL || 'http://127.0.0.1:3100';
     report.checks.push('Dundubhi entrance is paused behind real dialogue, plays after ENGAGE, and skips safely');
     await capture('12-live-boss-after-skip');
 
+    // The isolated lab is a 16:9 cinematic player plus controls. A 540px
+    // viewport only captured the UPPER HALF of its actual animated canvas,
+    // falsely making the boss look cropped and hiding the ground-contact shot.
+    await page.setViewportSize({ width: 960, height: 820 });
     await page.goto(base + '/cinematic-lab', { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.getByRole('button', { name: /Play cinematic/i }).waitFor({ timeout: 30000 });
+    const cinematicViewport = await page.evaluate(() => {
+      const canvas = document.querySelector('canvas[aria-label*="Animated entrance preview"]');
+      const rect = canvas?.getBoundingClientRect();
+      return { top: rect?.top ?? -1, bottom: rect?.bottom ?? Infinity, viewport: window.innerHeight };
+    });
+    assert.ok(
+      cinematicViewport.top >= 0 &&
+      cinematicViewport.bottom <= cinematicViewport.viewport - 20,
+      'Full Dundubhi cinematic canvas must fit in the QA screenshot viewport'
+    );
+    report.checks.push('full 16:9 boss cinematic and ground contact are visible in screenshot viewport');
     await capture('03-dundubhi-before-play');
     await page.getByRole('button', { name: /Play cinematic/i }).click();
     // The FBX character and its MP4 arena must use an identical dolly.
