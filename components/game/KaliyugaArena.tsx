@@ -196,6 +196,7 @@ import {
   type WeaponTrailSample,
 } from '@/lib/game/act1WeaponPoseTrail';
 import { getAct1ExecutionVisualPlan } from '@/lib/game/act1ExecutionVisualPlan';
+import { shouldSpawnCombatCallout } from '@/lib/game/act1CombatCalloutPolicy';
 import {
   MAX_CLAMPED_CAMERA_TRAUMA,
   ParashuFinisherVariant,
@@ -1532,6 +1533,13 @@ export default function KaliyugaArena() {
         }
         return;
       }
+
+      // Restrict repetitive non-numeric combat captions around the same hit
+      // point. Important execute/posture prompts and all damage numbers retain
+      // their separate, higher-priority handling.
+      if (!shouldSpawnCombatCallout({
+        existing: pool, text: cleanText, x, y: y - 18,
+      })) return;
 
       const fanSlot = (simRef.current.nextScarId++ % 7) - 3;
       const popAngle = -Math.PI * 0.5 + fanSlot * 0.28 + (Math.random() - 0.5) * 0.14;
