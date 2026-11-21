@@ -8116,7 +8116,7 @@ export default function KaliyugaArena() {
               // The actual live phase transition uses a valid elemental palette;
               // leaving this undefined crashed the first post-reveal VFX burst.
               const bossPhasePalette: DemonSlayerVfxPalette =
-                e.type === 'vrikodara' ? 'hinokami' : 'crimson_gold';
+                e.type === 'vrikodara' ? 'magma' : 'blood';
               spawnShockwave(e.x, e.y, 240, '#a855f7', 0.48);
               triggerImpactInversionFlash(bloodDemonArtsRef.current, e.x, e.y - 38, 0.06, '#c026d3');
               // Purple-Crimson Blood Demon Art Cage + Thorny Floor Vines (no cyan Akaza compass on Dundubhi!)
