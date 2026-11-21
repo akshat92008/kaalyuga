@@ -1,0 +1,51 @@
+name: Act I Parashu blade-head Blender preflight
+on:
+  pull_request:
+    paths:
+      - "scripts/act1-parashu-geometry-preflight.py"
+      - ".github/workflows/act1-parashu-geometry-preflight.yml"
+  workflow_dispatch:
+concurrency:
+  group: act1-parashu-head-blender-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  geometry:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            scripts/act1-parashu-geometry-preflight.py
+            new 3D assets and animations/3D Models/Weapons/Bloodforged_Trident_Axe_20261025
+          sparse-checkout-cone-mode: false
+      - name: Install open-source Blender
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y blender python3-numpy
+      - name: Check Python script
+        run: python3 -m py_compile scripts/act1-parashu-geometry-preflight.py
+      - name: Inspect real Parashu source vertices and render a head marker preview
+        run: |
+          blender -b --python scripts/act1-parashu-geometry-preflight.py -- \
+            --weapon "new 3D assets and animations/3D Models/Weapons/Bloodforged_Trident_Axe_20261025/Meshy_AI_Bloodforged_Trident_Axe_20261025_texture.fbx" \
+            --output "artifacts/act1-parashu/head-audit.json" \
+            --render-preview
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.load(open("artifacts/act1-parashu/head-audit.json"))
+          assert r["mesh_count"]>=1 and r["triangles"]>0
+          assert r["sampled_vertices"]>=16
+          assert not r["errors"]
+          assert Path("artifacts/act1-parashu/head-audit.png").is_file()
+          print("Parashu geometry candidate:",r["dominant_axis"],r["suggested_blade_surface_vertex_blender_world"])
+          PY
+      - name: Archive Blender marker image and source geometry audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: act1-parashu-weapon-head-geometry-preflight
+          path: artifacts/act1-parashu/
+          if-no-files-found: warn
+          retention-days: 14
