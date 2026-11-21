@@ -22,7 +22,6 @@ import {
 import { loadFbxCached, simplifyBufferGeometry } from './meshSimplifier';
 import {
   computeCameraFootAnchorRatio,
-  computeTrimmedCleaveClock,
 } from './kalaBhairavaSusanoo';
 
 export type RudraAnimState =
@@ -143,7 +142,15 @@ export function resolveRudraAnimStateAndClock(
     };
   }
 
-  if (state === 'attack1' || state === 'attack2' || state === 'attack3' || state === 'heavy') {
+  // The spinning execution deliberately borrows the cast/360° axe clip.
+  // It is still a WEAPON action, not an Astra cast: drive that clip from the
+  // very same normalized attack clock that gates damage, sound and impact VFX.
+  // Using elapsed render time here made its blade arrive late/early after
+  // hitstop or irregular frames, while the other two executions stayed in sync.
+  const isFinisherCast = state === 'cast' && Boolean(input.finisherVariant) &&
+    (input.isHeavyAttack || input.isAttacking);
+  if (state === 'attack1' || state === 'attack2' || state === 'attack3' ||
+      state === 'heavy' || isFinisherCast) {
     const prog = Number.isFinite(input.attackProgress)
       ? input.attackProgress
       : stateElapsedSec / 0.44;
@@ -171,9 +178,44 @@ export function resolveRudraAnimStateAndClock(
   };
 }
 
+/**
+ * Maps an animation clock to one exact baked sprite frame. Trim attack clips once,
+ * not twice: double trimming shortened the visible cleave and shifted contact timing.
+ * The same quantization is used by preview/prewarm and normal combat.
+ */
+export function computeRudraBakedFrameTime(
+  clockSec: number,
+  clipDurationSec: number,
+  steps: number,
+  isAction: boolean,
+  isAttack: boolean
+): { frame: number; timeSec: number } {
+  const count = Math.max(2, Math.floor(Number.isFinite(steps) ? steps : 2));
+  const duration = Math.max(0.01, Number.isFinite(clipDurationSec) ? clipDurationSec : 1);
+  const clock = Number.isFinite(clockSec) ? Math.max(0, clockSec) : 0;
+  const frame = isAction
+    ? Math.min(count - 1, Math.floor(Math.min(0.9999, clock) * count))
+    : Math.floor(((clock % duration) / duration) * count);
+  const phase = frame / (count - 1);
+  return {
+    frame,
+    timeSec: isAttack
+      ? (0.14 + phase * (0.88 - 0.14)) * duration
+      : (frame / count) * duration,
+  };
+}
+
+/** Baked-sprite transitions retain pose continuity without fading precise contact or parry frames. */
+export function getRudraTransitionBlendSeconds(from: RudraAnimState, to: RudraAnimState): number {
+  if (from === to || to === 'hurt' || to === 'dash' || to === 'block') return 0;
+  if (isNormalizedRudraActionState(to)) return 0.038;
+  if (isNormalizedRudraActionState(from)) return 0.07;
+  return 0.11;
+}
+
 // Exact 1:1 vertex match (493,632 verts === 493,632 verts) between Pro Melee Axe Pack rig & Ashen_Warborn texture FBX!
 const RUDRA_RIGGED_FBX_URL =
-  '/new_3d_assets/Animations/Pro Melee Axe Pack/Meshy_AI_Ashen_Warborn_20261025_generate.fbx';
+  '/kaalyuga/rudra/rigged.fbx';
 const RUDRA_TEXTURE_FBX_URL =
   '/models/Meshy_AI_Ashen_Warborn_20261025_texture_fbx/Meshy_AI_Ashen_Warborn_20261025_texture.fbx';
 const RUDRA_DIFFUSE_URL =
@@ -181,7 +223,7 @@ const RUDRA_DIFFUSE_URL =
 
 // 3D Parashu Battle-Axe attached to Rudra's mixamorigRightHand bone
 const PARASHU_WEAPON_FBX_URL =
-  '/new_3d_assets/3D Models/Weapons/Bloodforged_Trident_Axe_20261025/Meshy_AI_Bloodforged_Trident_Axe_20261025_texture.fbx';
+  '/kaalyuga/parashu/weapon.fbx';
 const PARASHU_DIFFUSE_URL =
   '/models/Meshy_AI_Bloodforged_Trident_A_1025041928_texture_fbx/Meshy_AI_Bloodforged_Trident_A_1025041928_texture.png';
 
@@ -200,16 +242,16 @@ const RUDRA_LOCAL_ANIM_URLS: Record<RudraAnimState, string> = {
 };
 
 const RUDRA_ANIM_URLS: Record<RudraAnimState, string> = {
-  idle: '/new_3d_assets/Animations/Pro Melee Axe Pack/standing idle.fbx',
-  run: '/new_3d_assets/Animations/Pro Melee Axe Pack/standing run forward.fbx',
-  dash: '/new_3d_assets/Animations/Pro Melee Axe Pack/standing run forward.fbx',
-  attack1: '/new_3d_assets/Animations/Pro Melee Axe Pack/standing melee combo attack ver. 1.fbx',
-  attack2: '/new_3d_assets/Animations/Pro Melee Axe Pack/standing melee combo attack ver. 2.fbx',
-  attack3: '/new_3d_assets/Animations/Pro Melee Axe Pack/standing melee combo attack ver. 3.fbx',
-  heavy: '/new_3d_assets/Animations/Pro Melee Axe Pack/standing melee attack downward.fbx',
-  cast: '/new_3d_assets/Animations/Pro Melee Axe Pack/standing melee attack 360 high.fbx',
-  block: '/new_3d_assets/Animations/Pro Melee Axe Pack/standing block idle.fbx',
-  hurt: '/new_3d_assets/Animations/Pro Melee Axe Pack/standing react large from left.fbx',
+  idle: '/animations/pro_melee_axe/standing idle.fbx',
+  run: '/animations/pro_melee_axe/standing run forward.fbx',
+  dash: '/animations/pro_melee_axe/standing run forward.fbx',
+  attack1: '/animations/pro_melee_axe/standing melee combo attack ver. 1.fbx',
+  attack2: '/animations/pro_melee_axe/standing melee combo attack ver. 2.fbx',
+  attack3: '/animations/pro_melee_axe/standing melee combo attack ver. 3.fbx',
+  heavy: '/animations/pro_melee_axe/standing melee attack downward.fbx',
+  cast: '/animations/pro_melee_axe/standing melee attack 360 high.fbx',
+  block: '/animations/pro_melee_axe/standing block idle.fbx',
+  hurt: '/animations/pro_melee_axe/standing react large from left.fbx',
 };
 
 export class Rudra3DRenderer {
@@ -228,6 +270,10 @@ export class Rudra3DRenderer {
   private stateElapsedSec = 0;
   private lastAnimState: RudraAnimState = 'idle';
   private lastAttackSerial = -1;
+  private blendFromCanvas: HTMLCanvasElement | null = null;
+  private blendOutCanvas: HTMLCanvasElement | null = null;
+  private blendDurationSec = 0;
+  private blendElapsedSec = 0;
   private frameCache: Map<string, HTMLCanvasElement> = new Map();
   private celMaterials: THREE.Material[] = [];
   private parashuAuraMat: THREE.ShaderMaterial | null = null;
@@ -259,6 +305,12 @@ export class Rudra3DRenderer {
       this.canvas = document.createElement('canvas');
       this.canvas.width = size;
       this.canvas.height = size;
+      this.blendFromCanvas = document.createElement('canvas');
+      this.blendFromCanvas.width = size;
+      this.blendFromCanvas.height = size;
+      this.blendOutCanvas = document.createElement('canvas');
+      this.blendOutCanvas.width = size;
+      this.blendOutCanvas.height = size;
     } else {
       this.canvas = null as unknown as HTMLCanvasElement;
     }
@@ -578,6 +630,19 @@ export class Rudra3DRenderer {
     const serialChanged =
       typeof input.attackSerial === 'number' && input.attackSerial !== this.lastAttackSerial;
     if (nextState !== this.lastAnimState || serialChanged) {
+      const duration = serialChanged && nextState === this.lastAnimState
+        ? 0
+        : getRudraTransitionBlendSeconds(this.lastAnimState, nextState);
+      this.blendDurationSec = 0;
+      if (duration > 0 && this.canvas?.width && this.blendFromCanvas) {
+        const sourceCtx = this.blendFromCanvas.getContext('2d');
+        if (sourceCtx) {
+          sourceCtx.clearRect(0, 0, this.size, this.size);
+          sourceCtx.drawImage(this.canvas, 0, 0, this.size, this.size);
+          this.blendElapsedSec = 0;
+          this.blendDurationSec = duration;
+        }
+      }
       this.stateElapsedSec = 0;
       this.lastAnimState = nextState;
       if (typeof input.attackSerial === 'number') {
@@ -608,7 +673,25 @@ export class Rudra3DRenderer {
       Boolean(input.susanooActive)
     );
     if (baked) {
-      this.canvas = baked;
+      if (this.blendDurationSec > 0 && this.blendFromCanvas && this.blendOutCanvas) {
+        this.blendElapsedSec += stepDt;
+        const alpha = Math.min(1, this.blendElapsedSec / this.blendDurationSec);
+        const blendCtx = this.blendOutCanvas.getContext('2d');
+        if (blendCtx && alpha < 1) {
+          blendCtx.clearRect(0, 0, this.size, this.size);
+          blendCtx.globalAlpha = 1 - alpha;
+          blendCtx.drawImage(this.blendFromCanvas, 0, 0, this.size, this.size);
+          blendCtx.globalAlpha = alpha;
+          blendCtx.drawImage(baked, 0, 0, this.size, this.size);
+          blendCtx.globalAlpha = 1;
+          this.canvas = this.blendOutCanvas;
+        } else {
+          this.blendDurationSec = 0;
+          this.canvas = baked;
+        }
+      } else {
+        this.canvas = baked;
+      }
       return true;
     }
     return false;
@@ -647,15 +730,9 @@ export class Rudra3DRenderer {
     // Higher swing frame density (12 software / 24 GPU) + active cleave window [0.14..0.88] eliminates stalled axe swings
     const steps = isSoft ? (isAttack ? 12 : 8) : isAttack ? 24 : 14;
 
-    const effectiveNorm = isAttack
-      ? computeTrimmedCleaveClock(animTimeSec, 0.14, 0.88)
-      : Math.max(0, Math.min(0.999, animTimeSec));
-    const stepIndex = isAction
-      ? Math.min(steps - 1, Math.floor(effectiveNorm * steps))
-      : Math.floor(((Math.max(0, animTimeSec) % clipDur) / clipDur) * steps);
-    const quantizedTime = isAttack
-      ? (0.14 + (stepIndex / Math.max(1, steps - 1)) * 0.74) * clipDur
-      : (stepIndex / steps) * clipDur;
+    const { frame: stepIndex, timeSec: quantizedTime } = computeRudraBakedFrameTime(
+      animTimeSec, clipDur, steps, isAction, isAttack
+    );
 
     const stanceTag = susanooActive
       ? 'susanoo'

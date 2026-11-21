@@ -38,6 +38,15 @@ import {
   computeGodOfWarHeavyStyleSpec,
 } from '@/lib/game/rules';
 import { soundEngine } from '@/lib/game/audio';
+import { heavyElementFromStance, spawnHeavyElementalRelease } from '@/lib/game/elementalImpactDirector';
+import { spawnExecutionImpactFx } from '@/lib/game/executionImpactDirector';
+import { CinematicCameraTrack } from '@/lib/game/cinematicCamera';
+import {
+  createBossEntranceCameraTrack,
+  createExecutionCameraTrack,
+  getExecutionBeat,
+  shouldCommitExecutionImpact,
+} from '@/lib/game/executionChoreography';
 import {
   loadAndProcessSprite,
   getProcessedSpriteSync,
@@ -530,6 +539,20 @@ export default function KaliyugaArena() {
     triggerThreshold: number;
     execute: () => void;
   } | null>(null);
+  const pendingExecutionRef = useRef<{
+    variant: ParashuFinisherVariant;
+    fired: boolean;
+    execute: () => void;
+  } | null>(null);
+  const liveCameraRef = useRef<{
+    kind: 'boss' | 'execution';
+    elapsedSec: number;
+    track: CinematicCameraTrack;
+  } | null>(null);
+  const qaRecentEventsRef = useRef<Array<{
+    name: string; frameTime: number; meta?: string; progress?: number;
+    contactX?: number; contactY?: number; playerX?: number; playerY?: number;
+  }>>([]);
   const bloodDemonArtsRef = useRef<BloodDemonArtPool>(createBloodDemonArtPool());
   const enemyVariantCounterRef = useRef<number>(0);
   const chamberLoadSeqRef = useRef<number>(0);
@@ -1086,6 +1109,151 @@ export default function KaliyugaArena() {
       bufferTimer: 0,
     },
   });
+
+  // Read-only testing snapshot. Enabled ONLY via the existing ?debug=1 switch.
+  // Browser QA can assert actual action states, contact commits and camera resets
+  // instead of claiming screenshots alone prove combat worked.
+  useEffect(() => {
+    if (!isDebugMode || typeof window === 'undefined') return;
+    Object.defineProperty(window, '__kaliyugaPhaseQA', {
+      configurable: true,
+      get: () => {
+        const sim = simRef.current;
+        return {
+          state: sim.state,
+          sliceStage: sliceStageRef.current,
+          chamber: sim.chamberIndex + 1,
+          action: sim.player.action,
+          stance: sim.player.stance,
+          attackProgress: sim.player.weaponSwingProgress,
+          focusOrbs: sim.player.focusOrbs,
+          astraEnergy: sim.player.astraEnergy,
+          health: sim.player.hp,
+          maximumHealth: sim.player.maxHp,
+          transformRemaining: sim.player.transformTimer,
+          fps: sim.fps,
+          cameraKind: liveCameraRef.current?.kind ?? null,
+          cameraElapsedSec: liveCameraRef.current?.elapsedSec ?? null,
+          cameraZoom: sim.cameraZoom,
+          // Real projected boss position; a valid entrance must include the
+          // boss on screen, not just a running camera animation and boss HUD.
+          bossScreen: (() => {
+            const boss = sim.enemies.find(e => e.isBoss && e.hp > 0 && e.aiState !== 'ko');
+            if (!boss) return null;
+            const width = sim.viewportW || 960;
+            const height = sim.viewportH || 540;
+            const shot = liveCameraRef.current?.track.sample(
+              liveCameraRef.current.elapsedSec, width, height
+            );
+            const zoom = sim.cameraZoom * (shot?.zoom ?? 1);
+            return {
+              x: width * 0.5 + ((boss.x - sim.camX - width * 0.5) + (shot?.offsetX ?? 0)) * zoom,
+              y: height * 0.5 + ((boss.y - sim.camY - height * 0.5) + (shot?.offsetY ?? 0)) * zoom,
+              width, height,
+            };
+          })(),
+          rudra3dReady: rudra3dRef.current?.isReady ?? false,
+          webglVfxReady: Boolean(webglDemonSlayerVfxRef.current),
+          recentEvents: qaRecentEventsRef.current.slice(-36),
+        };
+      },
+    });
+    if (new URLSearchParams(window.location.search).get('qaFixtures') === '1') {
+      // These fixtures are never installed in normal gameplay: both debug=1
+      // and qaFixtures=1 must be explicitly present in the address bar.
+      const prepareArena = () => {
+        const sim = simRef.current;
+        if (sim.state !== 'playing') throw new Error('QA fixture requires a live arena');
+        const p = sim.player;
+        p.hp = p.maxHp;
+        p.displayHp = p.maxHp;
+        p.invulnTimer = Math.max(45, p.invulnTimer);
+        p.astraEnergy = p.maxAstraEnergy;
+        p.focusOrbs = 4;
+        p.agneyastraCd = 0;
+        p.vayavyastraCd = 0;
+        p.vajrastraCd = 0;
+        p.transformCd = 0;
+        p.transformTimer = 0;
+        p.action = 'idle';
+        p.actionTimer = 0;
+        p.actionDuration = 0;
+        sim.input.bufferedAction = null;
+        sim.input.bufferTimer = 0;
+        sim.hitstopTimer = 0;
+        sim.slowMoTimer = 0;
+        sim.activeAstraZones.length = 0;
+        // QA only: don't let the previous Astra's short-lived lightning and
+        // spark pools obscure the next stance or execution contact screenshot.
+        // Normal gameplay retains its original effect lifetime semantics.
+        sim.lightningArcs.length = 0;
+        webglDemonSlayerVfxRef.current?.clearActiveEffects();
+        sim.chamberClearTimer = 0;
+        for (const enemy of sim.enemies) {
+          enemy.hp = Math.max(9000, enemy.hp);
+          enemy.aiState = 'recover';
+          enemy.aiTimer = 45;
+          enemy.postureBrokenTimer = 0;
+          enemy.immobilizedTimer = 45;
+          enemy.vx = 0;
+          enemy.vy = 0;
+        }
+      };
+      const fixture = {
+        grantResources: () => { prepareArena(); },
+        // QA-only story overlay fixture proves a boss camera does not expire
+        // behind the actual ENGAGE / FACE dialogue shown in normal Act I.
+        prepareBossDialogue: (kind: 'dundubhi' | 'vrikodara') => {
+          const sim = simRef.current;
+          const expectedChamber = kind === 'dundubhi' ? 3 : 7;
+          if (sim.state !== 'playing' || sim.chamberIndex !== expectedChamber) {
+            throw new Error('Boss dialogue QA fixture requires the matching live boss chamber');
+          }
+          liveCameraRef.current = {
+            kind: 'boss',
+            elapsedSec: 0,
+            track: createBossEntranceCameraTrack(kind),
+          };
+          setSliceStage(kind === 'dundubhi' ? 'dundubhi_intro' : 'vrikodara_intro');
+        },
+        prepareExecution: (variant: ParashuFinisherVariant) => {
+          if (!['downward_crush', 'spin_360_cleave', 'impaling_lunge'].includes(variant)) {
+            throw new Error('Unknown finisher fixture ' + String(variant));
+          }
+          prepareArena();
+          const sim = simRef.current;
+          const p = sim.player;
+          p.stance = variant === 'spin_360_cleave' ? 'pillar' : variant === 'impaling_lunge' ? 'thrust' : 'smash';
+          const target = sim.enemies.find((enemy) => enemy.aiState !== 'ko');
+          if (!target) throw new Error('No active enemy for execution test');
+          sim.enemies.forEach((enemy, index) => {
+            if (enemy === target || enemy.aiState === 'ko') return;
+            enemy.x = p.x + 850 + index * 50;
+            enemy.y = p.y + 600;
+            enemy.aiState = 'recover';
+            enemy.aiTimer = 45;
+          });
+          target.x = p.x + 74;
+          target.y = p.y + 2;
+          target.hp = Math.max(9000, target.hp);
+          target.postureBrokenTimer = 9;
+          target.posture = 0;
+          target.aiState = 'recover';
+          target.aiTimer = 9;
+          target.vx = 0;
+          target.vy = 0;
+          p.facing = 1;
+          p.invulnTimer = 45;
+          qaRecentEventsRef.current.push({ name: 'execution-fixture', frameTime: performance.now(), meta: variant });
+        },
+      };
+      Object.defineProperty(window, '__kaliyugaPhaseQAFixture', { configurable: true, value: fixture });
+    }
+    return () => {
+      delete (window as Window & { __kaliyugaPhaseQA?: unknown }).__kaliyugaPhaseQA;
+      delete (window as Window & { __kaliyugaPhaseQAFixture?: unknown }).__kaliyugaPhaseQAFixture;
+    };
+  }, [isDebugMode]);
 
   const cycleGraphicsTier = useCallback(() => {
     setGraphicsSettings((prev) => {
@@ -2122,6 +2290,10 @@ export default function KaliyugaArena() {
       sim.chamberClearTimer = 0;
       sim.bossPhaseBanner = null;
       sim.cameraZoom = BASE_CAMERA_ZOOM;
+      pendingStrikeVfxRef.current = null;
+      pendingExecutionRef.current = null;
+      liveCameraRef.current?.track.interrupt();
+      liveCameraRef.current = null;
       sim.cameraKickX = 0;
       sim.cameraKickY = 0;
       sim.delayedFaultLines = [];
@@ -2181,7 +2353,15 @@ export default function KaliyugaArena() {
         }
       });
 
-      // Trigger Boss Intro Painted Story Cutscenes when entering Chamber 4 (Dundubhi) or Chamber 8 (Vrikodara) during a run
+      // Start safe boss camera even for direct-chamber QA / quick-start runs.
+      // Painted story overlay remains controlled by the original narrative condition.
+      if (!isTitleMode && sim.state === 'playing' && (clampedIdx === 3 || clampedIdx === 7)) {
+        liveCameraRef.current = {
+          kind: 'boss', elapsedSec: 0,
+          track: createBossEntranceCameraTrack(clampedIdx === 3 ? 'dundubhi' : 'vrikodara'),
+        };
+      }
+      // Trigger Boss Intro Painted Story Cutscenes when entering Chamber 4 or 8.
       if (!resetFullRun && sim.state === 'playing') {
         if (clampedIdx === 3) {
           setSliceStage('dundubhi_intro');
@@ -3273,6 +3453,10 @@ export default function KaliyugaArena() {
       p.action = 'astra';
       p.actionDuration = 0.38;
       p.actionTimer = 0.38;
+      if (isDebugMode) {
+        qaRecentEventsRef.current.push({ name: 'astra-invoked', frameTime: performance.now(), meta: astraId });
+        if (qaRecentEventsRef.current.length > 50) qaRecentEventsRef.current.shift();
+      }
       p.invulnTimer = Math.max(p.invulnTimer, 0.36);
       sim.runAstrasInvoked += 1;
       sim.cameraShakeTrauma = Math.min(1, sim.cameraShakeTrauma + 0.48);
@@ -4391,6 +4575,7 @@ export default function KaliyugaArena() {
     const sim = simRef.current;
     const p = sim.player;
     if (sim.state !== 'playing') return;
+    if (p.action === 'execute' || pendingExecutionRef.current) return;
 
     const brokenEnemy = sim.enemies.find(
       (e) => e.aiState !== 'ko' && e.postureBrokenTimer > 0
@@ -4442,7 +4627,26 @@ export default function KaliyugaArena() {
     p.slashAngle = p.facing === 1 ? 0 : Math.PI;
     p.slashArcAlpha = 1.0;
     p.weaponSwingProgress = 0.0;
-
+    p.attackSerial += 1;
+    // During choreography the broken foe holds its stagger; the blade actually
+    // deals damage and launches particles ONLY when the animation crosses contact.
+    brokenEnemy.aiState = 'recover';
+    brokenEnemy.aiTimer = Math.max(brokenEnemy.aiTimer, finisherSpec.durationSec);
+    brokenEnemy.vx = 0;
+    brokenEnemy.vy = 0;
+    pendingStrikeVfxRef.current = null;
+    liveCameraRef.current = {
+      kind: 'execution',
+      elapsedSec: 0,
+      track: createExecutionCameraTrack(finisherSpec.variant, finisherSpec.durationSec),
+    };
+    pendingExecutionRef.current = {
+      variant: finisherSpec.variant,
+      fired: false,
+      execute: () => {
+        if (sim.state !== 'playing' || p.action !== 'execute') return;
+        // Existing finisher damage, enemy reaction, rewards, audio, dual-element
+        // ribbons, starbursts and shards now share this contact frame.
     const stats = computeDerivedPlayerStats(sim.ranks);
     const execDmg = Math.round(
       (brokenEnemy.isBoss ? 360 : 290) * stats.damageMultiplier * finisherSpec.damageMultiplier
@@ -4538,88 +4742,42 @@ export default function KaliyugaArena() {
     gainAstraEnergy(ASTRA_ENERGY_GAINS.EXECUTION);
 
     soundEngine.playHit('execute');
-    spawnShockwave(brokenEnemy.x, brokenEnemy.y, 290, '#ff4d3b', 0.48);
-    spawnSunHaloRing(bloodDemonArtsRef.current, {
-      x: brokenEnemy.x,
-      y: brokenEnemy.y - 22,
-      radius: 196,
-      palette: 'sun',
-    });
-    spawnHinokamiSlashArc(bloodDemonArtsRef.current, {
-      x: brokenEnemy.x,
-      y: brokenEnemy.y - 24,
-      angle: p.slashAngle,
-      arcSpan: 3.3,
-      radius: 198,
-      thickness: 38,
-      palette: 'sun',
-      direction: 1,
-    });
-    // Counter-rotating Ukiyo-e Water Dragon ribbon for the dual Fire + Water Hinokami Execution!
-    spawnHinokamiSlashArc(bloodDemonArtsRef.current, {
-      x: brokenEnemy.x,
-      y: brokenEnemy.y - 24,
-      angle: p.slashAngle + 0.35,
-      arcSpan: 2.95,
-      radius: 168,
-      thickness: 32,
-      palette: 'water',
-      direction: -1,
-    });
-    webglDemonSlayerVfxRef.current?.spawnSolarFlameWheel({
-      x: brokenEnemy.x,
-      y: brokenEnemy.y - 24,
-      angle: p.slashAngle,
-      radius: 218,
-      palette: 'hinokami',
-      duration: 0.60,
-    });
-    webglDemonSlayerVfxRef.current?.spawnWaterDragon({
-      x: brokenEnemy.x,
-      y: brokenEnemy.y - 24,
-      angle: p.slashAngle + 0.35,
-      radius: 175,
-      duration: 0.68,
-    });
-    webglDemonSlayerVfxRef.current?.spawnClashStarburst({
-      x: brokenEnemy.x,
-      y: brokenEnemy.y - 24,
-      scale: 1.75,
-      palette: 'sun',
-      duration: 0.32,
-    });
-    webglDemonSlayerVfxRef.current?.spawnSlashRibbon({
-      x: brokenEnemy.x,
-      y: brokenEnemy.y - 24,
-      angle: p.slashAngle,
-      radius: 235,
-      width: 82,
-      arcSpan: 3.25,
-      direction: 1,
-      palette: 'sun',
-      duration: 0.46,
-      tiltX: 0.58,
-    });
-    webglDemonSlayerVfxRef.current?.spawnSlashRibbon({
-      x: brokenEnemy.x,
-      y: brokenEnemy.y - 24,
-      angle: p.slashAngle + 0.35,
-      radius: 205,
-      width: 66,
-      arcSpan: 2.95,
-      direction: -1,
-      palette: 'water',
-      duration: 0.42,
-      tiltX: 0.48,
-    });
-    webglDemonSlayerVfxRef.current?.spawnSparkBurst({
-      x: brokenEnemy.x,
-      y: brokenEnemy.y - 24,
-      count: 28,
-      speed: 520,
-      palette: 'sun',
-    });
-    triggerImpactInversionFlash(bloodDemonArtsRef.current, brokenEnemy.x, brokenEnemy.y - 24, 0.068, '#ff4d3b');
+    // FINISHER CONTACT: distinct primary visuals authored to the same impact
+    // marker as damage. No more identical nine-layer fire/water rings for
+    // overhead crush, 360 cleave and armor-piercing lunge.
+    const executionVfx = spawnExecutionImpactFx(
+      webglDemonSlayerVfxRef.current,
+      finisherSpec.variant,
+      brokenEnemy.x,
+      brokenEnemy.y,
+      p.slashAngle
+    );
+    const executionAccent =
+      executionVfx.palette === 'wind' ? '#42f3b5' :
+      executionVfx.palette === 'thunder' ? '#ffe87e' : '#ff5434';
+    spawnShockwave(
+      brokenEnemy.x, brokenEnemy.y,
+      executionVfx.strikeRadius * 0.87, executionAccent, 0.36
+    );
+    if (finisherSpec.variant === 'downward_crush') {
+      // Tight flame guillotine follows the blade down; the enemy remains visible.
+      spawnHinokamiSlashArc(bloodDemonArtsRef.current, {
+        x: brokenEnemy.x, y: brokenEnemy.y - 25,
+        angle: p.slashAngle, arcSpan: 1.52, radius: 145,
+        thickness: 28, palette: 'sun', direction: 1,
+      });
+    } else if (finisherSpec.variant === 'spin_360_cleave') {
+      // Readable counterclockwise whirlwind: not another fullscreen fire halo.
+      spawnHinokamiSlashArc(bloodDemonArtsRef.current, {
+        x: brokenEnemy.x, y: brokenEnemy.y - 22,
+        angle: p.slashAngle + 0.35, arcSpan: 3.3, radius: 162,
+        thickness: 27, palette: 'water', direction: -1,
+      });
+    }
+    triggerImpactInversionFlash(
+      bloodDemonArtsRef.current,
+      brokenEnemy.x, brokenEnemy.y - 24, 0.054, executionAccent
+    );
     const execSlashRow =
       finisherSpec.variant === 'spin_360_cleave'
         ? PARASHU_FLIPBOOK_ROWS.SPIN_360_WHIRLWIND_RING
@@ -4666,18 +4824,10 @@ export default function KaliyugaArena() {
       4.4,
       100
     );
-    // Call down Twin Cataclysmic Sky-Splitting Vajra Lightning Bolts on Execute!
-    for (let b = 0; b < 3; b++) {
-      sim.lightningArcs.push({
-        x1: brokenEnemy.x + (b - 1) * 110,
-        y1: brokenEnemy.y - 540,
-        x2: brokenEnemy.x + (b - 1) * 18,
-        y2: brokenEnemy.y - 12,
-        life: 0.38,
-        maxLife: 0.38,
-        color: b === 1 ? '#ffd86b' : '#ff4d3b',
-      });
-    }
+    // Keep the three execution silhouettes coherent: the old unconditional
+    // triple SKY LIGHTNING stack polluted the fire crush and wind cleave,
+    // filled the entire camera, and obscured weapon contact in real QA shots.
+    // Impaling Lunge already has its own bounded directional Vajra effect.
     spawnFloatingText(
       brokenEnemy.x,
       brokenEnemy.y - 96,
@@ -4686,6 +4836,8 @@ export default function KaliyugaArena() {
       1.25,
       finisherSpec.subtitle
     );
+      },
+    };
   }, [gainAstraEnergy, recordQuestEvent, spawnAfterimage, spawnFlipbookVfx, spawnFloatingText, spawnParticles, spawnShockwave]);
 
   const triggerStanceHeavyUnleash = useCallback(() => {
@@ -4810,61 +4962,38 @@ export default function KaliyugaArena() {
 
         // Tier 2 Heavy Unleash: Explosive AAA Stance Spectacle + Heavy Iron Swing SFX
         soundEngine.playHeavyIronSwing();
-        if (heavyStyleId === 'pralaya_earth_shatter') {
-          webglDemonSlayerVfxRef.current?.spawnSolarFlameWheel({
-            x: syncImpactX,
-            y: syncImpactY - 20,
-            angle: heavySlashAngle,
-            radius: 215 + orbsUsed * 18,
-            palette: 'hinokami',
-            duration: 0.72,
-          });
-          webglDemonSlayerVfxRef.current?.spawnShockwaveRing({
-            x: syncImpactX,
-            y: syncImpactY,
-            radius: 195 + orbsUsed * 20,
-            palette: 'hinokami',
-            duration: 0.46,
-          });
-          webglDemonSlayerVfxRef.current?.spawnClashStarburst({
-            x: syncImpactX,
-            y: syncImpactY - 24,
-            scale: 1.55,
-            palette: 'hinokami',
-            duration: 0.4,
-          });
-          spawnShockwave(syncImpactX, syncImpactY, 165 + orbsUsed * 20, '#ff5418', 0.42);
-          spawnParticles(syncImpactX, syncImpactY - 18, 28, '#ff7b24', 285, 5.2, 110);
-          simRef.current.hitstopTimer = Math.max(simRef.current.hitstopTimer, 0.068);
-        } else if (heavyStyleId === 'sudarshana_vortex') {
-          webglDemonSlayerVfxRef.current?.spawnWindGaleCrescents({
-            x: curP.x,
-            y: curP.y - 20,
-            angle: heavySlashAngle,
-            radius: heavyCleaveRadius * 1.12,
-            duration: 0.62,
-          });
-          spawnShockwave(curP.x, curP.y, heavyCleaveRadius * 1.02, '#10b981', 0.36);
-        } else {
-          // Thrust Heavy: Rebuilt GLSL Plasma Thunderclap Bolt + crisp electric slash
-          webglDemonSlayerVfxRef.current?.spawnThunderZigzag({
-            x1: curP.x,
-            y1: curP.y - 22,
-            x2: syncImpactX + Math.cos(heavySlashAngle) * 195,
-            y2: syncImpactY - 22 + Math.sin(heavySlashAngle) * 140,
-            palette: 'thunder',
-            duration: 0.62,
-            width: 28,
-            withFloorRing: true,
-          });
-        }
-        webglDemonSlayerVfxRef.current?.spawnSparkBurst({
+        const heavyElement = curP.transformTimer > 0
+          ? 'guardian'
+          : heavyStyleId === 'sudarshana_vortex'
+          ? 'vayu'
+          : heavyElementFromStance(curP.stance);
+        // All five elements now share the physical active-contact point, but not generic geometry:
+        // Agni = flame wheel; Varuna = water serpent; Vayu = emerald gale;
+        // Vajra = branching bolt; Kala-Bhairava = crimson astral axe.
+        const heavyRelease = spawnHeavyElementalRelease(webglDemonSlayerVfxRef.current, {
           x: syncImpactX,
-          y: syncImpactY - 22,
-          count: 12 + orbsUsed * 2,
-          speed: 410,
-          palette: primaryHeavyPalette,
+          y: syncImpactY,
+          angle: heavySlashAngle,
+          radius: heavyCleaveRadius * 0.95,
+          energyOrbs: orbsUsed,
+          element: heavyElement,
         });
+        if (isDebugMode) {
+          qaRecentEventsRef.current.push({
+            name: 'heavy-contact', frameTime: performance.now(), meta: heavyElement,
+            progress: curP.weaponSwingProgress, contactX: syncImpactX,
+            contactY: syncImpactY, playerX: curP.x, playerY: curP.y,
+          });
+          if (qaRecentEventsRef.current.length > 50) qaRecentEventsRef.current.shift();
+        }
+        const impactColor =
+          heavyElement === 'vayu' ? '#10b981' :
+          heavyElement === 'vajra' ? '#fde047' :
+          heavyElement === 'varuna' ? '#38e8ff' :
+          heavyElement === 'guardian' ? '#ed334f' : '#ff5418';
+        spawnShockwave(syncImpactX, syncImpactY, heavyRelease.radius * 0.76, impactColor, 0.36);
+        spawnParticles(syncImpactX, syncImpactY - 18, 12 + orbsUsed * 2, impactColor, 280, 4.6, 95);
+        simRef.current.hitstopTimer = Math.max(simRef.current.hitstopTimer, 0.062);
       },
     };
 
@@ -6262,6 +6391,12 @@ export default function KaliyugaArena() {
 
       if (e.code === 'Escape' || e.code === 'KeyP') {
         e.preventDefault();
+        // Escape skips an active live-camera shot instead of accidentally pausing the fight.
+        if (e.code === 'Escape' && liveCameraRef.current) {
+          liveCameraRef.current.track.skip();
+          liveCameraRef.current = null;
+          return;
+        }
         if (partyModalOpen) {
           setPartyModalOpen(false);
           return;
@@ -6338,6 +6473,10 @@ export default function KaliyugaArena() {
           sim.input.pointerActive ? sim.input.pointerX - p.x : p.lastMoveDirX || p.facing
         );
         soundEngine.playBreathingStyle('water');
+        if (isDebugMode) {
+          qaRecentEventsRef.current.push({ name: 'varuna-water-dragon', frameTime: performance.now(), meta: 'varuna' });
+          if (qaRecentEventsRef.current.length > 50) qaRecentEventsRef.current.shift();
+        }
         // Tier 3 Cinema Ultimate: Coiled Hokusai Water Dragon + Dual Tidal Vortex Ripples + Foam Spark Burst
         webglDemonSlayerVfxRef.current?.spawnWaterDragon({
           x: p.x,
@@ -6790,6 +6929,20 @@ export default function KaliyugaArena() {
         sim.fpsAccum = 0;
       }
 
+      // Pause authored camera when narrative dialogue, loading or a menu owns
+      // the screen. Previously the boss entrance played BEHIND the pre-fight
+      // overlay, so it had already finished when the player clicked ENGAGE.
+      // Resume the same keyframed shot exactly when active combat returns.
+      if (liveCameraRef.current) {
+        const running = liveCameraRef.current;
+        if (!sim.modalPaused && sim.state === 'playing') {
+          running.elapsedSec += Math.min(0.05, Math.max(0, rawDt));
+        }
+        if (running.track.sample(running.elapsedSec, cw, ch).completed) {
+          liveCameraRef.current = null;
+        }
+      }
+
       // Hitstop, slow-mo, camera zoom, and screen shake decay in real dt
       if (sim.hitstopTimer > 0) {
         sim.hitstopTimer = Math.max(0, sim.hitstopTimer - dt);
@@ -6858,8 +7011,12 @@ export default function KaliyugaArena() {
       let focusX = sim.player.x + lookAheadX;
       let focusY = sim.player.y - 18 + lookAheadY;
       if (activeBoss && Math.hypot(activeBoss.x - sim.player.x, activeBoss.y - sim.player.y) < 1100) {
-        focusX = focusX * 0.78 + activeBoss.x * 0.22;
-        focusY = focusY * 0.78 + activeBoss.y * 0.22;
+        // During a boss entrance the enemy MUST actually be in the shot.
+        // Normal combat keeps Rudra dominant; the authored entrance instead
+        // frames both combatants, then restores the original player bias.
+        const bossWeight = liveCameraRef.current?.kind === 'boss' ? 0.62 : 0.22;
+        focusX = focusX * (1 - bossWeight) + activeBoss.x * bossWeight;
+        focusY = focusY * (1 - bossWeight) + activeBoss.y * bossWeight;
       }
 
       // Clamp camera strictly inside [0, worldW] x [0, worldH] accounting for current zoom
@@ -7017,12 +7174,11 @@ export default function KaliyugaArena() {
         p.dashStrikeWindowTimer = Math.max(0, p.dashStrikeWindowTimer - simDt);
         p.slashArcAlpha = Math.max(0, p.slashArcAlpha - simDt * 4.8);
         p.dashStreakAlpha = Math.max(0, p.dashStreakAlpha - simDt * 4.2);
-        p.weaponSwingProgress = computeNormalizedAttackProgress(
-          p.action,
-          p.actionTimer,
-          p.actionDuration,
-          Math.min(0.99, p.weaponSwingProgress + simDt * 3.8)
-        );
+        // Preserve existing idle recovery for the guardian/afterimage renderer;
+        // attack clocks are advanced separately AFTER actionTimer is ticked.
+        if (p.action === 'idle') {
+          p.weaponSwingProgress = Math.min(0.99, p.weaponSwingProgress + simDt * 3.8);
+        }
         for (let si = sim.devanagariStamps.length - 1; si >= 0; si--) {
           sim.devanagariStamps[si].life += simDt;
           if (sim.devanagariStamps[si].life >= sim.devanagariStamps[si].maxLife) {
@@ -7270,6 +7426,35 @@ export default function KaliyugaArena() {
         if (p.action !== 'idle') {
           const prevAction = p.action;
           p.actionTimer -= simDt;
+          // One authoritative action clock for Rudra's weapon pose AND VFX
+          // contact gates. Previously this was sampled before subtracting
+          // simDt, leaving the blade behind the impact by one simulation frame.
+          p.weaponSwingProgress = computeNormalizedAttackProgress(
+            p.action,
+            p.actionTimer,
+            p.actionDuration,
+            Math.min(0.99, p.weaponSwingProgress + simDt * 3.8)
+          );
+          const execution = pendingExecutionRef.current;
+          if (execution) {
+            if (p.action !== 'execute') {
+              pendingExecutionRef.current = null;
+            } else {
+              const progress = 1 - Math.max(0, p.actionTimer) / Math.max(0.05, p.actionDuration);
+              if (shouldCommitExecutionImpact(execution.variant, progress, execution.fired) || p.actionTimer <= 0) {
+                execution.fired = true;
+                pendingExecutionRef.current = null;
+                if (isDebugMode) {
+                  qaRecentEventsRef.current.push({
+                    name: 'execution-contact', frameTime: performance.now(),
+                    meta: execution.variant, progress,
+                  });
+                  if (qaRecentEventsRef.current.length > 50) qaRecentEventsRef.current.shift();
+                }
+                execution.execute();
+              }
+            }
+          }
 
           // Synchronize melee slash VFX with Rudra's physical Parashu axe cleave active frame!
           const pendingStrike = pendingStrikeVfxRef.current;
@@ -7284,6 +7469,15 @@ export default function KaliyugaArena() {
             if (gate.shouldFireNow || p.actionTimer <= 0) {
               pendingStrike.fired = true;
               pendingStrike.execute();
+              if (isDebugMode && p.action === 'light_attack') {
+                qaRecentEventsRef.current.push({
+                  name: 'light-contact',
+                  frameTime: performance.now(),
+                  meta: p.stance,
+                  progress: curProgress,
+                });
+                if (qaRecentEventsRef.current.length > 50) qaRecentEventsRef.current.shift();
+              }
               pendingStrikeVfxRef.current = null;
             }
           }
@@ -8028,6 +8222,7 @@ export default function KaliyugaArena() {
               }
               spawnShockwave(e.x, e.y, 240, '#a855f7', 0.48);
               triggerImpactInversionFlash(bloodDemonArtsRef.current, e.x, e.y - 38, 0.06, '#c026d3');
+              const bossPhasePalette: DemonSlayerVfxPalette = nextPhase >= 3 ? 'void' : e.type === 'vrikodara' ? 'magma' : 'bronze';
               // Purple-Crimson Blood Demon Art Cage + Thorny Floor Vines (no cyan Akaza compass on Dundubhi!)
               webglDemonSlayerVfxRef.current?.spawnBloodThreadCage({
                 x: e.x,
@@ -8736,7 +8931,7 @@ export default function KaliyugaArena() {
               const enemyTier = classifyEnemyVfxTier({
                 type: e.type,
                 isBoss: e.isBoss,
-                isSemiBoss: e.isSemiBoss,
+                isSemiBoss: e.type === 'semi_boss_bloodforge',
               });
               const enemyBudget = getEnemySlashVfxBudget(enemyTier, e.telegraphRadius, e.attackKind);
               const enemyVfxPal: DemonSlayerVfxPalette =
@@ -9824,13 +10019,17 @@ export default function KaliyugaArena() {
       // Step 1: Render Deep Parallax Underworld Abyss (0.38x camera parallax lava/blood chasm & sunken pillars)
       renderParallaxAbyss(ctx, cw, ch, sim.camX, sim.camY, now, sim.chamberIndex);
 
-      // Apply dynamic camera zoom & high-impact directional + rotational trauma shake around viewport center
+      // Combine existing battle camera with bounded authored boss/execution framing.
+      const liveShot = liveCameraRef.current?.track.sample(liveCameraRef.current.elapsedSec, cw, ch);
+      const composedZoom = sim.cameraZoom * (liveShot?.zoom ?? 1);
       ctx.translate(cw * 0.5, ch * 0.5);
-      if (Math.abs(sim.cameraZoom - 1) > 0.0005) {
-        ctx.scale(sim.cameraZoom, sim.cameraZoom);
+      if (Math.abs(composedZoom - 1) > 0.0005) {
+        ctx.scale(composedZoom, composedZoom);
       }
-      if (Math.abs(sim.cameraKickX) > 0.05 || Math.abs(sim.cameraKickY) > 0.05) {
-        ctx.translate(sim.cameraKickX, sim.cameraKickY);
+      const cinematicOffsetX = liveShot?.offsetX ?? 0;
+      const cinematicOffsetY = liveShot?.offsetY ?? 0;
+      if (Math.abs(sim.cameraKickX + cinematicOffsetX) > 0.05 || Math.abs(sim.cameraKickY + cinematicOffsetY) > 0.05) {
+        ctx.translate(sim.cameraKickX + cinematicOffsetX, sim.cameraKickY + cinematicOffsetY);
       }
       if (sim.cameraShakeTrauma > 0) {
         const traumaSq = sim.cameraShakeTrauma * sim.cameraShakeTrauma;
