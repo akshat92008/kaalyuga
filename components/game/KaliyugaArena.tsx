@@ -194,6 +194,7 @@ import {
   projectWeaponHeadToWorld,
   type WeaponTrailSample,
 } from '@/lib/game/act1WeaponPoseTrail';
+import { getAct1ExecutionVisualPlan } from '@/lib/game/act1ExecutionVisualPlan';
 import {
   MAX_CLAMPED_CAMERA_TRAUMA,
   ParashuFinisherVariant,
@@ -4640,6 +4641,56 @@ export default function KaliyugaArena() {
 
     soundEngine.playHit('execute');
     soundEngine.playVoiceBark('rudra_execute', { priority: 'high', cooldownMs: 7000 });
+    const executionVisual = getAct1ExecutionVisualPlan(finisherSpec.variant);
+    if (executionVisual.useGroundedOverheadContact) {
+      // Downward Parashu Crush: physical overhead blade, local impact cone,
+      // grounded dust + ink. NO floating water-dragon / full-circle solar
+      // wheel / giant sky lightning unrelated to the axe's travel.
+      const contactX = brokenEnemy.x - p.facing * 4;
+      const contactY = brokenEnemy.y - 23;
+      spawnShockwave(
+        brokenEnemy.x, brokenEnemy.y,
+        executionVisual.groundShockwaveRadius, '#ff713d', 0.32
+      );
+      webglDemonSlayerVfxRef.current?.spawnSlashRibbon({
+        x: contactX - p.facing * 20,
+        y: contactY - 22,
+        angle: p.slashAngle + p.facing * 0.22,
+        radius: executionVisual.slashRadius,
+        width: executionVisual.slashWidth,
+        arcSpan: executionVisual.slashArcSpan,
+        direction: p.facing,
+        palette: 'hinokami',
+        duration: 0.31,
+        tiltX: 0.52,
+      });
+      webglDemonSlayerVfxRef.current?.spawnClashStarburst({
+        x: contactX,
+        y: contactY,
+        scale: executionVisual.impactBurstScale,
+        palette: 'sun',
+        duration: 0.21,
+      });
+      webglDemonSlayerVfxRef.current?.spawnSparkBurst({
+        x: contactX + p.facing * 8,
+        y: contactY,
+        count: executionVisual.sparkCount,
+        speed: 315,
+        palette: 'sun',
+      });
+      // One short contact inversion is appropriate for a posture-break
+      // execution. It remains local, not a full-screen whiteout.
+      triggerImpactInversionFlash(
+        bloodDemonArtsRef.current,
+        contactX, contactY, 0.036, '#ff672e'
+      );
+      spawnParticles(
+        brokenEnemy.x, brokenEnemy.y - 11, 12,
+        '#a77a56', 152, 2.9, 64
+      );
+    } else {
+      // Preserve original sweeping/impaling set pieces. They remain separate
+      // milestones for Blender interaction choreography and readability QA.
     spawnShockwave(brokenEnemy.x, brokenEnemy.y, 290, '#ff4d3b', 0.48);
     spawnSunHaloRing(bloodDemonArtsRef.current, {
       x: brokenEnemy.x,
@@ -4722,6 +4773,7 @@ export default function KaliyugaArena() {
       palette: 'sun',
     });
     triggerImpactInversionFlash(bloodDemonArtsRef.current, brokenEnemy.x, brokenEnemy.y - 24, 0.068, '#ff4d3b');
+    }
     const execSlashRow =
       finisherSpec.variant === 'spin_360_cleave'
         ? PARASHU_FLIPBOOK_ROWS.SPIN_360_WHIRLWIND_RING
@@ -4730,8 +4782,8 @@ export default function KaliyugaArena() {
       PHASE2_VFX_SHEETS.parashuSlashes3x3.url,
       brokenEnemy.x,
       brokenEnemy.y - 22,
-      248,
-      0.34,
+      executionVisual.flipbookSize,
+      executionVisual.useGroundedOverheadContact ? 0.27 : 0.34,
       finisherSpec.variant === 'impaling_lunge' ? p.slashAngle : 0,
       finisherSpec.variant === 'spin_360_cleave' ? 0.72 : 1,
       'screen',
@@ -4768,7 +4820,9 @@ export default function KaliyugaArena() {
       4.4,
       100
     );
-    // Call down Twin Cataclysmic Sky-Splitting Vajra Lightning Bolts on Execute!
+    // Sky bolts belong to elemental/sweeping executions, NOT to a grounded
+    // overhead axe crush. Keep the original other finishers untouched.
+    if (executionVisual.allowSpectralSkyBolts) {
     for (let b = 0; b < 3; b++) {
       sim.lightningArcs.push({
         x1: brokenEnemy.x + (b - 1) * 110,
@@ -4779,6 +4833,7 @@ export default function KaliyugaArena() {
         maxLife: 0.38,
         color: b === 1 ? '#ffd86b' : '#ff4d3b',
       });
+    }
     }
     spawnFloatingText(
       brokenEnemy.x,
@@ -4792,7 +4847,7 @@ export default function KaliyugaArena() {
     pendingStrikeVfxRef.current = {
       expectedAction: 'execute', fired: false,
       attackSerial: p.attackSerial, chamberIndex: sim.chamberIndex,
-      triggerThreshold: 0.35,
+      triggerThreshold: getAct1ExecutionVisualPlan(finisherSpec.variant).contactProgress,
       execute: performExecutionContact,
     };
   }, [gainAstraEnergy, recordQuestEvent, spawnAfterimage, spawnFlipbookVfx, spawnFloatingText, spawnParticles, spawnShockwave]);
