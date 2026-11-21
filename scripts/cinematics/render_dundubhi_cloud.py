@@ -27,8 +27,8 @@ ROAR = ROOT / "public/kaalyuga/anims/dundubhi/roar.fbx"
 
 FPS = 24
 FRAMES = 144
-WIDTH = 960
-HEIGHT = 540
+WIDTH = 640
+HEIGHT = 360
 
 
 def clear_scene():
@@ -169,7 +169,7 @@ def build(out_dir):
     clear_scene()
     scene = bpy.context.scene
     scene.render.engine = "BLENDER_EEVEE"
-    scene.eevee.taa_render_samples = 16
+    scene.eevee.taa_render_samples = 4
     scene.render.resolution_x = WIDTH
     scene.render.resolution_y = HEIGHT
     scene.render.resolution_percentage = 100
@@ -184,6 +184,9 @@ def build(out_dir):
     scene.render.fps = FPS
     scene.frame_start = 1
     scene.frame_end = FRAMES
+    # Fast CPU-only draft: render 24 key poses across six seconds (every sixth frame).
+    # Composite as 4 FPS for motion-check proof before committing to an expensive full render.
+    scene.frame_step = 6
     scene.render.filepath = str(out_dir / "frames" / "")
     scene.render.filepath = str(out_dir / "frames" / "frame_")
     scene.render.use_file_extension = True
