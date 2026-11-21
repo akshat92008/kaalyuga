@@ -87,6 +87,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: act1-rudra-rig-preflight
-          path: artifacts/act1-*-rig-audit.json
+          path: |
+            artifacts/act1-*-rig-audit.json
+            artifacts/act1-rudra-local-clip-audit.json
           if-no-files-found: warn
           retention-days: 14
