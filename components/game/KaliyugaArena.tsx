@@ -4980,11 +4980,10 @@ export default function KaliyugaArena() {
     const impactY = p.y + Math.sin(p.slashAngle) * (p.stance === 'thrust' ? 48 : 30);
 
     const primaryHeavyPalette: DemonSlayerVfxPalette =
-      p.stance === 'pillar'
-        ? 'wind'
-        : p.stance === 'thrust'
-        ? 'thunder'
-        : 'hinokami';
+      p.transformTimer>0 ? 'void' :
+      performance.now()<waterBladeUntilMsRef.current ? 'water' :
+      p.stance === 'pillar' ? 'wind' :
+      p.stance === 'thrust' ? 'thunder' : 'hinokami';
 
     // Startup Windup Anticipation: crisp Parashu blade-edge glint immediately on input,
     // while the heavy cleave VFX fires at the exact physical axe impact frame (~28% swing)!
@@ -5036,7 +5035,37 @@ export default function KaliyugaArena() {
         const bladeHitY = bladeNearImpact && physicalBlade
           ? (syncImpactY-22) * 0.55 + physicalBlade.y * 0.45 : syncImpactY-22;
         const heavySpectacle=getAct1HeavyContactSpectacle(curP.stance,orbsUsed);
-        if (heavyStyleId === 'pralaya_earth_shatter') {
+        if(curP.transformTimer>0){
+          // Preserve the existing fully rigged Kala-Bhairava guardian.
+          // Its spectral fist drives the huge purple-gold slash; the contact
+          // gets one majestic void mandala, not an unrelated fire ultimate.
+          webglDemonSlayerVfxRef.current?.spawnShockwaveRing({
+            x:bladeHitX,y:syncImpactY,
+            radius:heavySpectacle.shockwaveRadius,
+            palette:'void',duration:heavySpectacle.duration,
+          });
+          webglDemonSlayerVfxRef.current?.spawnCycloneVortex({
+            x:bladeHitX,y:bladeHitY,
+            radius:heavySpectacle.energyRadius,
+            palette:'void',duration:0.42,ringCount:3,
+          });
+          spawnShockwave(bladeHitX,syncImpactY,heavySpectacle.shockwaveRadius,'#a95bff',0.36);
+        } else if(performance.now()<waterBladeUntilMsRef.current){
+          // Existing Hokusai/Varuna water dragon from [4] remains alive.
+          // While active, charged K becomes a large blue tidal strike whose
+          // wave body *starts at the Parashu blade*, not behind the camera.
+          webglDemonSlayerVfxRef.current?.spawnShockwaveRing({
+            x:bladeHitX,y:syncImpactY,
+            radius:heavySpectacle.shockwaveRadius,
+            palette:'water',duration:heavySpectacle.duration,
+          });
+          webglDemonSlayerVfxRef.current?.spawnCycloneVortex({
+            x:bladeHitX,y:bladeHitY,
+            radius:heavySpectacle.energyRadius,
+            palette:'water',duration:0.43,ringCount:3,
+          });
+          spawnShockwave(bladeHitX,syncImpactY,heavySpectacle.shockwaveRadius,'#38dfff',0.32);
+        } else if (heavyStyleId === 'pralaya_earth_shatter') {
           const heavyVisual = getSmashHeavyVfxPresentation(orbsUsed);
           const radius=heavySpectacle.shockwaveRadius;
           webglDemonSlayerVfxRef.current?.spawnShockwaveRing({
