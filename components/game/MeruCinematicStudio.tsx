@@ -127,7 +127,7 @@ export default function MeruCinematicStudio(){
       void videoRef.current?.play().catch(()=>undefined);
     }
   };
-  const updateAtCursor=(track:'camera'|'actor'|'lighting',prop:string,number:number)=>{
+  const updateAtCursor=(track:'camera'|'actor'|'lighting',prop:string,number:number|string)=>{
     const current=sceneRef.current;
     const sampled=sampleCinematic(current,timelineRef.current.time);
     const source=(current[track] as unknown as Array<{time:number;value:Record<string,unknown>;ease?:string}>);
@@ -140,6 +140,28 @@ export default function MeruCinematicStudio(){
     keys.sort((a,b)=>a.time-b.time);
     loadScene({...current,[track]:keys});
     // Restore playhead after a scene edit.
+    timelineRef.current.seek(time);
+    setTime(time);
+  };
+
+  const addCue=(kind:'drum'|'roar'|'impact'|'subtitle')=>{
+    const current=sceneRef.current;
+    const at=Number(time.toFixed(2));
+    let ordinal=current.cues.length+1;
+    while(current.cues.some(c=>c.id==='cue-'+ordinal))ordinal++;
+    const cues=[...current.cues,{
+      id:'cue-'+ordinal,
+      time:at,
+      kind,
+      ...(kind==='subtitle'?{payload:'NEW CINEMATIC TITLE · Edit the exported scene JSON'}:{})
+    }];
+    loadScene({...current,cues});
+    timelineRef.current.seek(at);
+    setTime(at);
+  };
+  const removeCue=(id:string)=>{
+    const current=sceneRef.current;
+    loadScene({...current,cues:current.cues.filter(c=>c.id!==id)});
     timelineRef.current.seek(time);
     setTime(time);
   };
@@ -211,11 +233,16 @@ export default function MeruCinematicStudio(){
               {track:'camera' as const,field:'zoom',label:'Camera zoom',min:0.4,max:2.2,step:0.02},
               {track:'camera' as const,field:'x',label:'Camera X',min:-90,max:90,step:1},
               {track:'camera' as const,field:'y',label:'Camera Y',min:-90,max:90,step:1},
+              {track:'camera' as const,field:'roll',label:'Camera roll',min:-0.18,max:0.18,step:0.005},
+              {track:'camera' as const,field:'shake',label:'Camera shake',min:0,max:1,step:0.02},
+              {track:'actor' as const,field:'x',label:'Boss X',min:-110,max:110,step:1},
+              {track:'actor' as const,field:'y',label:'Boss Y',min:-90,max:90,step:1},
               {track:'actor' as const,field:'scale',label:'Boss scale',min:0.5,max:2,step:0.02},
               {track:'actor' as const,field:'opacity',label:'Boss opacity',min:0,max:1,step:0.02},
               {track:'lighting' as const,field:'vignette',label:'Vignette',min:0,max:1,step:0.02},
               {track:'lighting' as const,field:'ash',label:'Ash density',min:0,max:1,step:0.02},
               {track:'lighting' as const,field:'warmth',label:'Warmth',min:0,max:1,step:0.02},
+              {track:'lighting' as const,field:'exposure',label:'Light exposure',min:0,max:2,step:0.02},
             ]).map(c=><label key={c.track+c.field} className="block">
               <span className="mb-1 flex justify-between text-xs"><span>{c.label}</span><span className="font-mono">{fmt((selected[c.track] as unknown as Record<string,number>)[c.field])}</span></span>
               <input type="range" min={c.min} max={c.max} step={c.step}
@@ -223,7 +250,37 @@ export default function MeruCinematicStudio(){
                 onChange={e=>updateAtCursor(c.track,c.field,Number(e.target.value))}
                 className="w-full accent-[#d18d55]"/>
             </label>)}
-            <p className="text-xs text-[#967f74]">Adjusting a control creates or updates a keyframe at the playhead.</p>
+            <label className="block text-xs">Boss animation at playhead
+              <select aria-label="Boss animation state" value={selected.actor.state}
+                onChange={e=>updateAtCursor('actor','state',e.target.value)}
+                className="mt-1 block w-full rounded bg-[#2d2529] p-2 text-sm">
+                <option value="idle">Idle</option>
+                <option value="chase">Movement</option>
+                <option value="windup">Windup / anticipation</option>
+                <option value="attack">Attack / roar beat</option>
+              </select>
+            </label>
+            <p className="text-xs text-[#967f74]">Editing creates a keyframe at the current playhead. Bone-level posing still requires additional tooling.</p>
+          </div>
+          <div className="rounded-lg border border-[#43352e] bg-[#171216] p-4 space-y-3">
+            <h2 className="font-semibold">Sound and title cues</h2>
+            <p className="text-xs text-[#a69081]">Place a cue at the playhead; click an existing cue to jump to it.</p>
+            <div className="grid grid-cols-2 gap-2">
+              {(['drum','roar','impact','subtitle'] as const).map(kind=>
+                <button key={kind} onClick={()=>addCue(kind)}
+                  className="rounded border border-[#6c533e] px-2 py-2 text-xs capitalize hover:bg-[#3d271c]">
+                  + {kind}
+                </button>)}
+            </div>
+            <div className="max-h-36 space-y-1 overflow-y-auto">
+              {scene.cues.map(cue=><div key={cue.id} className="flex items-center gap-2 rounded bg-[#30252b] px-2 py-1 text-xs">
+                <button onClick={()=>seek(cue.time)} className="min-w-0 flex-1 truncate text-left">
+                  {fmt(cue.time)}s · {cue.kind}
+                </button>
+                <button aria-label={'Delete cue '+cue.id} title="Remove cue" onClick={()=>removeCue(cue.id)}
+                  className="rounded px-2 py-1 text-[#efb7a1] hover:bg-[#67322c]">×</button>
+              </div>)}
+            </div>
           </div>
           <div className="rounded-lg border border-[#43352e] bg-[#171216] p-4 space-y-3">
             <h2 className="font-semibold">Project and export</h2>
