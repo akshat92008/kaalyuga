@@ -6,6 +6,7 @@ on:
       - feature/phase1-weapon-socket-combat-proof-20261122
     paths:
       - 'lib/game/**'
+      - 'lib/server/staticAssetProxy.ts'
       - 'components/game/**'
       - 'scripts/qa/act1_phase1_4_browser_smoke.cjs'
       - '.github/workflows/phase1-weapon-socket-visual-proof.yml'
@@ -42,6 +43,8 @@ jobs:
         run: npx tsx --test lib/game/guardianAttackGate.test.ts
       - name: Test actual weapon projection and safe fallback
         run: npx tsx --test lib/game/weaponContactProjection.test.ts
+      - name: Verify actual Mixamo-bone guardian preview animation
+        run: npx tsx --test lib/game/guardianPreviewAnimation.test.ts
       - name: TypeScript full project verification
         run: npx tsc --noEmit
       - name: Build production game
@@ -70,6 +73,8 @@ jobs:
             npx playwright install chromium
           fi
       - name: Run and capture live browser gameplay and cinematic
+        env:
+          QA_GUARDIAN_RIG_PREVIEW: '1'
         run: node scripts/qa/act1_phase1_4_browser_smoke.cjs
       - name: Configure Python for rendered screenshot validation
         uses: actions/setup-python@v5
@@ -90,7 +95,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: p1-weapon-socket-real-gameplay
+          name: p1-skinned-guardian-proxy-gameplay
           path: artifacts/act1-phase1-4
           if-no-files-found: warn
           retention-days: 21
