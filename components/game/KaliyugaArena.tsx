@@ -3543,19 +3543,17 @@ export default function KaliyugaArena() {
         }
       }
 
-      spawnShockwave(p.x, p.y, spec.radius, meta.color, 0.42);
-      spawnParticles(p.x, p.y - 26, 30, meta.color, 230, 4.8, 70);
+      // Grounding only. A full-radius canvas shockwave obscured every Astra
+      // and competed with the signature elemental mesh.
+      spawnShockwave(p.x, p.y, spec.radius * 0.30, meta.color, 0.23);
+      spawnParticles(p.x, p.y - 26, 11, meta.color, 210, 3.1, 55);
       soundEngine.playBreathingStyle(
         astraId === 'agneyastra' ? 'sun' : astraId === 'vayavyastra' ? 'wind' : 'thunder'
       );
       const astraPalette: DemonSlayerVfxPalette =
         astraId === 'agneyastra' ? 'sun' : astraId === 'vayavyastra' ? 'wind' : 'thunder';
-      spawnSunHaloRing(bloodDemonArtsRef.current, {
-        x: p.x,
-        y: p.y - 16,
-        radius: spec.radius * 1.08,
-        palette: astraPalette,
-      });
+      // No universal solar halo: fire, wind and thunder must have genuinely
+      // distinct silhouettes, not the same circular portal with color swaps.
       if (astraId === 'vayavyastra') {
         // Sanemi Wind Breathing: ONE monumental emerald gale burst + bold Sumi-e ink shards (no duplicate cyclones/ribbons)
         webglDemonSlayerVfxRef.current?.spawnWindGaleCrescents({
@@ -3566,34 +3564,30 @@ export default function KaliyugaArena() {
           duration: 0.76,
         });
       } else if (astraId === 'agneyastra') {
-        // Agni Solar Eruption: High-impact Hinokami Solar Flame Wheel + dual molten floor shockwaves + ember vortex
-        webglDemonSlayerVfxRef.current?.spawnSolarFlameWheel({
-          x: p.x,
+        // Agneyastra: one sweeping calligraphic flame eruption travelling
+        // outward from the axe; no rotating ring, oversized star or duplicate
+        // shockwave. The broader silhouette differentiates it from Agni heavy.
+        webglDemonSlayerVfxRef.current?.spawnPainterlyCleave({
+          x: p.x + Math.cos(aimAngle) * 14,
           y: p.y - 22,
           angle: aimAngle,
-          radius: spec.radius * 1.32,
+          radius: spec.radius * 1.27,
           palette: 'hinokami',
-          duration: 0.78,
-        });
-        webglDemonSlayerVfxRef.current?.spawnShockwaveRing({
-          x: p.x,
-          y: p.y,
-          radius: spec.radius * 1.18,
-          palette: 'hinokami',
-          duration: 0.48,
+          duration: 0.73,
+          variant: 'flame',
         });
         webglDemonSlayerVfxRef.current?.spawnClashStarburst({
-          x: p.x + Math.cos(aimAngle) * 26,
-          y: p.y - 24,
-          scale: 1.45,
+          x: p.x + Math.cos(aimAngle) * 55,
+          y: p.y - 24 + Math.sin(aimAngle) * 22,
+          scale: 0.60,
           palette: 'hinokami',
-          duration: 0.42,
+          duration: 0.15,
         });
-        spawnShockwave(p.x, p.y, spec.radius * 1.15, '#ff5a1f', 0.42);
-        spawnParticles(p.x, p.y - 24, 28, '#ff7a22', 280, 5.2, 80);
         soundEngine.playHeavyIronSwing();
       } else {
-        // Vajrastra: Rebuilt Zenitsu GLSL Plasma Thunderclap — primary forked plasma bolt + Godspeed ricochet + launch starburst (zero muddying slash ribbons)
+        // Vajrastra: one dominant lightning corridor with internally branched
+        // plasma and a small terminal ionization ring, not three clashing
+        // white stars and overlapping zigzags.
         const reach = Math.max(290, spec.range * 0.96);
         const endX = p.x + Math.cos(aimAngle) * reach;
         const endY = p.y + Math.sin(aimAngle) * reach * 0.78;
@@ -3607,29 +3601,17 @@ export default function KaliyugaArena() {
           width: 30,
           withFloorRing: true,
         });
-        webglDemonSlayerVfxRef.current?.spawnThunderZigzag({
-          x1: p.x + Math.cos(aimAngle) * 34,
-          y1: p.y - 22 + Math.sin(aimAngle) * 20,
-          x2: p.x + Math.cos(aimAngle - 0.32) * (reach * 0.84),
-          y2: p.y - 20 + Math.sin(aimAngle - 0.32) * (reach * 0.66),
-          palette: 'thunder',
-          duration: 0.62,
-          width: 20,
-          withFloorRing: false,
-        });
-        webglDemonSlayerVfxRef.current?.spawnClashStarburst({
-          x: p.x + Math.cos(aimAngle) * 28,
-          y: p.y - 24 + Math.sin(aimAngle) * 18,
-          scale: 1.5,
-          palette: 'thunder',
-          duration: 0.38,
-        });
+        // Do not overlay a second independent lightning strike or a
+        // full-size starburst at Rudra's feet; the primary bolt branches
+        // and terminates at the actual hit location already.
       }
       webglDemonSlayerVfxRef.current?.spawnSparkBurst({
         x: p.x,
         y: p.y - 24,
-        count: 14,
-        speed: 440,
+        count: 13,
+        speed: 360,
+        angle: aimAngle,
+        spread: 1.55,
         palette: astraPalette,
       });
 
