@@ -59,3 +59,28 @@ test('works with FBXLoader-sanitized Mixamo bone names lacking colons', () => {
   mixer.update(0.42);
   assert.ok(arm.quaternion.angleTo(new THREE.Quaternion()) > 0.1);
 });
+
+test('guardian idle no longer leaves both upper arms in imported T-pose', () => {
+  const root = new THREE.Group();
+  for (const name of ['mixamorig:Spine2','mixamorig:RightArm',
+    'mixamorig:LeftArm','mixamorig:RightForeArm','mixamorig:LeftForeArm']) {
+    const bone = new THREE.Bone();
+    bone.name = name;
+    root.add(bone);
+  }
+  const { clips } = createGuardianProofClips(root);
+  const mixer = new THREE.AnimationMixer(root);
+  const right = root.getObjectByName('mixamorigRightArm') as THREE.Bone;
+  const left = root.getObjectByName('mixamorigLeftArm') as THREE.Bone;
+  assert.ok(right && left);
+  mixer.clipAction(clips.idle).play();
+  mixer.update(0.20);
+  assert.ok(right.quaternion.angleTo(new THREE.Quaternion()) > 0.45);
+  assert.ok(left.quaternion.angleTo(new THREE.Quaternion()) > 0.42);
+  const qBefore = right.quaternion.clone();
+  mixer.stopAllAction();
+  mixer.clipAction(clips.swing2).reset().play();
+  mixer.update(0.44);
+  assert.ok(right.quaternion.angleTo(qBefore) > 0.25,
+    'Heavy attack shoulder must change pose, not remain at lowered idle');
+});
