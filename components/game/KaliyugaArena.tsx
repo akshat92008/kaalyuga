@@ -1140,6 +1140,7 @@ export default function KaliyugaArena() {
           health: sim.player.hp,
           maximumHealth: sim.player.maxHp,
           transformRemaining: sim.player.transformTimer,
+          guardianRenderer: susanoo3dRef.current?.debugStatus() ?? null,
           fps: sim.fps,
           cameraKind: liveCameraRef.current?.kind ?? null,
           cameraElapsedSec: liveCameraRef.current?.elapsedSec ?? null,
