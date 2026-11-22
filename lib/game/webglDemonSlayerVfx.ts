@@ -402,8 +402,8 @@ const RIBBON_FRAGMENT_SHADER = /* glsl */ `
     } else {
       // Hinokami Kagura / Rengoku 4-band stepped fire cel shader (deep vermilion -> blazing amber -> narrow golden-white spine!)
       float outerRed = smoothstep(radiusMask * 0.94, radiusMask * 0.58, bodyDist + (n - 0.5) * 0.16);
-      float midGold = smoothstep(radiusMask * 0.64, radiusMask * 0.28, bodyDist + (n2 - 0.5) * 0.14);
-      float spineHot = smoothstep(radiusMask * 0.26, radiusMask * 0.07, bodyDist + (n2 - 0.5) * 0.08);
+      float midGold = smoothstep(radiusMask * 0.59, radiusMask * 0.20, bodyDist + (n2 - 0.5) * 0.14);
+      float spineHot = smoothstep(radiusMask * 0.18, radiusMask * 0.025, bodyDist + (n2 - 0.5) * 0.08);
       col = mix(uEdgeColor * 0.85, uEdgeColor * 1.12, outerRed);
       col = mix(col, uMidColor * 1.10, midGold);
       col = mix(col, uCoreColor * coreGain, spineHot);
@@ -602,6 +602,7 @@ interface ActiveWebglRibbon {
   coreMesh: THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>;
   glowMesh: THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>;
   extraPaintMeshes?: Array<THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>>;
+  painterlyCleave?: boolean;
   worldX: number;
   worldY: number;
   baseRotZ: number;
@@ -1256,18 +1257,21 @@ export class WebglDemonSlayerVfxOverlay {
     const variant = opts.variant ?? 'flame';
     const pal = RIBBON_PALETTES[opts.palette ?? (variant === 'guardian' ? 'blood' : 'hinokami')];
     const radius = Math.max(90, Math.min(220, Number.isFinite(opts.radius) ? opts.radius! : 160));
-    const mainLength = radius * (variant === 'guardian' ? 1.37 : 1.30);
-    const mainWidth = radius * (variant === 'guardian' ? 0.58 : 0.55);
-    const inkGeo = buildForwardPainterlyCleaveGeometry(mainLength * 1.02, mainWidth * 1.08, 2.1, 52);
-    const coreGeo = buildForwardPainterlyCleaveGeometry(mainLength, mainWidth, 0.55, 52);
-    const glowGeo = buildForwardPainterlyCleaveGeometry(mainLength * 1.04, mainWidth * 1.14, 1.5, 48);
+    // Avoid the previous 120px-wide solid geometric wedge at actual gameplay zoom.
+    // Keep the long attack silhouette, but let thinner overlapping ink/warmth
+    // strokes and independent living flame tongues define the outline.
+    const mainLength = radius * (variant === 'guardian' ? 1.34 : 1.27);
+    const mainWidth = radius * (variant === 'guardian' ? 0.36 : 0.33);
+    const inkGeo = buildForwardPainterlyCleaveGeometry(mainLength * 1.03, mainWidth * 1.30, 2.1, 52);
+    const coreGeo = buildForwardPainterlyCleaveGeometry(mainLength, mainWidth * 0.92, 0.55, 52);
+    const glowGeo = buildForwardPainterlyCleaveGeometry(mainLength * 1.04, mainWidth * 1.12, 1.5, 48);
     const mode = paletteModeIndex(opts.palette ?? (variant === 'guardian' ? 'blood' : 'hinokami'));
     const inkMat = createRibbonMaterial(pal, mode, 0.75, true, THREE.NormalBlending, 0.36);
     inkMat.uniforms.uCoreColor.value.copy(pal.ink);
     inkMat.uniforms.uMidColor.value.copy(pal.ink);
     inkMat.uniforms.uEdgeColor.value.copy(pal.ink);
     const coreMat = createRibbonMaterial(pal, mode, 0.98, true, THREE.NormalBlending, variant === 'guardian' ? 1.68 : 2.05);
-    const glowMat = createRibbonMaterial(pal, mode, 0.31, false, THREE.AdditiveBlending, 1.20);
+    const glowMat = createRibbonMaterial(pal, mode, 0.22, false, THREE.AdditiveBlending, 1.12);
     const inkMesh = new THREE.Mesh(inkGeo, inkMat);
     const coreMesh = new THREE.Mesh(coreGeo, coreMat);
     const glowMesh = new THREE.Mesh(glowGeo, glowMat);
@@ -1281,7 +1285,7 @@ export class WebglDemonSlayerVfxOverlay {
     const extraPaintMeshes: Array<THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>> = [];
     for (let i = 0; i < 3; i++) {
       const tongueGeo = buildTaperedFlameTongueGeometry(
-        radius * (0.42 + i * 0.12), radius * (0.072 + i * 0.014), 16
+        radius * (0.46 + i * 0.11), radius * (0.063 + i * 0.011), 20
       );
       const tongueMat = createRibbonMaterial(
         pal, mode, variant === 'guardian' ? 0.78 : 0.86,
@@ -1289,8 +1293,8 @@ export class WebglDemonSlayerVfxOverlay {
       );
       const tongue = new THREE.Mesh(tongueGeo, tongueMat);
       tongue.position.set(
-        -mainLength * 0.14 + mainLength * i * 0.20,
-        mainWidth * (0.12 + i * 0.09),
+        -mainLength * 0.06 + mainLength * i * 0.15,
+        mainWidth * (0.30 + i * 0.24),
         3 + i
       );
       tongue.rotation.z = 0.16 + i * 0.14;
@@ -1301,6 +1305,7 @@ export class WebglDemonSlayerVfxOverlay {
     this.scene.add(group);
     this.ribbons.push({
       group, inkMesh, coreMesh, glowMesh, extraPaintMeshes,
+      painterlyCleave: true,
       worldX: opts.x, worldY: opts.y,
       baseRotZ: -opts.angle,
       tiltX: 0.28, tiltY: 0,
@@ -2537,7 +2542,22 @@ export class WebglDemonSlayerVfxOverlay {
       const sy = toScreenY(r.worldY);
       const s = zoom * (0.9 + norm * 0.24) * r.scale;
       r.group.position.set(sx, sy, 20);
-      r.group.scale.set(s, s, s);
+      if (r.painterlyCleave) {
+        // Drawn motion: the brushstroke grows out of contact before unravelling
+        // into separately fluttering tongues. No rotating neon halo.
+        const opening = Math.sin(Math.min(1, norm * 4.0) * Math.PI * 0.5);
+        const extension = 0.52 + 0.54 * opening;
+        const breadth = 0.82 + 0.20 * Math.sin(Math.min(1, norm * 2.3) * Math.PI);
+        r.group.scale.set(s * extension, s * breadth, s);
+        for (let n = 0; n < (r.extraPaintMeshes?.length ?? 0); n++) {
+          const tongue = r.extraPaintMeshes![n];
+          tongue.rotation.z = 0.14 + n * 0.16
+            + Math.sin(this.elapsed * (8.0 + n * 1.7) + n * 2.1) * 0.09;
+          tongue.scale.y = 0.85 + Math.sin(norm * Math.PI * (1.25 + n * 0.21)) * 0.23;
+        }
+      } else {
+        r.group.scale.set(s, s, s);
+      }
       r.group.rotation.set(r.tiltX, r.tiltY, r.baseRotZ - r.spinRate * r.life);
 
       for (const m of [r.inkMesh, r.coreMesh, r.glowMesh, ...(r.extraPaintMeshes ?? [])]) {
