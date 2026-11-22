@@ -24,6 +24,7 @@ export default function MeruStoryCinematic({onFinish}:MeruStoryCinematicProps){
   const frame=sampleMeruStory(sequence,elapsed);
   const {shot,index}=frame;
   const progress=Math.min(100,frame.elapsed/duration*100);
+  const slowPushScale=reducedMotion?1:1+frame.progress*shot.slowPush;
   const complete=()=>{
     if(completedRef.current)return;
     completedRef.current=true;
@@ -89,13 +90,14 @@ export default function MeruStoryCinematic({onFinish}:MeruStoryCinematicProps){
       <div className="absolute inset-0 overflow-hidden">
         <div
           className="absolute inset-0 bg-center bg-cover"
-          style={{backgroundImage:'url('+shot.poster+')'}}
+          style={{backgroundImage:'url('+shot.poster+')',transform:'scale('+slowPushScale+')'}}
         />
         {shot.motionVideo&&!reducedMotion&&(
           <video
             key={shot.id} src={shot.motionVideo} poster={shot.poster}
             preload="auto" playsInline muted autoPlay loop aria-hidden="true"
             onLoadedData={()=>setDecoded(true)} onError={()=>setDecoded(false)}
+            style={{transform:'scale('+slowPushScale+')'}}
             className={'absolute inset-0 h-full w-full object-cover transition-opacity duration-500 '+
               (decoded?'opacity-85':'opacity-0')}
           />
@@ -108,11 +110,13 @@ export default function MeruStoryCinematic({onFinish}:MeruStoryCinematicProps){
             <img
               src={shot.poster} alt=""
               className="relative h-[min(82vh,760px)] w-auto max-w-[80vw] object-contain opacity-80 drop-shadow-[0_0_60px_rgba(90,196,255,.32)]"
+              style={{transform:'scale('+slowPushScale+')'}}
             />
           </div>
         )}
         <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-[#03050c]/45 via-[#060611]/10 to-[#03050c]/95"/>
         <div className="absolute inset-0 pointer-events-none bg-gradient-to-r from-[#070716]/30 via-transparent to-[#070716]/30"/>
+        <div className="pointer-events-none absolute inset-0 bg-[#020207]" style={{opacity:1-frame.transitionOpacity}}/>
       </div>
 
       <div className="absolute left-5 right-5 top-6 sm:left-10 sm:right-10 flex items-start justify-between gap-4">
