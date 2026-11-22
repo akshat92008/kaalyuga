@@ -129,6 +129,10 @@ const base = process.env.GAME_URL || 'http://127.0.0.1:3100';
       await page.keyboard.press('k');
       await assertEvent('heavy-contact', attack.element, before);
       await assertContactAnchor('heavy-contact', attack.element, 0.28, 110);
+      // Commit the gameplay contact immediately, then photograph the energy
+      // stroke after it has drawn from the weapon root toward its full tip.
+      // The old screenshot grabbed ~8%-20% of a progressive brush reveal.
+      await page.waitForTimeout(115);
       await capture('09-' + attack.name + '-heavy-contact');
       report.checks.push('real ' + attack.element + ' heavy: stance, animation contact and screenshot');
     }
@@ -146,6 +150,9 @@ const base = process.env.GAME_URL || 'http://127.0.0.1:3100';
       await page.keyboard.press('j');
       await assertEvent('light-contact', light.stance, lightBefore);
       await assertContactAnchor('light-contact', light.stance, 0.0);
+      // Contact has its own active-frame assertion. Snapshot the readable
+      // light afterglow instead of the first faint animation frame.
+      await page.waitForTimeout(55);
       await capture(light.screenshot);
       report.checks.push('real ' + light.stance + ' light Parashu active-frame contact and screenshot');
     }
@@ -162,7 +169,7 @@ const base = process.env.GAME_URL || 'http://127.0.0.1:3100';
       await assertEvent('astra-invoked', astra.id, before);
       // The cast event precedes WebGL's next animation frame; a screenshot
       // taken immediately at keydown can show NO VFX despite a valid cast.
-      await page.waitForTimeout(240);
+      await page.waitForTimeout(305);
       await capture('10-' + astra.name);
       report.checks.push('real ' + astra.id + ' meter-spending Astra and screenshot');
     }
@@ -172,7 +179,7 @@ const base = process.env.GAME_URL || 'http://127.0.0.1:3100';
     const waterBefore = await countEvent('varuna-water-dragon');
     await page.keyboard.press('4');
     await assertEvent('varuna-water-dragon', 'varuna', waterBefore);
-    await page.waitForTimeout(160);
+    await page.waitForTimeout(235);
     await capture('10-varuna-water-dragon');
     report.checks.push('real Varuna water-dragon input, VFX dispatch and screenshot');
 
