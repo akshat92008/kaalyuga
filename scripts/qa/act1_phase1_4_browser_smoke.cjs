@@ -180,6 +180,18 @@ const base = process.env.GAME_URL || 'http://127.0.0.1:3100';
     await page.waitForTimeout(1100);
     await page.keyboard.press('z');
     await page.waitForFunction(() => window.__kaliyugaPhaseQA?.transformRemaining > 0, null, { timeout: 9000 });
+    // Phase 1 P0: the guardian's light shockwave must NOT fire at keydown;
+    // it must share the physical Parashu contact clock (>=25% swing).
+    const guardianLightBefore = await countEvent('guardian-light-contact');
+    await page.keyboard.press('j');
+    await assertEvent('guardian-light-contact', 'guardian', guardianLightBefore);
+    await assertContactAnchor('guardian-light-contact', 'guardian', 0.25, 90);
+    await capture('10-guardian-light-contact');
+    report.checks.push('guardian light VFX anchors to active Parashu contact, not attack startup');
+    await page.waitForFunction(
+      () => window.__kaliyugaPhaseQA?.action === 'idle',
+      null, { timeout: 8000 }
+    );
     const guardianBefore = await countEvent('heavy-contact');
     await page.keyboard.press('k');
     await assertEvent('heavy-contact', 'guardian', guardianBefore);
