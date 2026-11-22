@@ -114,6 +114,43 @@ jobs:
           echo "Note: control self-diff only checks comparator determinism; not before/after game improvements."
           echo "Source: historical passing Chromium run 44940706905, artifact 14721264196." \
             > "$QA_OUTPUT/actual-browser/source.txt"
+      - name: Phase 13 - compare two different historical successful gameplay captures
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$QA_OUTPUT/historical-before"
+          curl --fail --show-error --silent --location --retry 3 \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/artifacts/14721127425/zip" \
+            -o "$RUNNER_TEMP/earlier-browser-evidence.zip"
+          unzip -q "$RUNNER_TEMP/earlier-browser-evidence.zip" -d "$QA_OUTPUT/historical-before"
+          OLDER_REPORT="$(find "$QA_OUTPUT/historical-before" -type f -name browser-verification.json -print -quit)"
+          LATER_REPORT="$(find "$QA_OUTPUT/actual-browser" -type f -name browser-verification.json -print -quit)"
+          if test -z "$OLDER_REPORT" || test -z "$LATER_REPORT"; then
+            echo "Missing browser report in one or both archives"; exit 1
+          fi
+          python scripts/qa/compare_visual_evidence.py \
+            --before "$(dirname "$OLDER_REPORT")" \
+            --after "$(dirname "$LATER_REPORT")" \
+            --output-dir "$QA_OUTPUT/historical-cross-run-diff"
+          python - "$QA_OUTPUT/historical-cross-run-diff/comparison-report.json" <<'PY'
+          import json, sys
+          report = json.load(open(sys.argv[1], encoding="utf-8"))
+          count = report["compared_count"]
+          if count < 10:
+              raise SystemExit(f"Insufficient matched screenshots from two runs: {count}")
+          print("Matched captures from two actual distinct builds:", count)
+          print("Dimension mismatches:", report["size_mismatches"])
+          print("Unmatched older:", len(report["only_in_before"]))
+          print("Unmatched newer:", len(report["only_in_after"]))
+          for item in sorted((r for r in report["results"] if r["status"] == "compared"),
+                             key=lambda x: -x["changed_percent"])[:8]:
+              print(f"  {item['stem']}: {item['changed_percent']}% changed pixels "
+                    "(review signal only, not a visual quality score)")
+          PY
+          echo "Old run 44939178918 vs later run 44940706905; screenshots are from separate successful builds." \
+            > "$QA_OUTPUT/historical-cross-run-diff/provenance.txt"
       - name: Display concise static audit results
         run: |
           python - <<'PY'
