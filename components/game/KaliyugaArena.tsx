@@ -5009,18 +5009,14 @@ export default function KaliyugaArena() {
           heavyElement === 'vajra' ? '#fde047' :
           heavyElement === 'varuna' ? '#38e8ff' :
           heavyElement === 'guardian' ? '#ed334f' : '#ff5418';
-        // A giant full-radius expanding circle drowned out the hand-painted
-        // blade silhouette in Agni and guardian heavy screenshots.
-        // Keep tactile ground feedback, but localize it to the strike point.
-        const groundPulseScale =
-          heavyElement === 'guardian' ? 0.24 :
-          heavyElement === 'agni' ? 0.30 :
-          heavyElement === 'varuna' ? 0.38 : 0.48;
-        spawnShockwave(
-          syncImpactX, syncImpactY,
-          heavyRelease.radius * groundPulseScale,
-          impactColor, heavyElement === 'guardian' ? 0.24 : 0.30
-        );
+        // Phase 1: elemental heavies get grounded sparks and their distinct
+        // forward attack silhouettes. Do NOT layer a second circular shockwave
+        // over the sword-shaped flames, S-curve water, gale or thunder.
+        // Preserve legacy guardian behavior (explicitly outside Phase 1 scope).
+        if (heavyElement === 'guardian') {
+          spawnShockwave(syncImpactX, syncImpactY,
+            heavyRelease.radius * 0.24, impactColor, 0.24);
+        }
         spawnParticles(syncImpactX, syncImpactY - 18, 12 + orbsUsed * 2, impactColor, 280, 4.6, 95);
         simRef.current.hitstopTimer = Math.max(simRef.current.hitstopTimer, 0.062);
       },
@@ -5703,13 +5699,16 @@ export default function KaliyugaArena() {
               withFloorRing: true,
             });
           } else {
-            webglDemonSlayerVfxRef.current?.spawnSolarFlameWheel({
+            // Combo-4 must finish with the blade, not become a rotating fire
+            // ring that blocks the very enemy being struck.
+            webglDemonSlayerVfxRef.current?.spawnPainterlyCleave({
               x: originX,
               y: originY + 2,
               angle: capturedAngle,
               radius: 148,
               palette: 'hinokami',
               duration: 0.48,
+              variant: 'flame',
             });
           }
           webglDemonSlayerVfxRef.current?.spawnSparkBurst({
