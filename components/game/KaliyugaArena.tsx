@@ -5007,7 +5007,18 @@ export default function KaliyugaArena() {
           heavyElement === 'vajra' ? '#fde047' :
           heavyElement === 'varuna' ? '#38e8ff' :
           heavyElement === 'guardian' ? '#ed334f' : '#ff5418';
-        spawnShockwave(syncImpactX, syncImpactY, heavyRelease.radius * 0.76, impactColor, 0.36);
+        // A giant full-radius expanding circle drowned out the hand-painted
+        // blade silhouette in Agni and guardian heavy screenshots.
+        // Keep tactile ground feedback, but localize it to the strike point.
+        const groundPulseScale =
+          heavyElement === 'guardian' ? 0.24 :
+          heavyElement === 'agni' ? 0.30 :
+          heavyElement === 'varuna' ? 0.38 : 0.48;
+        spawnShockwave(
+          syncImpactX, syncImpactY,
+          heavyRelease.radius * groundPulseScale,
+          impactColor, heavyElement === 'guardian' ? 0.24 : 0.30
+        );
         spawnParticles(syncImpactX, syncImpactY - 18, 12 + orbsUsed * 2, impactColor, 280, 4.6, 95);
         simRef.current.hitstopTimer = Math.max(simRef.current.hitstopTimer, 0.062);
       },
