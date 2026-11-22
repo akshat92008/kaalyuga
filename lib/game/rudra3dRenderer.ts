@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { ndcWeaponTipToDrawOffset, type NdcPoint, type ScreenOffset } from './weaponContactProjection';
 import {
   bindTexturedGeometryToSkeleton,
   buildStabilizedInPlaceClip,
@@ -277,6 +278,10 @@ export class Rudra3DRenderer {
   private frameCache: Map<string, HTMLCanvasElement> = new Map();
   private celMaterials: THREE.Material[] = [];
   private parashuAuraMat: THREE.ShaderMaterial | null = null;
+  private parashuTipMarker: THREE.Object3D | null = null;
+  private bakedTipCache = new Map<string, NdcPoint>();
+  private lastRenderedTipNdc: NdcPoint | null = null;
+  private liveAttackTipNdc: NdcPoint | null = null;
   private studioRimLight: THREE.DirectionalLight | null = null;
   private disposed = false;
   private prewarmQueue: Array<() => void> = [];
@@ -446,6 +451,23 @@ export class Rudra3DRenderer {
           const maxDim = Math.max(0.001, wepSize.x, wepSize.y, wepSize.z);
           const desiredWorldLen = 1.04;
           const localWepScale = desiredWorldLen / (maxDim * handScale);
+
+          // Follow a real extremity of the FBX axe, rather than inventing a
+          // constant world-space pixel offset from Rudra.
+          const headWorld = wepBox.getCenter(new THREE.Vector3());
+          const axeAxis: 'x' | 'y' | 'z' =
+            wepSize.y >= wepSize.x && wepSize.y >= wepSize.z ? 'y' :
+            wepSize.x >= wepSize.z ? 'x' : 'z';
+          headWorld[axeAxis] =
+            Math.abs(wepBox.max[axeAxis]) >= Math.abs(wepBox.min[axeAxis])
+              ? wepBox.max[axeAxis] : wepBox.min[axeAxis];
+          weaponGroup.updateMatrixWorld(true);
+          const headLocal = weaponGroup.worldToLocal(headWorld.clone());
+          const marker = new THREE.Object3D();
+          marker.name = 'ParashuBladeTip_QA';
+          marker.position.copy(headLocal);
+          weaponGroup.add(marker);
+          this.parashuTipMarker = marker;
 
           const weaponSocket = new THREE.Group();
           weaponGroup.scale.setScalar(localWepScale);
@@ -673,6 +695,9 @@ export class Rudra3DRenderer {
       Boolean(input.susanooActive)
     );
     if (baked) {
+      // Prewarming a different frame must not silently overwrite the live
+      // gameplay contact anchor. Only updateAndRender promotes a pose.
+      this.liveAttackTipNdc = this.lastRenderedTipNdc;
       if (this.blendDurationSec > 0 && this.blendFromCanvas && this.blendOutCanvas) {
         this.blendElapsedSec += stepDt;
         const alpha = Math.min(1, this.blendElapsedSec / this.blendDurationSec);
@@ -743,7 +768,10 @@ export class Rudra3DRenderer {
     const cacheKey = `rudra:${state}:${stanceTag}:y${yawIndex}:f${stepIndex}:${flashTag}`;
 
     const cached = this.frameCache.get(cacheKey);
-    if (cached) return cached;
+    if (cached) {
+      this.lastRenderedTipNdc = this.bakedTipCache.get(cacheKey) ?? null;
+      return cached;
+    }
 
     const renderer = getSharedStudioWebGLRenderer(this.size);
     if (!renderer) return null;
@@ -814,6 +842,21 @@ export class Rudra3DRenderer {
     this.wrapper.rotation.y = Math.PI * 0.5 - quantizedYaw;
     this.wrapper.rotation.x = 0;
 
+    // Pose is evaluated above at the exact baked animation frame. Sample the
+    // actual FBX weapon end and project it with this same studio camera.
+    this.lastRenderedTipNdc = null;
+    if (this.parashuTipMarker) {
+      this.wrapper.updateMatrixWorld(true);
+      const ndc = this.parashuTipMarker
+        .getWorldPosition(new THREE.Vector3()).project(this.camera);
+      if (Number.isFinite(ndc.x) && Number.isFinite(ndc.y) && Number.isFinite(ndc.z) &&
+          Math.abs(ndc.x) <= 1.05 && Math.abs(ndc.y) <= 1.05 &&
+          ndc.z >= -1 && ndc.z <= 1) {
+        this.lastRenderedTipNdc = { x: ndc.x, y: ndc.y, z: ndc.z };
+        this.bakedTipCache.set(cacheKey, this.lastRenderedTipNdc);
+      }
+    }
+
     renderer.render(this.scene, this.camera);
 
     const rimRgba = susanooActive
@@ -837,15 +880,27 @@ export class Rudra3DRenderer {
 
     if (this.frameCache.size > 1100) {
       const oldest = this.frameCache.keys().next().value;
-      if (oldest) this.frameCache.delete(oldest);
+      if (oldest) {
+        this.frameCache.delete(oldest);
+        this.bakedTipCache.delete(oldest);
+      }
     }
     this.frameCache.set(cacheKey, baked);
 
     return baked;
   }
 
+  /** Last displayed Parashu 3D pose mapped into the isometric sprite footprint. */
+  public getBladeTipDrawOffset(drawnSpriteSize = 136): ScreenOffset | null {
+    return ndcWeaponTipToDrawOffset(
+      this.liveAttackTipNdc, drawnSpriteSize, this.footAnchorRatio
+    );
+  }
+
   public dispose(): void {
     this.disposed = true;
+    this.bakedTipCache.clear();
+    this.parashuTipMarker = null;
     this.prewarmQueue.length = 0;
     if (this.prewarmTimer !== null && typeof window !== 'undefined') {
       window.clearTimeout(this.prewarmTimer);
