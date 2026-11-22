@@ -7,7 +7,7 @@ import {useEffect,useRef,useState} from 'react';
 import {Boss3DRenderer} from '@/lib/game/boss3dRenderer';
 import {GAME_ASSETS} from '@/lib/game/assets';
 import {isSoftwareWebGLRenderer} from '@/lib/game/hadesSpriteBaker';
-import {MeruTimelinePlayer,type MeruCinematic} from '@/engine/meru/cinematicTimeline';
+import {MeruTimelinePlayer,activeCinematicSubtitle,type MeruCinematic} from '@/engine/meru/cinematicTimeline';
 import {MeruAdaptiveQuality} from '@/engine/meru/adaptiveQuality';
 import {makeMeruBossParams,paintMeruFrame,MERU_FRAME_WIDTH,MERU_FRAME_HEIGHT} from '@/engine/meru/cinematicVisuals';
 
@@ -31,6 +31,7 @@ export default function MeruCinematicPlayback({scene,onFinish,muted=false}:MeruC
   const [seconds,setSeconds]=useState(0);
   const [ready,setReady]=useState(false);
   const [videoDecoded,setVideoDecoded]=useState(false);
+  const [accessibleCaption,setAccessibleCaption]=useState('');
   const [startedWithRig,setStartedWithRig]=useState<boolean|null>(null);
 
   const finish=(reason:MeruCinematicEndReason)=>{
@@ -43,11 +44,14 @@ export default function MeruCinematicPlayback({scene,onFinish,muted=false}:MeruC
   useEffect(()=>{
     finishOnceRef.current=false;
     setVideoDecoded(false);
+    setAccessibleCaption('');
     let disposed=false;
     let frameId=0;
     let lastNow=0, lastUi=0, lastBoss=0;
     let hasRig=false;
     let isReady=false;
+    let captionId='';
+    const reducedMotion=window.matchMedia?.('(prefers-reduced-motion: reduce)').matches??false;
     let audio:Record<string,HTMLAudioElement>={};
     let watchdogId:ReturnType<typeof setTimeout>|null=null;
     const timeline=new MeruTimelinePlayer(scene);
@@ -122,6 +126,11 @@ export default function MeruCinematicPlayback({scene,onFinish,muted=false}:MeruC
       const dt=lastNow?Math.min(0.75,Math.max(0,(now-lastNow)/1000)):0.016;
       lastNow=now;
       const result=timeline.tick(dt);
+      if(isReady){
+        const cue=activeCinematicSubtitle(scene,result.frame.time);
+        const nextId=cue?.id??'';
+        if(nextId!==captionId){captionId=nextId;setAccessibleCaption(cue?.payload??'');}
+      }
       quality.sample(Math.max(1,dt*1000));
       const budget=quality.budget;
       if(isReady){
@@ -145,7 +154,7 @@ export default function MeruCinematicPlayback({scene,onFinish,muted=false}:MeruC
             updateRigStatus(false);
           }
         }
-        paintMeruFrame(ctx,result.frame,scene,boss,hasRig,portrait,budget.particleMultiplier);
+        paintMeruFrame(ctx,result.frame,scene,boss,hasRig,portrait,budget.particleMultiplier,reducedMotion);
       }
       if(now-lastUi>110){lastUi=now;setSeconds(result.frame.time);}
       if(result.ended){
@@ -217,6 +226,7 @@ export default function MeruCinematicPlayback({scene,onFinish,muted=false}:MeruC
             KALIYUGA · {scene.title}
           </div>
           {!ready && <div role="status" className="absolute inset-0 flex items-center justify-center bg-black/50 text-center font-serif text-xl text-[#edc28e]">{status}</div>}
+          <div className="sr-only" role="status" aria-live="polite" aria-atomic="true" data-testid="meru-accessible-caption">{accessibleCaption}</div>
         </div>
         <div className="absolute bottom-3 left-4 right-4 z-10 flex items-center gap-3 rounded-md border border-[#816044]/30 bg-[#080608]/80 px-3 py-2 backdrop-blur-sm">
           <div className="h-1 flex-1 overflow-hidden rounded bg-[#30221f]" aria-hidden="true">
