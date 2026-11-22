@@ -1408,14 +1408,12 @@ export class WebglDemonSlayerVfxOverlay {
     const steps = 36;
     for (let i = 0; i <= steps; i++) {
       const t = i / steps;
-      // An OPEN, progressive serpent stroke, not a circular blue portal.
-      // The former 2.18-PI coil closed around the fighter and read as
-      // concentric neon water rings in captured real gameplay.
-      const theta = t * Math.PI * 1.46 - Math.PI * 0.75;
-      const rad = baseR * (0.30 + t * 0.90);
-      const x = Math.cos(theta) * rad + (t - 0.5) * baseR * 0.32;
-      const y = Math.sin(theta) * rad * 0.66 + Math.sin(t * Math.PI) * 44;
-      const z = Math.sin(t * Math.PI * 1.75) * 36 + t * 30;
+      // A directional travelling S-curve, NOT a circular coil. The earlier
+      // water dragon kept reading as a neon ring from gameplay distance.
+      const x = baseR * (-0.33 + 1.74 * t);
+      const y = baseR * (-0.20 + 0.42 * Math.sin(t * Math.PI * 1.33))
+        + baseR * 0.08 * Math.sin(t * Math.PI * 2.72);
+      const z = 8 + Math.sin(t * Math.PI) * 31 + t * 18;
       pts.push(new THREE.Vector3(x, y, z));
     }
 
@@ -1451,14 +1449,15 @@ export class WebglDemonSlayerVfxOverlay {
     const dragonBody = new THREE.Mesh(tubeGeo, bodyMat);
     group.add(inkBody, dragonBody);
 
-    // Companion swirling Hokusai woodblock wave crest ribbons embracing the coiled dragon
-    // A shorter, offset open crest follows the dragon's wake rather than
-    // drawing the generic near-complete water halo around Rudra.
-    const waveSplashGeo = buildCurvedRibbonGeometry(baseR * 0.95, 34, Math.PI * 1.24, 1, 30);
+    // A tapered breaking wave follows the dragon down its forward trajectory
+    // rather than drawing a 220-degree glowing ring around the hero.
+    const waveSplashGeo = buildForwardPainterlyCleaveGeometry(
+      baseR * 1.45, baseR * 0.27, 2.8, 42
+    );
     geos.push(waveSplashGeo);
     const waveSplashMat = createRibbonMaterial(pal, 1.0, 0.92, true, THREE.NormalBlending, 1.15);
     const waveSplashMesh = new THREE.Mesh(waveSplashGeo, waveSplashMat);
-    waveSplashMesh.rotation.set(0.55, -0.18, 0.35);
+    waveSplashMesh.rotation.set(0.36, -0.12, -0.08);
     waveSplashMesh.position.z = -4;
     group.add(waveSplashMesh);
     // Keep shader updated via bodyMat? Use fadeMats/custom cleanup: attach waveSplashMat to fadeMats via cast or dispose cleanly
@@ -1895,15 +1894,18 @@ export class WebglDemonSlayerVfxOverlay {
     const shardMeshes: ActiveWindGale['shardMeshes'] = [];
 
     for (let i = 0; i < 3; i++) {
-      const r = radius * (0.72 + i * 0.22);
-      const w = 54 + i * 16;
-      const dir: 1 | -1 = i % 2 === 0 ? 1 : -1;
-      const geo = buildCurvedRibbonGeometry(r, w, 2.65 + i * 0.28, dir, 26);
+      const r = radius * (0.90 + i * 0.16);
+      const w = 48 + i * 11;
+      // Three distinct forward-moving emerald brushstrokes replace three
+      // nested crescents. Readable direction even at 0.58Y arena perspective.
+      const geo = buildForwardPainterlyCleaveGeometry(
+        r * 1.35, w * 1.25, 1.4 + i * 2.3, 42
+      );
       const mat = createRibbonMaterial(pal, 3.0, 0.96 - i * 0.08, true, THREE.NormalBlending, 1.85);
       const glowMat = createRibbonMaterial(pal, 3.0, 0.62, false, THREE.AdditiveBlending, 2.0);
 
       const m = new THREE.Mesh(geo, mat);
-      m.rotation.set(0.55 + i * 0.18, (i - 1) * 0.28, -opts.angle + (i - 1) * 0.45);
+      m.rotation.set(0.32 + i * 0.10, (i - 1) * 0.13, -opts.angle + (i - 1) * 0.20);
       const gm = new THREE.Mesh(geo, glowMat);
       gm.rotation.copy(m.rotation);
       gm.position.z = 3;
@@ -1931,8 +1933,9 @@ export class WebglDemonSlayerVfxOverlay {
     shardMats.push(inkShardMat);
 
     for (let s = 0; s < 9; s++) {
-      const a = -opts.angle + (s / 9) * Math.PI * 2;
-      const dist = radius * (0.35 + (s % 4) * 0.18);
+      // Scatter along a forward fan, not in a complete circular halo.
+      const a = -opts.angle + (s / 8 - 0.5) * 1.55;
+      const dist = radius * (0.22 + (s % 4) * 0.14);
       const mesh = new THREE.Mesh(shardGeo, inkShardMat);
       mesh.position.set(Math.cos(a) * dist, Math.sin(a) * dist * 0.7, 18);
       const sc = 0.48 + (s % 3) * 0.16;
@@ -2555,7 +2558,9 @@ export class WebglDemonSlayerVfxOverlay {
       const grow = zoom * (0.68 + Math.sin(Math.min(1, norm * 1.35) * Math.PI * 0.5) * 0.48);
       d.group.position.set(toScreenX(d.worldX), toScreenY(d.worldY), 24);
       d.group.scale.set(grow, grow, grow);
-      d.group.rotation.z = -d.angle + norm * 1.9;
+      // Maintain a forward surge with only a subtle crest roll.
+      // Spinning the whole serpent by 110 degrees reconstructed a donut.
+      d.group.rotation.z = -d.angle + 0.13 * Math.sin(norm * Math.PI);
       d.group.rotation.x = 0.26 * Math.sin(norm * Math.PI);
       d.bodyMat.uniforms.uTime.value = this.elapsed * 1.4;
       d.bodyMat.uniforms.uLife.value = norm;
