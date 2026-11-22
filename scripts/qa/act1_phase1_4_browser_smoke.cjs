@@ -231,6 +231,12 @@ const base = process.env.GAME_URL || 'http://127.0.0.1:3100';
     // Run the ACTUAL pre-fight narrative overlay and enter combat through its
     // visible ENGAGE DUNDUBHI button. A camera that expires behind dialogue
     // makes the boss entrance invisible even though the timeline unit test passes.
+    const bossVoiceRequests = [];
+    page.on('request', (request) => {
+      if (request.url().includes('voice_dundubhi_intro.mp3')) {
+        bossVoiceRequests.push(request.url());
+      }
+    });
     await page.goto(base + '/?debug=1&qaFixtures=1&chamber=4', {
       waitUntil: 'domcontentloaded', timeout: 60000
     });
@@ -250,6 +256,7 @@ const base = process.env.GAME_URL || 'http://127.0.0.1:3100';
       Math.abs(cameraDuringDialogue.cameraElapsedSec - cameraBeforeDialogue.cameraElapsedSec) < 0.07,
       'The boss entrance played invisibly behind narrative dialogue'
     );
+    assert.equal(bossVoiceRequests.length, 0, 'Boss voice must not pre-play invisibly behind ENGAGE dialogue');
     await page.getByRole('button', { name: /ENGAGE DUNDUBHI/i }).click();
     await page.waitForFunction(() => {
       const q = window.__kaliyugaPhaseQA;
@@ -265,6 +272,9 @@ const base = process.env.GAME_URL || 'http://127.0.0.1:3100';
         shot.y >= 100 && shot.y <= shot.height - 55;
     }, null, { timeout: 14000 });
     await capture('11-live-dundubhi-boss-entrance');
+    assert.ok(bossVoiceRequests.length > 0,
+      'Boss intro voice asset must be requested after pressing ENGAGE');
+    report.checks.push('Dundubhi real voice recording requested on ENGAGE, not hidden behind dialogue');
     // Screenshot readback may consume the entire 2.65-second entrance track.
     // If it has expired, pressing Escape opens PAUSE rather than skipping,
     // and an assertion on cameraKind===null would give a FALSE PASS.
