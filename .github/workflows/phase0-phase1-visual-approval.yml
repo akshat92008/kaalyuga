@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - feature/phase0-phase1-screenshot-approval-20261122
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -16,6 +19,8 @@ concurrency:
 jobs:
   game:
     name: "Real gameplay test, build and screenshots for user approval"
+    # Ignore unrelated PRs; only our isolated Phase 0/1 branch is in scope.
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.ref == 'feature/phase0-phase1-screenshot-approval-20261122' }}
     # Pin to supported browser image; ubuntu-latest 26.04 breaks Playwright 1.58.
     runs-on: ubuntu-24.04
     timeout-minutes: 45
