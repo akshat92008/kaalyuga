@@ -1,0 +1,342 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {createDundubhiScene, createVrikodaraScene, createBossPhaseScene, validateCinematic, sampleCinematic, retimeCinematic, cuesBetween, MeruTimelinePlayer} from './cinematicTimeline';
+import {MeruAdaptiveQuality,GRAPHICS_PRESETS} from './adaptiveQuality';
+import {MeruFrameProbe} from './performanceProbe';
+import {validateProductionManifest,resolveProductionScene,MERU_PRODUCTION_SCENE_IDS,getInstalledProductionSceneIds} from './productionSceneRegistry';
+import {measureSilhouetteCrop} from './silhouetteCrop';
+import {beginPortalTransition,advancePortalTransition,portalPalette} from './portalDirector';
+import {shouldStartDundubhiIntro,shouldStartBossIntro,shouldStartBossPhase,meruStorageKey,meruSceneStorageKey,defaultBossIntro} from './runtimePolicy';
+
+test('canonical Dundubhi sequence validates and produces finite frames at every sample',()=>{
+  const scene=createDundubhiScene();
+  assert.equal(scene.schemaVersion,1);
+  for(let t=0;t<=8;t+=0.025){
+    const frame=sampleCinematic(scene,t);
+    assert.ok(Number.isFinite(frame.camera.zoom));
+    assert.ok(frame.actor.opacity>=0&&frame.actor.opacity<=1);
+  }
+});
+test('strict schema rejects malformed, duplicate, unsorted and unsafe content',()=>{
+  const scene=createDundubhiScene();
+  assert.throws(()=>validateCinematic({...scene,schemaVersion:2}),/schemaVersion/);
+  assert.throws(()=>validateCinematic({...scene,duration:0}),/duration/);
+  assert.throws(()=>validateCinematic({...scene,backgroundUrl:'https://example.com/data'}),/URL/);
+  assert.throws(()=>validateCinematic({...scene,camera:[...scene.camera].reverse()}),/increase|begin at/);
+  assert.throws(()=>validateCinematic({...scene,camera:[{...scene.camera[0],value:{...scene.camera[0].value,zoom:Infinity}}]}),/invalid zoom|Camera zoom/);
+  assert.throws(()=>validateCinematic({...scene,cues:[...scene.cues,scene.cues[0]]}),/unique/);
+});
+test('interpolates and clamps without altering original scene',()=>{
+  const scene=createDundubhiScene();
+  const start=sampleCinematic(scene,-1),end=sampleCinematic(scene,20);
+  assert.equal(start.time,0);
+  assert.equal(end.time,scene.duration);
+  assert.ok(sampleCinematic(scene,1).camera.zoom>start.camera.zoom);
+  assert.equal(start.actor.state,'idle');
+  assert.notEqual(sampleCinematic(scene,5.4).actor.state,'chase');
+  assert.equal(scene.camera[0].value.zoom,0.92);
+});
+test('cues trigger exactly once, irrespective of frame delta; seek and pause are silent',()=>{
+  const scene=createDundubhiScene();
+  const p=new MeruTimelinePlayer(scene);
+  p.play();assert.deepEqual(p.tick(0.65).cues.map(c=>c.id),['drum-intro']);
+  assert.deepEqual(p.tick(0).cues,[]);
+  p.pause();assert.deepEqual(p.tick(4).cues,[]);
+  p.seek(4);assert.deepEqual(p.tick(0.1).cues,[]);
+  p.play();
+  assert.deepEqual(p.tick(2.5).cues.map(c=>c.id),['earth-impact','earth-sunder','reveal-title']);
+  assert.deepEqual(p.tick(100).cues,[]);
+  assert.equal(p.playing,false);
+  assert.deepEqual(cuesBetween(scene,5.2,4),[]);
+});
+test('timeline terminates once, replay resets, large dt cannot exceed duration',()=>{
+  const p=new MeruTimelinePlayer(createDundubhiScene());
+  p.play();const r=p.tick(100);assert.equal(r.ended,true);
+  assert.equal(r.frame.time,p.scene.duration);
+  assert.equal(p.tick(1).ended,false);
+  p.play();assert.equal(p.time,0);
+  p.reset();assert.equal(p.time,0);
+  assert.equal(p.playing,false);
+});
+test('graphics budgets are ordered, bounded, and expose even pixel dimensions',()=>{
+  assert.ok(GRAPHICS_PRESETS.lite.resolutionScale<GRAPHICS_PRESETS.balanced.resolutionScale);
+  const q=new MeruAdaptiveQuality('balanced',60);
+  const size=q.renderSize(1440,900,2);
+  assert.ok(size.width<=4096&&size.height<=4096);
+  assert.equal(size.width%2,0);assert.equal(size.height%2,0);
+  assert.throws(()=>q.renderSize(0,100),/viewport/);
+});
+test('adaptive performance reacts only to sustained load and avoids oscillation',()=>{
+  const q=new MeruAdaptiveQuality('cinematic',60);
+  assert.equal(q.sample(1000),'cinematic');
+  for(let i=0;i<130;i++)q.sample(28);
+  assert.equal(q.tier,'balanced');
+  q.setAutomatic(false);
+  for(let i=0;i<1800;i++)q.sample(100);
+  assert.equal(q.tier,'balanced');
+  q.setTier('lite');assert.equal(q.tier,'lite');
+});
+test('portal loading never reveals an unready chamber, then finishes correctly',()=>{
+  let p=beginPortalTransition('vaitarani','hub',1.6);
+  for(let i=0;i<30;i++)p=advancePortalTransition(p,0.2,false);
+  assert.equal(p.state,'loading');
+  assert.ok(p.elapsed<=p.duration*0.62+0.0001);
+  for(let i=0;i<30;i++)p=advancePortalTransition(p,0.2,true);
+  assert.equal(p.state,'finished');
+  assert.equal(p.elapsed,p.duration);
+  assert.equal(advancePortalTransition(p,2,true),p);
+  assert.notEqual(portalPalette('deva').core,portalPalette('warden').core);
+  assert.throws(()=>beginPortalTransition('deva','',1.6),/Invalid/);
+});
+
+test('Dundubhi intro launches only for live normal boss encounter',()=>{
+  const base={chamberIndex:3,stage:'playing',hasDundubhi:true};
+  assert.equal(shouldStartDundubhiIntro(base),true);
+  assert.equal(shouldStartDundubhiIntro({...base,query:'?cinematic=0'}),false);
+  assert.equal(shouldStartDundubhiIntro({...base,query:'?phase=2'}),false);
+  assert.equal(shouldStartDundubhiIntro({...base,query:'?cleared=1'}),false);
+  assert.equal(shouldStartDundubhiIntro({...base,query:'?wave=2'}),false);
+  assert.equal(shouldStartDundubhiIntro({...base,stage:'title'}),false);
+  assert.equal(shouldStartDundubhiIntro({...base,hasDundubhi:false}),false);
+  assert.equal(shouldStartDundubhiIntro({...base,chamberIndex:0}),false);
+});
+
+test('Act I cinematics use actual game arena and painted poster assets, not phantom paths',()=>{
+  const d=createDundubhiScene();
+  const v=createVrikodaraScene();
+  assert.equal(d.boss,'dundubhi');
+  assert.equal(v.boss,'vrikodara');
+  assert.equal(d.id,'dundubhi-entrance');
+  assert.equal(v.id,'vrikodara-entrance');
+  assert.equal(d.backgroundUrl,'/videos/Flames_flickering_around_stone_f_09be2052.mp4');
+  assert.equal(d.posterUrl,'/arenas/Gemini_Generated_Image_bc2kjfbc2kjfbc2k.png');
+  assert.equal(v.backgroundUrl,'/videos/Animate_mythological_game_enviro_f7acefd6_1080p.mp4');
+  assert.equal(v.posterUrl,'/assets/aistudio/Gemini_Generated_Image_plgsv7plgsv7plgs.png');
+  assert.equal(validateCinematic(v).id,v.id);
+  assert.equal(defaultBossIntro('vrikodara').id,v.id);
+  assert.notEqual(meruStorageKey('dundubhi'),meruStorageKey('vrikodara'));
+  for(const scene of [d,v]) {
+    for(let t=0;t<=scene.duration;t+=0.035){
+      const frame=sampleCinematic(scene,t);
+      assert.ok(Number.isFinite(frame.camera.zoom));
+      assert.ok(frame.actor.opacity>=0&&frame.actor.opacity<=1);
+    }
+  }
+});
+test('Vrikodara cinematic starts only for a live Chamber VIII phase-1 boss',()=>{
+  const base={boss:'vrikodara' as const,chamberIndex:7,stage:'playing',hasBoss:true};
+  assert.equal(shouldStartBossIntro(base),true);
+  assert.equal(shouldStartBossIntro({...base,chamberIndex:3}),false);
+  assert.equal(shouldStartBossIntro({...base,hasBoss:false}),false);
+  assert.equal(shouldStartBossIntro({...base,stage:'title'}),false);
+  for(const query of ['?phase=2','?cleared=1','?cinematic=0','?wave=2'])
+    assert.equal(shouldStartBossIntro({...base,query}),false);
+});
+test('scene URL whitelist rejects external URLs and parent traversal for both bosses',()=>{
+  const v=createVrikodaraScene();
+  for(const bad of ['/assets/aistudio/../../private.png','//attacker/scene.png',
+    'https://attacker.example/evil.png','/scripts/main.js']){
+    assert.throws(()=>validateCinematic({...v,posterUrl:bad}),/URL/);
+  }
+});
+
+test('editor-authored cue at zero fires once on play, not on pause or seek',()=>{
+  const base=createDundubhiScene();
+  const scene=validateCinematic({...base,cues:[
+    ...base.cues,{id:'opening-sound',time:0,kind:'drum'},
+  ]});
+  const p=new MeruTimelinePlayer(scene);
+  p.play();
+  assert.deepEqual(p.tick(0.015).cues.map(c=>c.id),['opening-sound']);
+  assert.deepEqual(p.tick(0.015).cues,[]);
+  p.pause();
+  assert.deepEqual(p.tick(3).cues,[]);
+  p.play(); // Resuming from t>0 cannot re-fire the start sound.
+  assert.deepEqual(p.tick(0.015).cues,[]);
+  p.seek(0);p.pause();p.play();
+  assert.deepEqual(p.tick(0.015).cues.map(c=>c.id),['opening-sound']);
+});
+
+test('all four phase reveals are validated, distinct, animated using the real rig and MP4 artwork',()=>{
+  for(const kind of ['dundubhi','vrikodara'] as const){
+    const intro=defaultBossIntro(kind);
+    for(const phase of [2,3] as const){
+      const scene=createBossPhaseScene(kind,phase);
+      assert.equal(scene.boss,kind);
+      assert.equal(scene.bossPhase,phase);
+      assert.equal(validateCinematic(scene).id,scene.id);
+      assert.ok(scene.duration>=3&&scene.duration<=5);
+      assert.notEqual(scene.id,intro.id);
+      assert.notEqual(meruSceneStorageKey(scene),meruStorageKey(kind));
+      assert.ok(scene.cues.some(c=>c.kind==='impact'));
+      assert.ok(scene.cues.some(c=>c.kind==='subtitle'));
+      assert.ok(scene.backgroundUrl.startsWith('/videos/'));
+      for(let t=0;t<=scene.duration;t+=0.05){
+        const f=sampleCinematic(scene,t);
+        assert.ok(f.camera.zoom>=0.2&&f.camera.zoom<=4);
+        assert.ok(f.actor.opacity>=0&&f.actor.opacity<=1);
+      }
+      assert.throws(()=>validateCinematic({...scene,bossPhase:4}),/boss phase/);
+      assert.throws(()=>validateCinematic({...scene,bossPhase:'2'}),/boss phase/);
+    }
+  }
+  const eclipse=createBossPhaseScene('vrikodara',2);
+  assert.equal(eclipse.backgroundUrl,'/videos/Furnaces_spewing_flames_and_slag_baeefd93_1080p.mp4');
+  assert.equal(eclipse.posterUrl,'/arenas/Gemini_Generated_Image_3ay6rk3ay6rk3ay6.png');
+});
+test('boss phase reveals never launch on title, wrong chamber, dead rig or debug phase',()=>{
+  const active={boss:'vrikodara' as const,phase:2 as const,chamberIndex:7,stage:'playing',hasBoss:true};
+  assert.equal(shouldStartBossPhase(active),true);
+  assert.equal(shouldStartBossPhase({...active,stage:'title'}),false);
+  assert.equal(shouldStartBossPhase({...active,hasBoss:false}),false);
+  assert.equal(shouldStartBossPhase({...active,chamberIndex:3}),false);
+  assert.equal(shouldStartBossPhase({...active,query:'?cinematic=0'}),false);
+  assert.equal(shouldStartBossPhase({...active,query:'?phase=2'}),false);
+  assert.equal(shouldStartBossPhase({...active,query:'?cleared=1'}),false);
+  assert.equal(meruSceneStorageKey(createDundubhiScene()),meruStorageKey('dundubhi'));
+});
+
+test('authored entrance impacts align with their visual beat and remain in camera space',()=>{
+  const scenes=[
+    createDundubhiScene(),createVrikodaraScene(),
+    createBossPhaseScene('dundubhi',2),createBossPhaseScene('dundubhi',3),
+    createBossPhaseScene('vrikodara',2),createBossPhaseScene('vrikodara',3),
+  ];
+  for(const scene of scenes){
+    const audioImpacts=scene.cues.filter(c=>c.kind==='impact');
+    const visualImpacts=scene.cues.filter(c=>c.kind==='vfx');
+    assert.ok(audioImpacts.length>=1,scene.id+' has an authored impact sound');
+    assert.ok(visualImpacts.length>=1,scene.id+' has an authored visual impact');
+    assert.ok(audioImpacts.some(sound=>visualImpacts.some(vfx=>Math.abs(sound.time-vfx.time)<=0.05)),
+      scene.id+' visual and audible impacts remain synchronized');
+    assert.ok(visualImpacts.every(c=>['earth-sunder','blood-furnace','ward-break'].includes(c.payload??'')),
+      scene.id+' only uses palette-authored, bounded ink impact effects');
+  }
+});
+
+test('real rig pose tracks are time-interpolated on every shipped boss scene and backward compatible',()=>{
+  for(const boss of ['dundubhi','vrikodara'] as const){
+    for(const scene of [boss==='dundubhi'?createDundubhiScene():createVrikodaraScene(),createBossPhaseScene(boss,2),createBossPhaseScene(boss,3)]){
+      assert.ok(scene.pose && scene.pose.length>=4,scene.id+' needs an authored FBX pose track');
+      const sampled=sampleCinematic(scene,scene.pose![2].time);
+      assert.ok(sampled.pose,scene.id+' must sample a rig pose');
+      assert.ok(Math.abs(sampled.pose!.rightArmLift)>0.1,scene.id+' authored weapon lift should be non-neutral');
+      assert.ok(sampled.pose!.rightArmLift<=0.9&&sampled.pose!.rightArmLift>=-0.9);
+      for(let t=0;t<scene.duration;t+=0.037){
+        const frame=sampleCinematic(scene,t);
+        assert.ok(frame.pose);
+        for(const angle of Object.values(frame.pose!))assert.ok(Number.isFinite(angle));
+      }
+    }
+  }
+  const legacy=createDundubhiScene();
+  delete legacy.pose;
+  const roundtrip=validateCinematic(legacy);
+  assert.equal(roundtrip.pose,undefined);
+  assert.equal(sampleCinematic(roundtrip,2).pose,undefined);
+});
+test('out-of-range skeletal joints, malformed keys, and unsorted authored poses cannot enter game',()=>{
+  const original=createVrikodaraScene();
+  assert.throws(()=>validateCinematic({...original,pose:original.pose!.map((k,i)=>i===1?{...k,value:{...k.value,rightArmLift:1.9}}:k)}),/joint offset/);
+  assert.throws(()=>validateCinematic({...original,pose:[...original.pose!].reverse()}),/increase|begin at/);
+  assert.throws(()=>validateCinematic({...original,pose:[{time:0,value:{...original.pose![0].value,torsoLean:NaN}}]}),/invalid torsoLean/);
+  const out=validateCinematic(original);
+  out.pose![0].value.torsoYaw=0.4;
+  assert.equal(original.pose![0].value.torsoYaw,0,'validation must deep-clone the joint tracks');
+});
+test('step easing makes a direct movie-camera cut, not a false video parallax move',()=>{
+  const original=createDundubhiScene();
+  const start=original.camera[0],stop=original.camera[1];
+  const scene=validateCinematic({...original,camera:[{...start,ease:'step'},stop,...original.camera.slice(2)]});
+  assert.equal(sampleCinematic(scene,stop.time-0.001).camera.zoom,start.value.zoom);
+  assert.equal(sampleCinematic(scene,stop.time).camera.zoom,stop.value.zoom);
+});
+
+test('offline target-device frame report is bounded, truthful, and excludes invalid samples',()=>{
+  const p=new MeruFrameProbe(4);
+  assert.equal(p.report().sampleCount,0);
+  for(const ms of [16,16.5,48,24,19])p.sample(ms);
+  for(const invalid of [0,NaN,Infinity,-5,1500])p.sample(invalid);
+  const r=p.report();
+  assert.equal(r.sampleCount,4);
+  assert.equal(r.worstMs,48);
+  assert.ok(r.p95Ms>=r.medianMs);
+  assert.equal(r.jankOver33MsPercent,25);
+  assert.ok(r.estimatedFps>0);
+  p.reset();assert.equal(p.report().sampleCount,0);
+  assert.throws(()=>new MeruFrameProbe(1),/sample window/);
+});
+
+test('retiming a cinematic rescales sound and visual beats together with character pose',()=>{
+  for(const original of [createDundubhiScene(),createVrikodaraScene(),createBossPhaseScene('vrikodara',3)]){
+    const next=retimeCinematic(original,12);
+    assert.equal(next.duration,12);
+    const ratio=12/original.duration;
+    assert.ok(Math.abs(next.camera[1].time-original.camera[1].time*ratio)<0.000001);
+    assert.ok(Math.abs(next.actor[2].time-original.actor[2].time*ratio)<0.000001);
+    assert.ok(Math.abs(next.pose![2].time-original.pose![2].time*ratio)<0.000001);
+    const oldCue=original.cues.find(c=>c.kind==='impact')!;
+    const newCue=next.cues.find(c=>c.id===oldCue.id)!;
+    assert.ok(Math.abs(newCue.time-oldCue.time*ratio)<0.000001);
+    assert.equal(original.duration,original.bossPhase?4.2:original.boss==='dundubhi'?8:8.5);
+    assert.equal(validateCinematic(next).duration,12);
+  }
+  assert.throws(()=>retimeCinematic(createDundubhiScene(),-1),/duration/);
+});
+
+test('transparent rig alpha framing removes empty space while preserving limbs and foot anchor',()=>{
+  const width=128,height=128;
+  const rgba=new Uint8Array(width*height*4);
+  for(let y=15;y<=109;y++)for(let x=41;x<=86;x++)rgba[(y*width+x)*4+3]=255;
+  const crop=measureSilhouetteCrop(rgba,width,height);
+  assert.equal(crop.fitted,true);
+  assert.ok(crop.width<0.7&&crop.width>0.3);
+  assert.ok(crop.height>0.7&&crop.height<=1);
+  assert.ok(crop.x*width<=41&&crop.x*width>0);
+  assert.ok((crop.x+crop.width)*width>=86);
+  assert.ok(crop.footY>0.8&&crop.footY<=1);
+  const empty=measureSilhouetteCrop(new Uint8Array(width*height*4),width,height);
+  assert.equal(empty.fitted,false,'Missing rigs must preserve a safe full-frame fallback');
+  const invalid=measureSilhouetteCrop(rgba,width,200);
+  assert.equal(invalid.fitted,false,'Undersized RGBA data never crashes rendering');
+});
+
+test('production cinematic manifest lists exactly the six gameplay scene slots',()=>{
+  assert.deepEqual([...MERU_PRODUCTION_SCENE_IDS].sort(),[
+    'dundubhi-entrance','dundubhi-phase-2','dundubhi-phase-3',
+    'vrikodara-entrance','vrikodara-phase-2','vrikodara-phase-3',
+  ].sort());
+  assert.deepEqual(getInstalledProductionSceneIds(),[],
+    'No user-approved Studio exports have been installed yet; never claim they shipped');
+  for(const boss of ['dundubhi','vrikodara'] as const){
+    for(const phase of [1,2,3] as const){
+      const resolved=resolveProductionScene(boss,phase);
+      const factory=phase===1?(boss==='dundubhi'?createDundubhiScene():createVrikodaraScene()):createBossPhaseScene(boss,phase);
+      assert.equal(resolved.id,factory.id);
+      assert.deepEqual(resolved.cues,factory.cues);
+    }
+  }
+});
+test('packaged cinematic scene overrides are delivered to the correct boss and phase',()=>{
+  const authored=createDundubhiScene();
+  authored.title='PRODUCTION REVIEWED DUNDUBHI';
+  authored.pose![1].value.rightArmLift=-0.25;
+  const manifest={schemaVersion:1,scenes:{[authored.id]:authored}};
+  const checked=validateProductionManifest(manifest);
+  assert.deepEqual(Object.keys(checked.scenes),['dundubhi-entrance']);
+  assert.equal(resolveProductionScene('dundubhi',1,manifest).title,'PRODUCTION REVIEWED DUNDUBHI');
+  assert.equal(resolveProductionScene('dundubhi',1,manifest).pose![1].value.rightArmLift,-0.25);
+  assert.equal(resolveProductionScene('vrikodara',1,manifest).title,createVrikodaraScene().title);
+  checked.scenes['dundubhi-entrance']!.title='changed clone only';
+  assert.equal(authored.title,'PRODUCTION REVIEWED DUNDUBHI');
+});
+test('invalid or spoofed shipped scenes cannot override another encounter',()=>{
+  const valid=createBossPhaseScene('dundubhi',2);
+  assert.throws(()=>validateProductionManifest({schemaVersion:1,scenes:{'vrikodara-phase-2':valid}}),/mismatch/);
+  assert.throws(()=>validateProductionManifest({schemaVersion:1,scenes:{'dundubhi-phase2':valid}}),/Unknown/);
+  assert.throws(()=>validateProductionManifest({schemaVersion:1,scenes:{'dundubhi-phase-2':{...valid,backgroundUrl:'https://attacker.example/clip.mp4'}}}),/asset URL/);
+  assert.throws(()=>validateProductionManifest({schemaVersion:2,scenes:{}}),/manifest/);
+  assert.throws(()=>validateProductionManifest({schemaVersion:1,scenes:{'rogue':valid}}),/Unknown/);
+  assert.equal(resolveProductionScene('dundubhi',2,{schemaVersion:1,scenes:{'dundubhi-phase-2':{...valid,boss:'vrikodara'}}}).title,valid.title);
+  assert.equal(resolveProductionScene('dundubhi',2,{schemaVersion:1,scenes:{'dundubhi-phase-2':valid}}).id,valid.id);
+});

@@ -1,5 +1,6 @@
 // Hades-Style Isometric Chamber Collision Boundaries, Asset-Driven Exit Gates, Reward Orbs, Floor Traps & Foreground Parallax
 import { GAME_ASSETS } from './assets';
+import { renderMeruPortal } from '@/engine/meru/portalDirector';
 import { computeArenaFloorGradeSpec } from './hadesSpriteBaker';
 import { getChamberBiomeProfile } from './kalaBhairavaSusanoo';
 import { getProcessedSpriteSync } from './spriteProcessor';
@@ -406,6 +407,8 @@ export function prewarmArenaVideo(videoUrl: string | undefined): void {
   arenaVideoPool.set(videoUrl, video);
 }
 
+const meruVideoRevealAt = new WeakMap<HTMLVideoElement, number>();
+
 export function getOrStartArenaVideo(videoUrl: string | undefined, paused: boolean = false): HTMLVideoElement | null {
   if (typeof window === 'undefined' || typeof document === 'undefined' || !videoUrl) {
     return null;
@@ -512,7 +515,15 @@ export function renderIsometricChamberPlatform(
   }
 
   if (isVideoReady && activeVideo) {
+    // Meru Living Arenas: gently blend from the painted poster to decoded MP4.
+    // This prevents the hard still-to-video snap during first-frame streaming.
+    if (!meruVideoRevealAt.has(activeVideo)) meruVideoRevealAt.set(activeVideo, performance.now());
+    const elapsed = performance.now() - (meruVideoRevealAt.get(activeVideo) || 0);
+    const revealAlpha = isBgImgReady ? Math.max(0, Math.min(1, elapsed / 450)) : 1;
+    ctx.save();
+    ctx.globalAlpha = revealAlpha;
     ctx.drawImage(activeVideo, 0, 0, worldW, worldH);
+    ctx.restore();
   }
 
   if (!isBgImgReady && !isVideoReady) {
@@ -718,6 +729,17 @@ export function renderIsometricChamberPlatform(
         ctx.restore();
       }
       ctx.restore();
+
+      // Meru Portal Director: living, energy-filled aperture behind the real painted arch.
+      // Keep the existing arch sprite as a foreground occluder.
+      renderMeruPortal(ctx, {
+        kind: isNextChamberBoss ? 'warden' : 'deva',
+        x: gx,
+        y: gy + 8,
+        size: 104,
+        unlocked: isChamberCleared,
+        timeMs: now,
+      });
 
       // 4.15. 2x1 Vedic Chained Gate Archway (d647kw...png: Frame 0 = Chained & Padlocked, Frame 1 = Shattered Chains & Open Crimson Portal)
       if (gatesAsset && gatesAsset.frames.length >= 2) {

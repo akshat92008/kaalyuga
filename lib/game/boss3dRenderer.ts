@@ -46,6 +46,12 @@ export type Boss3DKind =
   | 'savitri_hub'
   | 'weaponsmith_hub';
 
+/** Optional additive pose offsets for an authored cinematic ONLY. These never
+ * reach the playable combat AI; the existing FBX mixer remains authoritative. */
+export interface BossCinematicPose {
+  rootYaw:number; torsoYaw:number; torsoLean:number;
+  rightArmLift:number; rightElbowBend:number; leftArmLift:number;
+}
 export interface Boss3DUpdateParams {
   kind: Boss3DKind;
   dt: number;
@@ -63,6 +69,7 @@ export interface Boss3DUpdateParams {
   isHitFlash: boolean;
   isParrying?: boolean;
   bypassSoftwareThrottle?: boolean;
+  cinematicPose?: BossCinematicPose;
 }
 
 export interface BossPbrMaterialMaps {
@@ -1768,12 +1775,23 @@ export class Boss3DRenderer {
           ? `a${Math.round((1 - this.attackSwingTimer / Math.max(0.05, this.attackSwingDuration)) * (isSoft ? 2 : 6))}`
           : 'loc';
     const flashSuffix = params.isHitFlash ? 'flash' : 'norm';
-    const frameKey = `${baseKey}:${actionSubStep}:${flashSuffix}`;
+    // Pose-aware quantization keeps the cutscene's authored body performance
+    // without re-baking nearly identical high-resolution frames every tick.
+    // Software WebGL uses coarser 0.14rad steps; real GPUs preserve ~0.06rad.
+    const pose=params.cinematicPose;
+    const poseStep=isSoft?0.14:0.06;
+    const poseKey=pose?':pose-'+[
+      pose.rootYaw,pose.torsoYaw,pose.torsoLean,pose.rightArmLift,
+      pose.rightElbowBend,pose.leftArmLift,
+    ].map(v=>Math.round(v/poseStep)).join('_'):'';
+    const frameKey = `${baseKey}:${actionSubStep}:${flashSuffix}${poseKey}`;
 
+    // The above pose signature prevents stale joint poses and bounds memory.
     const cached = this.frameCache.get(frameKey);
     if (cached) {
       this.canvas = cached;
       rig.mixer.update(dt);
+      if(pose)this.applyCinematicBossPose(rig.bones,pose);
       return true;
     }
 
@@ -1831,6 +1849,10 @@ export class Boss3DRenderer {
       }
     }
 
+    // Authored upper-body performance is additive to the real FBX animation.
+    // No one-frame bind-pose snapping and no mutation of regular combat moves.
+    if (params.cinematicPose) this.applyCinematicBossPose(rig.bones,params.cinematicPose);
+
     // Subtle 360-degree spin during Whirlwind shockwave
     let spinYawOffset = 0;
     const pat = (params.attackPattern ?? 0) % 6;
@@ -1842,7 +1864,7 @@ export class Boss3DRenderer {
       spinYawOffset = Math.min(1, p * 1.15) * Math.PI * 2;
     }
 
-    rig.root.rotation.y = quantizedYaw + spinYawOffset;
+    rig.root.rotation.y = quantizedYaw + spinYawOffset + (params.cinematicPose?.rootYaw ?? 0);
 
     const leanTarget =
       params.aiState === 'attack'
@@ -1962,12 +1984,46 @@ export class Boss3DRenderer {
       cacheFrame: false,
     });
     this.canvas = baked;
-    if (this.frameCache.size > 96) {
+    const cacheLimit=pose?(isSoft?40:64):96;
+    if (this.frameCache.size > cacheLimit) {
       const oldest = this.frameCache.keys().next().value;
       if (oldest) this.frameCache.delete(oldest);
     }
     this.frameCache.set(frameKey, baked);
     return true;
+  }
+
+  /** Small joint offsets in rig-local axes after each FBX mixer update. Joint
+   * rotation is recomputed from the mixer each frame, so scrubbing is safe. */
+  /**
+   * Authoritative projected weapon point from the original animated FBX socket.
+   * Normalized to the baked sprite frame, for cue-locked ink effects that
+   * FOLLOW the weapon rather than hover at an unrelated screen coordinate.
+   * Read-only: does not alter the playable combat rig.
+   */
+  public getCinematicWeaponAnchor(): {x:number;y:number}|null {
+    const rig=this.activeKind?this.rigs[this.activeKind]:null;
+    if(!rig?.rightWeaponSocket)return null;
+    rig.root.updateMatrixWorld(true);
+    rig.weaponTipNode.getWorldPosition(this.scratchTipWorld);
+    const p=this.scratchTipWorld.clone().project(this.camera);
+    if(!Number.isFinite(p.x)||!Number.isFinite(p.y)||
+       Math.abs(p.x)>1.7||Math.abs(p.y)>1.7)return null;
+    return {x:(p.x+1)*0.5,y:(1-p.y)*0.5};
+  }
+
+  private applyCinematicBossPose(bones: BossUpperBodyBones, pose: BossCinematicPose): void {
+    const rotate=(joint:THREE.Object3D|null,x:number,y:number,z:number)=>{
+      if(!joint)return;
+      this.scratchEuler.set(x,y,z,'XYZ');
+      this.scratchRotQ.setFromEuler(this.scratchEuler);
+      joint.quaternion.multiply(this.scratchRotQ);
+    };
+    rotate(bones.spine1,pose.torsoLean*0.52,pose.torsoYaw*0.5,0);
+    rotate(bones.spine2,pose.torsoLean*0.48,pose.torsoYaw*0.5,0);
+    rotate(bones.rightArm,0,0,pose.rightArmLift);
+    rotate(bones.rightForeArm,0,0,pose.rightElbowBend);
+    rotate(bones.leftArm,0,0,pose.leftArmLift);
   }
 
   private applyProceduralBossPose(

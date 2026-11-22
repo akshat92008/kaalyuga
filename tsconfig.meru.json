@@ -1,0 +1,23 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "incremental": false,
+    "plugins": []
+  },
+  "include": [
+    "next-env.d.ts",
+    "engine/meru/**/*.ts",
+    "components/game/MeruCinematicStudio.tsx",
+    "components/game/MeruCinematicPlayback.tsx",
+    "components/game/MeruPortalTravel.tsx",
+    "app/meru-studio/page.tsx",
+    "lib/game/chamberGeometry.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "**/*.test.ts",
+    ".next",
+    "demon slayer",
+    "new 3D assets and animations"
+  ]
+}
