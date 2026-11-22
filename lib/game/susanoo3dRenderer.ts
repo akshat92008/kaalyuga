@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { shouldStartGuardianSwing } from './guardianAttackGate';
 import {
   getSharedStudioWebGLRenderer,
   isSoftwareWebGLRenderer,
@@ -83,7 +84,7 @@ const SUSANOO_SKINNED_VERTEX_SHADER = /* glsl */ `
     vWorldPos = worldPosition.xyz;
     vec4 mvPosition = viewMatrix * worldPosition;
     vViewPos = -mvPosition.xyz;
-    vNormalView = normalize(normalMatrix * objectNormal);
+    vNormalView = normalize(normalMatrix * transformedNormal);
 
     vec4 clipPos = projectionMatrix * mvPosition;
     vNdcPos = clipPos.xy / max(clipPos.w, 0.0001);
@@ -215,6 +216,7 @@ export class Susanoo3DRenderer {
   private activeClip: SusanooClipKey | null = null;
   private hasSkinnedBones = false;
   private lastAttackSerial = -1;
+  private wasAttacking = false;
   private roarPlayedForSummon = false;
   private lastTransformTimer = 0;
   private attackAnimHoldSec = 0;
@@ -373,7 +375,13 @@ export class Susanoo3DRenderer {
         const act = this.mixer!.clipAction(stabilized);
         act.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, loop ? Infinity : 1);
         act.clampWhenFinished = !loop;
+        const priorIdle = key === 'idle' ? this.actions.idle : null;
         this.actions[key] = act;
+        // Never leave the base FBX idle clip running beneath a streamed idle.
+        if (key === 'idle' && priorIdle && priorIdle !== act && this.activeClip === 'idle') {
+          priorIdle.fadeOut(0.12);
+          act.reset().setEffectiveWeight(1).fadeIn(0.12).play();
+        }
       });
       if (this.actions.idle && !this.activeClip) {
         this.playClip('idle', 0.1, 0.9);
@@ -387,9 +395,10 @@ export class Susanoo3DRenderer {
     timeScale = 1.0,
     forceRestart = false
   ): void {
-    const next = this.actions[key] || this.actions.idle;
+    const resolvedKey: SusanooClipKey = this.actions[key] ? key : 'idle';
+    const next = this.actions[resolvedKey];
     if (!next) return;
-    if (this.activeClip === key && !forceRestart) {
+    if (this.activeClip === resolvedKey && !forceRestart) {
       next.setEffectiveTimeScale(timeScale);
       return;
     }
@@ -402,7 +411,7 @@ export class Susanoo3DRenderer {
     if (prev && prev !== next) {
       prev.crossFadeTo(next, fadeSec, false);
     }
-    this.activeClip = key;
+    this.activeClip = resolvedKey;
   }
 
   public isReady(): boolean {
@@ -417,6 +426,9 @@ export class Susanoo3DRenderer {
     if (!this.isLoaded || !this.ctx2d || input.transformTimer <= 0) {
       this.roarPlayedForSummon = false;
       this.lastTransformTimer = 0;
+      this.wasAttacking = false;
+      this.lastAttackSerial = -1;
+      this.attackAnimHoldSec = 0;
       return null;
     }
 
@@ -437,9 +449,16 @@ export class Susanoo3DRenderer {
     const dt = Math.min(0.05, Math.max(0.008, input.dt ?? 0.016));
 
     // Trigger Pro Melee Axe Pack heavy bare-arm swings whenever Rudra commands an attack inside Susanoo
-    const attackSerial = input.attackSerial ?? -1;
-    if (input.isAttacking && (attackSerial !== this.lastAttackSerial || this.attackAnimHoldSec <= 0.05)) {
-      this.lastAttackSerial = attackSerial;
+    const startNewSwing = shouldStartGuardianSwing({
+      isAttacking: input.isAttacking,
+      attackSerial: input.attackSerial,
+      lastAttackSerial: this.lastAttackSerial,
+      wasAttacking: this.wasAttacking,
+    });
+    if (startNewSwing) {
+      if (typeof input.attackSerial === 'number' && Number.isFinite(input.attackSerial)) {
+        this.lastAttackSerial = input.attackSerial;
+      }
       this.activeSwingIndex = ((input.comboStep ?? this.activeSwingIndex + 1) % 3);
       const swingKey: SusanooClipKey =
         input.isHeavyAttack || this.activeSwingIndex === 1
@@ -458,6 +477,7 @@ export class Susanoo3DRenderer {
       this.playClip('idle', 0.22, 0.92, false);
     }
 
+    this.wasAttacking = input.isAttacking;
     if (this.mixer) {
       this.mixer.update(dt);
     }
