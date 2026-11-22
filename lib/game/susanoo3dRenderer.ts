@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { shouldStartGuardianSwing } from './guardianAttackGate';
+import { createGuardianProofClips } from './guardianPreviewAnimation';
 import {
   getSharedStudioWebGLRenderer,
   isSoftwareWebGLRenderer,
@@ -185,6 +186,7 @@ const SUSANOO_FRAGMENT_SHADER = /* glsl */ `
 `;
 
 export const SUSANOO_FBX_URL = '/models_v2/horned_warlord_abyss.fbx';
+const GUARDIAN_RIGGED_QA_URL = '/models_v2/rigged_crimson_guardian_preview.fbx';
 
 const SUSANOO_ANIM_URLS = {
   idle: '/new_3d_assets/Animations/Creature Pack (4)/mutant breathing idle.fbx',
@@ -216,6 +218,9 @@ export class Susanoo3DRenderer {
   private actions: Partial<Record<SusanooClipKey, THREE.AnimationAction>> = {};
   private activeClip: SusanooClipKey | null = null;
   private hasSkinnedBones = false;
+  private readonly riggedPreviewMode =
+    typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('guardianPreview') === '1';
+  private generatedPreviewBones: string[] = [];
   private lastAttackSerial = -1;
   private wasAttacking = false;
   private roarPlayedForSummon = false;
@@ -289,7 +294,7 @@ export class Susanoo3DRenderer {
     if (this.isLoading || this.isLoaded || this.loadFailed) return;
     this.isLoading = true;
     try {
-      const fbx = await loadFbxCached(SUSANOO_FBX_URL, false);
+      const fbx = await loadFbxCached(this.riggedPreviewMode ? GUARDIAN_RIGGED_QA_URL : SUSANOO_FBX_URL, false);
       // A plain Object3D clone duplicates bones without reliably rebinding
       // SkinnedMesh.skeleton.bones to the cloned bone hierarchy. The avatar
       // can appear frozen or deformed even when an AnimationMixer advances.
@@ -297,9 +302,14 @@ export class Susanoo3DRenderer {
       clone.animations = fbx.animations;
 
       let foundBones = false;
+      let skinnedMeshes = 0;
       clone.traverse((child) => {
         if ((child as THREE.Bone).isBone || (child as THREE.SkinnedMesh).isSkinnedMesh) {
           foundBones = true;
+        }
+        if ((child as THREE.SkinnedMesh).isSkinnedMesh) {
+          const sm = child as THREE.SkinnedMesh;
+          if (sm.skeleton?.bones?.length) skinnedMeshes += 1;
         }
         if ((child as THREE.Mesh).isMesh) {
           const mesh = child as THREE.Mesh;
@@ -307,7 +317,10 @@ export class Susanoo3DRenderer {
           mesh.frustumCulled = false;
         }
       });
-      this.hasSkinnedBones = foundBones;
+      this.hasSkinnedBones = foundBones && skinnedMeshes > 0;
+      if (this.riggedPreviewMode && !this.hasSkinnedBones) {
+        throw new Error('Rigged QA character is not a valid skinned mesh with bones');
+      }
 
       const standingHipY = foundBones ? extractStandingHipY(clone) : 0;
       const rawBox = new THREE.Box3().setFromObject(clone);
@@ -330,9 +343,9 @@ export class Susanoo3DRenderer {
       this.meshGroup.add(clone);
       this.modelPivot.add(this.meshGroup);
 
-      if (foundBones) {
+      if (this.hasSkinnedBones) {
         this.mixer = new THREE.AnimationMixer(clone);
-        if (clone.animations?.[0]) {
+        if (!this.riggedPreviewMode && clone.animations?.[0]) {
           const baseClip = buildStabilizedInPlaceClip(clone.animations[0], clone, standingHipY);
           if (baseClip.tracks.length > 0) {
             const act = this.mixer.clipAction(baseClip);
@@ -345,8 +358,24 @@ export class Susanoo3DRenderer {
 
       this.isLoaded = true;
 
-      // Stream Creature Pack (idle + roar) & Pro Melee Axe Pack (heavy swings) non-blockingly
-      if (foundBones && this.mixer) {
+      if (this.riggedPreviewMode && this.mixer) {
+        // The alternative Crimson Skull source is genuinely skinned, but its
+        // embedded clip is Running. Build an explicit *preview* animation
+        // set that targets exactly its own known Mixamo bone hierarchy;
+        // unrelated Creature Pack clips must never play on this skeleton.
+        const { clips, animatedBones } = createGuardianProofClips(clone);
+        this.generatedPreviewBones = animatedBones;
+        for (const [key, clip] of Object.entries(clips) as Array<[SusanooClipKey, THREE.AnimationClip]>) {
+          if (clip.tracks.length === 0) throw new Error('Missing guardian QA animation tracks: ' + key);
+          const act = this.mixer.clipAction(clip);
+          const loop = key === 'idle';
+          act.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, loop ? Infinity : 1);
+          act.clampWhenFinished = !loop;
+          this.actions[key] = act;
+        }
+        this.playClip('idle', 0.03, 0.85, true);
+      } else if (this.hasSkinnedBones && this.mixer) {
+        // Original runtime path. Do not claim this works for an unskinned source.
         this.streamSusanooClips(clone, standingHipY);
       }
     } catch (err) {
@@ -434,6 +463,9 @@ export class Susanoo3DRenderer {
     loadedActions: string[];
     lastAttackSerial: number;
     rendered3dFrameCount: number;
+    riggedPreviewMode: boolean;
+    skeletonAnimationReady: boolean;
+    animatedPreviewBoneNames: string[];
   } {
     return {
       ready: this.isReady(),
@@ -444,6 +476,9 @@ export class Susanoo3DRenderer {
       loadedActions: Object.keys(this.actions).sort(),
       lastAttackSerial: this.lastAttackSerial,
       rendered3dFrameCount: this.rendered3dFrameCount,
+      riggedPreviewMode: this.riggedPreviewMode,
+      skeletonAnimationReady: this.hasSkinnedBones && Boolean(this.actions.swing1) && Boolean(this.actions.swing2) && Boolean(this.actions.swing3),
+      animatedPreviewBoneNames: this.generatedPreviewBones,
     };
   }
 
