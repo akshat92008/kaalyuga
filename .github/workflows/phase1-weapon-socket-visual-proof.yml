@@ -1,0 +1,92 @@
+name: Kaliyuga Phase 1 - live weapon-attached VFX approval
+
+on:
+  push:
+    branches:
+      - feature/phase1-weapon-socket-combat-proof-20261122
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p1-weapon-socket-visual-approval-20261122
+  cancel-in-progress: true
+
+jobs:
+  game:
+    name: "Real gameplay test, build and screenshots for user approval"
+    # Pin to supported browser image; ubuntu-latest 26.04 breaks Playwright 1.58.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CI: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - name: Checkout Kaliyuga with game assets
+        uses: actions/checkout@v4
+      - name: Configure Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install repository dependencies (lockfile not present in this repo)
+        run: npm install --no-audit --no-fund --legacy-peer-deps
+      - name: Test Phase 4 shots, camera safety and existing combat regressions
+        run: npm run test:phase1-4
+      - name: Validate guardian P0 animation regression
+        run: npx tsx --test lib/game/guardianAttackGate.test.ts
+      - name: Test actual weapon projection and safe fallback
+        run: npx tsx --test lib/game/weaponContactProjection.test.ts
+      - name: TypeScript full project verification
+        run: npx tsc --noEmit
+      - name: Build production game
+        run: npm run build
+      - name: Start actual production server
+        run: |
+          npm run start -- -p 3100 > /tmp/kaliyuga-next-server.log 2>&1 &
+          for n in $(seq 1 100); do
+            if curl -fsS http://127.0.0.1:3100/ -o /dev/null; then
+              echo "Production server healthy"
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/kaliyuga-next-server.log
+          exit 1
+      - name: Install isolated Playwright browser test dependency
+        run: npm install --no-save --ignore-scripts --no-audit --no-fund --legacy-peer-deps playwright@1.58.2
+      - name: Install Chromium with headless WebGL software driver
+        run: |
+          # ubuntu-24.04 images already supply browser runtime libraries.
+          # Optional font package mirrors can temporarily omit legacy names;
+          # do NOT confuse apt mirror failure with a game/browser test failure.
+          if ! npx playwright install --with-deps chromium; then
+            echo "::warning::Optional Playwright OS dependency install failed; using runner libraries"
+            npx playwright install chromium
+          fi
+      - name: Run and capture live browser gameplay and cinematic
+        run: node scripts/qa/act1_phase1_4_browser_smoke.cjs
+      - name: Configure Python for rendered screenshot validation
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Pillow for deterministic image-pixel checks
+        run: python -m pip install --disable-pip-version-check "Pillow>=10,<14"
+      - name: Verify existing elemental and execution VFX remain visible
+        run: python scripts/qa/verify_elemental_frames.py artifacts/act1-phase1-4
+      - name: Reject obstructive magenta boss-entrance wireframe
+        run: python scripts/qa/verify_boss_entrance_frame.py artifacts/act1-phase1-4
+      - name: Collect screenshots, logs and test reports even on failure
+        if: always()
+        run: |
+          mkdir -p artifacts/act1-phase1-4
+          if test -f /tmp/kaliyuga-next-server.log; then cp /tmp/kaliyuga-next-server.log artifacts/act1-phase1-4/server.log; fi
+      - name: Upload Phase 4 rendered browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-weapon-socket-real-gameplay
+          path: artifacts/act1-phase1-4
+          if-no-files-found: warn
+          retention-days: 21
+
