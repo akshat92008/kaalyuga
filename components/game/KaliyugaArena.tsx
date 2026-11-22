@@ -4579,14 +4579,10 @@ export default function KaliyugaArena() {
       1,
       true
     );
-    spawnShockwave(p.x, p.y, 260, '#ff5924', 0.52);
-    webglDemonSlayerVfxRef.current?.spawnShockwaveRing({
-      x: p.x,
-      y: p.y,
-      radius: 235,
-      palette: 'hinokami',
-      duration: 0.48,
-    });
+    // The old stacked 260px canvas ring and 235px WebGL ring surrounded the
+    // guardian with an oversized black/red circle. Use a short grounded pulse
+    // beneath the feet; the 3D body and slash now own the transformation.
+    spawnShockwave(p.x, p.y, 90, '#ff5924', 0.25);
     spawnParticles(p.x, p.y - 36, 38, '#ff5924', 240, 5.5, 65);
     // Place the summon inscription beside, not across, the guardian's head.
     // The former 104px offset visually collided with its enlarged silhouette.
