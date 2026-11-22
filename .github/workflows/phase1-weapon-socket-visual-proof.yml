@@ -47,6 +47,8 @@ jobs:
         run: npx tsx --test lib/game/guardianPreviewAnimation.test.ts
       - name: Verify guardian HUD safe framing
         run: npx tsx --test lib/game/guardianScreenFraming.test.ts
+      - name: Check real weapon-sampled painterly trail geometry
+        run: npx tsx --test lib/game/parashuMotionTrail.test.ts
       - name: TypeScript full project verification
         run: npx tsc --noEmit
       - name: Build production game
