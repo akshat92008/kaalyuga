@@ -1263,17 +1263,19 @@ export class WebglDemonSlayerVfxOverlay {
     const pal = RIBBON_PALETTES[opts.palette ?? (variant === 'guardian' ? 'blood' : 'hinokami')];
     const radius = Math.max(90, Math.min(220, Number.isFinite(opts.radius) ? opts.radius! : 160));
     const mainLength = radius * (variant === 'guardian' ? 1.54 : 1.40);
-    const mainWidth = radius * (variant === 'guardian' ? 0.70 : 0.67);
-    const inkGeo = buildForwardPainterlyCleaveGeometry(mainLength * 1.02, mainWidth * 1.19, 2.1, 52);
+    // A broad solid fan reads as an opaque red rectangle in gameplay.
+    // Keep a narrow incandescent stroke and let forked tongues carry power.
+    const mainWidth = radius * (variant === 'guardian' ? 0.70 : 0.44);
+    const inkGeo = buildForwardPainterlyCleaveGeometry(mainLength * 1.02, mainWidth * (variant === 'flame' ? 1.07 : 1.19), 2.1, 52);
     const coreGeo = buildForwardPainterlyCleaveGeometry(mainLength, mainWidth, 0.55, 52);
-    const glowGeo = buildForwardPainterlyCleaveGeometry(mainLength * 1.05, mainWidth * 1.25, 1.5, 48);
+    const glowGeo = buildForwardPainterlyCleaveGeometry(mainLength * 1.05, mainWidth * (variant === 'flame' ? 1.15 : 1.25), 1.5, 48);
     const mode = paletteModeIndex(opts.palette ?? (variant === 'guardian' ? 'blood' : 'hinokami'));
     const inkMat = createRibbonMaterial(pal, mode, 0.97, true, THREE.NormalBlending, 0.36);
     inkMat.uniforms.uCoreColor.value.copy(pal.ink);
     inkMat.uniforms.uMidColor.value.copy(pal.ink);
     inkMat.uniforms.uEdgeColor.value.copy(pal.ink);
     const coreMat = createRibbonMaterial(pal, mode, 0.98, true, THREE.NormalBlending, variant === 'guardian' ? 1.68 : 2.05);
-    const glowMat = createRibbonMaterial(pal, mode, 0.40, false, THREE.AdditiveBlending, 1.27);
+    const glowMat = createRibbonMaterial(pal, mode, variant === 'flame' ? 0.24 : 0.40, false, THREE.AdditiveBlending, 1.12);
     if (variant === 'flame') {
       // Directional attack reveal, not a static fully-formed screen sticker.
       inkMat.uniforms.uDirectionalReveal.value = 1;
@@ -1652,14 +1654,8 @@ export class WebglDemonSlayerVfxOverlay {
       maxLife: opts.duration ?? 0.68,
     });
 
-    // Accompanying water spray spark burst
-    this.spawnSparkBurst({
-      x: opts.x,
-      y: opts.y,
-      count: 22,
-      speed: 440,
-      palette: 'water',
-    });
+    // The heavy-release director already emits a bounded directional spray.
+    // Do not double-spawn 22 orbiting blue particles at the dragon's root.
   }
 
   /**
@@ -2362,10 +2358,12 @@ export class WebglDemonSlayerVfxOverlay {
     count?: number;
     speed?: number;
     palette?: DemonSlayerVfxPalette;
+    angle?: number; // directional weapon travel; omit for legacy radial sparks
+    spread?: number; // radians, constrained around angle
   }): void {
     if (!this.renderer || this.disposed) return;
     const pal = RIBBON_PALETTES[opts.palette ?? 'hinokami'];
-    const count = Math.min(28, opts.count ?? 14);
+    const count = Math.max(1, Math.min(28, opts.count ?? 14));
     for (let i = 0; i < count; i++) {
       if (this.sparks.length >= 110) {
         const oldest = this.sparks.shift();
@@ -2374,17 +2372,23 @@ export class WebglDemonSlayerVfxOverlay {
           oldest.mesh.material.dispose();
         }
       }
-      const ang = (i / count) * Math.PI * 2 + (Math.random() - 0.5) * 0.5;
-      const spd = (opts.speed ?? 380) * (0.55 + Math.random() * 0.85);
+      // Elemental heavy sparks fan out from the axe in its travel direction.
+      // Old all-direction bursts hid the hero and read as generic fireworks.
+      const hasBearing = Number.isFinite(opts.angle);
+      const spread = Math.min(Math.PI * 2, Math.max(0.1, opts.spread ?? 1.25));
+      const ang = hasBearing
+        ? opts.angle! + ((i + 0.5) / count - 0.5) * spread + (Math.random() - 0.5) * 0.16
+        : (i / count) * Math.PI * 2 + (Math.random() - 0.5) * 0.5;
+      const spd = (opts.speed ?? 380) * (0.52 + Math.random() * 0.72);
       const mat = new THREE.MeshBasicMaterial({
-        color: (i % 3 === 0 ? pal.core : pal.mid).clone().multiplyScalar(1.9),
+        color: (i % 4 === 0 ? pal.core : pal.mid).clone().multiplyScalar(1.25),
         transparent: true,
         opacity: 0.95,
         blending: THREE.AdditiveBlending,
         depthWrite: false,
       });
       const mesh = new THREE.Mesh(this.sparkGeo, mat);
-      mesh.scale.set(22 + Math.random() * 18, 4.2, 1);
+      mesh.scale.set(13 + Math.random() * 14, 2.2, 1);
       mesh.rotation.z = -ang;
       this.scene.add(mesh);
       this.sparks.push({
