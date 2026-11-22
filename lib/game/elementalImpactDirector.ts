@@ -94,7 +94,7 @@ export function spawnHeavyElementalRelease(
         x, y: y - 22, angle, radius: radius * 1.02,
         palette, duration: 0.59, variant: 'flame',
       });
-      fx.spawnClashStarburst({ x, y: y - 22, scale: 1.02, duration: 0.20, palette });
+      fx.spawnClashStarburst({ x, y: y - 22, scale: 0.61, duration: 0.17, palette });
       break;
     case 'varuna':
       fx.spawnWaterDragon({ x, y: y - 20, angle, radius: radius * 0.96, duration });
@@ -125,7 +125,7 @@ export function spawnHeavyElementalRelease(
         x, y: y - 26, angle, radius,
         palette, duration: 0.66, variant: 'guardian',
       });
-      fx.spawnClashStarburst({ x, y: y - 22, scale: 1.23, duration: 0.24, palette });
+      fx.spawnClashStarburst({ x, y: y - 22, scale: 0.74, duration: 0.19, palette });
       break;
   }
   fx.spawnSparkBurst({
