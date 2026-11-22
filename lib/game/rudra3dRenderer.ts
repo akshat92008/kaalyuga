@@ -890,6 +890,25 @@ export class Rudra3DRenderer {
     return baked;
   }
 
+  /** Read-only actual 3D rig and animation diagnostics for screenshot acceptance. */
+  public debugPoseStatus(): {
+    ready: boolean;
+    loadedActions: string[];
+    parashuMeshTipPresent: boolean;
+    parashuTipProjected: boolean;
+    activePose: string;
+    lastAttackSerial: number;
+  } {
+    return {
+      ready: this.isReady,
+      loadedActions: Object.keys(this.actions).sort(),
+      parashuMeshTipPresent: this.parashuTipMarker !== null,
+      parashuTipProjected: this.liveAttackTipNdc !== null,
+      activePose: this.lastAnimState,
+      lastAttackSerial: this.lastAttackSerial,
+    };
+  }
+
   /** Last displayed Parashu 3D pose mapped into the isometric sprite footprint. */
   public getBladeTipDrawOffset(drawnSpriteSize = 136): ScreenOffset | null {
     return ndcWeaponTipToDrawOffset(
