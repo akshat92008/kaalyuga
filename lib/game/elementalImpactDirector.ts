@@ -66,7 +66,7 @@ export function resolveHeavyReleaseProfile(input: HeavyReleaseInput): HeavyRelea
     element: input.element,
     palette: palette[input.element],
     radius,
-    reach: radius * (input.element === 'vajra' ? 1.62 : 1.14),
+    reach: radius * (input.element === 'vajra' ? 1.30 : 1.04),
     sparks: Math.round(clamp(11 + orbBoost * 2, 11, 19)),
     duration: input.element === 'guardian' ? 0.74 : 0.64,
   };
@@ -89,21 +89,35 @@ export function spawnHeavyElementalRelease(
   const { radius, reach, palette, duration } = profile;
   switch (input.element) {
     case 'agni':
-      fx.spawnSolarFlameWheel({ x, y: y - 18, angle, radius, duration, palette });
-      fx.spawnShockwaveRing({ x, y, radius: radius * 0.92, duration: 0.39, palette });
+      // Two open, counter-swept ink-edged flame blades instead of the old
+      // rotating solar wheel (a luminous orange ring in real gameplay).
+      // Their crests remain directional to the impact rather than orbit Rudra.
+      fx.spawnSlashRibbon({
+        x: x + Math.cos(angle) * 14, y: y - 24 + Math.sin(angle) * 8,
+        angle, radius: radius * 0.94, width: 67,
+        arcSpan: 2.04, direction: 1, duration: 0.52, palette,
+        tiltX: 0.53, spinRate: 0.18,
+      });
+      fx.spawnSlashRibbon({
+        x: x - Math.cos(angle) * 11, y: y - 22 - Math.sin(angle) * 6,
+        angle: angle + 0.24, radius: radius * 0.74, width: 38,
+        arcSpan: 1.52, direction: -1, duration: 0.43, palette,
+        tiltX: 0.71, spinRate: -0.23,
+      });
+      fx.spawnClashStarburst({ x, y: y - 25, scale: 0.96, duration: 0.22, palette });
       break;
     case 'varuna':
       fx.spawnWaterDragon({ x, y: y - 20, angle, radius: radius * 0.96, duration });
       fx.spawnSlashRibbon({
-        x, y: y - 22, angle, radius: radius * 1.04, width: 49,
-        arcSpan: 2.65, direction: 1, duration: 0.38, palette,
+        x, y: y - 22, angle: angle + 0.18, radius: radius * 0.72, width: 35,
+        arcSpan: 1.43, direction: 1, duration: 0.34, palette, spinRate: 0.13,
       });
       break;
     case 'vayu':
       fx.spawnWindGaleCrescents({ x, y: y - 18, angle, radius, duration });
       fx.spawnSlashRibbon({
-        x, y: y - 20, angle, radius: radius * 0.86, width: 36,
-        arcSpan: 2.82, direction: -1, duration: 0.34, palette,
+        x, y: y - 20, angle, radius: radius * 0.77, width: 32,
+        arcSpan: 1.67, direction: -1, duration: 0.34, palette, spinRate: -0.16,
       });
       break;
     case 'vajra':
@@ -118,11 +132,17 @@ export function spawnHeavyElementalRelease(
       break;
     case 'guardian':
       fx.spawnSlashRibbon({
-        x, y: y - 34, angle, radius: radius * 1.14, width: 68,
-        arcSpan: 2.95, direction: 1, palette, duration, tiltX: 0.58,
+        x: x + Math.cos(angle) * 16, y: y - 34,
+        angle, radius: radius * 0.92, width: 63,
+        arcSpan: 1.96, direction: 1, palette, duration: 0.55,
+        tiltX: 0.52, spinRate: 0.11,
       });
-      fx.spawnShockwaveRing({ x, y, radius: radius * 1.04, duration: 0.43, palette });
-      fx.spawnClashStarburst({ x, y: y - 24, scale: 1.55, duration: 0.3, palette });
+      fx.spawnSlashRibbon({
+        x, y: y - 38, angle: angle - 0.17,
+        radius: radius * 0.67, width: 31, arcSpan: 1.27,
+        direction: 1, palette, duration: 0.42, tiltX: 0.61, spinRate: -0.12,
+      });
+      fx.spawnClashStarburst({ x, y: y - 24, scale: 1.18, duration: 0.23, palette });
       break;
   }
   fx.spawnSparkBurst({
