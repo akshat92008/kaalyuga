@@ -4,6 +4,7 @@ import {
   computeMaterialFoleySpec,
   computeSpatialAudioPanAndGain,
 } from './particleAndAudioEngine';
+import { isAudioEventOnCooldown } from './audioCooldown';
 
 class SoundEngine {
   private ctx: AudioContext | null = null;
@@ -535,8 +536,8 @@ class SoundEngine {
   ) {
     if (this.muted || typeof window === 'undefined') return;
     const nowMs = performance.now();
-    const lastMs = this.sfxLastPlayedAt.get(url) ?? 0;
-    if (nowMs - lastMs < minCooldownMs) return;
+    const lastMs = this.sfxLastPlayedAt.get(url);
+    if (isAudioEventOnCooldown(lastMs, nowMs, minCooldownMs)) return;
     this.sfxLastPlayedAt.set(url, nowMs);
 
     try {
@@ -624,8 +625,8 @@ class SoundEngine {
 
     const nowMs = performance.now();
     const cooldownMs = options?.cooldownMs ?? (key.includes('intro') || key.includes('death') ? 1500 : 3800);
-    const lastMs = this.voiceLastPlayedAt.get(key) ?? 0;
-    if (nowMs - lastMs < cooldownMs) return;
+    const lastMs = this.voiceLastPlayedAt.get(key);
+    if (isAudioEventOnCooldown(lastMs, nowMs, cooldownMs)) return;
 
     const priority = options?.priority ?? (key.includes('intro') || key.includes('death') || key.includes('phase2') || key.includes('susanoo') ? 'high' : 'normal');
     if (
