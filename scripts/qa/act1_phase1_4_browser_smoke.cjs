@@ -184,7 +184,16 @@ const base = process.env.GAME_URL || 'http://127.0.0.1:3100';
     await page.keyboard.press('k');
     await assertEvent('heavy-contact', 'guardian', guardianBefore);
     await capture('10-guardian-heavy-contact');
+    const guardianReadiness = (await qa()).guardianRenderer;
+    report.guardianReadiness = guardianReadiness;
+    console.log('GUARDIAN_3D_DEBUG ' + JSON.stringify(guardianReadiness));
     report.checks.push('real guardian transformation and guardian-element heavy contact');
+    // A golden fallback sprite with a successful damage event is not a 3D
+    // animation pass. Explicitly fail this visual gate if model/mixer never
+    // became operational in the actual Chromium gameplay test.
+    assert.ok(guardianReadiness?.ready && guardianReadiness?.rendered3dFrameCount > 0,
+      'Guardian visual is only fallback/uncaptured 3D, not a verified skinned 3D guardian: ' +
+      JSON.stringify(guardianReadiness));
 
     for (const variant of ['downward_crush', 'spin_360_cleave', 'impaling_lunge']) {
       await page.evaluate(v => window.__kaliyugaPhaseQAFixture.prepareExecution(v), variant);
