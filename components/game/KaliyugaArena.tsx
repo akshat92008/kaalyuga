@@ -2650,15 +2650,35 @@ export default function KaliyugaArena() {
           boss3dRef.current.prewarmBossAtlas(bossKind);
           const bossUnit = sim.enemies.find((en) => en.isBoss || en.type === 'semi_boss_bloodforge');
           if (bossUnit) {
-            // Purple-Crimson Blood Demon Art Entrance Cage (Zero cyan Akaza compass on Dundubhi!)
-            webglDemonSlayerVfxRef.current?.spawnBloodThreadCage({
-              x: bossUnit.x,
-              y: bossUnit.y - 12,
-              radius: bossUnit.isBoss ? 275 : 215,
-              palette: bossUnit.type === 'dundubhi' || bossUnit.type === 'vrikodara' ? 'void' : 'blood',
-              duration: 1.65,
-              threadCount: 16,
-            });
+            // Director's choice: the old 16-line hot-magenta wireframe
+            // covered the actual character during the cinematic reveal.
+            // Use a compact, grounded elemental burst instead; the model,
+            // voiced introduction and moving camera must remain visible.
+            const entranceFx = webglDemonSlayerVfxRef.current;
+            if (bossUnit.type === 'dundubhi') {
+              entranceFx?.spawnShockwaveRing({
+                x: bossUnit.x, y: bossUnit.y + 4,
+                radius: 145, palette: 'bronze', duration: 0.60,
+              });
+              entranceFx?.spawnSparkBurst({
+                x: bossUnit.x, y: bossUnit.y - 28,
+                count: 12, speed: 170, palette: 'bronze',
+              });
+            } else if (bossUnit.type === 'vrikodara') {
+              entranceFx?.spawnCycloneVortex({
+                x: bossUnit.x, y: bossUnit.y - 16,
+                radius: 152, palette: 'blood', duration: 0.82, ringCount: 2,
+              });
+              entranceFx?.spawnSparkBurst({
+                x: bossUnit.x, y: bossUnit.y - 30,
+                count: 10, speed: 150, palette: 'blood',
+              });
+            } else {
+              entranceFx?.spawnShockwaveRing({
+                x: bossUnit.x, y: bossUnit.y + 2,
+                radius: 100, palette: 'blood', duration: 0.45,
+              });
+            }
             soundEngine.playBloodDemonArt();
             if (bossUnit.type === 'dundubhi') {
               soundEngine.playVoiceBark('dundubhi_intro', { priority: 'high' });
@@ -7048,7 +7068,7 @@ export default function KaliyugaArena() {
         // During a boss entrance the enemy MUST actually be in the shot.
         // Normal combat keeps Rudra dominant; the authored entrance instead
         // frames both combatants, then restores the original player bias.
-        const bossWeight = liveCameraRef.current?.kind === 'boss' || liveCameraRef.current?.kind === 'transformation' ? 0.62 : 0.22;
+        const bossWeight = liveCameraRef.current?.kind === 'boss' ? 0.78 : liveCameraRef.current?.kind === 'transformation' ? 0.82 : 0.22;
         focusX = focusX * (1 - bossWeight) + activeBoss.x * bossWeight;
         focusY = focusY * (1 - bossWeight) + activeBoss.y * bossWeight;
       }
@@ -8270,15 +8290,9 @@ export default function KaliyugaArena() {
               spawnShockwave(e.x, e.y, 240, '#a855f7', 0.48);
               triggerImpactInversionFlash(bloodDemonArtsRef.current, e.x, e.y - 38, 0.06, '#c026d3');
               const bossPhasePalette: DemonSlayerVfxPalette = nextPhase >= 3 ? 'void' : e.type === 'vrikodara' ? 'magma' : 'bronze';
-              // Purple-Crimson Blood Demon Art Cage + Thorny Floor Vines (no cyan Akaza compass on Dundubhi!)
-              webglDemonSlayerVfxRef.current?.spawnBloodThreadCage({
-                x: e.x,
-                y: e.y - 16,
-                radius: 265,
-                palette: 'void',
-                duration: 1.45,
-                threadCount: 18,
-              });
+              // No oversized magenta wireframe obscuring a phase change.
+              // Existing vortex, timed hit flash, ink trails, shockwave and
+              // voiced phase reveal below already provide the visual climax.
               webglDemonSlayerVfxRef.current?.spawnCycloneVortex({
                 x: e.x,
                 y: e.y - 22,
@@ -9019,13 +9033,15 @@ export default function KaliyugaArena() {
                 (e.attackKind === 'shockwave' || e.phase >= 2 || e.type === 'vrikodara' || e.type === 'dundubhi')
               ) {
                 soundEngine.playBloodDemonArt();
-                webglDemonSlayerVfxRef.current?.spawnBloodThreadCage({
+                // Preserve the existing attack slash and ground telegraph,
+                // but remove the enormous pink crisscross cage. Compact
+                // sparks read as impact without hiding the combatants.
+                webglDemonSlayerVfxRef.current?.spawnSparkBurst({
                   x: e.x,
-                  y: e.y - 14,
-                  radius: Math.max(220, e.telegraphRadius * 1.15),
-                  palette: e.type === 'vrikodara' || e.type === 'dundubhi' ? 'void' : 'blood',
-                  duration: 1.15,
-                  threadCount: e.isBoss ? 16 : 12,
+                  y: e.y - 18,
+                  count: e.isBoss ? 10 : 6,
+                  speed: e.isBoss ? 185 : 120,
+                  palette: enemyVfxPal,
                 });
               }
 
