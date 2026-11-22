@@ -105,6 +105,7 @@ const SUSANOO_FRAGMENT_SHADER = /* glsl */ `
   uniform float uWaistMinY;
   uniform float uWaistMaxY;
   uniform float uAttackFlash;
+  uniform float uPreviewClarity;
   uniform vec3 uCoreColor;
   uniform vec3 uMidColor;
   uniform vec3 uRimColor;
@@ -178,7 +179,10 @@ const SUSANOO_FRAGMENT_SHADER = /* glsl */ `
 
     // Keep chest interior translucent (~0.24) so calm-walking Rudra inside stays clearly visible,
     // while armor rims and horns glow intensely (~0.88)
-    float finalAlpha = uAlpha * waistMask * radialFade * (0.22 + fresnel * 0.68 + ribLines * 0.12);
+    float interior = mix(0.22 + fresnel * 0.68 + ribLines * 0.12,
+                         0.66 + fresnel * 0.25 + ribLines * 0.06,
+                         uPreviewClarity);
+    float finalAlpha = uAlpha * waistMask * radialFade * interior;
     finalAlpha = clamp(finalAlpha, 0.0, 0.90);
 
     gl_FragColor = vec4(energyColor, finalAlpha);
@@ -221,6 +225,9 @@ export class Susanoo3DRenderer {
   private readonly riggedPreviewMode =
     typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('guardianPreview') === '1';
   private generatedPreviewBones: string[] = [];
+  private previewArmBone: THREE.Bone | null = null;
+  private previewArmAtRest = new THREE.Quaternion();
+  private peakPreviewArmRotationRad = 0;
   private lastAttackSerial = -1;
   private wasAttacking = false;
   private roarPlayedForSummon = false;
@@ -261,9 +268,10 @@ export class Susanoo3DRenderer {
       uniforms: {
         uTime: { value: 0 },
         uAlpha: { value: 0.92 },
-        uWaistMinY: { value: 0.62 },
-        uWaistMaxY: { value: 1.24 },
+        uWaistMinY: { value: this.riggedPreviewMode ? 0.08 : 0.62 },
+        uWaistMaxY: { value: this.riggedPreviewMode ? 0.54 : 1.24 },
         uAttackFlash: { value: 0.0 },
+        uPreviewClarity: { value: this.riggedPreviewMode ? 1.0 : 0.0 },
         uCoreColor: { value: palette.core.clone() },
         uMidColor: { value: palette.mid.clone() },
         uRimColor: { value: palette.rim.clone() },
@@ -328,7 +336,7 @@ export class Susanoo3DRenderer {
       rawBox.getSize(rawSize);
 
       // Fit cleanly inside the 5.85-unit camera frustum (~2.45 units tall) with breathing room for horns & swings
-      const targetHeight = 2.45;
+      const targetHeight = this.riggedPreviewMode ? 3.08 : 2.45;
       const scale = targetHeight / Math.max(0.001, rawSize.y);
       clone.scale.setScalar(scale);
 
@@ -338,6 +346,11 @@ export class Susanoo3DRenderer {
       // Avoid double-lifting rigged Mixamo skeletons whose hips already anchor at y = 0
       const baseY = foundBones && Math.abs(standingHipY) > 0.01 ? 0 : -scaledBox.min.y;
       clone.position.set(-scaledCenter.x, baseY, -scaledCenter.z);
+      if (this.riggedPreviewMode) {
+        // Move the large spectral fighter slightly behind Rudra, keeping
+        // feet at the contact shadow rather than a detached upper corner.
+        clone.position.y += 0.05;
+      }
 
       this.meshGroup = new THREE.Group();
       this.meshGroup.add(clone);
@@ -365,6 +378,11 @@ export class Susanoo3DRenderer {
         // unrelated Creature Pack clips must never play on this skeleton.
         const { clips, animatedBones } = createGuardianProofClips(clone);
         this.generatedPreviewBones = animatedBones;
+        const rightArm = clone.getObjectByName('mixamorigRightArm');
+        if (rightArm && (rightArm as THREE.Bone).isBone) {
+          this.previewArmBone = rightArm as THREE.Bone;
+          this.previewArmAtRest.copy(this.previewArmBone.quaternion);
+        }
         for (const [key, clip] of Object.entries(clips) as Array<[SusanooClipKey, THREE.AnimationClip]>) {
           if (clip.tracks.length === 0) throw new Error('Missing guardian QA animation tracks: ' + key);
           const act = this.mixer.clipAction(clip);
@@ -463,6 +481,7 @@ export class Susanoo3DRenderer {
     loadedActions: string[];
     lastAttackSerial: number;
     rendered3dFrameCount: number;
+    peakPreviewArmRotationRad: number;
     riggedPreviewMode: boolean;
     skeletonAnimationReady: boolean;
     animatedPreviewBoneNames: string[];
@@ -476,6 +495,7 @@ export class Susanoo3DRenderer {
       loadedActions: Object.keys(this.actions).sort(),
       lastAttackSerial: this.lastAttackSerial,
       rendered3dFrameCount: this.rendered3dFrameCount,
+      peakPreviewArmRotationRad: Number(this.peakPreviewArmRotationRad.toFixed(3)),
       riggedPreviewMode: this.riggedPreviewMode,
       skeletonAnimationReady: this.hasSkinnedBones && Boolean(this.actions.swing1) && Boolean(this.actions.swing2) && Boolean(this.actions.swing3),
       animatedPreviewBoneNames: this.generatedPreviewBones,
@@ -545,6 +565,12 @@ export class Susanoo3DRenderer {
     if (this.mixer) {
       this.mixer.update(dt);
     }
+    if (this.riggedPreviewMode && this.previewArmBone) {
+      this.peakPreviewArmRotationRad = Math.max(
+        this.peakPreviewArmRotationRad,
+        this.previewArmBone.quaternion.angleTo(this.previewArmAtRest)
+      );
+    }
 
     // Throttle software WebGL slightly (~24fps) while keeping GPU at fluid 60fps
     const isSw = isSoftwareWebGLRenderer();
@@ -561,16 +587,26 @@ export class Susanoo3DRenderer {
 
     const paletteKey = input.palette || 'crimson_gold';
     const pal = PALETTE_COLORS[paletteKey] || PALETTE_COLORS.crimson_gold;
+    // The QA model is warm orange because its default mid and rib are gold.
+    // Preview dark-crimson/bronze skin rather than a flat translucent torch.
+    const previewPalette = this.riggedPreviewMode
+      ? {
+          core: new THREE.Color('#26091c'),
+          mid: new THREE.Color('#a61a43'),
+          rim: new THREE.Color('#ffd09a'),
+          rib: new THREE.Color('#d74a35'),
+        }
+      : pal;
 
     // Update shader uniforms
     this.chakraMaterial.uniforms.uTime.value = t;
     this.chakraMaterial.uniforms.uAlpha.value = alpha * 0.94;
     this.chakraMaterial.uniforms.uAttackFlash.value =
       this.attackAnimHoldSec > 0 ? Math.min(1, this.attackAnimHoldSec * 2.2) : 0;
-    this.chakraMaterial.uniforms.uCoreColor.value.copy(pal.core);
-    this.chakraMaterial.uniforms.uMidColor.value.copy(pal.mid);
-    this.chakraMaterial.uniforms.uRimColor.value.copy(pal.rim);
-    this.chakraMaterial.uniforms.uRibColor.value.copy(pal.rib);
+    this.chakraMaterial.uniforms.uCoreColor.value.copy(previewPalette.core);
+    this.chakraMaterial.uniforms.uMidColor.value.copy(previewPalette.mid);
+    this.chakraMaterial.uniforms.uRimColor.value.copy(previewPalette.rim);
+    this.chakraMaterial.uniforms.uRibColor.value.copy(previewPalette.rib);
 
     // Orient towering Susanoo toward Rudra's facing direction + authoritative cleave twist on swing
     const yaw = Math.atan2(input.facingX, Math.max(0.28, input.facingY * 0.65 + 0.55));
@@ -593,7 +629,7 @@ export class Susanoo3DRenderer {
     // Spin spectral chakra halo behind shoulders
     this.haloRing.rotation.z = t * 1.1;
     const ringMat = this.haloRing.material as THREE.MeshBasicMaterial;
-    ringMat.opacity = alpha * (0.36 + Math.sin(t * 6.5) * 0.12);
+    ringMat.opacity = alpha * (this.riggedPreviewMode ? 0.16 : 0.36) + Math.sin(t * 6.5) * 0.035;
 
     renderer.setSize(size, size, false);
     renderer.setClearColor(0x000000, 0);
