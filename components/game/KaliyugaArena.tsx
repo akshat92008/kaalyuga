@@ -39,6 +39,7 @@ import {
 } from '@/lib/game/rules';
 import { soundEngine } from '@/lib/game/audio';
 import { heavyElementFromStance, spawnHeavyElementalRelease } from '@/lib/game/elementalImpactDirector';
+import { resolveVisualWeaponContact } from '@/lib/game/weaponContactProjection';
 import { spawnExecutionImpactFx } from '@/lib/game/executionImpactDirector';
 import { CinematicCameraTrack } from '@/lib/game/cinematicCamera';
 import {
@@ -4975,8 +4976,22 @@ export default function KaliyugaArena() {
       triggerThreshold: 0.28,
       execute: () => {
         const curP = simRef.current.player;
-        const syncImpactX = curP.x + Math.cos(heavySlashAngle) * (curP.stance === 'thrust' ? 74 : 46);
-        const syncImpactY = curP.y + Math.sin(heavySlashAngle) * (curP.stance === 'thrust' ? 46 : 28);
+        // Prefer the actual Parashu mesh extremity projected through Rudra's
+        // baked 3D camera, not a static guess relative to the fighter.
+        // Never alter damage authority; fall back during loading, guardian
+        // transformation and implausible/offscreen weapon pose samples.
+        const visualBladeTip = curP.transformTimer > 0
+          ? null
+          : rudra3dRef.current?.getBladeTipDrawOffset(HEROIC_DRAW_SIZES.rudra) ?? null;
+        const weaponContact = resolveVisualWeaponContact(
+          curP.x, curP.y, heavySlashAngle,
+          curP.stance === 'thrust' ? 74 : 46,
+          curP.stance === 'thrust' ? 46 : 28,
+          visualBladeTip,
+          110,
+        );
+        const syncImpactX = weaponContact.x;
+        const syncImpactY = weaponContact.y;
 
         // Tier 2 Heavy Unleash: Explosive AAA Stance Spectacle + Heavy Iron Swing SFX
         soundEngine.playHeavyIronSwing();
@@ -5001,6 +5016,7 @@ export default function KaliyugaArena() {
             name: 'heavy-contact', frameTime: performance.now(), meta: heavyElement,
             progress: curP.weaponSwingProgress, contactX: syncImpactX,
             contactY: syncImpactY, playerX: curP.x, playerY: curP.y,
+            anchorSource: weaponContact.source,
           });
           if (qaRecentEventsRef.current.length > 50) qaRecentEventsRef.current.shift();
         }
