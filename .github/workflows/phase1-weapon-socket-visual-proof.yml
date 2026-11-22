@@ -4,6 +4,11 @@ on:
   push:
     branches:
       - feature/phase1-weapon-socket-combat-proof-20261122
+    paths:
+      - 'lib/game/**'
+      - 'components/game/**'
+      - 'scripts/qa/act1_phase1_4_browser_smoke.cjs'
+      - '.github/workflows/phase1-weapon-socket-visual-proof.yml'
   workflow_dispatch:
 
 permissions:
