@@ -44,9 +44,18 @@ export function shouldStartDundubhiIntro(ctx:BossIntroContext):boolean {
  * if none has been installed, use the original hand-authored default.
  * Corrupt or foreign JSON must never break live combat.
  */
-export function readBossIntro(kind:BossCharacter):MeruCinematic {
+/** Player builds must prefer the director-reviewed package, not browser
+ * drafts left behind by someone who visited /meru-studio. Local preview is
+ * intentionally supported in dev and inside the authoring Studio itself. */
+export function allowLocalStudioPreview(runtimeMode:string,insideStudio=false):boolean {
+  return insideStudio || runtimeMode!=='production';
+}
+export function readBossIntro(
+  kind:BossCharacter,
+  localPreview=allowLocalStudioPreview(process.env.NODE_ENV)
+):MeruCinematic {
   const fallback=defaultBossIntro(kind);
-  if(typeof localStorage==='undefined')return fallback;
+  if(!localPreview||typeof localStorage==='undefined')return fallback;
   try{
     const raw=localStorage.getItem(meruStorageKey(kind));
     if(!raw||raw.length>400_000)return fallback;
@@ -74,9 +83,12 @@ export function shouldStartBossPhase(ctx:BossIntroContext & {phase:2|3}):boolean
   return params.get('cinematic')!=='0' &&
     params.get('cleared')!=='1' && params.get('phase')!=='2';
 }
-export function readBossPhase(kind:BossCharacter,phase:2|3):MeruCinematic {
+export function readBossPhase(
+  kind:BossCharacter,phase:2|3,
+  localPreview=allowLocalStudioPreview(process.env.NODE_ENV)
+):MeruCinematic {
   const fallback=resolveProductionScene(kind,phase);
-  if(typeof localStorage==='undefined')return fallback;
+  if(!localPreview||typeof localStorage==='undefined')return fallback;
   try{
     const raw=localStorage.getItem(meruSceneStorageKey(fallback));
     if(!raw||raw.length>400_000)return fallback;
