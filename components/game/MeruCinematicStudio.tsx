@@ -9,7 +9,7 @@ import {Boss3DRenderer} from '@/lib/game/boss3dRenderer';
 import {GAME_ASSETS} from '@/lib/game/assets';
 import {isSoftwareWebGLRenderer} from '@/lib/game/hadesSpriteBaker';
 import {
-  createDundubhiScene, createBossPhaseScene, MeruTimelinePlayer, sampleCinematic, retimeCinematic,
+  createDundubhiScene, MeruTimelinePlayer, sampleCinematic, retimeCinematic,
   validateCinematic, NEUTRAL_CINEMATIC_POSE, type MeruCinematic, type BossCharacter,
 } from '@/engine/meru/cinematicTimeline';
 import {GRAPHICS_PRESETS,type GraphicsTier} from '@/engine/meru/adaptiveQuality';
@@ -61,7 +61,7 @@ export default function MeruCinematicStudio(){
   useEffect(()=>{
     // Hydrate before enabling persistence: otherwise the default scene silently
     // overwrites an existing user's authored camera/lighting keyframes on mount.
-    loadScene(readBossIntro('dundubhi'));
+    loadScene(readBossIntro('dundubhi',true));
     setHydrated(true);
   },[loadScene]);
   useEffect(()=>{
@@ -441,8 +441,8 @@ export default function MeruCinematicStudio(){
                 onChange={e=>{
                   const id=e.target.value;
                   const match=/^(dundubhi|vrikodara)-phase([23])$/.exec(id);
-                  if(match)loadScene(readBossPhase(match[1] as BossCharacter,Number(match[2]) as 2|3));
-                  else loadScene(readBossIntro(id as BossCharacter));
+                  if(match)loadScene(readBossPhase(match[1] as BossCharacter,Number(match[2]) as 2|3,true));
+                  else loadScene(readBossIntro(id as BossCharacter,true));
                 }}
                 className="mt-1 block w-full rounded bg-[#2d2529] p-2 text-sm">
                 <option value="dundubhi">Dundubhi · Chamber IV (Entrance)</option>
@@ -472,7 +472,7 @@ export default function MeruCinematicStudio(){
                 className="mt-2 block w-full text-xs text-[#cdb196]"/>
             </label>
             <button onClick={()=>loadScene(resolveProductionScene(scene.boss,scene.bossPhase??1))} className="w-full rounded border border-[#665043] px-4 py-2 text-sm">Restore shipped scene</button>
-            <p className="text-xs text-[#998879]">Changes autosave locally in this browser. To publish an exported .meru.json in the actual game, run <code className="font-mono text-[#edc08d]">npx tsx scripts/meru/install-scenes.ts path/to/scene.meru.json</code> from the repository, review the manifest diff and commit it. A local preview is not automatically shipped to players.</p>
+            <p className="text-xs text-[#998879]">Changes autosave locally in this browser. To publish an exported .meru.json in the actual game, run <code className="font-mono text-[#edc08d]">npx tsx scripts/meru/install-scenes.ts path/to/scene.meru.json</code> from the repository, review the manifest diff and commit it. A local preview is not automatically shipped to players; production gameplay ignores uncommitted browser drafts.</p>
           </div>
         </aside>
       </div>
