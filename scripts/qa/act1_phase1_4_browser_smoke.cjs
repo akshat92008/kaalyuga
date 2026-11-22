@@ -129,6 +129,17 @@ const base = process.env.GAME_URL || 'http://127.0.0.1:3100';
       await page.keyboard.press('k');
       await assertEvent('heavy-contact', attack.element, before);
       await assertContactAnchor('heavy-contact', attack.element, 0.28, 110);
+      const attackSnapshot = await qa();
+      const contactEvent = attackSnapshot.recentEvents
+        .filter(e => e.name === 'heavy-contact' && e.meta === attack.element).at(-1);
+      report.weaponAnchorEvidence ??= [];
+      report.weaponAnchorEvidence.push({
+        element: attack.element,
+        anchorSource: contactEvent?.anchorSource ?? 'not-recorded',
+        tipPresent: attackSnapshot.rudraRenderer?.parashuMeshTipPresent ?? false,
+        tipProjected: attackSnapshot.rudraRenderer?.parashuTipProjected ?? false,
+        loadedActions: attackSnapshot.rudraRenderer?.loadedActions ?? [],
+      });
       await capture('09-' + attack.name + '-heavy-contact');
       report.checks.push('real ' + attack.element + ' heavy: stance, animation contact and screenshot');
     }
