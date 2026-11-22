@@ -219,6 +219,20 @@ export function cuesBetween(scene: MeruCinematic, previous: number, next: number
   if (next <= previous) return [];
   return scene.cues.filter(c => c.time > previous && c.time <= next);
 }
+/** Deterministic current caption; successive title/dialogue cues replace the
+ * previous one rather than remaining hidden behind the first authored cue.
+ * Shared by the screen-reader text and the cinematic render pass. */
+export function activeCinematicSubtitle(
+  scene:MeruCinematic,time:number
+):CinematicCue|null {
+  let active:CinematicCue|null=null;
+  const safeTime=Number.isFinite(time)?time:0;
+  for(const cue of scene.cues){
+    if(cue.kind==='subtitle'&&cue.time<=safeTime&&
+      (!active||cue.time>=active.time))active=cue;
+  }
+  return active;
+}
 export class MeruTimelinePlayer {
   readonly scene: MeruCinematic;
   time = 0;
