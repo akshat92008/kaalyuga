@@ -18,13 +18,14 @@ test('guardian preview requires a genuine skeleton with matching named bones', (
   for (const key of ['idle', 'roar', 'swing1', 'swing2', 'swing3'] as const) {
     assert.equal(clips[key].tracks.length, 5, 'Missing keyed bone rotations in ' + key);
     for (const track of clips[key].tracks) {
-      assert.match(track.name, /mixamorig:/);
+      assert.match(track.name, /mixamorig/);
+      assert.ok(!track.name.includes(':'), 'Do not leave unbindable Mixamo bone namespace separators');
       assert.ok(track.values.every(Number.isFinite));
       assert.ok(track.times.every(Number.isFinite));
     }
   }
   const mixer = new THREE.AnimationMixer(root);
-  const arm = root.getObjectByName('mixamorig:RightArm') as THREE.Bone;
+  const arm = root.getObjectByName('mixamorigRightArm') as THREE.Bone;
   assert.ok(arm);
   const before = arm.quaternion.clone();
   mixer.clipAction(clips.swing2).play();
