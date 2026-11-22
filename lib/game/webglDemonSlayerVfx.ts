@@ -893,7 +893,8 @@ export function buildForwardPainterlyCleaveGeometry(
   length: number,
   width: number,
   seed = 0,
-  segments = 48
+  segments = 48,
+  curvature = 0
 ): THREE.BufferGeometry {
   const n = Math.max(12, Math.min(72, Math.round(segments)));
   const len = Math.max(12, Math.min(500, Number.isFinite(length) ? length : 160));
@@ -915,7 +916,9 @@ export function buildForwardPainterlyCleaveGeometry(
     const centerY = span * (
       0.25 * Math.sin(t * Math.PI * 1.16 + seed * 0.23)
       + 0.13 * Math.sin(t * Math.PI * 2.15 + seed * 0.34)
-    ) * envelope;
+    ) * envelope
+      + Math.max(-0.32, Math.min(0.32, curvature)) * len *
+        Math.sin(t * Math.PI) * (0.68 + 0.32 * t);
     const lower = centerY - span * envelope * Math.max(0.45, broadInk) * 0.43;
     const upper = centerY + span * envelope * Math.max(0.42, tooth) * 0.48;
     const lift = 8 * envelope * Math.sin(t * Math.PI);
@@ -1272,9 +1275,9 @@ export class WebglDemonSlayerVfxOverlay {
     // A broad solid fan reads as an opaque red rectangle in gameplay.
     // Keep a narrow incandescent stroke and let forked tongues carry power.
     const mainWidth = radius * (variant === 'guardian' ? 0.70 : 0.44);
-    const inkGeo = buildForwardPainterlyCleaveGeometry(mainLength * 1.02, mainWidth * (variant === 'flame' ? 1.07 : 1.19), 2.1, 52);
-    const coreGeo = buildForwardPainterlyCleaveGeometry(mainLength, mainWidth, 0.55, 52);
-    const glowGeo = buildForwardPainterlyCleaveGeometry(mainLength * 1.05, mainWidth * (variant === 'flame' ? 1.15 : 1.25), 1.5, 48);
+    const inkGeo = buildForwardPainterlyCleaveGeometry(mainLength * 1.02, mainWidth * (variant === 'flame' ? 1.07 : 1.19), 2.1, 52, variant === 'flame' ? -0.075 : 0);
+    const coreGeo = buildForwardPainterlyCleaveGeometry(mainLength, mainWidth, 0.55, 52, variant === 'flame' ? -0.075 : 0);
+    const glowGeo = buildForwardPainterlyCleaveGeometry(mainLength * 1.05, mainWidth * (variant === 'flame' ? 1.15 : 1.25), 1.5, 48, variant === 'flame' ? -0.075 : 0);
     const mode = paletteModeIndex(opts.palette ?? (variant === 'guardian' ? 'blood' : 'hinokami'));
     const inkMat = createRibbonMaterial(pal, mode, variant === 'flame' ? 0.70 : 0.97, true, THREE.NormalBlending, 0.36);
     inkMat.uniforms.uCoreColor.value.copy(pal.ink);
@@ -1935,7 +1938,8 @@ export class WebglDemonSlayerVfxOverlay {
       const r = radius * (0.92 + i * 0.14);
       const w = opts.lightweight ? 25 : 43 - i * 7;
       const bladeOffset = opts.lightweight ? 0 : i - 1;
-      const geo = buildForwardPainterlyCleaveGeometry(r * 1.52, w, 2.5 + i * 1.35, 38);
+      const bend = opts.lightweight ? -0.13 : [0.21, -0.055, -0.20][i];
+      const geo = buildForwardPainterlyCleaveGeometry(r * 1.52, w, 2.5 + i * 1.35, 38, bend);
       const mat = createRibbonMaterial(pal, 3.0, 0.92 - i * 0.10, true, THREE.NormalBlending, 1.50);
       const glowMat = createRibbonMaterial(pal, 3.0, 0.38, false, THREE.AdditiveBlending, 1.30);
       mat.uniforms.uDirectionalReveal.value = 1;
