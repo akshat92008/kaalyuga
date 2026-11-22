@@ -38,3 +38,23 @@ test('no unskinned guardian can masquerade as animated preview', () => {
   assert.deepEqual(animatedBones, []);
   assert.ok(Object.values(clips).every(clip=>clip.tracks.length===0));
 });
+
+test('works with FBXLoader-sanitized Mixamo bone names lacking colons', () => {
+  const root = new THREE.Group();
+  for (const name of [
+    'mixamorigSpine2', 'mixamorigRightArm', 'mixamorigLeftArm',
+    'mixamorigRightForeArm', 'mixamorigLeftForeArm',
+  ]) {
+    const bone = new THREE.Bone();
+    bone.name = name;
+    root.add(bone);
+  }
+  const { clips, animatedBones } = createGuardianProofClips(root);
+  assert.equal(animatedBones.length, 5);
+  assert.ok(clips.swing2.tracks.length >= 4);
+  const mixer = new THREE.AnimationMixer(root);
+  const arm = root.getObjectByName('mixamorigRightArm') as THREE.Bone;
+  mixer.clipAction(clips.swing2).play();
+  mixer.update(0.42);
+  assert.ok(arm.quaternion.angleTo(new THREE.Quaternion()) > 0.1);
+});
