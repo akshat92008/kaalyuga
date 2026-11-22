@@ -84,7 +84,7 @@ const SUSANOO_SKINNED_VERTEX_SHADER = /* glsl */ `
     vWorldPos = worldPosition.xyz;
     vec4 mvPosition = viewMatrix * worldPosition;
     vViewPos = -mvPosition.xyz;
-    vNormalView = normalize(normalMatrix * transformedNormal);
+    vNormalView = normalize(normalMatrix * objectNormal);
 
     vec4 clipPos = projectionMatrix * mvPosition;
     vNdcPos = clipPos.xy / max(clipPos.w, 0.0001);
