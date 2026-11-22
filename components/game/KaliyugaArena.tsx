@@ -1142,6 +1142,28 @@ export default function KaliyugaArena() {
           cameraKind: liveCameraRef.current?.kind ?? null,
           cameraElapsedSec: liveCameraRef.current?.elapsedSec ?? null,
           cameraZoom: sim.cameraZoom,
+          // Camera debug values are read-only and only exposed with ?debug=1.
+          // This lets rendered-browser tests prove the actual heavy and
+          // execution camera moves, rather than merely the existence of code.
+          cameraAccent: (() => {
+            const width = sim.viewportW || 960;
+            const height = sim.viewportH || 540;
+            const running = liveCameraRef.current;
+            if (running) {
+              const shot = running.track.sample(running.elapsedSec, width, height);
+              return { kind: running.kind, zoom: shot.zoom, offsetX: shot.offsetX, offsetY: shot.offsetY };
+            }
+            const accent = sampleCombatCameraAccent({
+              action: sim.player.action,
+              progress: sim.player.weaponSwingProgress,
+              facing: sim.player.facing,
+              stance: sim.player.stance,
+              comboStep: sim.player.comboStep,
+              guardianActive: sim.player.transformTimer > 0,
+              frozen: sim.state !== 'playing' || sim.modalPaused,
+            });
+            return { kind: sim.player.action, ...accent };
+          })(),
           // Real projected boss position; a valid entrance must include the
           // boss on screen, not just a running camera animation and boss HUD.
           bossScreen: (() => {
