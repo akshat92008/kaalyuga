@@ -207,6 +207,11 @@ def main():
     args=p.parse_args(argv)
     out=Path(args.output)
     out.mkdir(parents=True,exist_ok=True)
+    # CRITICAL QA FIX: clear Blender's default cube/light/camera before FBX
+    # import. The cube covered the imported sculpt in the previous previews,
+    # creating a false grey rectangular "broken mesh" diagnosis.
+    bpy.ops.object.select_all(action='SELECT')
+    bpy.ops.object.delete(use_global=False)
     if not Path(args.mesh).is_file() or not Path(args.idle).is_file():
         raise SystemExit('Source guardian mesh or skeleton asset missing')
 
