@@ -99,3 +99,15 @@ Changes on draft PR #9, **not on main**:
 ### Unfinished release gates
 
 The new passage and phase scenes require verified browser screenshots, repeated full gameplay testing across transitions and input methods, checks for slow video/poster loading, 30/60 FPS strike timing, audio unlock and frame pacing, M3 Air 8GB GPU and thermal profiling, and director approval for visual staging. The real rig phase sequences reuse existing animation states; bone posing/IK, bespoke transformation meshes, synchronized multi-character performance, facial animation, lip sync and full cinematic scene physics are **not complete**. Scene authoring is browser-local until exported and committed. **Keep PR #9 in draft and unmerged** pending full evidence.
+
+## Director-approved production scenes and accessible cinematic playback (2026-11-22)
+
+**Production shipment:** Studio exports no longer have to remain browser-only. Run `npm run meru:ship-scenes -- path/to/export.meru.json` to validate one or more reviewed files and atomically add them to `engine/meru/productionScenes.json`. Review and commit that manifest; the production game bundles these scenes. Run `npm run meru:verify-scenes` before shipping.
+
+**Fallbacks:** This manifest currently has zero installed custom scenes. That is intentional: both boss intros and all four phase reveals already have compiled hand-authored defaults. Invalid or foreign scenes never replace them. Development gameplay can use local Studio previews; production gameplay ignores browser-only draft data. Studio itself always loads the author's local draft.
+
+**Safety:** The installer rejects unknown boss/phase IDs, unsafe pose values, invalid local asset paths, oversized JSON and duplicate batch entries. CI validates the manifest and runs an actual temporary export-to-install smoke test. A rejected batch must not modify the compiled manifest.
+
+**Accessibility:** The active authored subtitle is mirrored into a screen-reader status region in live cinematics. Reduced-motion systems suppress camera shake and large impact-streak motion while preserving timing, titles and the return to gameplay.
+
+**Still not signed off:** True multi-character Rudra/Vishnu choreography, full bone IK/retargeting, lip sync, all story interludes, full chamber-path playtests, 30-minute Mac M3 Air/Windows GPU frame pacing and thermals, every boss-camera visual review, texture-source sharpness and legacy repository-wide TypeScript cleanup. Passing headless Chromium tests does not establish AAA visual fidelity.
