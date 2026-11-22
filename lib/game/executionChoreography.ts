@@ -108,7 +108,7 @@ export function createBossEntranceCameraTrack(
       ]
     : [
         { at: duration * 0.12, focusX: 0.53, focusY: 0.74, zoom: 1.025 },
-        { at: duration * 0.30, focusX: 0.54, focusY: 0.69, zoom: 1.08 },
+        { at: duration * 0.30, focusX: 0.54, focusY: 0.69, zoom: 1.115 },
         { at: duration * 0.54, focusX: 0.55, focusY: 0.63, zoom: 1.205 },
         { at: duration * 0.75, focusX: 0.53, focusY: 0.67, zoom: 1.125 },
         { at: duration * 0.89, focusX: 0.50, focusY: 0.75, zoom: 1.018 },
