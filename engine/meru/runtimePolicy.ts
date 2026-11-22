@@ -3,9 +3,10 @@
  * No title, hub, phase2, cleared, or non-boss encounter may trigger a cinematic.
  */
 import {
-  createDundubhiScene, createVrikodaraScene, createBossPhaseScene, validateCinematic,
+  validateCinematic,
   type BossCharacter, type MeruCinematic,
 } from './cinematicTimeline';
+import {resolveProductionScene} from './productionSceneRegistry';
 
 export const MERU_STUDIO_STORAGE_KEY='meru.studio.cinematic.v1';
 export const MERU_VRIKODARA_STORAGE_KEY='meru.studio.cinematic.vrikodara.v1';
@@ -14,7 +15,7 @@ export const meruStorageKey=(kind:BossCharacter)=>
   kind==='vrikodara'?MERU_VRIKODARA_STORAGE_KEY:MERU_STUDIO_STORAGE_KEY;
 
 export const defaultBossIntro=(kind:BossCharacter):MeruCinematic=>
-  kind==='vrikodara'?createVrikodaraScene():createDundubhiScene();
+  resolveProductionScene(kind,1);
 
 export interface BossIntroContext {
   chamberIndex:number;
@@ -38,8 +39,10 @@ export function shouldStartDundubhiIntro(ctx:BossIntroContext):boolean {
   return shouldStartBossIntro({...ctx,boss:'dundubhi'});
 }
 /**
- * Local Studio scenes are read ONLY after version/boss/ID/asset validation.
- * Corrupt or foreign scenes always fall back to the correct built-in sequence.
+ * Preview scenes in this particular browser take precedence only when valid.
+ * If there is no local preview, load the checked-in packaged production scene;
+ * if none has been installed, use the original hand-authored default.
+ * Corrupt or foreign JSON must never break live combat.
  */
 export function readBossIntro(kind:BossCharacter):MeruCinematic {
   const fallback=defaultBossIntro(kind);
@@ -72,7 +75,7 @@ export function shouldStartBossPhase(ctx:BossIntroContext & {phase:2|3}):boolean
     params.get('cleared')!=='1' && params.get('phase')!=='2';
 }
 export function readBossPhase(kind:BossCharacter,phase:2|3):MeruCinematic {
-  const fallback=createBossPhaseScene(kind,phase);
+  const fallback=resolveProductionScene(kind,phase);
   if(typeof localStorage==='undefined')return fallback;
   try{
     const raw=localStorage.getItem(meruSceneStorageKey(fallback));
