@@ -2648,44 +2648,9 @@ export default function KaliyugaArena() {
                 ? 'vrikodara'
                 : 'semi_boss';
           boss3dRef.current.prewarmBossAtlas(bossKind);
-          const bossUnit = sim.enemies.find((en) => en.isBoss || en.type === 'semi_boss_bloodforge');
-          if (bossUnit) {
-            // Director's choice: the old 16-line hot-magenta wireframe
-            // covered the actual character during the cinematic reveal.
-            // Use a compact, grounded elemental burst instead; the model,
-            // voiced introduction and moving camera must remain visible.
-            const entranceFx = webglDemonSlayerVfxRef.current;
-            if (bossUnit.type === 'dundubhi') {
-              entranceFx?.spawnShockwaveRing({
-                x: bossUnit.x, y: bossUnit.y + 4,
-                radius: 145, palette: 'bronze', duration: 0.60,
-              });
-              entranceFx?.spawnSparkBurst({
-                x: bossUnit.x, y: bossUnit.y - 28,
-                count: 12, speed: 170, palette: 'bronze',
-              });
-            } else if (bossUnit.type === 'vrikodara') {
-              entranceFx?.spawnCycloneVortex({
-                x: bossUnit.x, y: bossUnit.y - 16,
-                radius: 152, palette: 'blood', duration: 0.82, ringCount: 2,
-              });
-              entranceFx?.spawnSparkBurst({
-                x: bossUnit.x, y: bossUnit.y - 30,
-                count: 10, speed: 150, palette: 'blood',
-              });
-            } else {
-              entranceFx?.spawnShockwaveRing({
-                x: bossUnit.x, y: bossUnit.y + 2,
-                radius: 100, palette: 'blood', duration: 0.45,
-              });
-            }
-            soundEngine.playBloodDemonArt();
-            if (bossUnit.type === 'dundubhi') {
-              soundEngine.playVoiceBark('dundubhi_intro', { priority: 'high' });
-            } else if (bossUnit.type === 'vrikodara') {
-              soundEngine.playVoiceBark('vrikodara_intro', { priority: 'high' });
-            }
-          }
+          // Entrance voice and VFX are intentionally deferred until the
+          // player presses ENGAGE on the pre-fight cinematic. Starting them
+          // here made the intro play unheard/hidden behind dialogue.
         }
         enemy3dRef.current?.prewarmChamberSlots(
           sim.enemies
@@ -13347,6 +13312,43 @@ export default function KaliyugaArena() {
             if (nextStage === 'vaitarani_hub') {
               enterVaitaraniHub();
               return;
+            }
+            // The authored camera waits behind the intro dialogue. Release
+            // boss voice and stage effects on the SAME ENGAGE gesture, not
+            // during chamber loading (when browser audio may be locked).
+            if (
+              nextStage === 'combat_arena' &&
+              (sliceStageRef.current === 'dundubhi_intro' ||
+                sliceStageRef.current === 'vrikodara_intro')
+            ) {
+              const bossUnit = simRef.current.enemies.find(
+                (en) => en.isBoss && en.hp > 0 && en.aiState !== 'ko'
+              );
+              if (bossUnit) {
+                const entranceFx = webglDemonSlayerVfxRef.current;
+                if (bossUnit.type === 'dundubhi') {
+                  entranceFx?.spawnShockwaveRing({
+                    x: bossUnit.x, y: bossUnit.y + 4,
+                    radius: 145, palette: 'bronze', duration: 0.60,
+                  });
+                  entranceFx?.spawnSparkBurst({
+                    x: bossUnit.x, y: bossUnit.y - 28,
+                    count: 12, speed: 170, palette: 'bronze',
+                  });
+                  soundEngine.playVoiceBark('dundubhi_intro', { priority: 'high' });
+                } else if (bossUnit.type === 'vrikodara') {
+                  entranceFx?.spawnCycloneVortex({
+                    x: bossUnit.x, y: bossUnit.y - 16,
+                    radius: 152, palette: 'blood', duration: 0.82, ringCount: 2,
+                  });
+                  entranceFx?.spawnSparkBurst({
+                    x: bossUnit.x, y: bossUnit.y - 30,
+                    count: 10, speed: 150, palette: 'blood',
+                  });
+                  soundEngine.playVoiceBark('vrikodara_intro', { priority: 'high' });
+                }
+                soundEngine.playBloodDemonArt();
+              }
             }
             setSliceStage(nextStage);
             if (nextStage === 'combat_arena') {
