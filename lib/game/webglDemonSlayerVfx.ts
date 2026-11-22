@@ -925,6 +925,61 @@ export function buildForwardPainterlyCleaveGeometry(
   return geometry;
 }
 
+/**
+ * Distinct Kaliyuga brush-cleave geometry: a flowing Sumi-e stroke with two
+ * opposed shoulders, widening through momentum before ending in a fine tip.
+ * No circular topology; curvature is created along the actual strike axis.
+ * The prior wide straight ribbon rendered as a single red rectangle/wedge.
+ */
+export function buildSinuousInkCleaveGeometry(
+  length: number,
+  width: number,
+  bow: number,
+  seed = 0,
+  segments = 52,
+): THREE.BufferGeometry {
+  const n = Math.max(16, Math.min(80, Math.round(segments)));
+  const len = Math.max(18, Math.min(430, length));
+  const thick = Math.max(2, Math.min(60, width));
+  const curve = Math.max(-80, Math.min(80, bow));
+  const positions: number[] = [];
+  const uvs: number[] = [];
+  const faces: number[] = [];
+  for (let i = 0; i <= n; i++) {
+    const u = i / n;
+    // The slash begins behind the blade, rolls through a sweeping curve
+    // and tapers into a sharp pointed endpoint.
+    const x = len * (u - 0.13);
+    const bowY = -curve * Math.sin(Math.PI * u)
+      + curve * 0.18 * Math.sin(Math.PI * u * 2.5 + seed);
+    const dx = len;
+    const dy = -curve * Math.PI * Math.cos(Math.PI * u)
+      + curve * 0.45 * Math.PI * Math.cos(Math.PI * 2.5 * u + seed);
+    const mag = Math.max(0.001, Math.hypot(dx, dy));
+    const nx = -dy / mag;
+    const ny = dx / mag;
+    const envelope = Math.pow(Math.sin(Math.PI * u), 0.84);
+    const inkBleed = 0.87
+      + 0.10 * Math.sin(u * 15.1 + seed * 3.2)
+      + 0.065 * Math.sin(u * 32.3 + seed * 2.1);
+    const w = Math.max(0, thick * envelope * inkBleed);
+    const lift = 6.5 * envelope;
+    positions.push(x + nx * w, bowY + ny * w, lift);
+    positions.push(x - nx * w, bowY - ny * w, lift * 0.5);
+    uvs.push(u, 0, u, 1);
+    if (i < n) {
+      const k = i * 2;
+      faces.push(k, k + 1, k + 2, k + 1, k + 3, k + 2);
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geo.setIndex(faces);
+  geo.computeVertexNormals();
+  return geo;
+}
+
 /** Painterly flame tongues taper to a fine, curling point rather than another glowing circle. */
 function buildTaperedFlameTongueGeometry(length: number, width: number, segments = 11): THREE.BufferGeometry {
   const positions: number[] = [];
@@ -1260,11 +1315,12 @@ export class WebglDemonSlayerVfxOverlay {
     // Avoid the previous 120px-wide solid geometric wedge at actual gameplay zoom.
     // Keep the long attack silhouette, but let thinner overlapping ink/warmth
     // strokes and independent living flame tongues define the outline.
-    const mainLength = radius * (variant === 'guardian' ? 1.34 : 1.27);
-    const mainWidth = radius * (variant === 'guardian' ? 0.36 : 0.33);
-    const inkGeo = buildForwardPainterlyCleaveGeometry(mainLength * 1.03, mainWidth * 1.30, 2.1, 52);
-    const coreGeo = buildForwardPainterlyCleaveGeometry(mainLength, mainWidth * 0.92, 0.55, 52);
-    const glowGeo = buildForwardPainterlyCleaveGeometry(mainLength * 1.04, mainWidth * 1.12, 1.5, 48);
+    const mainLength = radius * (variant === 'guardian' ? 1.24 : 1.18);
+    const mainWidth = radius * (variant === 'guardian' ? 0.17 : 0.15);
+    const arcBow = radius * (variant === 'guardian' ? 0.31 : 0.36);
+    const inkGeo = buildSinuousInkCleaveGeometry(mainLength * 1.04, mainWidth * 1.25, arcBow, 2.1, 64);
+    const coreGeo = buildSinuousInkCleaveGeometry(mainLength, mainWidth * 0.76, arcBow * 0.92, 0.7, 64);
+    const glowGeo = buildSinuousInkCleaveGeometry(mainLength * 1.06, mainWidth * 1.18, arcBow * 1.06, 1.5, 56);
     const mode = paletteModeIndex(opts.palette ?? (variant === 'guardian' ? 'blood' : 'hinokami'));
     const inkMat = createRibbonMaterial(pal, mode, 0.75, true, THREE.NormalBlending, 0.36);
     inkMat.uniforms.uCoreColor.value.copy(pal.ink);
@@ -1280,9 +1336,27 @@ export class WebglDemonSlayerVfxOverlay {
     const group = new THREE.Group();
     group.add(inkMesh, coreMesh, glowMesh);
 
-    // Separate trailing flame/astral licks supply readable flowing motion
-    // and varied silhouette without another concentric rotating ring.
+    // Two independent calligraphic streaks create direction, depth, and open
+    // negative space instead of one solid 200px red polygon.
     const extraPaintMeshes: Array<THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>> = [];
+    for (let n = 0; n < 2; n++) {
+      const sideGeo = buildSinuousInkCleaveGeometry(
+        mainLength * (n === 0 ? 0.77 : 0.61),
+        mainWidth * (n === 0 ? 0.54 : 0.43),
+        arcBow * (n === 0 ? -0.59 : 0.61),
+        4.3 + n * 2.0, 42
+      );
+      const sideMat = createRibbonMaterial(
+        pal, mode, n === 0 ? 0.68 : 0.52,
+        true, THREE.NormalBlending, n === 0 ? 1.33 : 1.08
+      );
+      const side = new THREE.Mesh(sideGeo, sideMat);
+      side.position.set(-mainLength * 0.035, (n === 0 ? -1 : 1) * mainWidth * 1.13, 4 + n);
+      side.rotation.z = (n === 0 ? -1 : 1) * 0.11;
+      group.add(side);
+      extraPaintMeshes.push(side);
+    }
+    // Short outward flame tongues flutter along the ink stroke.
     for (let i = 0; i < 3; i++) {
       const tongueGeo = buildTaperedFlameTongueGeometry(
         radius * (0.46 + i * 0.11), radius * (0.063 + i * 0.011), 20
@@ -1293,8 +1367,8 @@ export class WebglDemonSlayerVfxOverlay {
       );
       const tongue = new THREE.Mesh(tongueGeo, tongueMat);
       tongue.position.set(
-        -mainLength * 0.06 + mainLength * i * 0.15,
-        mainWidth * (0.30 + i * 0.24),
+        -mainLength * 0.08 + mainLength * i * 0.16,
+        mainWidth * (0.63 + i * 0.28),
         3 + i
       );
       tongue.rotation.z = 0.16 + i * 0.14;
