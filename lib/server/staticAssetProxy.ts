@@ -183,6 +183,15 @@ export const CLEAN_ASCII_REPO_MAP: Record<string, string[]> = {
   'vaitarani_realm.mp3': ['audio and sound effects', 'Vaitarani — The Forgotten Realm.mp3'],
   'the_bleeding_crown.mp3': ['audio and sound effects', 'The Bleeding Crown.mp3'],
   // New 2026-11-20 Sculpted 3D Models (Kala-Bhairava Susanoo + Weaponsmith Lohakara)
+  // QA-only alternative: genuine 66-bone skinned source for animated-preview approval.
+  // The canonical Abyss guardian stays selected during ordinary gameplay.
+  'rigged_crimson_guardian_preview.fbx': [
+    'cutscenes',
+    'assets',
+    'characters',
+    'Meshy_AI_Crimson_Skull_Warlord_biped',
+    'Meshy_AI_Crimson_Skull_Warlord_biped_Animation_Running_withSkin.fbx',
+  ],
   'horned_warlord_abyss.fbx': [
     'new 3D assets and animations',
     '3D Models',
