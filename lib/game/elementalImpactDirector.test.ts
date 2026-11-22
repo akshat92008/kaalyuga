@@ -28,14 +28,14 @@ test('heavy release stays bounded on low-end GPU and scales with power', () => {
 
 test('each elemental heavy uses distinct primary geometry and only one shared spark burst', () => {
   const primaryNames: Record<HeavyElement, string> = {
-    agni: 'spawnSolarFlameWheel',
+    agni: 'spawnPainterlyCleave',
     varuna: 'spawnWaterDragon',
     vayu: 'spawnWindGaleCrescents',
     vajra: 'spawnThunderZigzag',
-    guardian: 'spawnSlashRibbon',
+    guardian: 'spawnPainterlyCleave',
   };
   const methods = [
-    'spawnSolarFlameWheel', 'spawnWaterDragon', 'spawnWindGaleCrescents',
+    'spawnSolarFlameWheel', 'spawnPainterlyCleave', 'spawnWaterDragon', 'spawnWindGaleCrescents',
     'spawnThunderZigzag', 'spawnSlashRibbon', 'spawnShockwaveRing',
     'spawnClashStarburst', 'spawnSparkBurst',
   ];
@@ -50,7 +50,67 @@ test('each elemental heavy uses distinct primary geometry and only one shared sp
     });
     assert.equal(calls[0], primaryNames[element], element);
     assert.equal(calls.filter((name) => name === 'spawnSparkBurst').length, 1, element);
-    assert.ok(calls.length >= 3 && calls.length <= 4, element);
+    // Thunder is deliberately just its bolt and one forward spark burst.
+    // Additional impact stars would double-render and hide the blade.
+    assert.ok(calls.length >= 2 && calls.length <= 4, element);
     assert.ok(profile.radius > 170);
+  }
+});
+
+test('Agni and guardian use a single forward painterly cleave, not circular shockwaves', () => {
+  for (const element of ['agni', 'guardian'] as const) {
+    const log: Array<{kind:string; opts:Record<string, unknown>}> = [];
+    const methods = [
+      'spawnSolarFlameWheel', 'spawnPainterlyCleave', 'spawnWaterDragon', 'spawnWindGaleCrescents',
+      'spawnThunderZigzag', 'spawnSlashRibbon', 'spawnShockwaveRing',
+      'spawnClashStarburst', 'spawnSparkBurst',
+    ];
+    const sink = Object.fromEntries(methods.map(kind => [kind, (opts: Record<string, unknown>) => log.push({kind,opts})])) as unknown as HeavyEffectSink;
+    spawnHeavyElementalRelease(sink, {element, x:150, y:100, angle:0.4, radius:180});
+    const main=log.filter(c=>c.kind==='spawnPainterlyCleave');
+    assert.equal(main.length,1,'one painted forward impact per attack');
+    assert.equal(main[0].opts.angle,0.4);
+    assert.equal(main[0].opts.variant,element==='guardian'?'guardian':'flame');
+    assert.ok(!log.some(c=>c.kind==='spawnSolarFlameWheel' || c.kind==='spawnShockwaveRing'));
+    assert.equal(log.filter(c=>c.kind==='spawnSparkBurst').length,1);
+  }
+});
+
+
+test('Phase 1 elemental heavies stay weapon-directed with no radial/ribbon companion clutter', () => {
+  const primary = {
+    agni: 'spawnPainterlyCleave',
+    varuna: 'spawnWaterDragon',
+    vayu: 'spawnWindGaleCrescents',
+    vajra: 'spawnThunderZigzag',
+  } as const;
+  const supported = [
+    'spawnSolarFlameWheel', 'spawnPainterlyCleave', 'spawnWaterDragon',
+    'spawnWindGaleCrescents', 'spawnThunderZigzag', 'spawnSlashRibbon',
+    'spawnShockwaveRing', 'spawnClashStarburst', 'spawnSparkBurst',
+  ];
+  const base = { x: 210, y: 155, angle: Math.PI / 5, radius: 165, energyOrbs: 2 };
+  for (const element of Object.keys(primary) as Array<keyof typeof primary>) {
+    const calls: Array<{name:string; opts:Record<string, unknown>}> = [];
+    const sink = Object.fromEntries(supported.map(name => [
+      name, (opts: Record<string, unknown>) => calls.push({name, opts}),
+    ])) as unknown as HeavyEffectSink;
+    const profile = spawnHeavyElementalRelease(sink, {...base, element});
+    assert.equal(calls[0].name, primary[element], element);
+    assert.ok(!calls.some(c =>
+      ['spawnSolarFlameWheel', 'spawnShockwaveRing', 'spawnSlashRibbon'].includes(c.name)),
+    element + ': no circular or generic ribbon overlays');
+    assert.equal(calls.filter(c => c.name === 'spawnSparkBurst').length, 1);
+    assert.ok(calls.length <= 3, element + ': strict readable VFX layers');
+    assert.ok(profile.radius <= 256, element + ': mobile/M3 Air bounded effects');
+    assert.ok(profile.duration <= 0.74);
+    if (element !== 'vajra') {
+      assert.equal(calls[0].opts.angle, base.angle, element + ': follows aimed Parashu strike');
+      assert.equal(calls[0].opts.x, base.x);
+    } else {
+      const bolt = calls[0].opts;
+      assert.ok(Number(bolt.x2) > Number(bolt.x1), 'lightning advances to the target');
+      assert.equal(bolt.withFloorRing, true, 'thunder gets only its localized contact pulse');
+    }
   }
 });

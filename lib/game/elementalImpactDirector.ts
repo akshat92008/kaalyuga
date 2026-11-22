@@ -9,6 +9,7 @@ export type HeavyElement = 'agni' | 'varuna' | 'vayu' | 'vajra' | 'guardian';
 
 type HeavyEffectMethod =
   | 'spawnSolarFlameWheel'
+  | 'spawnPainterlyCleave'
   | 'spawnWaterDragon'
   | 'spawnWindGaleCrescents'
   | 'spawnThunderZigzag'
@@ -66,15 +67,16 @@ export function resolveHeavyReleaseProfile(input: HeavyReleaseInput): HeavyRelea
     element: input.element,
     palette: palette[input.element],
     radius,
-    reach: radius * (input.element === 'vajra' ? 1.62 : 1.14),
+    reach: radius * (input.element === 'vajra' ? 1.30 : 1.04),
     sparks: Math.round(clamp(11 + orbBoost * 2, 11, 19)),
     duration: input.element === 'guardian' ? 0.74 : 0.64,
   };
 }
 
 /**
- * One primary silhouette + localized supporting flare. Each style has distinct geometry:
- * fire wheel, serpent-shaped water, emerald crescent gale, branching bolt, crimson guardian.
+ * One readable weapon-directed signature per element, with localized contact
+ * flare instead of ornamental circles: flame blade, S-curve water dragon,
+ * three staggered wind razors, angular thunder and legacy guardian.
  */
 export function spawnHeavyElementalRelease(
   fx: HeavyEffectSink | null | undefined,
@@ -89,21 +91,27 @@ export function spawnHeavyElementalRelease(
   const { radius, reach, palette, duration } = profile;
   switch (input.element) {
     case 'agni':
-      fx.spawnSolarFlameWheel({ x, y: y - 18, angle, radius, duration, palette });
-      fx.spawnShockwaveRing({ x, y, radius: radius * 0.92, duration: 0.39, palette });
+      fx.spawnPainterlyCleave({
+        x, y: y - 22, angle, radius: radius * 1.02,
+        palette, duration: 0.59, variant: 'flame',
+      });
+      fx.spawnClashStarburst({
+        x: x + Math.cos(angle) * 32, y: y - 22 + Math.sin(angle) * 16,
+        scale: 0.48, duration: 0.13, palette,
+      });
       break;
     case 'varuna':
       fx.spawnWaterDragon({ x, y: y - 20, angle, radius: radius * 0.96, duration });
-      fx.spawnSlashRibbon({
-        x, y: y - 22, angle, radius: radius * 1.04, width: 49,
-        arcSpan: 2.65, direction: 1, duration: 0.38, palette,
+      fx.spawnClashStarburst({
+        x: x + Math.cos(angle) * 34, y: y - 21 + Math.sin(angle) * 17,
+        scale: 0.35, duration: 0.11, palette,
       });
       break;
     case 'vayu':
       fx.spawnWindGaleCrescents({ x, y: y - 18, angle, radius, duration });
-      fx.spawnSlashRibbon({
-        x, y: y - 20, angle, radius: radius * 0.86, width: 36,
-        arcSpan: 2.82, direction: -1, duration: 0.34, palette,
+      fx.spawnClashStarburst({
+        x: x + Math.cos(angle) * 32, y: y - 20 + Math.sin(angle) * 18,
+        scale: 0.40, duration: 0.11, palette,
       });
       break;
     case 'vajra':
@@ -114,22 +122,24 @@ export function spawnHeavyElementalRelease(
         y2: y - 20 + Math.sin(angle) * reach * 0.68,
         width: 29, duration, palette, withFloorRing: true,
       });
-      fx.spawnClashStarburst({ x, y: y - 24, scale: 1.10, duration: 0.30, palette });
+      // The bolt renderer already generates focused tip/elbow nodes.
+      // A second giant white contact star was obscuring Rudra's pose.
       break;
     case 'guardian':
-      fx.spawnSlashRibbon({
-        x, y: y - 34, angle, radius: radius * 1.14, width: 68,
-        arcSpan: 2.95, direction: 1, palette, duration, tiltX: 0.58,
+      fx.spawnPainterlyCleave({
+        x, y: y - 26, angle, radius,
+        palette, duration: 0.66, variant: 'guardian',
       });
-      fx.spawnShockwaveRing({ x, y, radius: radius * 1.04, duration: 0.43, palette });
-      fx.spawnClashStarburst({ x, y: y - 24, scale: 1.55, duration: 0.3, palette });
+      fx.spawnClashStarburst({ x, y: y - 22, scale: 1.23, duration: 0.24, palette });
       break;
   }
   fx.spawnSparkBurst({
     x: x + Math.cos(angle) * 22,
     y: y - 24 + Math.sin(angle) * 12,
     count: profile.sparks,
-    speed: 400,
+    speed: 350,
+    angle,
+    spread: 1.45,
     palette,
   });
   return profile;

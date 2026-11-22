@@ -1140,6 +1140,7 @@ export default function KaliyugaArena() {
           health: sim.player.hp,
           maximumHealth: sim.player.maxHp,
           transformRemaining: sim.player.transformTimer,
+          guardianRenderer: susanoo3dRef.current?.debugStatus() ?? null,
           fps: sim.fps,
           cameraKind: liveCameraRef.current?.kind ?? null,
           cameraElapsedSec: liveCameraRef.current?.elapsedSec ?? null,
@@ -3542,19 +3543,17 @@ export default function KaliyugaArena() {
         }
       }
 
-      spawnShockwave(p.x, p.y, spec.radius, meta.color, 0.42);
-      spawnParticles(p.x, p.y - 26, 30, meta.color, 230, 4.8, 70);
+      // Grounding only. A full-radius canvas shockwave obscured every Astra
+      // and competed with the signature elemental mesh.
+      spawnShockwave(p.x, p.y, spec.radius * 0.30, meta.color, 0.23);
+      spawnParticles(p.x, p.y - 26, 11, meta.color, 210, 3.1, 55);
       soundEngine.playBreathingStyle(
         astraId === 'agneyastra' ? 'sun' : astraId === 'vayavyastra' ? 'wind' : 'thunder'
       );
       const astraPalette: DemonSlayerVfxPalette =
         astraId === 'agneyastra' ? 'sun' : astraId === 'vayavyastra' ? 'wind' : 'thunder';
-      spawnSunHaloRing(bloodDemonArtsRef.current, {
-        x: p.x,
-        y: p.y - 16,
-        radius: spec.radius * 1.08,
-        palette: astraPalette,
-      });
+      // No universal solar halo: fire, wind and thunder must have genuinely
+      // distinct silhouettes, not the same circular portal with color swaps.
       if (astraId === 'vayavyastra') {
         // Sanemi Wind Breathing: ONE monumental emerald gale burst + bold Sumi-e ink shards (no duplicate cyclones/ribbons)
         webglDemonSlayerVfxRef.current?.spawnWindGaleCrescents({
@@ -3565,34 +3564,30 @@ export default function KaliyugaArena() {
           duration: 0.76,
         });
       } else if (astraId === 'agneyastra') {
-        // Agni Solar Eruption: High-impact Hinokami Solar Flame Wheel + dual molten floor shockwaves + ember vortex
-        webglDemonSlayerVfxRef.current?.spawnSolarFlameWheel({
-          x: p.x,
+        // Agneyastra: one sweeping calligraphic flame eruption travelling
+        // outward from the axe; no rotating ring, oversized star or duplicate
+        // shockwave. The broader silhouette differentiates it from Agni heavy.
+        webglDemonSlayerVfxRef.current?.spawnPainterlyCleave({
+          x: p.x + Math.cos(aimAngle) * 14,
           y: p.y - 22,
           angle: aimAngle,
-          radius: spec.radius * 1.32,
+          radius: spec.radius * 1.27,
           palette: 'hinokami',
-          duration: 0.78,
-        });
-        webglDemonSlayerVfxRef.current?.spawnShockwaveRing({
-          x: p.x,
-          y: p.y,
-          radius: spec.radius * 1.18,
-          palette: 'hinokami',
-          duration: 0.48,
+          duration: 0.73,
+          variant: 'flame',
         });
         webglDemonSlayerVfxRef.current?.spawnClashStarburst({
-          x: p.x + Math.cos(aimAngle) * 26,
-          y: p.y - 24,
-          scale: 1.45,
+          x: p.x + Math.cos(aimAngle) * 55,
+          y: p.y - 24 + Math.sin(aimAngle) * 22,
+          scale: 0.60,
           palette: 'hinokami',
-          duration: 0.42,
+          duration: 0.15,
         });
-        spawnShockwave(p.x, p.y, spec.radius * 1.15, '#ff5a1f', 0.42);
-        spawnParticles(p.x, p.y - 24, 28, '#ff7a22', 280, 5.2, 80);
         soundEngine.playHeavyIronSwing();
       } else {
-        // Vajrastra: Rebuilt Zenitsu GLSL Plasma Thunderclap — primary forked plasma bolt + Godspeed ricochet + launch starburst (zero muddying slash ribbons)
+        // Vajrastra: one dominant lightning corridor with internally branched
+        // plasma and a small terminal ionization ring, not three clashing
+        // white stars and overlapping zigzags.
         const reach = Math.max(290, spec.range * 0.96);
         const endX = p.x + Math.cos(aimAngle) * reach;
         const endY = p.y + Math.sin(aimAngle) * reach * 0.78;
@@ -3606,29 +3601,17 @@ export default function KaliyugaArena() {
           width: 30,
           withFloorRing: true,
         });
-        webglDemonSlayerVfxRef.current?.spawnThunderZigzag({
-          x1: p.x + Math.cos(aimAngle) * 34,
-          y1: p.y - 22 + Math.sin(aimAngle) * 20,
-          x2: p.x + Math.cos(aimAngle - 0.32) * (reach * 0.84),
-          y2: p.y - 20 + Math.sin(aimAngle - 0.32) * (reach * 0.66),
-          palette: 'thunder',
-          duration: 0.62,
-          width: 20,
-          withFloorRing: false,
-        });
-        webglDemonSlayerVfxRef.current?.spawnClashStarburst({
-          x: p.x + Math.cos(aimAngle) * 28,
-          y: p.y - 24 + Math.sin(aimAngle) * 18,
-          scale: 1.5,
-          palette: 'thunder',
-          duration: 0.38,
-        });
+        // Do not overlay a second independent lightning strike or a
+        // full-size starburst at Rudra's feet; the primary bolt branches
+        // and terminates at the actual hit location already.
       }
       webglDemonSlayerVfxRef.current?.spawnSparkBurst({
         x: p.x,
         y: p.y - 24,
-        count: 14,
-        speed: 440,
+        count: 13,
+        speed: 360,
+        angle: aimAngle,
+        spread: 1.55,
         palette: astraPalette,
       });
 
@@ -4584,7 +4567,8 @@ export default function KaliyugaArena() {
     });
     spawnParticles(p.x, p.y - 36, 38, '#ff5924', 240, 5.5, 65);
     sim.devanagariStamps.push(createDevanagariStamp('rage', p.x - p.facing * 104, p.y - 178));
-    spawnFloatingText(p.x, p.y - 88, 'KALA-BHAIRAVA SUSANOO! · 100% CHAKRA ARMOR', '#ffd46b', 1.18);
+    // The Devanagari rage stamp already communicates the summon.
+    // Avoid drawing a second giant English title over Rudra's guardian and attack.
   }, [spawnFloatingText, spawnParticles, spawnShockwave, updateStoryFlags]);
 
   const triggerExecuteBrokenTarget = useCallback(() => {
@@ -5007,7 +4991,14 @@ export default function KaliyugaArena() {
           heavyElement === 'vajra' ? '#fde047' :
           heavyElement === 'varuna' ? '#38e8ff' :
           heavyElement === 'guardian' ? '#ed334f' : '#ff5418';
-        spawnShockwave(syncImpactX, syncImpactY, heavyRelease.radius * 0.76, impactColor, 0.36);
+        // Phase 1: elemental heavies get grounded sparks and their distinct
+        // forward attack silhouettes. Do NOT layer a second circular shockwave
+        // over the sword-shaped flames, S-curve water, gale or thunder.
+        // Preserve legacy guardian behavior (explicitly outside Phase 1 scope).
+        if (heavyElement === 'guardian') {
+          spawnShockwave(syncImpactX, syncImpactY,
+            heavyRelease.radius * 0.24, impactColor, 0.24);
+        }
         spawnParticles(syncImpactX, syncImpactY - 18, 12 + orbsUsed * 2, impactColor, 280, 4.6, 95);
         simRef.current.hitstopTimer = Math.max(simRef.current.hitstopTimer, 0.062);
       },
@@ -5484,16 +5475,6 @@ export default function KaliyugaArena() {
     p.scaleY = isRiposteStrike || isDashStrike ? 0.89 : p.comboStep === 4 ? 0.93 : 0.97;
     p.weaponSwingProgress = 0.0;
     p.attackSerial += 1;
-    if (p.transformTimer > 0) {
-      // Kala-Bhairava Susanoo colossal spectral Parashu shockwave on every swing
-      spawnShockwave(
-        p.x + Math.cos(p.slashAngle) * 58,
-        p.y + Math.sin(p.slashAngle) * 34,
-        138,
-        '#ff5226',
-        0.28
-      );
-    }
     if (isRiposteStrike) {
       p.invulnTimer = Math.max(p.invulnTimer, 0.72);
     }
@@ -5615,9 +5596,6 @@ export default function KaliyugaArena() {
 
     const isComboFinisher = Boolean(p.comboStep === 4 || activeFinisherSpec);
     const arcRadius = isComboFinisher ? 132 : p.comboStep === 3 ? 110 : 98;
-    const arcWidth = isComboFinisher ? 48 : p.comboStep === 3 ? 38 : 34;
-    const arcDir: 1 | -1 = p.comboStep % 2 === 0 ? -1 : 1;
-    const capturedStep = p.comboStep;
     const capturedAngle = p.slashAngle;
     const capturedStance = p.stance;
 
@@ -5638,25 +5616,57 @@ export default function KaliyugaArena() {
         const originX = curP.x + curP.facing * 14;
         const originY = curP.y - 24;
 
+        // Guardian visuals begin on the SAME active frame as the Parashu hit.
+        // Previously a 138px ring appeared on keydown, before aim/pose/contact,
+        // reading as a detached blast and obscuring the blade. Keep the ground
+        // pulse small enough that the weapon silhouette remains visible.
+        if (curP.transformTimer > 0) {
+          const impactX = originX + Math.cos(capturedAngle) * 30;
+          const impactY = originY + Math.sin(capturedAngle) * 17;
+          spawnShockwave(impactX, impactY, 68, '#ff5226', 0.22);
+          if (isDebugMode) {
+            qaRecentEventsRef.current.push({
+              name: 'guardian-light-contact', frameTime: performance.now(),
+              meta: 'guardian', progress: curP.weaponSwingProgress,
+              contactX: impactX, contactY: impactY,
+              playerX: curP.x, playerY: curP.y,
+            });
+            if (qaRecentEventsRef.current.length > 50) qaRecentEventsRef.current.shift();
+          }
+        }
+
         if (!isComboFinisher) {
-          // Tier 1 Light Attack (Combo 1-3): ONE crisp, razor-clean breathing ribbon + sparse sparks ONLY!
-          webglDemonSlayerVfxRef.current?.spawnSlashRibbon({
-            x: originX,
-            y: originY,
-            angle: capturedAngle,
-            radius: arcRadius,
-            width: arcWidth,
-            arcSpan: capturedStep === 3 ? 2.35 : 2.05,
-            direction: arcDir,
-            palette: lightSlashPalette,
-            duration: 0.24,
-            tiltX: capturedStep === 2 ? -0.45 : 0.58,
-          });
+          // Tier 1 light attacks are genuine stance signatures, not the same
+          // generic circular blade with three palette swaps. Keep each small
+          // and fast so the heavy 3D silhouettes retain visual supremacy.
+          if (capturedStance === 'pillar') {
+            webglDemonSlayerVfxRef.current?.spawnWindGaleCrescents({
+              x: originX, y: originY,
+              angle: capturedAngle, radius: arcRadius * 1.02,
+              duration: 0.32, lightweight: true,
+            });
+          } else if (capturedStance === 'thrust') {
+            webglDemonSlayerVfxRef.current?.spawnThunderZigzag({
+              x1: originX, y1: originY,
+              x2: originX + Math.cos(capturedAngle) * (arcRadius * 1.15),
+              y2: originY + Math.sin(capturedAngle) * arcRadius * 0.77,
+              palette: 'thunder', duration: 0.30,
+              width: 13, withFloorRing: false, lightweight: true,
+            });
+          } else {
+            webglDemonSlayerVfxRef.current?.spawnPainterlyCleave({
+              x: originX, y: originY,
+              angle: capturedAngle, radius: arcRadius * 0.84,
+              palette: 'hinokami', duration: 0.31, variant: 'flame',
+            });
+          }
           webglDemonSlayerVfxRef.current?.spawnSparkBurst({
             x: originX + Math.cos(capturedAngle) * 44,
             y: originY + Math.sin(capturedAngle) * 28,
-            count: 6,
-            speed: 310,
+            count: 5,
+            speed: 260,
+            angle: capturedAngle,
+            spread: 1.35,
             palette: lightSlashPalette,
           });
         } else {
@@ -5681,13 +5691,16 @@ export default function KaliyugaArena() {
               withFloorRing: true,
             });
           } else {
-            webglDemonSlayerVfxRef.current?.spawnSolarFlameWheel({
+            // Combo-4 must finish with the blade, not become a rotating fire
+            // ring that blocks the very enemy being struck.
+            webglDemonSlayerVfxRef.current?.spawnPainterlyCleave({
               x: originX,
               y: originY + 2,
               angle: capturedAngle,
               radius: 148,
               palette: 'hinokami',
               duration: 0.48,
+              variant: 'flame',
             });
           }
           webglDemonSlayerVfxRef.current?.spawnSparkBurst({

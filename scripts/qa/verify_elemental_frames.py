@@ -6,6 +6,7 @@ combat event itself fired. It does NOT claim to measure artistic polish.
 """
 import argparse
 import json
+import os
 from pathlib import Path
 
 from PIL import Image
@@ -59,6 +60,10 @@ def main() -> int:
     passed = True
     results = []
     for stem, palette, minimum in CHECKS:
+        # Guardian is deferred from Phase 1 visual signoff; its independent
+        # animation/rig checks remain intact for the later guardian phase.
+        if os.environ.get("PHASE1_ELEMENTAL_ONLY") == "1" and stem.startswith("10-guardian-"):
+            continue
         path = next(
             (p for p in (folder / (stem + ext) for ext in (".png", ".jpg")) if p.exists()),
             None,

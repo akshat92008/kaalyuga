@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
+import { shouldStartGuardianSwing } from './guardianAttackGate';
 import {
   getSharedStudioWebGLRenderer,
   isSoftwareWebGLRenderer,
@@ -214,7 +216,12 @@ export class Susanoo3DRenderer {
   private actions: Partial<Record<SusanooClipKey, THREE.AnimationAction>> = {};
   private activeClip: SusanooClipKey | null = null;
   private hasSkinnedBones = false;
+  private skeletonBoneCount = 0;
+  private skinnedMeshCount = 0;
+  private skeletonBoneExamples: string[] = [];
+  private clipLoadDiagnostic: Record<string, string> = {};
   private lastAttackSerial = -1;
+  private wasAttacking = false;
   private roarPlayedForSummon = false;
   private lastTransformTimer = 0;
   private attackAnimHoldSec = 0;
@@ -223,6 +230,7 @@ export class Susanoo3DRenderer {
   private isLoaded = false;
   private isLoading = false;
   private loadFailed = false;
+  private rendered3dFrameCount = 0;
   private lastRenderMs = 0;
   private lastSignature = '';
   public readonly footAnchorRatio: number;
@@ -286,11 +294,21 @@ export class Susanoo3DRenderer {
     this.isLoading = true;
     try {
       const fbx = await loadFbxCached(SUSANOO_FBX_URL, false);
-      const clone = fbx.clone(true);
+      // A plain Object3D clone duplicates bones without reliably rebinding
+      // SkinnedMesh.skeleton.bones to the cloned bone hierarchy. The avatar
+      // can appear frozen or deformed even when an AnimationMixer advances.
+      const clone = SkeletonUtils.clone(fbx) as THREE.Group;
+      clone.animations = fbx.animations;
 
       let foundBones = false;
       clone.traverse((child) => {
-        if ((child as THREE.Bone).isBone || (child as THREE.SkinnedMesh).isSkinnedMesh) {
+        if ((child as THREE.Bone).isBone) {
+          this.skeletonBoneCount += 1;
+          if (this.skeletonBoneExamples.length < 12) this.skeletonBoneExamples.push(child.name);
+          foundBones = true;
+        }
+        if ((child as THREE.SkinnedMesh).isSkinnedMesh) {
+          this.skinnedMeshCount += 1;
           foundBones = true;
         }
         if ((child as THREE.Mesh).isMesh) {
@@ -340,6 +358,8 @@ export class Susanoo3DRenderer {
       // Stream Creature Pack (idle + roar) & Pro Melee Axe Pack (heavy swings) non-blockingly
       if (foundBones && this.mixer) {
         this.streamSusanooClips(clone, standingHipY);
+      } else {
+        this.clipLoadDiagnostic.rig = 'No skinned mesh or skeleton bones in FBX; skeletal actions cannot run';
       }
     } catch (err) {
       console.warn('[Susanoo3DRenderer] Failed to load Horned_Warlord_of_the_Abyss FBX:', err);
@@ -363,17 +383,36 @@ export class Susanoo3DRenderer {
     ).then((results) => {
       if (!this.mixer) return;
       results.forEach((res, idx) => {
-        if (res.status !== 'fulfilled') return;
-        const [key, , loop] = entries[idx];
+        const [key, url, loop] = entries[idx];
+        if (res.status !== 'fulfilled') {
+          this.clipLoadDiagnostic[key] = 'FBX fetch/parse failed ' + url + ': ' + String(res.reason).slice(0, 160);
+          return;
+        }
         const srcClip = res.value.animations?.[0];
-        if (!srcClip) return;
+        if (!srcClip) {
+          this.clipLoadDiagnostic[key] = 'FBX loaded without animation clip from ' + url;
+          return;
+        }
         const stabilized = buildStabilizedInPlaceClip(srcClip, clone, standingHipY);
-        if (stabilized.tracks.length === 0) return;
+        if (stabilized.tracks.length === 0) {
+          this.clipLoadDiagnostic[key] = '0 matching target bone tracks (source=' +
+            srcClip.tracks.length + '; source examples=' +
+            srcClip.tracks.slice(0, 4).map(t => t.name).join(', ') + ')';
+          return;
+        }
+        this.clipLoadDiagnostic[key] = String(stabilized.tracks.length) + '/' +
+          String(srcClip.tracks.length) + ' skeletal tracks matched';
         stabilized.name = `susanoo_${key}`;
         const act = this.mixer!.clipAction(stabilized);
         act.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, loop ? Infinity : 1);
         act.clampWhenFinished = !loop;
+        const priorIdle = key === 'idle' ? this.actions.idle : null;
         this.actions[key] = act;
+        // Never leave the base FBX idle clip running beneath a streamed idle.
+        if (key === 'idle' && priorIdle && priorIdle !== act && this.activeClip === 'idle') {
+          priorIdle.fadeOut(0.12);
+          act.reset().setEffectiveWeight(1).fadeIn(0.12).play();
+        }
       });
       if (this.actions.idle && !this.activeClip) {
         this.playClip('idle', 0.1, 0.9);
@@ -387,9 +426,10 @@ export class Susanoo3DRenderer {
     timeScale = 1.0,
     forceRestart = false
   ): void {
-    const next = this.actions[key] || this.actions.idle;
+    const resolvedKey: SusanooClipKey = this.actions[key] ? key : 'idle';
+    const next = this.actions[resolvedKey];
     if (!next) return;
-    if (this.activeClip === key && !forceRestart) {
+    if (this.activeClip === resolvedKey && !forceRestart) {
       next.setEffectiveTimeScale(timeScale);
       return;
     }
@@ -402,11 +442,42 @@ export class Susanoo3DRenderer {
     if (prev && prev !== next) {
       prev.crossFadeTo(next, fadeSec, false);
     }
-    this.activeClip = key;
+    this.activeClip = resolvedKey;
   }
 
   public isReady(): boolean {
     return this.isLoaded && !this.loadFailed;
+  }
+
+  /** Read-only snapshot for real browser QA; never used for gameplay decisions. */
+  public debugStatus(): {
+    ready: boolean;
+    loading: boolean;
+    failed: boolean;
+    skinned: boolean;
+    activeClip: string | null;
+    loadedActions: string[];
+    lastAttackSerial: number;
+    rendered3dFrameCount: number;
+    skeletonBoneCount: number;
+    skinnedMeshCount: number;
+    skeletonBoneExamples: string[];
+    clipLoadDiagnostic: Record<string, string>;
+  } {
+    return {
+      ready: this.isReady(),
+      loading: this.isLoading,
+      failed: this.loadFailed,
+      skinned: this.hasSkinnedBones,
+      activeClip: this.activeClip,
+      loadedActions: Object.keys(this.actions).sort(),
+      lastAttackSerial: this.lastAttackSerial,
+      rendered3dFrameCount: this.rendered3dFrameCount,
+      skeletonBoneCount: this.skeletonBoneCount,
+      skinnedMeshCount: this.skinnedMeshCount,
+      skeletonBoneExamples: this.skeletonBoneExamples,
+      clipLoadDiagnostic: { ...this.clipLoadDiagnostic },
+    };
   }
 
   public getCanvas(): HTMLCanvasElement {
@@ -417,6 +488,9 @@ export class Susanoo3DRenderer {
     if (!this.isLoaded || !this.ctx2d || input.transformTimer <= 0) {
       this.roarPlayedForSummon = false;
       this.lastTransformTimer = 0;
+      this.wasAttacking = false;
+      this.lastAttackSerial = -1;
+      this.attackAnimHoldSec = 0;
       return null;
     }
 
@@ -437,9 +511,16 @@ export class Susanoo3DRenderer {
     const dt = Math.min(0.05, Math.max(0.008, input.dt ?? 0.016));
 
     // Trigger Pro Melee Axe Pack heavy bare-arm swings whenever Rudra commands an attack inside Susanoo
-    const attackSerial = input.attackSerial ?? -1;
-    if (input.isAttacking && (attackSerial !== this.lastAttackSerial || this.attackAnimHoldSec <= 0.05)) {
-      this.lastAttackSerial = attackSerial;
+    const startNewSwing = shouldStartGuardianSwing({
+      isAttacking: input.isAttacking,
+      attackSerial: input.attackSerial,
+      lastAttackSerial: this.lastAttackSerial,
+      wasAttacking: this.wasAttacking,
+    });
+    if (startNewSwing) {
+      if (typeof input.attackSerial === 'number' && Number.isFinite(input.attackSerial)) {
+        this.lastAttackSerial = input.attackSerial;
+      }
       this.activeSwingIndex = ((input.comboStep ?? this.activeSwingIndex + 1) % 3);
       const swingKey: SusanooClipKey =
         input.isHeavyAttack || this.activeSwingIndex === 1
@@ -458,6 +539,7 @@ export class Susanoo3DRenderer {
       this.playClip('idle', 0.22, 0.92, false);
     }
 
+    this.wasAttacking = input.isAttacking;
     if (this.mixer) {
       this.mixer.update(dt);
     }
@@ -518,6 +600,7 @@ export class Susanoo3DRenderer {
 
     this.ctx2d.clearRect(0, 0, size, size);
     this.ctx2d.drawImage(renderer.domElement, 0, 0, size, size);
+    this.rendered3dFrameCount += 1;
 
     this.lastRenderMs = input.nowMs;
     this.lastSignature = `${paletteKey}_${Math.round(t * 24)}_${this.activeClip || 'idle'}`;
