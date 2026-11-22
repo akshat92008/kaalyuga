@@ -74,8 +74,9 @@ export function resolveHeavyReleaseProfile(input: HeavyReleaseInput): HeavyRelea
 }
 
 /**
- * One primary silhouette + localized supporting flare. Each style has distinct geometry:
- * fire wheel, serpent-shaped water, emerald crescent gale, branching bolt, crimson guardian.
+ * One readable weapon-directed signature per element, with localized contact
+ * flare instead of ornamental circles: flame blade, S-curve water dragon,
+ * three staggered wind razors, angular thunder and legacy guardian.
  */
 export function spawnHeavyElementalRelease(
   fx: HeavyEffectSink | null | undefined,
@@ -98,17 +99,11 @@ export function spawnHeavyElementalRelease(
       break;
     case 'varuna':
       fx.spawnWaterDragon({ x, y: y - 20, angle, radius: radius * 0.96, duration });
-      fx.spawnSlashRibbon({
-        x, y: y - 22, angle: angle + 0.18, radius: radius * 0.72, width: 35,
-        arcSpan: 1.43, direction: 1, duration: 0.34, palette, spinRate: 0.13,
-      });
+      fx.spawnClashStarburst({ x, y: y - 21, scale: 0.68, duration: 0.14, palette });
       break;
     case 'vayu':
       fx.spawnWindGaleCrescents({ x, y: y - 18, angle, radius, duration });
-      fx.spawnSlashRibbon({
-        x, y: y - 20, angle, radius: radius * 0.77, width: 32,
-        arcSpan: 1.67, direction: -1, duration: 0.34, palette, spinRate: -0.16,
-      });
+      fx.spawnClashStarburst({ x, y: y - 20, scale: 0.75, duration: 0.14, palette });
       break;
     case 'vajra':
       fx.spawnThunderZigzag({
