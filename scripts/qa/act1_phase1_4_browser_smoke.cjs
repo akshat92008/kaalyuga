@@ -7,7 +7,8 @@ const path = require('node:path');
 const OUTPUT = path.resolve(process.env.QA_OUTPUT || 'artifacts/act1-phase1-4');
 fs.mkdirSync(OUTPUT, { recursive: true });
 const base = process.env.GAME_URL || 'http://127.0.0.1:3100';
-const guardianRigPreview = process.env.QA_GUARDIAN_RIG_PREVIEW === '1';
+const guardianPreviewMode = process.env.QA_GUARDIAN_RIG_PREVIEW ?? '';
+const guardianRigPreview = guardianPreviewMode === '1' || guardianPreviewMode === 'abyss';
 
 (async () => {
   const browser = await chromium.launch({
@@ -80,7 +81,7 @@ const guardianRigPreview = process.env.QA_GUARDIAN_RIG_PREVIEW === '1';
     // Direct live combat with deterministic TEST-ONLY resources and frozen opponents.
     // This is still the production keyboard/weapon/Astra pipeline, not mock effects.
     await page.goto(base + '/?debug=1&qaFixtures=1&chamber=1' +
-      (guardianRigPreview ? '&guardianPreview=1' : ''), { waitUntil: 'domcontentloaded', timeout: 60000 });
+      (guardianRigPreview ? '&guardianPreview=' + guardianPreviewMode : ''), { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.waitForFunction(() => {
       const q = window.__kaliyugaPhaseQA;
       return q?.state === 'playing' && q.chamber === 1 && Boolean(window.__kaliyugaPhaseQAFixture);
@@ -212,11 +213,21 @@ const guardianRigPreview = process.env.QA_GUARDIAN_RIG_PREVIEW === '1';
     console.log('GUARDIAN_3D_DEBUG ' + JSON.stringify(guardianReadiness));
     if (guardianRigPreview) {
       assert.equal(guardianReadiness?.riggedPreviewMode, true);
+      assert.equal(guardianReadiness?.guardianPreviewSource, guardianPreviewMode,
+        'Unexpected guardian FBX; previous Crimson Skull proxy could falsely pass Abyss acceptance');
       assert.equal(guardianReadiness?.skinned, true);
       assert.equal(guardianReadiness?.skeletonAnimationReady, true,
         'Guardian QA proxy lacks keyed swing animation despite rendering');
       assert.ok(guardianReadiness?.animatedPreviewBoneNames?.length >= 4,
         'Guardian QA proxy missing actual skin/bone animation tracks');
+      if (guardianPreviewMode === 'abyss') {
+        assert.ok(guardianReadiness.loadedActions.includes('idle') &&
+          guardianReadiness.loadedActions.includes('roar') &&
+          guardianReadiness.loadedActions.includes('swing1') &&
+          guardianReadiness.loadedActions.includes('swing2') &&
+          guardianReadiness.loadedActions.includes('swing3'),
+          'Actual Abyss guardian must load real FBX idle, roar and three melee attacks');
+      }
       assert.ok(guardianReadiness?.peakPreviewArmRotationRad >= 0.12,
         'Guardian QA swing never rotated the actual skinned right arm; peak=' +
         guardianReadiness?.peakPreviewArmRotationRad);
