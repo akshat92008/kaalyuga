@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { shouldStartGuardianSwing } from './guardianAttackGate';
 import {
   getSharedStudioWebGLRenderer,
@@ -288,7 +289,11 @@ export class Susanoo3DRenderer {
     this.isLoading = true;
     try {
       const fbx = await loadFbxCached(SUSANOO_FBX_URL, false);
-      const clone = fbx.clone(true);
+      // A plain Object3D clone duplicates bones without reliably rebinding
+      // SkinnedMesh.skeleton.bones to the cloned bone hierarchy. The avatar
+      // can appear frozen or deformed even when an AnimationMixer advances.
+      const clone = SkeletonUtils.clone(fbx) as THREE.Group;
+      clone.animations = fbx.animations;
 
       let foundBones = false;
       clone.traverse((child) => {
@@ -416,6 +421,27 @@ export class Susanoo3DRenderer {
 
   public isReady(): boolean {
     return this.isLoaded && !this.loadFailed;
+  }
+
+  /** Read-only snapshot for real browser QA; never used for gameplay decisions. */
+  public debugStatus(): {
+    ready: boolean;
+    loading: boolean;
+    failed: boolean;
+    skinned: boolean;
+    activeClip: string | null;
+    loadedActions: string[];
+    lastAttackSerial: number;
+  } {
+    return {
+      ready: this.isReady(),
+      loading: this.isLoading,
+      failed: this.loadFailed,
+      skinned: this.hasSkinnedBones,
+      activeClip: this.activeClip,
+      loadedActions: Object.keys(this.actions).sort(),
+      lastAttackSerial: this.lastAttackSerial,
+    };
   }
 
   public getCanvas(): HTMLCanvasElement {
