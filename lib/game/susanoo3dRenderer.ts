@@ -312,6 +312,17 @@ export class Susanoo3DRenderer {
       // can appear frozen or deformed even when an AnimationMixer advances.
       const clone = SkeletonUtils.clone(fbx) as THREE.Group;
       clone.animations = fbx.animations;
+      if (this.abyssRiggedPreview) {
+        // Three.AnimationMixer interprets ':' as a namespace separator,
+        // producing a nonmoving mesh despite a valid FBX and animation clip.
+        // Rename only the disposable loaded clone. SkinnedMesh skeleton bone
+        // references remain intact, and source FBX is never modified.
+        clone.traverse(node => {
+          if ((node as THREE.Bone).isBone && node.name.includes(':')) {
+            node.name = node.name.replace(/:/g, '');
+          }
+        });
+      }
 
       let foundBones = false;
       let skinnedMeshes = 0;
@@ -376,10 +387,21 @@ export class Susanoo3DRenderer {
       this.isLoaded = true;
 
       if (this.abyssRiggedPreview && this.mixer) {
-        // The actual approved Abyss sculpt now has a 33-bone skin in a NEW
-        // generated FBX. Drive its own Mixamo-compatible bones using the
-        // original Creature Pack and axe clips, rather than substituting the
-        // Crimson Skull warlord or static orange shader mesh.
+        // The approved Abyss sculpt now has a 33-bone skin in a generated FBX.
+        // Use REAL Creature Pack and Pro Axe animations, not placeholder motion.
+        // Record the actual sampled right arm rather than counting empty clips.
+        clone.traverse(node => {
+          if ((node as THREE.Bone).isBone) {
+            this.generatedPreviewBones.push(node.name);
+            if (/^(mixamorig)?rightarm$/i.test(node.name)) {
+              this.previewArmBone = node as THREE.Bone;
+              this.previewArmAtRest.copy(node.quaternion);
+            }
+          }
+        });
+        if (!this.previewArmBone) {
+          throw new Error('Abyss skin has no Mixamo RightArm to verify actual swing');
+        }
         this.streamSusanooClips(clone, standingHipY);
       } else if (this.riggedPreviewMode && this.mixer) {
         // The alternative Crimson Skull source is genuinely skinned, but its
