@@ -27,6 +27,8 @@ def inspect(path, out):
            'main_mesh_vertices':len(mesh.data.vertices),
            'armature_count':len(rigs),
            'bone_counts':[len(o.data.bones) for o in rigs],
+           'bone_names':[[b.name for b in o.data.bones] for o in rigs],
+           'action_channels':{a.name: [fc.data_path for fc in a.fcurves[:14]] for a in bpy.data.actions if hasattr(a,'fcurves')},
            'main_mesh_skin_groups':len(mesh.vertex_groups),
            'main_mesh_armature_modifier':bool(mesh.find_armature()),
            'action_names':[a.name for a in bpy.data.actions],
