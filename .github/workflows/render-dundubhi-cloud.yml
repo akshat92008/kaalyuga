@@ -1,0 +1,97 @@
+name: Render Dundubhi cinematic (real asset cloud Blender)
+
+on:
+  push:
+    branches:
+      - feature/dundubhi-cloud-render-20261121
+    paths:
+      - "scripts/cinematics/render_dundubhi_cloud.py"
+      - ".github/workflows/render-dundubhi-cloud.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dundubhi-cinematic-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  render_dundubhi:
+    name: Render actual Dundubhi model and MP4 arena
+    runs-on: ubuntu-24.04
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            scripts/cinematics/render_dundubhi_cloud.py
+            new 3D assets and animations/Animations/Creature Pack (4)/Meshy_AI_Bellhorn_Warlord_20261114_generate.fbx
+            new 3D assets and animations/3D Models/Bellhorn_Warlord/Meshy_AI_Bellhorn_Warlord_20261114_texture_fbx/Meshy_AI_Bellhorn_Warlord_20261114_texture.png
+            public/kaalyuga/anims/dundubhi/
+            public/kaalyuga/arena/dundubhi_chamber.mp4
+            public/kaalyuga/audio/drum.wav
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Install Blender and FFmpeg
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y blender ffmpeg libgl1-mesa-dri libegl1 python3-numpy
+
+      - name: Validate scene script and source assets
+        run: |
+          python3 -m py_compile scripts/cinematics/render_dundubhi_cloud.py
+          test -s "new 3D assets and animations/Animations/Creature Pack (4)/Meshy_AI_Bellhorn_Warlord_20261114_generate.fbx"
+          test -s "new 3D assets and animations/3D Models/Bellhorn_Warlord/Meshy_AI_Bellhorn_Warlord_20261114_texture_fbx/Meshy_AI_Bellhorn_Warlord_20261114_texture.png"
+          test -s public/kaalyuga/anims/dundubhi/idle.fbx
+          test -s public/kaalyuga/anims/dundubhi/roar.fbx
+          test -s public/kaalyuga/arena/dundubhi_chamber.mp4
+          ffprobe -v error -show_entries format=duration -of default=nw=1 public/kaalyuga/arena/dundubhi_chamber.mp4
+
+      - name: Render foreground animation with Blender (no local Mac / no Codex)
+        run: |
+          mkdir -p artifacts/dundubhi_cloud/frames
+          blender -b -t 2 --python scripts/cinematics/render_dundubhi_cloud.py -- --out artifacts/dundubhi_cloud
+          test -s artifacts/dundubhi_cloud/frames/frame_0001.png
+          test -s artifacts/dundubhi_cloud/frames/frame_0139.png
+
+      - name: Composite the original MP4 arena, title, and drum sound
+        run: |
+          ffmpeg -hide_banner -y \
+            -stream_loop -1 -i public/kaalyuga/arena/dundubhi_chamber.mp4 \
+            -framerate 4 -pattern_type glob -i 'artifacts/dundubhi_cloud/frames/frame_*.png' \
+            -stream_loop -1 -i public/kaalyuga/audio/drum.wav \
+            -filter_complex "[0:v]scale=640:360,setsar=1,format=rgba[bg];[1:v]format=rgba[fg];[bg][fg]overlay=shortest=1:format=auto,format=yuv420p,drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf:text='DUNDUBHI':fontsize=29:fontcolor=0xf1c18d:x=(w-text_w)/2:y=h-118:enable='between(t,4.8,6)'[v];[2:a]atrim=duration=6,volume=0.60,afade=t=out:st=5.2:d=0.8[a]" \
+            -map "[v]" -map "[a]" \
+            -t 6 -r 24 -c:v libx264 -preset veryfast -crf 20 -pix_fmt yuv420p -c:a aac -b:a 128k -movflags +faststart \
+            artifacts/dundubhi_cloud/Dundubhi_Entrance_PREVIEW.mp4
+          ffmpeg -hide_banner -y -ss 00:00:03 -i artifacts/dundubhi_cloud/Dundubhi_Entrance_PREVIEW.mp4 -frames:v 1 artifacts/dundubhi_cloud/preview_midpoint.png
+          test -s artifacts/dundubhi_cloud/Dundubhi_Entrance_PREVIEW.mp4
+
+      - name: Validate MP4 and report
+        run: |
+          ffprobe -v error -select_streams v:0 -show_entries stream=codec_name,width,height,duration -of json artifacts/dundubhi_cloud/Dundubhi_Entrance_PREVIEW.mp4
+          cat artifacts/dundubhi_cloud/render_report.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          r = json.load(open("artifacts/dundubhi_cloud/render_report.json"))
+          assert r["mesh_count"] > 0 and r["rig_count"] > 0, "Real rig/mesh missing"
+          assert r["output_frames"] == 144, "Unexpected clip duration"
+          assert Path("artifacts/dundubhi_cloud/preview_midpoint.png").is_file()
+          print("Real Dundubhi rig rendered. Check motion quality visually before any gameplay integration.")
+          PY
+
+      - name: Upload MP4, Blender scene, screenshot, and report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dundubhi-cinematic-real-assets-preview
+          path: |
+            artifacts/dundubhi_cloud/Dundubhi_Entrance_PREVIEW.mp4
+            artifacts/dundubhi_cloud/Dundubhi_Entrance.blend
+            artifacts/dundubhi_cloud/preview_midpoint.png
+            artifacts/dundubhi_cloud/render_report.json
+          if-no-files-found: warn
+          retention-days: 7
