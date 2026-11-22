@@ -180,6 +180,11 @@ try{
   };
   await checkRigAndFrame(gamePage,'dundubhi');
   await gamePage.screenshot({path:join(out,'meru-ingame-dundubhi-intro.png'),animations:'disabled'});
+  await gamePage.waitForFunction(()=>{
+    const caption=document.querySelector('[data-testid="meru-accessible-caption"]');
+    return (caption?.textContent??'').includes('DUNDUBHI');
+  },null,{timeout:30000});
+  console.log('MERU_ACCESSIBILITY_QA: gameplay screen-reader caption matches authored cinematic title');
   await gamePage.getByRole('button',{name:'Skip boss cinematic and begin combat'}).click();
   await dialog.waitFor({state:'detached',timeout:15000});
   console.log('MERU_GAMEPLAY_QA: chamber=4 intro visible; Skip releases overlay; HTTP=200');
