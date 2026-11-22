@@ -29,7 +29,6 @@ on:
       - 'components/game/KaliyugaArena.tsx'
       - 'engine/meru/**'
       - 'app/meru-studio/**'
-  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
