@@ -176,60 +176,64 @@ const base = process.env.GAME_URL || 'http://127.0.0.1:3100';
     await capture('10-varuna-water-dragon');
     report.checks.push('real Varuna water-dragon input, VFX dispatch and screenshot');
 
-    await fixture();
-    await page.waitForTimeout(1100);
-    await page.keyboard.press('z');
-    await page.waitForFunction(() => window.__kaliyugaPhaseQA?.transformRemaining > 0, null, { timeout: 9000 });
-    // Phase 1 P0: the guardian's light shockwave must NOT fire at keydown;
-    // it must share the physical Parashu contact clock (>=25% swing).
-    const guardianLightBefore = await countEvent('guardian-light-contact');
-    await page.keyboard.press('j');
-    await assertEvent('guardian-light-contact', 'guardian', guardianLightBefore);
-    await assertContactAnchor('guardian-light-contact', 'guardian', 0.25, 90);
-    await capture('10-guardian-light-contact');
-    report.checks.push('guardian light VFX anchors to active Parashu contact, not attack startup');
-    await page.waitForFunction(
-      () => window.__kaliyugaPhaseQA?.action === 'idle',
-      null, { timeout: 8000 }
-    );
-    // A slow software-WebGL screenshot can outlast the limited guardian mode.
-    // Re-arm using the QA-only fixture rather than falsely testing a normal heavy.
-    await fixture();
-    await page.keyboard.press('z');
-    await page.waitForFunction(() => window.__kaliyugaPhaseQA?.transformRemaining > 0,
-      null, { timeout: 9000 });
-    try {
-      await page.waitForFunction(() => {
-        const g = window.__kaliyugaPhaseQA?.guardianRenderer;
-        return g?.skinned && g?.loadedActions?.includes('swing2');
-      }, null, { timeout: 18000 });
-    } catch (err) {
-      const diagnostic = (await qa()).guardianRenderer;
-      console.log('GUARDIAN_P0_ANIMATION_FAILURE ' + JSON.stringify(diagnostic));
-      report.guardianReadiness = diagnostic;
-      throw new Error('Guardian skinned swing2 never loaded: ' +
-        JSON.stringify(diagnostic) + '; underlying wait: ' + String(err.message || err));
+    // Kala-Bhairava remains in the game, but the user explicitly deferred
+    // it from Phase 1. Preserve its independent test for other pipelines.
+    if (process.env.PHASE1_ELEMENTAL_ONLY !== '1') {
+      await fixture();
+      await page.waitForTimeout(1100);
+      await page.keyboard.press('z');
+      await page.waitForFunction(() => window.__kaliyugaPhaseQA?.transformRemaining > 0, null, { timeout: 9000 });
+      // Phase 1 P0: the guardian's light shockwave must NOT fire at keydown;
+      // it must share the physical Parashu contact clock (>=25% swing).
+      const guardianLightBefore = await countEvent('guardian-light-contact');
+      await page.keyboard.press('j');
+      await assertEvent('guardian-light-contact', 'guardian', guardianLightBefore);
+      await assertContactAnchor('guardian-light-contact', 'guardian', 0.25, 90);
+      await capture('10-guardian-light-contact');
+      report.checks.push('guardian light VFX anchors to active Parashu contact, not attack startup');
+      await page.waitForFunction(
+        () => window.__kaliyugaPhaseQA?.action === 'idle',
+        null, { timeout: 8000 }
+      );
+      // A slow software-WebGL screenshot can outlast the limited guardian mode.
+      // Re-arm using the QA-only fixture rather than falsely testing a normal heavy.
+      await fixture();
+      await page.keyboard.press('z');
+      await page.waitForFunction(() => window.__kaliyugaPhaseQA?.transformRemaining > 0,
+        null, { timeout: 9000 });
+      try {
+        await page.waitForFunction(() => {
+          const g = window.__kaliyugaPhaseQA?.guardianRenderer;
+          return g?.skinned && g?.loadedActions?.includes('swing2');
+        }, null, { timeout: 18000 });
+      } catch (err) {
+        const diagnostic = (await qa()).guardianRenderer;
+        console.log('GUARDIAN_P0_ANIMATION_FAILURE ' + JSON.stringify(diagnostic));
+        report.guardianReadiness = diagnostic;
+        throw new Error('Guardian skinned swing2 never loaded: ' +
+          JSON.stringify(diagnostic) + '; underlying wait: ' + String(err.message || err));
+      }
+      const guardianBefore = await countEvent('heavy-contact');
+      await page.keyboard.press('k');
+      await assertEvent('heavy-contact', 'guardian', guardianBefore);
+      // Inspect clip while the attack is active. A software WebGL screenshot may
+      // take longer than the 0.56s swing hold and return after idle recovery.
+      const guardianReadiness = (await qa()).guardianRenderer;
+      report.guardianReadiness = guardianReadiness;
+      assert.ok(guardianReadiness?.skinned && guardianReadiness?.loadedActions?.includes('swing2'),
+        'Guardian 3D exists but the actual skinned heavy-swing clip is missing');
+      assert.equal(guardianReadiness?.activeClip, 'swing2',
+        'Heavy contact must display an actual animated guardian swing, not idle fallback');
+      await capture('10-guardian-heavy-contact');
+      console.log('GUARDIAN_3D_DEBUG ' + JSON.stringify(guardianReadiness));
+      report.checks.push('real guardian transformation and guardian-element heavy contact');
+      // A golden fallback sprite with a successful damage event is not a 3D
+      // animation pass. Explicitly fail this visual gate if model/mixer never
+      // became operational in the actual Chromium gameplay test.
+      assert.ok(guardianReadiness?.ready && guardianReadiness?.rendered3dFrameCount > 0,
+        'Guardian visual is only fallback/uncaptured 3D, not a verified skinned 3D guardian: ' +
+        JSON.stringify(guardianReadiness));
     }
-    const guardianBefore = await countEvent('heavy-contact');
-    await page.keyboard.press('k');
-    await assertEvent('heavy-contact', 'guardian', guardianBefore);
-    // Inspect clip while the attack is active. A software WebGL screenshot may
-    // take longer than the 0.56s swing hold and return after idle recovery.
-    const guardianReadiness = (await qa()).guardianRenderer;
-    report.guardianReadiness = guardianReadiness;
-    assert.ok(guardianReadiness?.skinned && guardianReadiness?.loadedActions?.includes('swing2'),
-      'Guardian 3D exists but the actual skinned heavy-swing clip is missing');
-    assert.equal(guardianReadiness?.activeClip, 'swing2',
-      'Heavy contact must display an actual animated guardian swing, not idle fallback');
-    await capture('10-guardian-heavy-contact');
-    console.log('GUARDIAN_3D_DEBUG ' + JSON.stringify(guardianReadiness));
-    report.checks.push('real guardian transformation and guardian-element heavy contact');
-    // A golden fallback sprite with a successful damage event is not a 3D
-    // animation pass. Explicitly fail this visual gate if model/mixer never
-    // became operational in the actual Chromium gameplay test.
-    assert.ok(guardianReadiness?.ready && guardianReadiness?.rendered3dFrameCount > 0,
-      'Guardian visual is only fallback/uncaptured 3D, not a verified skinned 3D guardian: ' +
-      JSON.stringify(guardianReadiness));
 
     for (const variant of ['downward_crush', 'spin_360_cleave', 'impaling_lunge']) {
       await page.evaluate(v => window.__kaliyugaPhaseQAFixture.prepareExecution(v), variant);
