@@ -42,7 +42,14 @@ import { heavyElementFromStance, spawnHeavyElementalRelease } from '@/lib/game/e
 import { spawnExecutionImpactFx } from '@/lib/game/executionImpactDirector';
 import { CinematicCameraTrack } from '@/lib/game/cinematicCamera';
 import {
+  COMBAT_CAMERA_REST,
+  sampleCombatCameraAccent,
+  sampleSteadyImpactShake,
+  clampCinematicOffsetToWorld,
+} from '@/lib/game/combatCameraDirector';
+import {
   createBossEntranceCameraTrack,
+  createBossTransformationCameraTrack,
   createExecutionCameraTrack,
   getExecutionBeat,
   shouldCommitExecutionImpact,
@@ -545,7 +552,7 @@ export default function KaliyugaArena() {
     execute: () => void;
   } | null>(null);
   const liveCameraRef = useRef<{
-    kind: 'boss' | 'execution';
+    kind: 'boss' | 'execution' | 'transformation';
     elapsedSec: number;
     track: CinematicCameraTrack;
   } | null>(null);
@@ -6935,7 +6942,12 @@ export default function KaliyugaArena() {
       // Resume the same keyframed shot exactly when active combat returns.
       if (liveCameraRef.current) {
         const running = liveCameraRef.current;
-        if (!sim.modalPaused && sim.state === 'playing') {
+        // Never leave a stale execution shot running after the actor has
+        // recovered or a death/title transition has ended combat.
+        if ((sim.state !== 'playing' && sim.state !== 'paused') ||
+            (running.kind === 'execution' && sim.player.action !== 'execute')) {
+          running.track.interrupt();
+        } else if (!sim.modalPaused && sim.state === 'playing') {
           running.elapsedSec += Math.min(0.05, Math.max(0, rawDt));
         }
         if (running.track.sample(running.elapsedSec, cw, ch).completed) {
@@ -7014,7 +7026,7 @@ export default function KaliyugaArena() {
         // During a boss entrance the enemy MUST actually be in the shot.
         // Normal combat keeps Rudra dominant; the authored entrance instead
         // frames both combatants, then restores the original player bias.
-        const bossWeight = liveCameraRef.current?.kind === 'boss' ? 0.62 : 0.22;
+        const bossWeight = liveCameraRef.current?.kind === 'boss' || liveCameraRef.current?.kind === 'transformation' ? 0.62 : 0.22;
         focusX = focusX * (1 - bossWeight) + activeBoss.x * bossWeight;
         focusY = focusY * (1 - bossWeight) + activeBoss.y * bossWeight;
       }
@@ -8208,6 +8220,19 @@ export default function KaliyugaArena() {
                 : computeBossPhase(e.hp, e.maxHp);
             if (nextPhase > e.phase) {
               e.phase = nextPhase;
+              // Use a brief boss-specific transformation reveal without
+              // replacing an active player execution camera.
+              if (liveCameraRef.current?.kind !== 'execution') {
+                liveCameraRef.current?.track.interrupt();
+                liveCameraRef.current = {
+                  kind: 'transformation',
+                  elapsedSec: 0,
+                  track: createBossTransformationCameraTrack(
+                    e.type === 'dundubhi' ? 'dundubhi' : 'vrikodara',
+                    nextPhase
+                  ),
+                };
+              }
               e.posture = e.maxPosture;
               e.immobilizedTimer = 0;
               sim.slowMoTimer = 0.32;
@@ -10019,26 +10044,42 @@ export default function KaliyugaArena() {
       // Step 1: Render Deep Parallax Underworld Abyss (0.38x camera parallax lava/blood chasm & sunken pillars)
       renderParallaxAbyss(ctx, cw, ch, sim.camX, sim.camY, now, sim.chamberIndex);
 
-      // Combine existing battle camera with bounded authored boss/execution framing.
+      // Phase 4: existing authored execution/boss tracks own the shot when
+      // active; otherwise lightweight weapon-synchronous camera direction.
+      // No new renderer, no Meru dependency, and no change to hit registration.
       const liveShot = liveCameraRef.current?.track.sample(liveCameraRef.current.elapsedSec, cw, ch);
-      const composedZoom = sim.cameraZoom * (liveShot?.zoom ?? 1);
+      const combatShot =
+        !liveShot && sim.state === 'playing' && !sim.modalPaused
+          ? sampleCombatCameraAccent({
+              action: sim.player.action,
+              progress: sim.player.weaponSwingProgress,
+              facing: sim.player.facing,
+              stance: sim.player.stance,
+              comboStep: sim.player.comboStep,
+              guardianActive: sim.player.transformTimer > 0,
+            })
+          : COMBAT_CAMERA_REST;
+      const activeShot = liveShot ?? combatShot;
+      const cameraShake = sampleSteadyImpactShake(now, sim.cameraShakeTrauma, cw, ch);
+      const safeCamera = clampCinematicOffsetToWorld({
+        viewportW: cw,
+        viewportH: ch,
+        worldW,
+        worldH,
+        camX: sim.camX,
+        camY: sim.camY,
+        zoom: sim.cameraZoom * activeShot.zoom,
+        offsetX: sim.cameraKickX + activeShot.offsetX + cameraShake.x,
+        offsetY: sim.cameraKickY + activeShot.offsetY + cameraShake.y,
+      });
       ctx.translate(cw * 0.5, ch * 0.5);
-      if (Math.abs(composedZoom - 1) > 0.0005) {
-        ctx.scale(composedZoom, composedZoom);
+      if (Math.abs(safeCamera.zoom - 1) > 0.0005) {
+        ctx.scale(safeCamera.zoom, safeCamera.zoom);
       }
-      const cinematicOffsetX = liveShot?.offsetX ?? 0;
-      const cinematicOffsetY = liveShot?.offsetY ?? 0;
-      if (Math.abs(sim.cameraKickX + cinematicOffsetX) > 0.05 || Math.abs(sim.cameraKickY + cinematicOffsetY) > 0.05) {
-        ctx.translate(sim.cameraKickX + cinematicOffsetX, sim.cameraKickY + cinematicOffsetY);
-      }
-      if (sim.cameraShakeTrauma > 0) {
-        const traumaSq = sim.cameraShakeTrauma * sim.cameraShakeTrauma;
-        const shakeAmp = traumaSq * 24;
-        const harmonicX = Math.sin(now * 0.068) * shakeAmp * 0.65 + (Math.random() - 0.5) * shakeAmp * 0.75;
-        const harmonicY = Math.cos(now * 0.082) * shakeAmp * 0.65 + (Math.random() - 0.5) * shakeAmp * 0.75;
-        const shakeRoll = Math.sin(now * 0.054) * traumaSq * 0.018;
-        ctx.translate(harmonicX, harmonicY);
-        ctx.rotate(shakeRoll);
+      // A steady, world-bounded hit impulse cannot expose black edges from
+      // the static poster or animated chamber MP4.
+      if (Math.abs(safeCamera.offsetX) > 0.05 || Math.abs(safeCamera.offsetY) > 0.05) {
+        ctx.translate(safeCamera.offsetX, safeCamera.offsetY);
       }
       ctx.translate(-cw * 0.5, -ch * 0.5);
 
