@@ -217,6 +217,9 @@ const guardianRigPreview = process.env.QA_GUARDIAN_RIG_PREVIEW === '1';
         'Guardian QA proxy lacks keyed swing animation despite rendering');
       assert.ok(guardianReadiness?.animatedPreviewBoneNames?.length >= 4,
         'Guardian QA proxy missing actual skin/bone animation tracks');
+      assert.ok(guardianReadiness?.peakPreviewArmRotationRad >= 0.12,
+        'Guardian QA swing never rotated the actual skinned right arm; peak=' +
+        guardianReadiness?.peakPreviewArmRotationRad);
     }
     report.checks.push('real guardian transformation and guardian-element heavy contact');
     // A golden fallback sprite with a successful damage event is not a 3D
