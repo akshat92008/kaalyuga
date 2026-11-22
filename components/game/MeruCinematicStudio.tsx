@@ -76,6 +76,7 @@ export default function MeruCinematicStudio(){
     frameProbeRef.current.reset();
     lastReportUiRef.current=0;
     let lastBossFrame=0;
+    const reduceMotion=window.matchMedia?.('(prefers-reduced-motion: reduce)').matches??false;
     let slowRigTimer:number|null=null;
     setStatus('Initializing original '+scene.boss+' rig…');
     const portrait=new Image();portrait.src=GAME_ASSETS.portraits[scene.boss];portraitRef.current=portrait;
@@ -130,7 +131,7 @@ export default function MeruCinematicStudio(){
           try{boss.updateAndRender(makeMeruBossParams(t,Math.max(0.015,dt),sceneRef.current.boss,sceneRef.current.bossPhase??1));}
           catch{readyRef.current=false;setStatus('3D renderer failed: portrait fallback');}
         }
-        paintMeruFrame(ctx,t,sceneRef.current,boss,readyRef.current,portraitRef.current,budget.particleMultiplier);
+        paintMeruFrame(ctx,t,sceneRef.current,boss,readyRef.current,portraitRef.current,budget.particleMultiplier,reduceMotion);
       }
       rafRef.current=requestAnimationFrame(loop);
     };
