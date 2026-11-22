@@ -1678,6 +1678,7 @@ export class WebglDemonSlayerVfxOverlay {
     duration?: number;
     width?: number;
     withFloorRing?: boolean;
+    lightweight?: boolean;
   }): void {
     if (!this.renderer || this.disposed) return;
     if (this.thunderBolts.length >= 6) {
@@ -1699,7 +1700,7 @@ export class WebglDemonSlayerVfxOverlay {
       Math.min(58, Math.max(28, boltDist * 0.18)),
       seed
     );
-    const branches = computeThunderForkedBranches(mainPts, seed);
+    const branches = opts.lightweight ? [] : computeThunderForkedBranches(mainPts, seed);
 
     const group = new THREE.Group();
     const shaderMats: THREE.ShaderMaterial[] = [];
@@ -1783,11 +1784,13 @@ export class WebglDemonSlayerVfxOverlay {
     });
     mats.push(starInkMat, starCyanMat, starCoreMat);
 
-    const nodeIndices = [
-      Math.max(1, Math.floor(mainPts.length * 0.34)),
-      Math.max(2, Math.floor(mainPts.length * 0.68)),
-      mainPts.length - 1,
-    ];
+    const nodeIndices = opts.lightweight
+      ? [mainPts.length - 1]
+      : [
+          Math.max(1, Math.floor(mainPts.length * 0.34)),
+          Math.max(2, Math.floor(mainPts.length * 0.68)),
+          mainPts.length - 1,
+        ];
     const uniqueNodeIndices = Array.from(new Set(nodeIndices)).filter(
       (idx) => idx > 0 && idx < mainPts.length
     );
@@ -1909,6 +1912,7 @@ export class WebglDemonSlayerVfxOverlay {
     angle: number;
     radius?: number;
     duration?: number;
+    lightweight?: boolean;
   }): void {
     if (!this.renderer || this.disposed) return;
     if (this.windGales.length >= 2) {
@@ -1926,9 +1930,10 @@ export class WebglDemonSlayerVfxOverlay {
 
     // Three staggered forward razor-strokes, each a tapered ink-blade.
     // Former 3 circular crescents enveloped Rudra as near-complete neon rings.
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < (opts.lightweight ? 1 : 3); i++) {
       const r = radius * (0.92 + i * 0.14);
-      const w = 43 - i * 7;
+      const w = opts.lightweight ? 25 : 43 - i * 7;
+      const bladeOffset = opts.lightweight ? 0 : i - 1;
       const geo = buildForwardPainterlyCleaveGeometry(r * 1.52, w, 2.5 + i * 1.35, 38);
       const mat = createRibbonMaterial(pal, 3.0, 0.92 - i * 0.10, true, THREE.NormalBlending, 1.50);
       const glowMat = createRibbonMaterial(pal, 3.0, 0.38, false, THREE.AdditiveBlending, 1.30);
@@ -1936,8 +1941,8 @@ export class WebglDemonSlayerVfxOverlay {
       glowMat.uniforms.uDirectionalReveal.value = 1;
 
       const m = new THREE.Mesh(geo, mat);
-      m.rotation.set(0.12, 0, -opts.angle + (i - 1) * 0.22);
-      m.position.set(radius * (0.05 + i * 0.08), (i - 1) * 27, 1 + i);
+      m.rotation.set(0.12, 0, -opts.angle + bladeOffset * 0.22);
+      m.position.set(radius * (0.05 + i * 0.08), bladeOffset * 27, 1 + i);
       const gm = new THREE.Mesh(geo, glowMat);
       gm.rotation.copy(m.rotation);
       gm.position.copy(m.position);
@@ -1965,7 +1970,7 @@ export class WebglDemonSlayerVfxOverlay {
     });
     shardMats.push(inkShardMat);
 
-    for (let s = 0; s < 9; s++) {
+    for (let s = 0; s < (opts.lightweight ? 3 : 9); s++) {
       // Ink debris follows the axe, rather than exploding around all 360°.
       const a = -opts.angle + ((s % 5) - 2) * 0.23;
       const dist = radius * (0.24 + (s % 4) * 0.17);
