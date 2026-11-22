@@ -205,13 +205,15 @@ const base = process.env.GAME_URL || 'http://127.0.0.1:3100';
     const guardianBefore = await countEvent('heavy-contact');
     await page.keyboard.press('k');
     await assertEvent('heavy-contact', 'guardian', guardianBefore);
-    await capture('10-guardian-heavy-contact');
+    // Inspect clip while the attack is active. A software WebGL screenshot may
+    // take longer than the 0.56s swing hold and return after idle recovery.
     const guardianReadiness = (await qa()).guardianRenderer;
     report.guardianReadiness = guardianReadiness;
     assert.ok(guardianReadiness?.skinned && guardianReadiness?.loadedActions?.includes('swing2'),
       'Guardian 3D exists but the actual skinned heavy-swing clip is missing');
     assert.equal(guardianReadiness?.activeClip, 'swing2',
       'Heavy contact must display an actual animated guardian swing, not idle fallback');
+    await capture('10-guardian-heavy-contact');
     console.log('GUARDIAN_3D_DEBUG ' + JSON.stringify(guardianReadiness));
     report.checks.push('real guardian transformation and guardian-element heavy contact');
     // A golden fallback sprite with a successful damage event is not a 3D
