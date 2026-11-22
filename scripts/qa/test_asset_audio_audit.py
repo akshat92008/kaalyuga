@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from audit_asset_footprint import MIB, Asset, markdown, parse_ls_tree, summarize
+from audit_asset_footprint import MIB, Asset, markdown, parse_ls_tree, parse_github_tree, summarize
 from audit_audio_delivery import audit, extract_aliases, extract_registries, literal_voice_calls, resolve_audio_url
 
 
@@ -35,6 +35,19 @@ class AssetFootprintTests(unittest.TestCase):
     def test_markdown_with_pipe_in_filename(self):
         report = summarize(parse_ls_tree(record("public/a|b.png", size=10*MIB)))
         self.assertIn(r"a\|b.png", markdown(report))
+
+    def test_github_tree_complete_metadata(self):
+        payload = {"truncated": False, "tree": [
+            {"path": "public/scene.mp4", "type": "blob", "sha": "a"*40, "size": 5000},
+            {"path": "public/", "type": "tree", "sha": "b"*40},
+        ]}
+        result = parse_github_tree(payload)
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0].size, 5000)
+
+    def test_github_tree_truncated_is_rejected(self):
+        with self.assertRaises(ValueError):
+            parse_github_tree({"truncated": True, "tree": []})
 
     def test_reject_bad_tree_record(self):
         with self.assertRaises(ValueError):
@@ -78,7 +91,7 @@ class AudioDeliveryTests(unittest.TestCase):
             calls, scanned = literal_voice_calls(root)
             self.assertEqual(scanned, 1)
             self.assertEqual(calls.get("dundubhi_intro"), 1)
-            self.assertEqual(calls.get("dynamicVoiceKey"), 0)
+            self.assertEqual(calls.get("dynamicVoiceKey", 0), 0)
 
     def test_registry_asset_resolution_and_voice_reporting(self):
         assets = [
