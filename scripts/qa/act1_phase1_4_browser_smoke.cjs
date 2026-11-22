@@ -7,6 +7,7 @@ const path = require('node:path');
 const OUTPUT = path.resolve(process.env.QA_OUTPUT || 'artifacts/act1-phase1-4');
 fs.mkdirSync(OUTPUT, { recursive: true });
 const base = process.env.GAME_URL || 'http://127.0.0.1:3100';
+const guardianRigPreview = process.env.QA_GUARDIAN_RIG_PREVIEW === '1';
 
 (async () => {
   const browser = await chromium.launch({
@@ -63,6 +64,7 @@ const base = process.env.GAME_URL || 'http://127.0.0.1:3100';
       '/kaalyuga/anims/rudra/attack1.fbx',
       '/kaalyuga/anims/rudra/heavy.fbx',
       '/animations/pro_melee_axe/standing%20melee%20attack%20downward.fbx',
+      ...(guardianRigPreview ? ['/models_v2/rigged_crimson_guardian_preview.fbx'] : []),
     ];
     for (const asset of assets) {
       const response = await page.request.get(base + asset, { timeout: 30000 });
@@ -77,7 +79,8 @@ const base = process.env.GAME_URL || 'http://127.0.0.1:3100';
 
     // Direct live combat with deterministic TEST-ONLY resources and frozen opponents.
     // This is still the production keyboard/weapon/Astra pipeline, not mock effects.
-    await page.goto(base + '/?debug=1&qaFixtures=1&chamber=1', { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await page.goto(base + '/?debug=1&qaFixtures=1&chamber=1' +
+      (guardianRigPreview ? '&guardianPreview=1' : ''), { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.waitForFunction(() => {
       const q = window.__kaliyugaPhaseQA;
       return q?.state === 'playing' && q.chamber === 1 && Boolean(window.__kaliyugaPhaseQAFixture);
@@ -189,6 +192,15 @@ const base = process.env.GAME_URL || 'http://127.0.0.1:3100';
 
     await fixture();
     await page.waitForTimeout(1100);
+    if (guardianRigPreview) {
+      // A model that merely renders is not a working guardian. Insist on a
+      // real skin-bound FBX and 3 locally keyed swing clips before triggering.
+      await page.waitForFunction(() => {
+        const g = window.__kaliyugaPhaseQA?.guardianRenderer;
+        return g?.skinned && g?.skeletonAnimationReady &&
+          g?.loadedActions?.includes('swing2');
+      }, null, { timeout: 45000 });
+    }
     await page.keyboard.press('z');
     await page.waitForFunction(() => window.__kaliyugaPhaseQA?.transformRemaining > 0, null, { timeout: 9000 });
     const guardianBefore = await countEvent('heavy-contact');
@@ -198,6 +210,14 @@ const base = process.env.GAME_URL || 'http://127.0.0.1:3100';
     const guardianReadiness = (await qa()).guardianRenderer;
     report.guardianReadiness = guardianReadiness;
     console.log('GUARDIAN_3D_DEBUG ' + JSON.stringify(guardianReadiness));
+    if (guardianRigPreview) {
+      assert.equal(guardianReadiness?.riggedPreviewMode, true);
+      assert.equal(guardianReadiness?.skinned, true);
+      assert.equal(guardianReadiness?.skeletonAnimationReady, true,
+        'Guardian QA proxy lacks keyed swing animation despite rendering');
+      assert.ok(guardianReadiness?.animatedPreviewBoneNames?.length >= 4,
+        'Guardian QA proxy missing actual skin/bone animation tracks');
+    }
     report.checks.push('real guardian transformation and guardian-element heavy contact');
     // A golden fallback sprite with a successful damage event is not a 3D
     // animation pass. Explicitly fail this visual gate if model/mixer never
