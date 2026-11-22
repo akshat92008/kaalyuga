@@ -15,7 +15,8 @@ import {
 import {GRAPHICS_PRESETS,type GraphicsTier} from '@/engine/meru/adaptiveQuality';
 import {MeruFrameProbe,type MeruFrameReport} from '@/engine/meru/performanceProbe';
 import {makeMeruBossParams,paintMeruFrame} from '@/engine/meru/cinematicVisuals';
-import {meruSceneStorageKey,readBossPhase,readBossIntro,defaultBossIntro} from '@/engine/meru/runtimePolicy';
+import {meruSceneStorageKey,readBossPhase,readBossIntro} from '@/engine/meru/runtimePolicy';
+import {resolveProductionScene} from '@/engine/meru/productionSceneRegistry';
 
 const W=960,H=540;
 function fmt(n:number){return Number.isFinite(n)?n.toFixed(2):'0.00';}
@@ -386,7 +387,7 @@ export default function MeruCinematicStudio(){
             ]).map(c=><label key={c.track+c.field} className="block">
               <span className="mb-1 flex justify-between text-xs"><span>{c.label}</span><span className="font-mono">{fmt(((selected[c.track]??NEUTRAL_CINEMATIC_POSE) as unknown as Record<string,number>)[c.field])}</span></span>
               <input type="range" min={c.min} max={c.max} step={c.step}
-                value={(selected[c.track] as unknown as Record<string,number>)[c.field]}
+                value={((selected[c.track]??NEUTRAL_CINEMATIC_POSE) as unknown as Record<string,number>)[c.field]}
                 onChange={e=>updateAtCursor(c.track,c.field,Number(e.target.value))}
                 className="w-full accent-[#d18d55]"/>
             </label>)}
@@ -470,12 +471,12 @@ export default function MeruCinematicStudio(){
               <input type="file" accept=".json,.meru.json,application/json" onChange={e=>void upload(e.target.files?.[0])}
                 className="mt-2 block w-full text-xs text-[#cdb196]"/>
             </label>
-            <button onClick={()=>loadScene((scene.bossPhase === 2 || scene.bossPhase === 3) ? createBossPhaseScene(scene.boss,scene.bossPhase) : defaultBossIntro(scene.boss))} className="w-full rounded border border-[#665043] px-4 py-2 text-sm">Restore original scene</button>
-            <p className="text-xs text-[#998879]">Changes autosave locally in this browser. Import/export never changes your combat saves.</p>
+            <button onClick={()=>loadScene(resolveProductionScene(scene.boss,scene.bossPhase??1))} className="w-full rounded border border-[#665043] px-4 py-2 text-sm">Restore shipped scene</button>
+            <p className="text-xs text-[#998879]">Changes autosave locally in this browser. To publish an exported .meru.json in the actual game, run <code className="font-mono text-[#edc08d]">npx tsx scripts/meru/install-scenes.ts path/to/scene.meru.json</code> from the repository, review the manifest diff and commit it. A local preview is not automatically shipped to players.</p>
           </div>
         </aside>
       </div>
-      <p className="text-sm text-[#bba899]">This is a real-asset cinematic editor foundation, not a finished AAA filmmaking suite. Camera movement is intentionally restricted to the MP4 background's safe perspective.</p>
+      <p className="text-sm text-[#bba899]">The Studio edits original rig animations and cinematic tracks. Publishing requires a separately reviewed production-scene manifest; camera movement remains constrained to the MP4 arena perspective. Bone IK, multi-character animation and facial sync still require further work.</p>
     </div>
   </main>;
 }
