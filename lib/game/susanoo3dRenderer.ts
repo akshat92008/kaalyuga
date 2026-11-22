@@ -226,6 +226,7 @@ export class Susanoo3DRenderer {
   private isLoaded = false;
   private isLoading = false;
   private loadFailed = false;
+  private rendered3dFrameCount = 0;
   private lastRenderMs = 0;
   private lastSignature = '';
   public readonly footAnchorRatio: number;
@@ -432,6 +433,7 @@ export class Susanoo3DRenderer {
     activeClip: string | null;
     loadedActions: string[];
     lastAttackSerial: number;
+    rendered3dFrameCount: number;
   } {
     return {
       ready: this.isReady(),
@@ -441,6 +443,7 @@ export class Susanoo3DRenderer {
       activeClip: this.activeClip,
       loadedActions: Object.keys(this.actions).sort(),
       lastAttackSerial: this.lastAttackSerial,
+      rendered3dFrameCount: this.rendered3dFrameCount,
     };
   }
 
@@ -564,6 +567,7 @@ export class Susanoo3DRenderer {
 
     this.ctx2d.clearRect(0, 0, size, size);
     this.ctx2d.drawImage(renderer.domElement, 0, 0, size, size);
+    this.rendered3dFrameCount += 1;
 
     this.lastRenderMs = input.nowMs;
     this.lastSignature = `${paletteKey}_${Math.round(t * 24)}_${this.activeClip || 'idle'}`;
