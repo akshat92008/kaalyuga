@@ -40,6 +40,7 @@ import {
 import { soundEngine } from '@/lib/game/audio';
 import { heavyElementFromStance, spawnHeavyElementalRelease } from '@/lib/game/elementalImpactDirector';
 import { resolveVisualWeaponContact } from '@/lib/game/weaponContactProjection';
+import { createBladeTrailState, sampleParashuTrail, drawParashuMotionTrail, visibleTrailLength, type BladeTrailElement } from '@/lib/game/parashuMotionTrail';
 import { computeGuardianPreviewDrawSize } from '@/lib/game/guardianScreenFraming';
 import { spawnExecutionImpactFx } from '@/lib/game/executionImpactDirector';
 import { CinematicCameraTrack } from '@/lib/game/cinematicCamera';
@@ -543,6 +544,7 @@ export default function KaliyugaArena() {
   const enemy3dRef = useRef<Enemy3DRenderer | null>(null);
   const susanoo3dRef = useRef<Susanoo3DRenderer | null>(null);
   const webglDemonSlayerVfxRef = useRef<WebglDemonSlayerVfxOverlay | null>(null);
+  const parashuTrailRef = useRef(createBladeTrailState());
   const pendingStrikeVfxRef = useRef<{
     fired: boolean;
     triggerThreshold: number;
@@ -1145,6 +1147,12 @@ export default function KaliyugaArena() {
           transformRemaining: sim.player.transformTimer,
           guardianRenderer: susanoo3dRef.current?.debugStatus() ?? null,
           rudraRenderer: rudra3dRef.current?.debugPoseStatus() ?? null,
+          parashuTrail: {
+            sampleCount: parashuTrailRef.current.samples.length,
+            traceLengthPx: Number(visibleTrailLength(parashuTrailRef.current).toFixed(1)),
+            element: parashuTrailRef.current.element,
+            attackSerial: parashuTrailRef.current.attackSerial,
+          },
           fps: sim.fps,
           cameraKind: liveCameraRef.current?.kind ?? null,
           cameraElapsedSec: liveCameraRef.current?.elapsedSec ?? null,
@@ -11683,7 +11691,37 @@ export default function KaliyugaArena() {
             );
           }
 
-          // Player combat slashes render exclusively through the from-scratch Ufotable WebGL Battle VFX Engine (legacy repo PNG flipbooks & bespokeSlashArc disabled)
+          // Phase 1: a genuinely WEAPON-SAMPLED, short-lived painted trace
+          // follows Rudra's posed FBX Parashu while the larger impact remains
+          // in the elemental WebGL layer. Sampling happens after the 3D sprite
+          // is baked, never at the attack-input's stale model pose.
+          // No tip = no fabricated trail, keeping the 2D fallback stable.
+          const isBladeSwing =
+            p.transformTimer <= 0 &&
+            (p.action === 'light_attack' || p.action === 'heavy_unleash' ||
+             p.action === 'execute');
+          const trailElement: BladeTrailElement =
+            p.stance === 'pillar' ? 'vayu' :
+            p.stance === 'thrust' ? 'vajra' : 'agni';
+          const tip = rendered3D && rudra3d && isBladeSwing
+            ? rudra3d.getBladeTipDrawOffset(HEROIC_DRAW_SIZES.rudra)
+            : null;
+          const plausibleTip = tip &&
+            Math.hypot(tip.dx, tip.dy) >= 10 &&
+            Math.hypot(tip.dx, tip.dy) <= 125;
+          parashuTrailRef.current = sampleParashuTrail(parashuTrailRef.current, {
+            attackSerial: p.attackSerial,
+            timeSec: now / 1000,
+            isAttacking: isBladeSwing,
+            heavy: p.action === 'heavy_unleash' || p.action === 'execute',
+            element: trailElement,
+            bladePoint: plausibleTip ? { x: p.x + tip.dx, y: p.y + tip.dy } : null,
+          });
+          if (p.transformTimer <= 0) {
+            drawParashuMotionTrail(ctx, parashuTrailRef.current, now / 1000);
+          }
+          // Larger element impacts remain in the WebGL compositor; this small
+          // local blade trace only fills the missing motion between frames.
         }
       });
 
