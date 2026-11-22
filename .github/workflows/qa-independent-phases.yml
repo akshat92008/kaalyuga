@@ -1,0 +1,82 @@
+name: "QA isolated - Phases 10, 12, 13"
+
+on:
+  push:
+    branches:
+      - qa/director-visual-review-20261122
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: isolated-qa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    name: "Read-only asset, audio and screenshot-tool checks"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      QA_OUTPUT: artifacts/qa-independent
+    steps:
+      - name: Sparse-checkout code only (no multi-GB media download)
+        uses: actions/checkout@v4
+        with:
+          filter: blob:none
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /scripts/qa/
+            /lib/
+            /components/
+            /app/
+      - name: Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install only screenshot-analysis dependency
+        run: python -m pip install --disable-pip-version-check Pillow==11.3.0
+      - name: Compile all independent QA scripts
+        run: python -m compileall -q scripts/qa
+      - name: Run independent regression tests
+        run: python -m unittest discover -s scripts/qa -p 'test_*.py' -v
+      - name: Fetch exact commit tree metadata (no asset blobs)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$QA_OUTPUT"
+          curl --fail --show-error --silent --retry 3 \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/git/trees/$GITHUB_SHA?recursive=1" \
+            -o "$QA_OUTPUT/github-tree.json"
+      - name: Phase 12 - inspect tracked asset footprint
+        run: python scripts/qa/audit_asset_footprint.py --tree-json "$QA_OUTPUT/github-tree.json" --output-dir "$QA_OUTPUT"
+      - name: Phase 10 - verify audio source aliases and call sites
+        run: python scripts/qa/audit_audio_delivery.py --tree-json "$QA_OUTPUT/github-tree.json" --output-dir "$QA_OUTPUT"
+      - name: Display concise static audit results
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d = Path("artifacts/qa-independent")
+          a = json.loads((d/"asset-inventory.json").read_text())
+          b = json.loads((d/"audio-audit.json").read_text())
+          print("Tracked media paths:", a["asset_count"])
+          print("Large-file review candidates:", len(a["size_review_candidates"]))
+          print("Same-blob groups:", len(a["identical_git_blob_groups"]))
+          print("Registered audio source resolutions:", b["resolved_entries"], "/", len(b["registered_audio"]))
+          print("Audio unresolved for runtime investigation:", len(b["needs_runtime_verification"]))
+          print("Voice keys without literal call sites:", b["voice_keys_without_literal_call_sites"])
+          print("None of these metadata checks proves actual gameplay quality or FPS.")
+          PY
+      - name: Preserve diagnostics even if a test fails
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-independent-phase10-12-13
+          path: artifacts/qa-independent
+          if-no-files-found: warn
+          retention-days: 14
