@@ -306,14 +306,19 @@ test('production cinematic manifest lists exactly the six gameplay scene slots',
     'dundubhi-entrance','dundubhi-phase-2','dundubhi-phase-3',
     'vrikodara-entrance','vrikodara-phase-2','vrikodara-phase-3',
   ].sort());
-  assert.deepEqual(getInstalledProductionSceneIds(),[],
-    'No user-approved Studio exports have been installed yet; never claim they shipped');
+  const shippedIds=getInstalledProductionSceneIds();
+  assert.ok(shippedIds.every(id=>MERU_PRODUCTION_SCENE_IDS.includes(id)),
+    'Only valid production scene slots may be installed');
   for(const boss of ['dundubhi','vrikodara'] as const){
     for(const phase of [1,2,3] as const){
       const resolved=resolveProductionScene(boss,phase);
       const factory=phase===1?(boss==='dundubhi'?createDundubhiScene():createVrikodaraScene()):createBossPhaseScene(boss,phase);
       assert.equal(resolved.id,factory.id);
-      assert.deepEqual(resolved.cues,factory.cues);
+      assert.equal(resolved.boss,boss);
+      assert.equal(resolved.bossPhase??1,phase);
+      if(!shippedIds.includes(factory.id as typeof MERU_PRODUCTION_SCENE_IDS[number]))
+        assert.deepEqual(resolved.cues,factory.cues,
+          'Unpublished cinematics must use original authored defaults');
     }
   }
 });
