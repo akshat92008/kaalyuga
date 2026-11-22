@@ -92,6 +92,14 @@ export function createGuardianProofClips(root: THREE.Group): {
     for (const boneInfo of PREVIEW_BONES) {
       const obj = knownBones.find(b => normalizedBoneName(b.name) === normalizedBoneName(boneInfo.name));
       if (!obj) continue;
+      // Three.AnimationMixer PropertyBinding treats ':' as a namespace separator;
+      // retaining Mixamo FBX's original "mixamorig:RightArm" object name makes
+      // a valid animation clip that cannot actually rotate its target bone.
+      // Preview-only rename does not alter skin indices, skeleton references,
+      // or the underlying source FBX.
+      if (obj.name.includes(':')) {
+        obj.name = obj.name.replace(/:/g, '');
+      }
       const rest = obj.quaternion.clone();
       const values: number[] = [];
       for (const poseValue of boneInfo.profiles[motion]) {
