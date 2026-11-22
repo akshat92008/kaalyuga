@@ -872,6 +872,55 @@ function buildCurvedRibbonGeometry(
   return geo;
 }
 
+/**
+ * A FORWARD-moving, hand-painted energy wedge. Unlike a circular arc, its
+ * silhouette begins near the axe contact, sweeps outward toward the target,
+ * and breaks up into deliberately irregular flame/ink tongues.
+ *
+ * The geometry has finite tapered ends and no full-circle topology.
+ */
+export function buildForwardPainterlyCleaveGeometry(
+  length: number,
+  width: number,
+  seed = 0,
+  segments = 48
+): THREE.BufferGeometry {
+  const n = Math.max(12, Math.min(72, Math.round(segments)));
+  const len = Math.max(12, Math.min(500, Number.isFinite(length) ? length : 160));
+  const span = Math.max(4, Math.min(200, Number.isFinite(width) ? width : 70));
+  const positions: number[] = [];
+  const uv: number[] = [];
+  const triangles: number[] = [];
+  for (let i = 0; i <= n; i++) {
+    const t = i / n;
+    const envelope = Math.pow(Math.max(0, Math.sin(Math.PI * t)), 0.67);
+    const broadInk = 0.82 + 0.24 * Math.sin(t * 22.0 + seed * 1.7)
+      + 0.10 * Math.sin(t * 49.0 + seed * 3.8);
+    const tooth = 0.74 + 0.27 * Math.sin(t * 37.0 + seed * 2.6)
+      + 0.16 * Math.sin(t * 71.0 + seed * 4.1);
+    const root = -len * 0.18;
+    const x = root + len * 1.18 * t;
+    const centerY = -span * 0.24 * Math.sin(t * Math.PI)
+      + span * 0.11 * Math.sin(t * Math.PI * 2.1 + seed) * envelope;
+    const lower = centerY - span * envelope * Math.max(0.22, broadInk) * 0.46;
+    const upper = centerY + span * envelope * Math.max(0.18, tooth) * 0.54;
+    const lift = 8 * envelope * Math.sin(t * Math.PI);
+    positions.push(x, lower, lift * 0.5);
+    positions.push(x, upper, lift);
+    uv.push(t, 0, t, 1);
+    if (i < n) {
+      const k = i * 2;
+      triangles.push(k, k + 1, k + 2, k + 1, k + 3, k + 2);
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  geometry.setIndex(triangles);
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
 /** Painterly flame tongues taper to a fine, curling point rather than another glowing circle. */
 function buildTaperedFlameTongueGeometry(length: number, width: number, segments = 11): THREE.BufferGeometry {
   const positions: number[] = [];
@@ -1179,6 +1228,58 @@ export class WebglDemonSlayerVfxOverlay {
       spinRate: opts.spinRate ?? direction * 1.45,
       life: 0,
       maxLife: opts.duration ?? 0.34,
+      scale: 1,
+    });
+  }
+
+  /**
+   * Phase 1 preview: non-circular calligraphic contact plume with jagged,
+   * tapered flame / guardian ink silhouette, no orbiting crescent loops.
+   */
+  public spawnPainterlyCleave(opts: {
+    x: number;
+    y: number;
+    angle: number;
+    radius?: number;
+    palette?: DemonSlayerVfxPalette;
+    duration?: number;
+    variant?: 'flame' | 'guardian';
+  }): void {
+    if (!this.renderer || this.disposed) return;
+    if (this.ribbons.length >= 6) {
+      const oldest = this.ribbons.shift();
+      if (oldest) this.disposeRibbon(oldest);
+    }
+    const variant = opts.variant ?? 'flame';
+    const pal = RIBBON_PALETTES[opts.palette ?? (variant === 'guardian' ? 'blood' : 'hinokami')];
+    const radius = Math.max(90, Math.min(220, Number.isFinite(opts.radius) ? opts.radius! : 160));
+    const mainLength = radius * (variant === 'guardian' ? 1.54 : 1.40);
+    const mainWidth = radius * (variant === 'guardian' ? 0.70 : 0.67);
+    const inkGeo = buildForwardPainterlyCleaveGeometry(mainLength * 1.02, mainWidth * 1.19, 2.1, 52);
+    const coreGeo = buildForwardPainterlyCleaveGeometry(mainLength, mainWidth, 0.55, 52);
+    const glowGeo = buildForwardPainterlyCleaveGeometry(mainLength * 1.05, mainWidth * 1.25, 1.5, 48);
+    const mode = paletteModeIndex(opts.palette ?? (variant === 'guardian' ? 'blood' : 'hinokami'));
+    const inkMat = createRibbonMaterial(pal, mode, 0.97, true, THREE.NormalBlending, 0.36);
+    inkMat.uniforms.uCoreColor.value.copy(pal.ink);
+    inkMat.uniforms.uMidColor.value.copy(pal.ink);
+    inkMat.uniforms.uEdgeColor.value.copy(pal.ink);
+    const coreMat = createRibbonMaterial(pal, mode, 0.98, true, THREE.NormalBlending, variant === 'guardian' ? 1.68 : 2.05);
+    const glowMat = createRibbonMaterial(pal, mode, 0.40, false, THREE.AdditiveBlending, 1.27);
+    const inkMesh = new THREE.Mesh(inkGeo, inkMat);
+    const coreMesh = new THREE.Mesh(coreGeo, coreMat);
+    const glowMesh = new THREE.Mesh(glowGeo, glowMat);
+    inkMesh.position.z = -3;
+    glowMesh.position.z = 2;
+    const group = new THREE.Group();
+    group.add(inkMesh, coreMesh, glowMesh);
+    this.scene.add(group);
+    this.ribbons.push({
+      group, inkMesh, coreMesh, glowMesh,
+      worldX: opts.x, worldY: opts.y,
+      baseRotZ: -opts.angle,
+      tiltX: 0.28, tiltY: 0,
+      spinRate: 0,
+      life: 0, maxLife: opts.duration ?? (variant === 'guardian' ? 0.65 : 0.56),
       scale: 1,
     });
   }
