@@ -73,3 +73,42 @@ test('Agni and guardian use a single forward painterly cleave, not circular shoc
     assert.equal(log.filter(c=>c.kind==='spawnSparkBurst').length,1);
   }
 });
+
+
+test('Phase 1 elemental heavies stay weapon-directed with no radial/ribbon companion clutter', () => {
+  const primary = {
+    agni: 'spawnPainterlyCleave',
+    varuna: 'spawnWaterDragon',
+    vayu: 'spawnWindGaleCrescents',
+    vajra: 'spawnThunderZigzag',
+  } as const;
+  const supported = [
+    'spawnSolarFlameWheel', 'spawnPainterlyCleave', 'spawnWaterDragon',
+    'spawnWindGaleCrescents', 'spawnThunderZigzag', 'spawnSlashRibbon',
+    'spawnShockwaveRing', 'spawnClashStarburst', 'spawnSparkBurst',
+  ];
+  const base = { x: 210, y: 155, angle: Math.PI / 5, radius: 165, energyOrbs: 2 };
+  for (const element of Object.keys(primary) as Array<keyof typeof primary>) {
+    const calls: Array<{name:string; opts:Record<string, unknown>}> = [];
+    const sink = Object.fromEntries(supported.map(name => [
+      name, (opts: Record<string, unknown>) => calls.push({name, opts}),
+    ])) as unknown as HeavyEffectSink;
+    const profile = spawnHeavyElementalRelease(sink, {...base, element});
+    assert.equal(calls[0].name, primary[element], element);
+    assert.ok(!calls.some(c =>
+      ['spawnSolarFlameWheel', 'spawnShockwaveRing', 'spawnSlashRibbon'].includes(c.name)),
+    element + ': no circular or generic ribbon overlays');
+    assert.equal(calls.filter(c => c.name === 'spawnSparkBurst').length, 1);
+    assert.ok(calls.length <= 3, element + ': strict readable VFX layers');
+    assert.ok(profile.radius <= 256, element + ': mobile/M3 Air bounded effects');
+    assert.ok(profile.duration <= 0.74);
+    if (element !== 'vajra') {
+      assert.equal(calls[0].opts.angle, base.angle, element + ': follows aimed Parashu strike');
+      assert.equal(calls[0].opts.x, base.x);
+    } else {
+      const bolt = calls[0].opts;
+      assert.ok(Number(bolt.x2) > Number(bolt.x1), 'lightning advances to the target');
+      assert.equal(bolt.withFloorRing, true, 'thunder gets only its localized contact pulse');
+    }
+  }
+});
