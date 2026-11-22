@@ -1054,7 +1054,9 @@ export default function KaliyugaArena() {
       sheetSpec: undefined as FlipbookSheetSpec | undefined,
       rowIndex: 0,
     })),
-    videoBgEnabled: false,
+    // Animated arena MP4s are the intended presentation; players can switch to static
+    // posters through the HD VIDEO BG control when conserving GPU/memory.
+    videoBgEnabled: true,
     lowEndMode: false,
     ambientMotes: Array.from({ length: MAX_AMBIENT_MOTES }, (_, idx) => ({
       x: (idx * 97) % 1440,
