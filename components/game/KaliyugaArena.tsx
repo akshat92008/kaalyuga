@@ -4584,7 +4584,8 @@ export default function KaliyugaArena() {
     });
     spawnParticles(p.x, p.y - 36, 38, '#ff5924', 240, 5.5, 65);
     sim.devanagariStamps.push(createDevanagariStamp('rage', p.x - p.facing * 104, p.y - 178));
-    spawnFloatingText(p.x, p.y - 88, 'KALA-BHAIRAVA SUSANOO! · 100% CHAKRA ARMOR', '#ffd46b', 1.18);
+    // The Devanagari rage stamp already communicates the summon.
+    // Avoid drawing a second giant English title over Rudra's guardian and attack.
   }, [spawnFloatingText, spawnParticles, spawnShockwave, updateStoryFlags]);
 
   const triggerExecuteBrokenTarget = useCallback(() => {
