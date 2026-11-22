@@ -5614,9 +5614,6 @@ export default function KaliyugaArena() {
 
     const isComboFinisher = Boolean(p.comboStep === 4 || activeFinisherSpec);
     const arcRadius = isComboFinisher ? 132 : p.comboStep === 3 ? 110 : 98;
-    const arcWidth = isComboFinisher ? 48 : p.comboStep === 3 ? 38 : 34;
-    const arcDir: 1 | -1 = p.comboStep % 2 === 0 ? -1 : 1;
-    const capturedStep = p.comboStep;
     const capturedAngle = p.slashAngle;
     const capturedStance = p.stance;
 
@@ -5657,19 +5654,30 @@ export default function KaliyugaArena() {
         }
 
         if (!isComboFinisher) {
-          // Tier 1 Light Attack (Combo 1-3): ONE crisp, razor-clean breathing ribbon + sparse sparks ONLY!
-          webglDemonSlayerVfxRef.current?.spawnSlashRibbon({
-            x: originX,
-            y: originY,
-            angle: capturedAngle,
-            radius: arcRadius,
-            width: arcWidth,
-            arcSpan: capturedStep === 3 ? 2.35 : 2.05,
-            direction: arcDir,
-            palette: lightSlashPalette,
-            duration: 0.24,
-            tiltX: capturedStep === 2 ? -0.45 : 0.58,
-          });
+          // Tier 1 light attacks are genuine stance signatures, not the same
+          // generic circular blade with three palette swaps. Keep each small
+          // and fast so the heavy 3D silhouettes retain visual supremacy.
+          if (capturedStance === 'pillar') {
+            webglDemonSlayerVfxRef.current?.spawnWindGaleCrescents({
+              x: originX, y: originY,
+              angle: capturedAngle, radius: arcRadius * 1.02,
+              duration: 0.22, lightweight: true,
+            });
+          } else if (capturedStance === 'thrust') {
+            webglDemonSlayerVfxRef.current?.spawnThunderZigzag({
+              x1: originX, y1: originY,
+              x2: originX + Math.cos(capturedAngle) * (arcRadius * 1.15),
+              y2: originY + Math.sin(capturedAngle) * arcRadius * 0.77,
+              palette: 'thunder', duration: 0.20,
+              width: 11, withFloorRing: false, lightweight: true,
+            });
+          } else {
+            webglDemonSlayerVfxRef.current?.spawnPainterlyCleave({
+              x: originX, y: originY,
+              angle: capturedAngle, radius: arcRadius * 0.84,
+              palette: 'hinokami', duration: 0.21, variant: 'flame',
+            });
+          }
           webglDemonSlayerVfxRef.current?.spawnSparkBurst({
             x: originX + Math.cos(capturedAngle) * 44,
             y: originY + Math.sin(capturedAngle) * 28,
