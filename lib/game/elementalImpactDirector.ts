@@ -95,15 +95,24 @@ export function spawnHeavyElementalRelease(
         x, y: y - 22, angle, radius: radius * 1.02,
         palette, duration: 0.59, variant: 'flame',
       });
-      fx.spawnClashStarburst({ x, y: y - 22, scale: 1.02, duration: 0.20, palette });
+      fx.spawnClashStarburst({
+        x: x + Math.cos(angle) * 32, y: y - 22 + Math.sin(angle) * 16,
+        scale: 0.48, duration: 0.13, palette,
+      });
       break;
     case 'varuna':
       fx.spawnWaterDragon({ x, y: y - 20, angle, radius: radius * 0.96, duration });
-      fx.spawnClashStarburst({ x, y: y - 21, scale: 0.68, duration: 0.14, palette });
+      fx.spawnClashStarburst({
+        x: x + Math.cos(angle) * 34, y: y - 21 + Math.sin(angle) * 17,
+        scale: 0.35, duration: 0.11, palette,
+      });
       break;
     case 'vayu':
       fx.spawnWindGaleCrescents({ x, y: y - 18, angle, radius, duration });
-      fx.spawnClashStarburst({ x, y: y - 20, scale: 0.75, duration: 0.14, palette });
+      fx.spawnClashStarburst({
+        x: x + Math.cos(angle) * 32, y: y - 20 + Math.sin(angle) * 18,
+        scale: 0.40, duration: 0.11, palette,
+      });
       break;
     case 'vajra':
       fx.spawnThunderZigzag({
@@ -113,7 +122,8 @@ export function spawnHeavyElementalRelease(
         y2: y - 20 + Math.sin(angle) * reach * 0.68,
         width: 29, duration, palette, withFloorRing: true,
       });
-      fx.spawnClashStarburst({ x, y: y - 24, scale: 1.10, duration: 0.30, palette });
+      // The bolt renderer already generates focused tip/elbow nodes.
+      // A second giant white contact star was obscuring Rudra's pose.
       break;
     case 'guardian':
       fx.spawnPainterlyCleave({
@@ -127,7 +137,9 @@ export function spawnHeavyElementalRelease(
     x: x + Math.cos(angle) * 22,
     y: y - 24 + Math.sin(angle) * 12,
     count: profile.sparks,
-    speed: 400,
+    speed: 350,
+    angle,
+    spread: 1.45,
     palette,
   });
   return profile;
