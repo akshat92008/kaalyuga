@@ -216,6 +216,10 @@ export class Susanoo3DRenderer {
   private actions: Partial<Record<SusanooClipKey, THREE.AnimationAction>> = {};
   private activeClip: SusanooClipKey | null = null;
   private hasSkinnedBones = false;
+  private skeletonBoneCount = 0;
+  private skinnedMeshCount = 0;
+  private skeletonBoneExamples: string[] = [];
+  private clipLoadDiagnostic: Record<string, string> = {};
   private lastAttackSerial = -1;
   private wasAttacking = false;
   private roarPlayedForSummon = false;
@@ -298,7 +302,13 @@ export class Susanoo3DRenderer {
 
       let foundBones = false;
       clone.traverse((child) => {
-        if ((child as THREE.Bone).isBone || (child as THREE.SkinnedMesh).isSkinnedMesh) {
+        if ((child as THREE.Bone).isBone) {
+          this.skeletonBoneCount += 1;
+          if (this.skeletonBoneExamples.length < 12) this.skeletonBoneExamples.push(child.name);
+          foundBones = true;
+        }
+        if ((child as THREE.SkinnedMesh).isSkinnedMesh) {
+          this.skinnedMeshCount += 1;
           foundBones = true;
         }
         if ((child as THREE.Mesh).isMesh) {
@@ -348,6 +358,8 @@ export class Susanoo3DRenderer {
       // Stream Creature Pack (idle + roar) & Pro Melee Axe Pack (heavy swings) non-blockingly
       if (foundBones && this.mixer) {
         this.streamSusanooClips(clone, standingHipY);
+      } else {
+        this.clipLoadDiagnostic.rig = 'No skinned mesh or skeleton bones in FBX; skeletal actions cannot run';
       }
     } catch (err) {
       console.warn('[Susanoo3DRenderer] Failed to load Horned_Warlord_of_the_Abyss FBX:', err);
@@ -371,12 +383,25 @@ export class Susanoo3DRenderer {
     ).then((results) => {
       if (!this.mixer) return;
       results.forEach((res, idx) => {
-        if (res.status !== 'fulfilled') return;
-        const [key, , loop] = entries[idx];
+        const [key, url, loop] = entries[idx];
+        if (res.status !== 'fulfilled') {
+          this.clipLoadDiagnostic[key] = 'FBX fetch/parse failed ' + url + ': ' + String(res.reason).slice(0, 160);
+          return;
+        }
         const srcClip = res.value.animations?.[0];
-        if (!srcClip) return;
+        if (!srcClip) {
+          this.clipLoadDiagnostic[key] = 'FBX loaded without animation clip from ' + url;
+          return;
+        }
         const stabilized = buildStabilizedInPlaceClip(srcClip, clone, standingHipY);
-        if (stabilized.tracks.length === 0) return;
+        if (stabilized.tracks.length === 0) {
+          this.clipLoadDiagnostic[key] = '0 matching target bone tracks (source=' +
+            srcClip.tracks.length + '; source examples=' +
+            srcClip.tracks.slice(0, 4).map(t => t.name).join(', ') + ')';
+          return;
+        }
+        this.clipLoadDiagnostic[key] = String(stabilized.tracks.length) + '/' +
+          String(srcClip.tracks.length) + ' skeletal tracks matched';
         stabilized.name = `susanoo_${key}`;
         const act = this.mixer!.clipAction(stabilized);
         act.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, loop ? Infinity : 1);
@@ -434,6 +459,10 @@ export class Susanoo3DRenderer {
     loadedActions: string[];
     lastAttackSerial: number;
     rendered3dFrameCount: number;
+    skeletonBoneCount: number;
+    skinnedMeshCount: number;
+    skeletonBoneExamples: string[];
+    clipLoadDiagnostic: Record<string, string>;
   } {
     return {
       ready: this.isReady(),
@@ -444,6 +473,10 @@ export class Susanoo3DRenderer {
       loadedActions: Object.keys(this.actions).sort(),
       lastAttackSerial: this.lastAttackSerial,
       rendered3dFrameCount: this.rendered3dFrameCount,
+      skeletonBoneCount: this.skeletonBoneCount,
+      skinnedMeshCount: this.skinnedMeshCount,
+      skeletonBoneExamples: this.skeletonBoneExamples,
+      clipLoadDiagnostic: { ...this.clipLoadDiagnostic },
     };
   }
 
