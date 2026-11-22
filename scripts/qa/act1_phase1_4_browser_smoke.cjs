@@ -265,9 +265,25 @@ const base = process.env.GAME_URL || 'http://127.0.0.1:3100';
         shot.y >= 100 && shot.y <= shot.height - 55;
     }, null, { timeout: 14000 });
     await capture('11-live-dundubhi-boss-entrance');
+    // Screenshot readback may consume the entire 2.65-second entrance track.
+    // If it has expired, pressing Escape opens PAUSE rather than skipping,
+    // and an assertion on cameraKind===null would give a FALSE PASS.
+    // Restart the boss intro under the existing QA fixture to prove Escape
+    // skips an ACTIVE camera and does not pause or discard combat.
+    await page.evaluate(() => window.__kaliyugaPhaseQAFixture.prepareBossDialogue('dundubhi'));
+    await page.getByRole('button', { name: /ENGAGE DUNDUBHI/i }).waitFor({ timeout: 10000 });
+    await page.getByRole('button', { name: /ENGAGE DUNDUBHI/i }).click();
+    await page.waitForFunction(() => {
+      const q = window.__kaliyugaPhaseQA;
+      return q?.state === 'playing' && q.cameraKind === 'boss' &&
+        q.cameraElapsedSec >= 0 && q.cameraElapsedSec < 1.9;
+    }, null, { timeout: 12000 });
     await page.keyboard.press('Escape');
-    await page.waitForFunction(() => window.__kaliyugaPhaseQA?.cameraKind === null, null, { timeout: 10000 });
-    report.checks.push('Dundubhi entrance is paused behind real dialogue, plays after ENGAGE, and skips safely');
+    await page.waitForFunction(() => {
+      const q = window.__kaliyugaPhaseQA;
+      return q?.cameraKind === null && q.state === 'playing';
+    }, null, { timeout: 10000 });
+    report.checks.push('Dundubhi entrance pauses behind dialogue, plays after ENGAGE, and Escape skips an active shot without pausing');
     await capture('12-live-boss-after-skip');
 
     // The isolated lab is a 16:9 cinematic player plus controls. A 540px
