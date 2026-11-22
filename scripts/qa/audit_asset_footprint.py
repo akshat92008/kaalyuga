@@ -63,7 +63,30 @@ def parse_ls_tree(blob):
     return out
 
 
-def read_assets(rev="HEAD", repo="."):
+def parse_github_tree(payload):
+    """GitHub recursive-tree API includes blob byte sizes without fetching any binary files."""
+    if payload.get("truncated") is not False:
+        raise ValueError("GitHub tree missing or truncated; refusing incomplete inventory")
+    entries = payload.get("tree")
+    if not isinstance(entries, list):
+        raise ValueError("GitHub tree response has no entries")
+    out = []
+    for item in entries:
+        if item.get("type") != "blob":
+            continue
+        path, sha, size = item.get("path"), item.get("sha"), item.get("size")
+        if not isinstance(path, str) or not isinstance(sha, str) or not isinstance(size, int):
+            raise ValueError("Invalid GitHub blob entry or missing byte size")
+        ext = Path(path).suffix.lower()
+        if ext in MEDIA_TYPES:
+            out.append(Asset(path, sha, size, ext, MEDIA_TYPES[ext],
+                             "public/" if path.startswith("public/") else "repo / alias or source"))
+    return out
+
+
+def read_assets(rev="HEAD", repo=".", tree_json=None):
+    if tree_json is not None:
+        return parse_github_tree(json.loads(Path(tree_json).read_text(encoding="utf-8")))
     raw = subprocess.run(
         ["git", "-C", str(repo), "ls-tree", "-r", "-l", "-z", rev],
         check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -132,7 +155,8 @@ def markdown(report):
     out.extend(["", "## Largest paths", "",
                 "| Path | MiB |", "|---|---:|"])
     for a in report["largest_assets"][:20]:
-        out.append(f"| \`{a['path'].replace('|', r'\|')}\` | {a['size']/MIB:.1f} |")
+        safe_path = a["path"].replace("|", chr(92) + "|")
+        out.append(f"| \`{safe_path}\` | {a['size']/MIB:.1f} |")
     out.extend(["", "## Caveats", ""])
     out.extend("- " + p for p in report["cautions"])
     out.append("")
@@ -143,9 +167,10 @@ def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--repo", default=".")
     p.add_argument("--revision", default="HEAD")
+    p.add_argument("--tree-json", type=Path, help="GitHub recursive tree API JSON; avoids media download")
     p.add_argument("--output-dir", type=Path, default=Path("artifacts/qa-independence"))
     args = p.parse_args(argv)
-    assets = read_assets(args.revision, args.repo)
+    assets = read_assets(args.revision, args.repo, args.tree_json)
     if not assets:
         p.error("No tracked media files; repository/tree missing or sparse metadata incomplete")
     report = summarize(assets)
