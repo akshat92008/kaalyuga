@@ -32,6 +32,13 @@ jobs:
             /hooks/
             /engine/
             /scripts/
+            /public/kaalyuga/anims/rudra/
+            /public/kaalyuga/rudra/rigged.fbx
+            /public/kaalyuga/parashu/weapon.fbx
+            /public/models/Meshy_AI_Ashen_Warborn_20261025_texture_fbx/Meshy_AI_Ashen_Warborn_20261025_texture.fbx
+            /public/models/Meshy_AI_Ashen_Warborn_20261025_texture_fbx/Meshy_AI_Ashen_Warborn_20261025_texture.png
+            /public/models/Meshy_AI_Bloodforged_Trident_A_1025041928_texture_fbx/Meshy_AI_Bloodforged_Trident_A_1025041928_texture.png
+            /public/animations/pro_melee_axe/
       - name: Use Node 22
         uses: actions/setup-node@v4
         with:
