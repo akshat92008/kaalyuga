@@ -1,0 +1,46 @@
+name: "P0 existing rigged guardian character alternatives"
+on:
+  push:
+    branches:
+      - feature/phase1-weapon-socket-combat-proof-20261122
+    paths:
+      - scripts/qa/guardian_existing_asset_candidates.py
+      - .github/workflows/phase0-existing-guardian-candidates.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          filter: blob:none
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            scripts/qa/guardian_existing_asset_candidates.py
+            new 3D assets and animations/3D Models/Kaliyuga_the_Bleeding_Guardian/Meshy_AI_Kaliyuga_the_Bleeding_Guardian_20261111_generate.fbx
+            new 3D assets and animations/3D Models/Gorthak_the_Horned_Warlord/Meshy_AI_Gorthak_the_Horned_Warlord_20261111_generate.fbx
+            new 3D assets and animations/3D Models/Crimson_Skull_Warlord_v2/Meshy_AI_Crimson_Skull_Warlord_20261030_generate.fbx
+            cutscenes/assets/characters/Meshy_AI_Crimson_Skull_Warlord_biped/Meshy_AI_Crimson_Skull_Warlord_biped_Animation_Running_withSkin.fbx
+      - name: Install headless Blender
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y blender python3-numpy libegl1 libgl1 libgl1-mesa-dri xvfb
+      - name: Inspect real source bones and render untouched model previews
+        run: |
+          blender -b -t 2 --python scripts/qa/guardian_existing_asset_candidates.py -- \
+            artifacts/guardian-candidates \
+            "new 3D assets and animations/3D Models/Kaliyuga_the_Bleeding_Guardian/Meshy_AI_Kaliyuga_the_Bleeding_Guardian_20261111_generate.fbx" \
+            "new 3D assets and animations/3D Models/Gorthak_the_Horned_Warlord/Meshy_AI_Gorthak_the_Horned_Warlord_20261111_generate.fbx" \
+            "new 3D assets and animations/3D Models/Crimson_Skull_Warlord_v2/Meshy_AI_Crimson_Skull_Warlord_20261030_generate.fbx" \
+            "cutscenes/assets/characters/Meshy_AI_Crimson_Skull_Warlord_biped/Meshy_AI_Crimson_Skull_Warlord_biped_Animation_Running_withSkin.fbx"
+      - name: Upload read-only asset options for director decision
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: guardian-existing-model-options
+          path: artifacts/guardian-candidates
+          retention-days: 14
+          if-no-files-found: warn
