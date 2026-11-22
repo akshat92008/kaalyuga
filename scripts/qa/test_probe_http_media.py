@@ -61,6 +61,12 @@ class HttpMediaTests(unittest.TestCase):
         self.assertEqual(report["responses"][1]["range_response"], "range_ignored_or_not_supported")
         self.assertEqual(report["responses"][1]["range_get"]["bytes_read"], 1024)
 
+    def test_skip_head_for_real_cold_cache_probe(self):
+        report = audit(self.base, ["/supports.mp4"], skip_head=True)
+        self.assertEqual(report["responses"][0]["head"]["status"], "skipped")
+        self.assertTrue(report["head_preflight_skipped"])
+        self.assertEqual(report["responses"][0]["range_get"]["status"], 206)
+
     def test_rejects_outside_origin_paths(self):
         for path in ("https://other.example/a.mp4", "//other.example/a.mp4", "relative.mp4"):
             with self.assertRaises(ValueError):
