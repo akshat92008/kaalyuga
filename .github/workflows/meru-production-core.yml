@@ -38,6 +38,7 @@ jobs:
         with:
           sparse-checkout: |
             engine/meru
+            scripts/meru/install-scenes.ts
             components
             app
             lib
@@ -60,6 +61,8 @@ jobs:
         run: npm install --no-audit --no-fund --ignore-scripts
       - name: Run cinematic, quality, and portal regression tests
         run: npx tsx --test engine/meru/meruCore.test.ts
+      - name: Verify compiled production cinematic scene manifest
+        run: npm run meru:verify-scenes
       - name: Strictly type-check new Meru modules and integrations
         run: npx tsc --noEmit --pretty false -p tsconfig.meru.json
       - name: Audit pre-existing repository-wide type debt (informational)
