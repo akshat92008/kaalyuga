@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {createDundubhiScene, createVrikodaraScene, createBossPhaseScene, validateCinematic, sampleCinematic, retimeCinematic, activeCinematicSubtitle, cuesBetween, MeruTimelinePlayer} from './cinematicTimeline';
 import {MeruAdaptiveQuality,GRAPHICS_PRESETS} from './adaptiveQuality';
 import {MeruFrameProbe} from './performanceProbe';
+import {MERU_PRESERVER_STORY,validateMeruStory,sampleMeruStory,meruStoryDuration} from './storyDirector';
 import {validateProductionManifest,resolveProductionScene,MERU_PRODUCTION_SCENE_IDS,getInstalledProductionSceneIds} from './productionSceneRegistry';
 import {measureSilhouetteCrop} from './silhouetteCrop';
 import {beginPortalTransition,advancePortalTransition,portalPalette} from './portalDirector';
@@ -361,4 +362,37 @@ test('accessible cinematic caption follows the most recent spoken/title cue',()=
   assert.equal(activeCinematicSubtitle(scene,7.01)?.payload,'THE DRUM FALLS SILENT');
   assert.equal(activeCinematicSubtitle(scene,999)?.payload,'THE DRUM FALLS SILENT');
   assert.equal(activeCinematicSubtitle(scene,NaN),null);
+});
+
+test('preserver four-shot story validates original footage, ordering and smooth cuts',()=>{
+  const scene=validateMeruStory(MERU_PRESERVER_STORY);
+  assert.equal(scene.shots.length,4);
+  assert.deepEqual(scene.shots.map(s=>s.id),[
+    'rudra-looks-up','rudra-close','cosmic-arrival','preserver-revealed',
+  ]);
+  const total=meruStoryDuration(scene);
+  assert.ok(total>18&&total<30);
+  assert.equal(sampleMeruStory(scene,0).index,0);
+  assert.equal(sampleMeruStory(scene,4.79).shot.id,'rudra-looks-up');
+  assert.equal(sampleMeruStory(scene,4.8).shot.id,'rudra-close');
+  assert.equal(sampleMeruStory(scene,9.3).shot.id,'cosmic-arrival');
+  assert.equal(sampleMeruStory(scene,total-0.01).shot.id,'preserver-revealed');
+  assert.equal(sampleMeruStory(scene,total).ended,true);
+  assert.equal(sampleMeruStory(scene,-100).elapsed,0);
+  assert.equal(sampleMeruStory(scene,Infinity).index,0);
+  for(const shot of scene.shots){
+    assert.ok(shot.motionVideo?.startsWith('/videos/'),shot.id+' uses an original in-game movie');
+    assert.ok(shot.poster.startsWith('/assets/aistudio/'),shot.id+' uses a bundled painterly poster');
+  }
+});
+test('story director rejects broken movies, duplicate shots and invalid timings',()=>{
+  const s=MERU_PRESERVER_STORY;
+  assert.throws(()=>validateMeruStory({...s,shots:[...s.shots,{...s.shots[0]}]}),/Duplicate/);
+  assert.throws(()=>validateMeruStory({...s,shots:[{...s.shots[0],duration:0.2}]}),/duration/);
+  assert.throws(()=>validateMeruStory({...s,shots:[{...s.shots[0],poster:'https://unknown.test/portrait.png'}]}),/approved local footage/);
+  assert.throws(()=>validateMeruStory({...s,shots:[{...s.shots[0],motionVideo:'/videos/../../secrets.mp4'}]}),/approved local footage/);
+  assert.throws(()=>validateMeruStory({...s,shots:[{...s.shots[0],slowPush:100}]}),/Invalid story narration/);
+  const clone=validateMeruStory(s);
+  clone.shots[0].narration='Changed clone';
+  assert.notEqual(s.shots[0].narration,'Changed clone');
 });
