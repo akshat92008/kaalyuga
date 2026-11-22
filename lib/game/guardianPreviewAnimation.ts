@@ -34,39 +34,41 @@ const PREVIEW_BONES: BoneDescriptor[] = [
     },
   },
   {
-    name: 'mixamorig:RightArm', axis: new THREE.Vector3(1, 0, 0), intensity: 1.0,
+    name: 'mixamorig:RightArm', axis: new THREE.Vector3(0, 0, 1), intensity: 1.0,
     profiles: {
-      idle: [0, -0.015, 0], roar: [0, -0.4, -0.85, 0],
-      swing1: [0, -0.95, 1.35, 0.48, 0],
-      swing2: [0, -1.25, 1.52, 0.42, 0],
-      swing3: [0, -0.56, 1.18, 0.16, 0],
+      // The static FBX rests in a T-pose. Z-axis shoulder elevation
+      // lowers the upper arm instead of merely twisting it around X.
+      idle: [0.84, 0.88, 0.84], roar: [0.84, 0.52, 0.40, 0.84],
+      swing1: [0.84, 0.22, 1.34, 1.04, 0.84],
+      swing2: [0.84, 0.05, 1.48, 1.16, 0.84],
+      swing3: [0.84, 1.36, 0.12, 0.56, 0.84],
     },
   },
   {
-    name: 'mixamorig:LeftArm', axis: new THREE.Vector3(1, 0, 0), intensity: 0.82,
+    name: 'mixamorig:LeftArm', axis: new THREE.Vector3(0, 0, 1), intensity: 1.0,
     profiles: {
-      idle: [0, 0.015, 0], roar: [0, -0.32, -0.58, 0],
-      swing1: [0, -0.49, 0.79, 0.22, 0],
-      swing2: [0, -0.65, 0.91, 0.20, 0],
-      swing3: [0, -0.40, 0.68, 0.15, 0],
+      idle: [-0.76, -0.82, -0.76], roar: [-0.76, -0.42, -0.34, -0.76],
+      swing1: [-0.76, -0.28, -1.17, -0.95, -0.76],
+      swing2: [-0.76, -0.22, -1.22, -0.92, -0.76],
+      swing3: [-0.76, -1.26, -0.32, -0.58, -0.76],
     },
   },
   {
-    name: 'mixamorig:RightForeArm', axis: new THREE.Vector3(0, 0, 1), intensity: 0.48,
+    name: 'mixamorig:RightForeArm', axis: new THREE.Vector3(0, 0, 1), intensity: 0.72,
     profiles: {
-      idle: [0, 0.01, 0], roar: [0, 0.22, 0.32, 0],
-      swing1: [0, 0.49, -0.28, -0.1, 0],
-      swing2: [0, 0.64, -0.34, -0.12, 0],
-      swing3: [0, 0.35, -0.34, -0.1, 0],
+      idle: [0.36, 0.40, 0.36], roar: [0.36, 0.45, 0.56, 0.36],
+      swing1: [0.36, 0.48, -0.28, 0.25, 0.36],
+      swing2: [0.36, 0.62, -0.32, 0.25, 0.36],
+      swing3: [0.36, 0.52, -0.26, 0.20, 0.36],
     },
   },
   {
-    name: 'mixamorig:LeftForeArm', axis: new THREE.Vector3(0, 0, 1), intensity: 0.28,
+    name: 'mixamorig:LeftForeArm', axis: new THREE.Vector3(0, 0, 1), intensity: 0.62,
     profiles: {
-      idle: [0, -0.01, 0], roar: [0, -0.18, -0.24, 0],
-      swing1: [0, -0.21, 0.31, 0.06, 0],
-      swing2: [0, -0.29, 0.37, 0.08, 0],
-      swing3: [0, -0.16, 0.22, 0.04, 0],
+      idle: [-0.32, -0.35, -0.32], roar: [-0.32, -0.48, -0.56, -0.32],
+      swing1: [-0.32, -0.45, 0.25, -0.16, -0.32],
+      swing2: [-0.32, -0.52, 0.30, -0.14, -0.32],
+      swing3: [-0.32, -0.38, 0.22, -0.12, -0.32],
     },
   },
 ];
