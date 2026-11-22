@@ -310,7 +310,10 @@ export default function MeruCinematicStudio(){
           <h1 className="font-serif text-3xl font-bold">Cinematic Studio</h1>
           <p className="text-xs text-[#a99c94]">Editable camera cuts · real skeletal performance keyframes · two original boss rigs</p>
         </div>
-        <a href="/" className="rounded border border-[#665043] px-4 py-2 text-sm hover:bg-[#20151a]">← Back to game</a>
+        <div className="flex flex-wrap gap-2">
+          <a href="/meru-story-preview" className="rounded border border-[#9d7957] px-4 py-2 text-sm text-[#f1d3b0] hover:bg-[#20151a]">Preview Preserver film</a>
+          <a href="/" className="rounded border border-[#665043] px-4 py-2 text-sm hover:bg-[#20151a]">← Back to game</a>
+        </div>
       </header>
       {error&&<div role="alert" className="rounded border border-[#c45b50] bg-[#321b1c] p-3 text-sm">{error}</div>}
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_310px]">
