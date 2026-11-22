@@ -35,6 +35,12 @@ jobs:
             /public/kaalyuga/audio/
             /public/audio/sfx/
             /audio and sound effects/
+            /public/kaalyuga/vfx/
+            /public/kaalyuga/arena/
+            /public/kaalyuga/rudra/diffuse.png
+            /public/kaalyuga/dundubhi/diffuse.png
+            /public/kaalyuga/parashu/diffuse.png
+            /public/kaalyuga/bellhorn/diffuse.png
       - name: Python 3.12
         uses: actions/setup-python@v5
         with:
@@ -59,6 +65,14 @@ jobs:
         run: python scripts/qa/audit_asset_footprint.py --tree-json "$QA_OUTPUT/github-tree.json" --output-dir "$QA_OUTPUT"
       - name: Phase 10 - verify audio source aliases and call sites
         run: python scripts/qa/audit_audio_delivery.py --tree-json "$QA_OUTPUT/github-tree.json" --output-dir "$QA_OUTPUT"
+      - name: Phase 12 - prioritize source-referenced assets
+        run: python scripts/qa/audit_referenced_media.py --tree-json "$QA_OUTPUT/github-tree.json" --output-dir "$QA_OUTPUT"
+      - name: Phase 12 - inspect live-art texture headers
+        run: |
+          python scripts/qa/probe_texture_dimensions.py \
+            --directories "public/kaalyuga/vfx" "public/kaalyuga/arena" "public/kaalyuga/rudra" \
+              "public/kaalyuga/dundubhi" "public/kaalyuga/parashu" "public/kaalyuga/bellhorn" \
+            --minimum-files 18 --output-dir "$QA_OUTPUT"
       - name: Phase 10 - inspect actual checked-out audio file headers
         run: |
           python scripts/qa/probe_audio_headers.py \
