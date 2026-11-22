@@ -266,6 +266,9 @@ def main():
     export_rigged_fbx(mesh,rig,fbxout)
     report['export_file']=str(fbxout)
     report['export_bytes']=fbxout.stat().st_size
+    # Persist a factual rig report BEFORE invoking the renderer. The headless
+    # runner may lack libEGL and exit the Blender process during render.
+    (out/'rigging-report.json').write_text(json.dumps(report,indent=2),encoding='utf-8')
 
     render_preview(mesh,rig,idle,out/'guardian-idle.png')
     if attack:
