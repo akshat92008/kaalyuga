@@ -198,10 +198,18 @@ const base = process.env.GAME_URL || 'http://127.0.0.1:3100';
     await page.keyboard.press('z');
     await page.waitForFunction(() => window.__kaliyugaPhaseQA?.transformRemaining > 0,
       null, { timeout: 9000 });
-    await page.waitForFunction(() => {
-      const g = window.__kaliyugaPhaseQA?.guardianRenderer;
-      return g?.skinned && g?.loadedActions?.includes('swing2');
-    }, null, { timeout: 25000 });
+    try {
+      await page.waitForFunction(() => {
+        const g = window.__kaliyugaPhaseQA?.guardianRenderer;
+        return g?.skinned && g?.loadedActions?.includes('swing2');
+      }, null, { timeout: 18000 });
+    } catch (err) {
+      const diagnostic = (await qa()).guardianRenderer;
+      console.log('GUARDIAN_P0_ANIMATION_FAILURE ' + JSON.stringify(diagnostic));
+      report.guardianReadiness = diagnostic;
+      throw new Error('Guardian skinned swing2 never loaded: ' +
+        JSON.stringify(diagnostic) + '; underlying wait: ' + String(err.message || err));
+    }
     const guardianBefore = await countEvent('heavy-contact');
     await page.keyboard.press('k');
     await assertEvent('heavy-contact', 'guardian', guardianBefore);
