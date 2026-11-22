@@ -10,7 +10,9 @@
     "components/game/MeruCinematicStudio.tsx",
     "components/game/MeruCinematicPlayback.tsx",
     "components/game/MeruPortalTravel.tsx",
+    "components/game/MeruStoryCinematic.tsx",
     "app/meru-studio/page.tsx",
+    "app/meru-story-preview/page.tsx",
     "lib/game/chamberGeometry.ts"
   ],
   "exclude": [
