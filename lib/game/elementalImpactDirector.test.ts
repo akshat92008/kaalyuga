@@ -50,7 +50,9 @@ test('each elemental heavy uses distinct primary geometry and only one shared sp
     });
     assert.equal(calls[0], primaryNames[element], element);
     assert.equal(calls.filter((name) => name === 'spawnSparkBurst').length, 1, element);
-    assert.ok(calls.length >= 3 && calls.length <= 5, element);
+    // Thunder is deliberately just its bolt and one forward spark burst.
+    // Additional impact stars would double-render and hide the blade.
+    assert.ok(calls.length >= 2 && calls.length <= 4, element);
     assert.ok(profile.radius > 170);
   }
 });
