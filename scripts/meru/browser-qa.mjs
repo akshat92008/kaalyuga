@@ -283,6 +283,12 @@ try{
       ?.getAttribute('data-meru-story-shot')==='rudra-close';
   },null,{timeout:16000});
   await storyPage.screenshot({path:join(out,'meru-preserver-four-shot-preview.png'),animations:'disabled'});
+  await storyPage.waitForFunction(()=>{
+    return document.querySelector('[data-testid="meru-story-cinematic"]')
+      ?.getAttribute('data-meru-story-shot')==='preserver-revealed';
+  },null,{timeout:25000});
+  assert.match(await storyPage.locator('#meru-story-narration').textContent()??'',/go and look/i);
+  await storyPage.screenshot({path:join(out,'meru-preserver-vishnu-reveal.png'),animations:'disabled'});
   await storyPage.getByRole('button',{name:'Skip Preserver memory and return to combat'}).click();
   await film.waitFor({state:'detached',timeout:5000});
   await storyPage.getByText('Playback completed.',{exact:false}).waitFor();
