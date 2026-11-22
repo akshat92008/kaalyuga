@@ -47,7 +47,7 @@ export function shouldStartDundubhiIntro(ctx:BossIntroContext):boolean {
 /** Player builds must prefer the director-reviewed package, not browser
  * drafts left behind by someone who visited /meru-studio. Local preview is
  * intentionally supported in dev and inside the authoring Studio itself. */
-export function allowLocalStudioPreview(runtimeMode:string,insideStudio=false):boolean {
+export function allowLocalStudioPreview(runtimeMode:string|undefined,insideStudio=false):boolean {
   return insideStudio || runtimeMode!=='production';
 }
 export function readBossIntro(
