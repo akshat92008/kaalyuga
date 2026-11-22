@@ -40,6 +40,7 @@ import {
 import { soundEngine } from '@/lib/game/audio';
 import { heavyElementFromStance, spawnHeavyElementalRelease } from '@/lib/game/elementalImpactDirector';
 import { resolveVisualWeaponContact } from '@/lib/game/weaponContactProjection';
+import { computeGuardianPreviewDrawSize } from '@/lib/game/guardianScreenFraming';
 import { spawnExecutionImpactFx } from '@/lib/game/executionImpactDirector';
 import { CinematicCameraTrack } from '@/lib/game/cinematicCamera';
 import {
@@ -4587,7 +4588,11 @@ export default function KaliyugaArena() {
       duration: 0.48,
     });
     spawnParticles(p.x, p.y - 36, 38, '#ff5924', 240, 5.5, 65);
-    sim.devanagariStamps.push(createDevanagariStamp('rage', p.x - p.facing * 104, p.y - 178));
+    // Place the summon inscription beside, not across, the guardian's head.
+    // The former 104px offset visually collided with its enlarged silhouette.
+    sim.devanagariStamps.push(createDevanagariStamp(
+      'rage', p.x - (p.facing < 0 ? -1 : 1) * 182, p.y - 124
+    ));
     // The Devanagari rage stamp already communicates the summon.
     // Avoid drawing a second giant English title over Rudra's guardian and attack.
   }, [spawnFloatingText, spawnParticles, spawnShockwave, updateStoryFlags]);
@@ -11602,8 +11607,19 @@ export default function KaliyugaArena() {
               palette: 'crimson_gold',
             });
             if (susanooCanvas && susanoo3d) {
-              const sDraw = HEROIC_DRAW_SIZES.susanoo;
+              // Spectral body has to stay below the HUD, including when Rudra
+              // walks north. Fit the canvas footprint and protect the top strip
+              // in screen coordinates; never translate a giant guardian over UI.
+              const sDraw = computeGuardianPreviewDrawSize(
+                p.y - sim.camY,
+                susanoo3d.footAnchorRatio,
+                HEROIC_DRAW_SIZES.susanoo,
+                72
+              );
               ctx.save();
+              ctx.beginPath();
+              ctx.rect(sim.camX, sim.camY + 72, cw, Math.max(0, ch - 72));
+              ctx.clip();
               ctx.translate(p.x, p.y);
               ctx.globalCompositeOperation = 'source-over';
               ctx.drawImage(
