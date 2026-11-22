@@ -70,3 +70,11 @@ jobs:
         run: npx tsc --noEmit --pretty false
       - name: Production build smoke check
         run: npm run build
+      - name: Verify exported director scenes can actually be installed
+        run: |
+          cp engine/meru/productionScenes.json /tmp/meru-original-productionScenes.json
+          trap 'cp /tmp/meru-original-productionScenes.json engine/meru/productionScenes.json' EXIT
+          npx tsx -e "import {createDundubhiScene} from './engine/meru/cinematicTimeline';import {writeFileSync} from 'node:fs';writeFileSync('/tmp/meru-director-qa.meru.json',JSON.stringify({...createDundubhiScene(),title:'MERU DIRECTOR SHIP QA'}))"
+          npm run meru:ship-scenes -- /tmp/meru-director-qa.meru.json
+          npm run meru:verify-scenes
+          grep -q 'MERU DIRECTOR SHIP QA' engine/meru/productionScenes.json
