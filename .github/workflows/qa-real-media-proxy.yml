@@ -1,0 +1,118 @@
+name: "QA isolated - real local media proxy range diagnostics"
+
+on:
+  push:
+    branches:
+      - qa/director-visual-review-20261122
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qa-real-media-probe-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  real-media:
+    name: "Build live Next.js staging server and run bounded Range GET"
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      QA_OUT: artifacts/qa-real-media
+    steps:
+      - name: Sparse-checkout real Next app and two small representative media samples
+        uses: actions/checkout@v4
+        with:
+          filter: blob:none
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /package.json
+            /package-lock.json
+            /tsconfig.json
+            /next.config.ts
+            /next-env.d.ts
+            /postcss.config.mjs
+            /postcss.config.js
+            /app/
+            /lib/
+            /components/
+            /engine/
+            /hooks/
+            /scripts/qa/probe_http_media.py
+            /public/kaalyuga/audio/hit.wav
+            /public/kaalyuga/arena/dundubhi_chamber.mp4
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install app dependencies
+        run: npm install --legacy-peer-deps --no-audit --no-fund
+      - name: Start exact current Next app in local preview
+        run: |
+          mkdir -p "$QA_OUT"
+          npm run dev -- --hostname 127.0.0.1 --port 3022 > "$RUNNER_TEMP/qa-next-media.log" 2>&1 &
+          echo "$!" > "$RUNNER_TEMP/qa-next-media.pid"
+          python - <<'PY'
+          import socket, time
+          for i in range(120):
+              try:
+                  with socket.create_connection(("127.0.0.1",3022),timeout=1):
+                      print("Local Next media server is listening.")
+                      break
+              except (OSError, TimeoutError):
+                  time.sleep(1)
+          else:
+              raise SystemExit("Next server did not open port 3022")
+          PY
+      - name: Cold-local-process Range GET without prewarming HEAD
+        run: |
+          python scripts/qa/probe_http_media.py --skip-head \
+            --base-url http://127.0.0.1:3022 \
+            --path /kaalyuga/audio/hit.wav \
+            --path /kaalyuga/arena/dundubhi_chamber.mp4 \
+            --timeout 45 --output-dir "$QA_OUT/initial"
+      - name: Repeat Range GET with server running (warm-ish cache)
+        run: |
+          python scripts/qa/probe_http_media.py --skip-head \
+            --base-url http://127.0.0.1:3022 \
+            --path /kaalyuga/audio/hit.wav \
+            --path /kaalyuga/arena/dundubhi_chamber.mp4 \
+            --timeout 45 --output-dir "$QA_OUT/repeated"
+      - name: Validate neither sample has failed GET
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root=Path("artifacts/qa-real-media")
+          for case in ("initial","repeated"):
+              data=json.loads((root/case/"http-range-probe.json").read_text())
+              for result in data["responses"]:
+                  got=result["range_get"]["status"]
+                  if got not in (200,206):
+                      raise SystemExit(f"FAIL {case}: {result['url']} GET {got}")
+                  print(f"{case}: {result['url']} {got}, "
+                        f"first-response {result['range_get'].get('first_response_ms')} ms, "
+                        f"{result['range_response']}")
+          print("Runner/Next dev timing is NOT production cold-cache, Mac FPS or network RTT.")
+          PY
+      - name: Save Next server log and evidence even on failure
+        if: always()
+        run: |
+          mkdir -p "$QA_OUT"
+          if test -e "$RUNNER_TEMP/qa-next-media.log"; then
+            cp "$RUNNER_TEMP/qa-next-media.log" "$QA_OUT/next-media-server.log"
+          fi
+      - name: Upload QA-only media diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-real-media-range
+          path: artifacts/qa-real-media
+          retention-days: 14
+          if-no-files-found: warn

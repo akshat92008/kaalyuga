@@ -1,0 +1,58 @@
+name: "QA isolated - Phase 10 decoded audio signal"
+
+on:
+  push:
+    branches:
+      - qa/director-visual-review-20261122
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qa-audio-signal-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  decode:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - name: Sparse checkout QA code and audio only
+        uses: actions/checkout@v4
+        with:
+          filter: blob:none
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /scripts/qa/
+            /public/kaalyuga/audio/
+            /public/audio/sfx/
+            /audio and sound effects/
+      - name: Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Ensure FFmpeg and ffprobe are present
+        run: |
+          if ! command -v ffmpeg || ! command -v ffprobe; then
+            sudo apt-get update -qq && sudo apt-get install -y ffmpeg
+          fi
+          ffmpeg -version | head -n 1
+      - name: Run real decoded-signal regression tests
+        run: python -m unittest discover -s scripts/qa -p 'test_measure_audio_signal.py' -v
+      - name: Phase 10 - decode actual game audio and triage peaks/silence
+        run: |
+          python scripts/qa/measure_audio_signal.py \
+            --directories "public/kaalyuga/audio" "public/audio/sfx" "audio and sound effects" \
+            --minimum-files 100 --timeout-seconds 180 \
+            --output-dir artifacts/qa-audio-signal
+      - name: Preserve evidence even if decoding fails
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-phase10-decoded-audio-signal
+          path: artifacts/qa-audio-signal
+          if-no-files-found: warn
+          retention-days: 14
