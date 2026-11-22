@@ -30,7 +30,7 @@ jobs:
       - name: Install Blender for real skinning and FBX export
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y blender python3-numpy
+          sudo apt-get install -y blender python3-numpy libegl1 libgl1 libgl1-mesa-dri xvfb
           blender --version
       - name: Build skin-bound 3D candidate and actual Blender pose screenshots
         run: |
