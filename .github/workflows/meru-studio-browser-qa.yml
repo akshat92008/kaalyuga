@@ -1,5 +1,21 @@
 name: Meru Studio browser QA and screenshot
 on:
+  push:
+    branches:
+      - feature/meru-cinematic-production-core-20261121
+    paths:
+      - 'scripts/meru/browser-qa.mjs'
+      - '.github/workflows/meru-studio-browser-qa.yml'
+      - 'components/game/MeruCinematicStudio.tsx'
+      - 'components/game/MeruCinematicPlayback.tsx'
+      - 'components/game/MeruStoryCinematic.tsx'
+      - 'components/game/NarrativeOverlay.tsx'
+      - 'components/game/MeruPortalTravel.tsx'
+      - 'components/game/KaliyugaArena.tsx'
+      - 'engine/meru/**'
+      - 'app/meru-story-preview/**'
+      - 'app/meru-studio/**'
+  workflow_dispatch:
   pull_request:
     paths:
       - 'scripts/meru/browser-qa.mjs'
