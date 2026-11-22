@@ -71,18 +71,27 @@ const PREVIEW_BONES: BoneDescriptor[] = [
   },
 ];
 
+function normalizedBoneName(name: string): string {
+  // Three.js FBXLoader sometimes strips Mixamo's colon separator.
+  return name.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
 export function createGuardianProofClips(root: THREE.Group): {
   clips: Record<GuardianPreviewMotion, THREE.AnimationClip>;
   animatedBones: string[];
 } {
+  const knownBones: THREE.Bone[] = [];
+  root.traverse(obj => {
+    if ((obj as THREE.Bone).isBone) knownBones.push(obj as THREE.Bone);
+  });
   const clips = {} as Record<GuardianPreviewMotion, THREE.AnimationClip>;
   const animatedBones: string[] = [];
   for (const motion of Object.keys(POSE_TIMELINES) as GuardianPreviewMotion[]) {
     const times = POSE_TIMELINES[motion];
     const tracks: THREE.QuaternionKeyframeTrack[] = [];
     for (const boneInfo of PREVIEW_BONES) {
-      const obj = root.getObjectByName(boneInfo.name);
-      if (!obj || !(obj as THREE.Bone).isBone) continue;
+      const obj = knownBones.find(b => normalizedBoneName(b.name) === normalizedBoneName(boneInfo.name));
+      if (!obj) continue;
       const rest = obj.quaternion.clone();
       const values: number[] = [];
       for (const poseValue of boneInfo.profiles[motion]) {
