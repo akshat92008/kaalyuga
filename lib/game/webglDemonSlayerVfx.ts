@@ -601,6 +601,7 @@ interface ActiveWebglRibbon {
   inkMesh: THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>;
   coreMesh: THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>;
   glowMesh: THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>;
+  extraPaintMeshes?: Array<THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>>;
   worldX: number;
   worldY: number;
   baseRotZ: number;
@@ -893,15 +894,17 @@ export function buildForwardPainterlyCleaveGeometry(
   const triangles: number[] = [];
   for (let i = 0; i <= n; i++) {
     const t = i / n;
-    const envelope = Math.pow(Math.max(0, Math.sin(Math.PI * t)), 0.67);
-    const broadInk = 0.82 + 0.24 * Math.sin(t * 22.0 + seed * 1.7)
-      + 0.10 * Math.sin(t * 49.0 + seed * 3.8);
-    const tooth = 0.74 + 0.27 * Math.sin(t * 37.0 + seed * 2.6)
-      + 0.16 * Math.sin(t * 71.0 + seed * 4.1);
+    // Rounded Sumi-e brush envelope with broad irregular flame licks rather
+    // than sawtooth frequency peaks (those rendered as flat comic triangles).
+    const envelope = Math.pow(Math.max(0, Math.sin(Math.PI * t)), 0.88);
+    const broadInk = 0.78 + 0.13 * Math.sin(t * 12.0 + seed * 1.7)
+      + 0.05 * Math.sin(t * 29.0 + seed * 3.8);
+    const tooth = 0.77 + 0.17 * Math.sin(t * 15.0 + seed * 2.6)
+      + 0.06 * Math.sin(t * 34.0 + seed * 4.1);
     const root = -len * 0.18;
     const x = root + len * 1.18 * t;
-    const centerY = -span * 0.24 * Math.sin(t * Math.PI)
-      + span * 0.11 * Math.sin(t * Math.PI * 2.1 + seed) * envelope;
+    const centerY = -span * 0.20 * Math.sin(t * Math.PI)
+      + span * 0.13 * Math.sin(t * Math.PI * 1.65 + seed) * envelope;
     const lower = centerY - span * envelope * Math.max(0.22, broadInk) * 0.46;
     const upper = centerY + span * envelope * Math.max(0.18, tooth) * 0.54;
     const lift = 8 * envelope * Math.sin(t * Math.PI);
@@ -1253,18 +1256,18 @@ export class WebglDemonSlayerVfxOverlay {
     const variant = opts.variant ?? 'flame';
     const pal = RIBBON_PALETTES[opts.palette ?? (variant === 'guardian' ? 'blood' : 'hinokami')];
     const radius = Math.max(90, Math.min(220, Number.isFinite(opts.radius) ? opts.radius! : 160));
-    const mainLength = radius * (variant === 'guardian' ? 1.54 : 1.40);
-    const mainWidth = radius * (variant === 'guardian' ? 0.70 : 0.67);
-    const inkGeo = buildForwardPainterlyCleaveGeometry(mainLength * 1.02, mainWidth * 1.19, 2.1, 52);
+    const mainLength = radius * (variant === 'guardian' ? 1.37 : 1.30);
+    const mainWidth = radius * (variant === 'guardian' ? 0.58 : 0.55);
+    const inkGeo = buildForwardPainterlyCleaveGeometry(mainLength * 1.02, mainWidth * 1.08, 2.1, 52);
     const coreGeo = buildForwardPainterlyCleaveGeometry(mainLength, mainWidth, 0.55, 52);
-    const glowGeo = buildForwardPainterlyCleaveGeometry(mainLength * 1.05, mainWidth * 1.25, 1.5, 48);
+    const glowGeo = buildForwardPainterlyCleaveGeometry(mainLength * 1.04, mainWidth * 1.14, 1.5, 48);
     const mode = paletteModeIndex(opts.palette ?? (variant === 'guardian' ? 'blood' : 'hinokami'));
-    const inkMat = createRibbonMaterial(pal, mode, 0.97, true, THREE.NormalBlending, 0.36);
+    const inkMat = createRibbonMaterial(pal, mode, 0.75, true, THREE.NormalBlending, 0.36);
     inkMat.uniforms.uCoreColor.value.copy(pal.ink);
     inkMat.uniforms.uMidColor.value.copy(pal.ink);
     inkMat.uniforms.uEdgeColor.value.copy(pal.ink);
     const coreMat = createRibbonMaterial(pal, mode, 0.98, true, THREE.NormalBlending, variant === 'guardian' ? 1.68 : 2.05);
-    const glowMat = createRibbonMaterial(pal, mode, 0.40, false, THREE.AdditiveBlending, 1.27);
+    const glowMat = createRibbonMaterial(pal, mode, 0.31, false, THREE.AdditiveBlending, 1.20);
     const inkMesh = new THREE.Mesh(inkGeo, inkMat);
     const coreMesh = new THREE.Mesh(coreGeo, coreMat);
     const glowMesh = new THREE.Mesh(glowGeo, glowMat);
@@ -1272,9 +1275,32 @@ export class WebglDemonSlayerVfxOverlay {
     glowMesh.position.z = 2;
     const group = new THREE.Group();
     group.add(inkMesh, coreMesh, glowMesh);
+
+    // Separate trailing flame/astral licks supply readable flowing motion
+    // and varied silhouette without another concentric rotating ring.
+    const extraPaintMeshes: Array<THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>> = [];
+    for (let i = 0; i < 3; i++) {
+      const tongueGeo = buildTaperedFlameTongueGeometry(
+        radius * (0.42 + i * 0.12), radius * (0.072 + i * 0.014), 16
+      );
+      const tongueMat = createRibbonMaterial(
+        pal, mode, variant === 'guardian' ? 0.78 : 0.86,
+        true, THREE.NormalBlending, 1.18
+      );
+      const tongue = new THREE.Mesh(tongueGeo, tongueMat);
+      tongue.position.set(
+        -mainLength * 0.14 + mainLength * i * 0.20,
+        mainWidth * (0.12 + i * 0.09),
+        3 + i
+      );
+      tongue.rotation.z = 0.16 + i * 0.14;
+      group.add(tongue);
+      extraPaintMeshes.push(tongue);
+    }
+
     this.scene.add(group);
     this.ribbons.push({
-      group, inkMesh, coreMesh, glowMesh,
+      group, inkMesh, coreMesh, glowMesh, extraPaintMeshes,
       worldX: opts.x, worldY: opts.y,
       baseRotZ: -opts.angle,
       tiltX: 0.28, tiltY: 0,
@@ -2514,7 +2540,7 @@ export class WebglDemonSlayerVfxOverlay {
       r.group.scale.set(s, s, s);
       r.group.rotation.set(r.tiltX, r.tiltY, r.baseRotZ - r.spinRate * r.life);
 
-      for (const m of [r.inkMesh, r.coreMesh, r.glowMesh]) {
+      for (const m of [r.inkMesh, r.coreMesh, r.glowMesh, ...(r.extraPaintMeshes ?? [])]) {
         m.material.uniforms.uTime.value = this.elapsed;
         m.material.uniforms.uLife.value = norm;
       }
@@ -2749,6 +2775,10 @@ export class WebglDemonSlayerVfxOverlay {
     r.coreMesh.material.dispose();
     r.glowMesh.geometry.dispose();
     r.glowMesh.material.dispose();
+    for (const m of r.extraPaintMeshes ?? []) {
+      m.geometry.dispose();
+      m.material.dispose();
+    }
   }
 
   private disposeCyclone(c: ActiveWebglCyclone): void {
