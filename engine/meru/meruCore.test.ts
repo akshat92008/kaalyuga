@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createDundubhiScene, createVrikodaraScene, createBossPhaseScene, validateCinematic, sampleCinematic, retimeCinematic, cuesBetween, MeruTimelinePlayer} from './cinematicTimeline';
+import {createDundubhiScene, createVrikodaraScene, createBossPhaseScene, validateCinematic, sampleCinematic, retimeCinematic, activeCinematicSubtitle, cuesBetween, MeruTimelinePlayer} from './cinematicTimeline';
 import {MeruAdaptiveQuality,GRAPHICS_PRESETS} from './adaptiveQuality';
 import {MeruFrameProbe} from './performanceProbe';
 import {validateProductionManifest,resolveProductionScene,MERU_PRODUCTION_SCENE_IDS,getInstalledProductionSceneIds} from './productionSceneRegistry';
@@ -346,4 +346,14 @@ test('production players ignore browser drafts; authoring Studio still loads its
   assert.equal(allowLocalStudioPreview('development'),true);
   assert.equal(allowLocalStudioPreview('test'),true);
   assert.equal(allowLocalStudioPreview('production',true),true);
+});
+
+test('accessible cinematic caption follows the most recent spoken/title cue',()=>{
+  const scene=createDundubhiScene();
+  assert.equal(activeCinematicSubtitle(scene,0),null);
+  scene.cues.push({id:'new-line',time:7,kind:'subtitle',payload:'THE DRUM FALLS SILENT'});
+  assert.equal(activeCinematicSubtitle(scene,6.5)?.payload,'DUNDUBHI · THE LIVING WAR-DRUM');
+  assert.equal(activeCinematicSubtitle(scene,7.01)?.payload,'THE DRUM FALLS SILENT');
+  assert.equal(activeCinematicSubtitle(scene,999)?.payload,'THE DRUM FALLS SILENT');
+  assert.equal(activeCinematicSubtitle(scene,NaN),null);
 });
