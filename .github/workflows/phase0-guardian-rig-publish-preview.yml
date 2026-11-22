@@ -1,0 +1,75 @@
+name: "P0 Kala-Bhairava: publish verified rig candidate to isolated branch"
+on:
+  push:
+    branches:
+      - feature/phase1-weapon-socket-combat-proof-20261122
+    paths:
+      - '.github/workflows/phase0-guardian-rig-publish-preview.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: guardian-verified-rig-asset-publish-20261122
+  cancel-in-progress: false
+jobs:
+  build-and-publish-preview:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Check out exact sculpt, animation source and export script
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+          filter: blob:none
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            scripts/qa/rig_kalabhairava.py
+            new 3D assets and animations/3D Models/Horned_Warlord_of_the_Abyss/Meshy_AI_Horned_Warlord_of_the_Abyss_20261120_generate.fbx
+            new 3D assets and animations/Animations/Creature Pack (4)/mutant breathing idle.fbx
+            new 3D assets and animations/Animations/Pro Melee Axe Pack (5)/standing melee attack downward.fbx
+      - name: Install headless Blender and dependable renderer
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y blender python3-numpy libegl1 libgl1 libgl1-mesa-dri xvfb
+          blender --version
+      - name: Skin the real approved Abyss guardian sculpt to 33-bone animation skeleton
+        run: |
+          blender -b -t 2 --python scripts/qa/rig_kalabhairava.py -- \
+            --mesh "new 3D assets and animations/3D Models/Horned_Warlord_of_the_Abyss/Meshy_AI_Horned_Warlord_of_the_Abyss_20261120_generate.fbx" \
+            --idle "new 3D assets and animations/Animations/Creature Pack (4)/mutant breathing idle.fbx" \
+            --heavy "new 3D assets and animations/Animations/Pro Melee Axe Pack (5)/standing melee attack downward.fbx" \
+            --output build/guardian
+      - name: Enforce true skin weights and animated-clips export acceptance
+        run: |
+          python3 - <<'PY'
+          import json, pathlib
+          d=json.loads(pathlib.Path('build/guardian/rigging-report.json').read_text())
+          assert d['mesh_has_armature_modifier'], 'Unskinned model'
+          assert d['deforming_vertex_groups'] >= 25, 'Insufficient bone weighting'
+          assert d['output_bone_count'] >= 30, 'Missing animation skeleton'
+          assert d['idle_fcurves'] >= 250 and d['heavy_fcurves'] >= 250, 'No animation tracks'
+          assert d['export_bytes'] > 1_000_000, 'Empty export'
+          for name in ('guardian-source-unrigged.png','guardian-idle.png','guardian-heavy.png'):
+            assert pathlib.Path('build/guardian',name).stat().st_size > 20_000, name
+          print('Rig asset candidate passes Blender technical checks; visual acceptance remains manual')
+          PY
+      - name: Stage generated binary ONLY on isolated experimental feature branch
+        run: |
+          set -euo pipefail
+          mkdir -p public/models_v2
+          cp build/guardian/guardian-abyss-rigged.fbx public/models_v2/kala_bhairava_guardian_rigged.fbx
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add --sparse --force public/models_v2/kala_bhairava_guardian_rigged.fbx
+          if ! git diff --cached --quiet; then
+            git commit -m "asset(p0): add true skin-bound Kala-Bhairava preview FBX (33 bones; QA only)"
+            git push origin HEAD:refs/heads/feature/phase1-weapon-socket-combat-proof-20261122
+          fi
+      - name: Upload rig previews and report for screenshot approval
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kala-bhairava-verified-rig-and-actual-blender-pose-previews
+          path: build/guardian
+          if-no-files-found: warn
+          retention-days: 14
