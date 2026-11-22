@@ -323,6 +323,7 @@ const RIBBON_FRAGMENT_SHADER = /* glsl */ `
   uniform float uInkBorder;
   uniform float uMode;
   uniform float uHdrBoost;
+  uniform float uDirectionalReveal;
 
   varying vec2 vUv;
 
@@ -416,7 +417,13 @@ const RIBBON_FRAGMENT_SHADER = /* glsl */ `
     }
 
     float dissolve = smoothstep(uLife * 0.86 - 0.08, uLife * 0.86 + 0.16, n * 0.74 + u * 0.26);
-    float finalAlpha = outerAlpha * dissolve * (1.0 - smoothstep(0.68, 1.0, uLife)) * uOpacity;
+    // Blade strokes draw from hilt to tip in the first ~32% of their life.
+    // Other legacy effects retain their existing static/reveal behavior.
+    float leadingEdge = 0.08 + uLife * 2.9;
+    float paintedFront = 1.0 - smoothstep(leadingEdge - 0.10, leadingEdge + 0.04, u);
+    float progressiveInk = mix(1.0, paintedFront, uDirectionalReveal);
+    float finalAlpha = outerAlpha * dissolve * progressiveInk *
+      (1.0 - smoothstep(0.68, 1.0, uLife)) * uOpacity;
     if (finalAlpha <= 0.01) discard;
 
     gl_FragColor = vec4(col * finalAlpha, finalAlpha);
@@ -1025,6 +1032,7 @@ function createRibbonMaterial(
       uInkBorder: { value: inkBorder ? 1.0 : 0.0 },
       uMode: { value: mode },
       uHdrBoost: { value: hdrBoost },
+      uDirectionalReveal: { value: 0 },
     },
     vertexShader: RIBBON_VERTEX_SHADER,
     fragmentShader: RIBBON_FRAGMENT_SHADER,
@@ -1266,6 +1274,12 @@ export class WebglDemonSlayerVfxOverlay {
     inkMat.uniforms.uEdgeColor.value.copy(pal.ink);
     const coreMat = createRibbonMaterial(pal, mode, 0.98, true, THREE.NormalBlending, variant === 'guardian' ? 1.68 : 2.05);
     const glowMat = createRibbonMaterial(pal, mode, 0.40, false, THREE.AdditiveBlending, 1.27);
+    if (variant === 'flame') {
+      // Directional attack reveal, not a static fully-formed screen sticker.
+      inkMat.uniforms.uDirectionalReveal.value = 1;
+      coreMat.uniforms.uDirectionalReveal.value = 1;
+      glowMat.uniforms.uDirectionalReveal.value = 1;
+    }
     const inkMesh = new THREE.Mesh(inkGeo, inkMat);
     const coreMesh = new THREE.Mesh(coreGeo, coreMat);
     const glowMesh = new THREE.Mesh(glowGeo, glowMat);
@@ -1918,6 +1932,8 @@ export class WebglDemonSlayerVfxOverlay {
       const geo = buildForwardPainterlyCleaveGeometry(r * 1.52, w, 2.5 + i * 1.35, 38);
       const mat = createRibbonMaterial(pal, 3.0, 0.92 - i * 0.10, true, THREE.NormalBlending, 1.50);
       const glowMat = createRibbonMaterial(pal, 3.0, 0.38, false, THREE.AdditiveBlending, 1.30);
+      mat.uniforms.uDirectionalReveal.value = 1;
+      glowMat.uniforms.uDirectionalReveal.value = 1;
 
       const m = new THREE.Mesh(geo, mat);
       m.rotation.set(0.12, 0, -opts.angle + (i - 1) * 0.22);
