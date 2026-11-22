@@ -14,6 +14,7 @@ import {
   VRIKODARA_DIALOGUE,
 } from '@/engine/v7StoryEngine';
 import { GAME_ASSETS } from '@/lib/game/assets';
+import MeruStoryCinematic from '@/components/game/MeruStoryCinematic';
 import {
   ASTRA_MANIFESTATION_MATRIX,
   ASTRA_METADATA,
@@ -941,79 +942,7 @@ export function NarrativeOverlay({
 
   if (stage === 'preserver_interlude') {
     return (
-      <div className="fixed inset-0 z-50 bg-black/92 flex items-center justify-center p-6 select-none">
-        <div className="max-w-3xl w-full bg-[#0b0a10] border-2 border-[#5ce6ff] p-7 space-y-5 shadow-[0_24px_90px_rgba(0,0,0,0.98)]">
-          <div className="flex items-center justify-between border-b border-[#5ce6ff]/30 pb-3">
-            <span className="text-xs font-mono-num tracking-[0.24em] text-[#5ce6ff] uppercase">
-              MEMORY ECHO · THE EIGHTEENTH NIGHT · THE PRESERVER MOMENT
-            </span>
-            <span className="text-xs font-mono-num text-[#ff9ea8]">
-              TIME HELD FOR ONE BREATH
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-center">
-            <div className="md:col-span-5 relative border border-[#5ce6ff]/60 bg-[#07080d] overflow-hidden">
-              <video
-                autoPlay
-                loop
-                muted
-                playsInline
-                poster={GAME_ASSETS.scrolls.scroll5FallOfFather}
-                src={GAME_ASSETS.cutsceneVideos.cosmicManifest}
-                className="w-full h-56 object-cover"
-              />
-              <div
-                className="absolute inset-0 pointer-events-none"
-                style={{
-                  background:
-                    'linear-gradient(180deg, rgba(10,14,22,0.15) 0%, rgba(8,10,16,0.88) 100%)',
-                }}
-              />
-              <div className="absolute bottom-2.5 left-3 right-3 text-[11px] text-[#bfefff] italic">
-                “Vishnu never touched him. Time was held for one breath so it looked that way.”
-              </div>
-            </div>
-
-            <div className="md:col-span-7 space-y-3.5">
-              <h3 className="font-display text-2xl font-bold text-[#fff6e8]">
-                “Rudra. Go and Look.”
-              </h3>
-              <p className="text-xs sm:text-sm text-[#d8ccb8] leading-relaxed">
-                As the chariot pyres of Chamber III rise ahead, the hollow in your brow throbs with
-                white Brahmashira fire. You remember the Preserver descending through the smoke—his
-                hands open, never striking you, only blocking your blows while your father
-                Kaala-Chakra fell to the ground <strong>before</strong> the Preserver’s hand even
-                moved.
-              </p>
-              <div className="p-3.5 bg-[#111520] border-l-2 border-[#5ce6ff] text-sm text-[#e6f9ff] flex items-center gap-3">
-                <img
-                  src={GAME_ASSETS.portraits.preserver}
-                  alt="The Preserver"
-                  className="w-12 h-12 object-cover border border-[#5ce6ff]/70 shrink-0"
-                />
-                <div>
-                  <strong className="text-[#5ce6ff] font-mono-num uppercase mr-2">
-                    THE PRESERVER:
-                  </strong>
-                  “I shattered the Mani into six shards to free the forty thousand souls you
-                  burned. Instead, they clung to the shards—and to your blood-brother Vrikodara.”
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex justify-end pt-2">
-            <button
-              type="button"
-              onClick={() => onAdvanceStage('combat_arena')}
-              className="px-6 py-2.5 bg-[#5ce6ff] hover:bg-[#82edff] text-[#06080c] font-bold text-xs tracking-[0.16em] uppercase cursor-pointer"
-            >
-              ENTER THE KURUKSHETRA CHARIOT PYRE →
-            </button>
-          </div>
-        </div>
-      </div>
+      <MeruStoryCinematic onFinish={() => onAdvanceStage('combat_arena')} />
     );
   }
 
