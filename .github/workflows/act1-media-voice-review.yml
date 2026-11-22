@@ -1,0 +1,51 @@
+name: Act I media and voice activation review
+
+on:
+  push:
+    branches:
+      - fix/act1-media-voice-activation-20261122
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  typecheck-and-audio-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      CI: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - name: Checkout code without large media library
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /package.json
+            /tsconfig.json
+            /next-env.d.ts
+            /next.config.ts
+            /lib/
+            /components/
+            /app/
+            /hooks/
+            /engine/
+            /scripts/
+            /public/kaalyuga/anims/rudra/
+            /public/kaalyuga/rudra/rigged.fbx
+            /public/kaalyuga/parashu/weapon.fbx
+            /public/models/Meshy_AI_Ashen_Warborn_20261025_texture_fbx/Meshy_AI_Ashen_Warborn_20261025_texture.fbx
+            /public/models/Meshy_AI_Ashen_Warborn_20261025_texture_fbx/Meshy_AI_Ashen_Warborn_20261025_texture.png
+            /public/models/Meshy_AI_Bloodforged_Trident_A_1025041928_texture_fbx/Meshy_AI_Bloodforged_Trident_A_1025041928_texture.png
+            /public/animations/pro_melee_axe/
+      - name: Use Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund --legacy-peer-deps
+      - name: Test visual combat regressions and voice/SFX cooldown
+        run: npm run test:phase1-4
+      - name: Typecheck
+        run: npx tsc --noEmit
