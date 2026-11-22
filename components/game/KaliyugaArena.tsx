@@ -560,6 +560,7 @@ export default function KaliyugaArena() {
   const qaRecentEventsRef = useRef<Array<{
     name: string; frameTime: number; meta?: string; progress?: number;
     contactX?: number; contactY?: number; playerX?: number; playerY?: number;
+    anchorSource?: 'weapon_mesh' | 'simulation_fallback';
   }>>([]);
   const bloodDemonArtsRef = useRef<BloodDemonArtPool>(createBloodDemonArtPool());
   const enemyVariantCounterRef = useRef<number>(0);
