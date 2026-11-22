@@ -601,6 +601,7 @@ interface ActiveWebglRibbon {
   inkMesh: THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>;
   coreMesh: THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>;
   glowMesh: THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>;
+  extraGeos?: THREE.BufferGeometry[];
   worldX: number;
   worldY: number;
   baseRotZ: number;
@@ -1272,9 +1273,25 @@ export class WebglDemonSlayerVfxOverlay {
     glowMesh.position.z = 2;
     const group = new THREE.Group();
     group.add(inkMesh, coreMesh, glowMesh);
+
+    // A single forward axe-shaped flame stroke plus two forked, tapering
+    // calligraphic tongues. Their cores share the existing shader/material,
+    // so no extra draw passes, radial rings, or independent screen-space origin.
+    const extraGeos: THREE.BufferGeometry[] = [];
+    if (variant === 'flame') {
+      const fringe = buildTaperedFlameTongueGeometry(mainLength * 0.78, mainWidth * 0.20, 15);
+      extraGeos.push(fringe);
+      for (const sign of [-1, 1]) {
+        const tongue = new THREE.Mesh(fringe, coreMat);
+        tongue.rotation.z = sign * 0.29;
+        tongue.position.set(mainLength * 0.10, sign * mainWidth * 0.24, 4);
+        tongue.scale.y = sign > 0 ? 0.92 : 0.76;
+        group.add(tongue);
+      }
+    }
     this.scene.add(group);
     this.ribbons.push({
-      group, inkMesh, coreMesh, glowMesh,
+      group, inkMesh, coreMesh, glowMesh, extraGeos,
       worldX: opts.x, worldY: opts.y,
       baseRotZ: -opts.angle,
       tiltX: 0.28, tiltY: 0,
@@ -1408,14 +1425,14 @@ export class WebglDemonSlayerVfxOverlay {
     const steps = 36;
     for (let i = 0; i <= steps; i++) {
       const t = i / steps;
-      // An OPEN, progressive serpent stroke, not a circular blue portal.
-      // The former 2.18-PI coil closed around the fighter and read as
-      // concentric neon water rings in captured real gameplay.
-      const theta = t * Math.PI * 1.46 - Math.PI * 0.75;
-      const rad = baseR * (0.30 + t * 0.90);
-      const x = Math.cos(theta) * rad + (t - 0.5) * baseR * 0.32;
-      const y = Math.sin(theta) * rad * 0.66 + Math.sin(t * Math.PI) * 44;
-      const z = Math.sin(t * Math.PI * 1.75) * 36 + t * 30;
+      // Weapon-directed S-shaped dragon: begins next to the Parashu and
+      // lashes FORWARD to a distinct head. Never curls back around Rudra
+      // into the circular portal seen in earlier gameplay captures.
+      const x = baseR * (-0.20 + 1.55 * t);
+      const envelope = Math.sin(t * Math.PI);
+      const y = baseR * (0.31 * Math.sin(t * Math.PI * 3.2) *
+        (1.0 - t * 0.42) + 0.085 * envelope);
+      const z = 8 + 27 * Math.sin(t * Math.PI * 1.4) + t * 24;
       pts.push(new THREE.Vector3(x, y, z));
     }
 
@@ -1451,15 +1468,14 @@ export class WebglDemonSlayerVfxOverlay {
     const dragonBody = new THREE.Mesh(tubeGeo, bodyMat);
     group.add(inkBody, dragonBody);
 
-    // Companion swirling Hokusai woodblock wave crest ribbons embracing the coiled dragon
-    // A shorter, offset open crest follows the dragon's wake rather than
-    // drawing the generic near-complete water halo around Rudra.
-    const waveSplashGeo = buildCurvedRibbonGeometry(baseR * 0.95, 34, Math.PI * 1.24, 1, 30);
+    // Parallel seafoam wake runs along the same forward travel direction,
+    // not an orbiting ring competing with the dragon silhouette.
+    const waveSplashGeo = buildForwardPainterlyCleaveGeometry(baseR * 1.22, 23, 2.7, 34);
     geos.push(waveSplashGeo);
     const waveSplashMat = createRibbonMaterial(pal, 1.0, 0.92, true, THREE.NormalBlending, 1.15);
     const waveSplashMesh = new THREE.Mesh(waveSplashGeo, waveSplashMat);
-    waveSplashMesh.rotation.set(0.55, -0.18, 0.35);
-    waveSplashMesh.position.z = -4;
+    waveSplashMesh.rotation.set(0.10, 0, -0.08);
+    waveSplashMesh.position.set(baseR * 0.03, -baseR * 0.23, -4);
     group.add(waveSplashMesh);
     // Keep shader updated via bodyMat? Use fadeMats/custom cleanup: attach waveSplashMat to fadeMats via cast or dispose cleanly
     fadeMats.push(waveSplashMat as unknown as THREE.MeshBasicMaterial);
@@ -1617,7 +1633,7 @@ export class WebglDemonSlayerVfxOverlay {
       worldX: opts.x,
       worldY: opts.y,
       angle: opts.angle,
-      speed: 220,
+      speed: 88,
       life: 0,
       maxLife: opts.duration ?? 0.68,
     });
@@ -1787,9 +1803,9 @@ export class WebglDemonSlayerVfxOverlay {
       this.spawnShockwaveRing({
         x: opts.x2,
         y: opts.y2 + 12,
-        radius: Math.max(76, Math.min(138, boltDist * 0.36)),
+        radius: Math.max(42, Math.min(82, boltDist * 0.22)),
         palette: 'thunder',
-        duration: 0.38,
+        duration: 0.26,
       });
     }
 
@@ -1894,19 +1910,22 @@ export class WebglDemonSlayerVfxOverlay {
     const shardMats: THREE.MeshBasicMaterial[] = [];
     const shardMeshes: ActiveWindGale['shardMeshes'] = [];
 
+    // Three staggered forward razor-strokes, each a tapered ink-blade.
+    // Former 3 circular crescents enveloped Rudra as near-complete neon rings.
     for (let i = 0; i < 3; i++) {
-      const r = radius * (0.72 + i * 0.22);
-      const w = 54 + i * 16;
-      const dir: 1 | -1 = i % 2 === 0 ? 1 : -1;
-      const geo = buildCurvedRibbonGeometry(r, w, 2.65 + i * 0.28, dir, 26);
-      const mat = createRibbonMaterial(pal, 3.0, 0.96 - i * 0.08, true, THREE.NormalBlending, 1.85);
-      const glowMat = createRibbonMaterial(pal, 3.0, 0.62, false, THREE.AdditiveBlending, 2.0);
+      const r = radius * (0.92 + i * 0.14);
+      const w = 43 - i * 7;
+      const geo = buildForwardPainterlyCleaveGeometry(r * 1.52, w, 2.5 + i * 1.35, 38);
+      const mat = createRibbonMaterial(pal, 3.0, 0.92 - i * 0.10, true, THREE.NormalBlending, 1.50);
+      const glowMat = createRibbonMaterial(pal, 3.0, 0.38, false, THREE.AdditiveBlending, 1.30);
 
       const m = new THREE.Mesh(geo, mat);
-      m.rotation.set(0.55 + i * 0.18, (i - 1) * 0.28, -opts.angle + (i - 1) * 0.45);
+      m.rotation.set(0.12, 0, -opts.angle + (i - 1) * 0.22);
+      m.position.set(radius * (0.05 + i * 0.08), (i - 1) * 27, 1 + i);
       const gm = new THREE.Mesh(geo, glowMat);
       gm.rotation.copy(m.rotation);
-      gm.position.z = 3;
+      gm.position.copy(m.position);
+      gm.position.z += 3;
       group.add(m, gm);
 
       geos.push(geo);
@@ -1931,8 +1950,9 @@ export class WebglDemonSlayerVfxOverlay {
     shardMats.push(inkShardMat);
 
     for (let s = 0; s < 9; s++) {
-      const a = -opts.angle + (s / 9) * Math.PI * 2;
-      const dist = radius * (0.35 + (s % 4) * 0.18);
+      // Ink debris follows the axe, rather than exploding around all 360°.
+      const a = -opts.angle + ((s % 5) - 2) * 0.23;
+      const dist = radius * (0.24 + (s % 4) * 0.17);
       const mesh = new THREE.Mesh(shardGeo, inkShardMat);
       mesh.position.set(Math.cos(a) * dist, Math.sin(a) * dist * 0.7, 18);
       const sc = 0.48 + (s % 3) * 0.16;
@@ -2555,8 +2575,10 @@ export class WebglDemonSlayerVfxOverlay {
       const grow = zoom * (0.68 + Math.sin(Math.min(1, norm * 1.35) * Math.PI * 0.5) * 0.48);
       d.group.position.set(toScreenX(d.worldX), toScreenY(d.worldY), 24);
       d.group.scale.set(grow, grow, grow);
-      d.group.rotation.z = -d.angle + norm * 1.9;
-      d.group.rotation.x = 0.26 * Math.sin(norm * Math.PI);
+      // Articulated strike stays along the weapon direction; a previous
+      // 109-degree spin made the entire dragon look like an expanding halo.
+      d.group.rotation.z = -d.angle + 0.055 * Math.sin(norm * Math.PI * 2);
+      d.group.rotation.x = 0.12 * Math.sin(norm * Math.PI);
       d.bodyMat.uniforms.uTime.value = this.elapsed * 1.4;
       d.bodyMat.uniforms.uLife.value = norm;
       const fade = 1 - Math.max(0, (norm - 0.65) / 0.35);
@@ -2744,6 +2766,7 @@ export class WebglDemonSlayerVfxOverlay {
     r.coreMesh.material.dispose();
     r.glowMesh.geometry.dispose();
     r.glowMesh.material.dispose();
+    r.extraGeos?.forEach(geo => geo.dispose());
   }
 
   private disposeCyclone(c: ActiveWebglCyclone): void {
