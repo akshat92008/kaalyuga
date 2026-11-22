@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {createDundubhiScene, createVrikodaraScene, createBossPhaseScene, validateCinematic, sampleCinematic, retimeCinematic, cuesBetween, MeruTimelinePlayer} from './cinematicTimeline';
 import {MeruAdaptiveQuality,GRAPHICS_PRESETS} from './adaptiveQuality';
 import {MeruFrameProbe} from './performanceProbe';
+import {validateProductionManifest,resolveProductionScene,MERU_PRODUCTION_SCENE_IDS,getInstalledProductionSceneIds} from './productionSceneRegistry';
 import {measureSilhouetteCrop} from './silhouetteCrop';
 import {beginPortalTransition,advancePortalTransition,portalPalette} from './portalDirector';
 import {shouldStartDundubhiIntro,shouldStartBossIntro,shouldStartBossPhase,meruStorageKey,meruSceneStorageKey,defaultBossIntro} from './runtimePolicy';
@@ -298,4 +299,44 @@ test('transparent rig alpha framing removes empty space while preserving limbs a
   assert.equal(empty.fitted,false,'Missing rigs must preserve a safe full-frame fallback');
   const invalid=measureSilhouetteCrop(rgba,width,200);
   assert.equal(invalid.fitted,false,'Undersized RGBA data never crashes rendering');
+});
+
+test('production cinematic manifest lists exactly the six gameplay scene slots',()=>{
+  assert.deepEqual([...MERU_PRODUCTION_SCENE_IDS].sort(),[
+    'dundubhi-entrance','dundubhi-phase-2','dundubhi-phase-3',
+    'vrikodara-entrance','vrikodara-phase-2','vrikodara-phase-3',
+  ].sort());
+  assert.deepEqual(getInstalledProductionSceneIds(),[],
+    'No user-approved Studio exports have been installed yet; never claim they shipped');
+  for(const boss of ['dundubhi','vrikodara'] as const){
+    for(const phase of [1,2,3] as const){
+      const resolved=resolveProductionScene(boss,phase);
+      const factory=phase===1?(boss==='dundubhi'?createDundubhiScene():createVrikodaraScene()):createBossPhaseScene(boss,phase);
+      assert.equal(resolved.id,factory.id);
+      assert.deepEqual(resolved.cues,factory.cues);
+    }
+  }
+});
+test('packaged cinematic scene overrides are delivered to the correct boss and phase',()=>{
+  const authored=createDundubhiScene();
+  authored.title='PRODUCTION REVIEWED DUNDUBHI';
+  authored.pose![1].value.rightArmLift=-0.25;
+  const manifest={schemaVersion:1,scenes:{[authored.id]:authored}};
+  const checked=validateProductionManifest(manifest);
+  assert.deepEqual(Object.keys(checked.scenes),['dundubhi-entrance']);
+  assert.equal(resolveProductionScene('dundubhi',1,manifest).title,'PRODUCTION REVIEWED DUNDUBHI');
+  assert.equal(resolveProductionScene('dundubhi',1,manifest).pose![1].value.rightArmLift,-0.25);
+  assert.equal(resolveProductionScene('vrikodara',1,manifest).title,createVrikodaraScene().title);
+  checked.scenes['dundubhi-entrance']!.title='changed clone only';
+  assert.equal(authored.title,'PRODUCTION REVIEWED DUNDUBHI');
+});
+test('invalid or spoofed shipped scenes cannot override another encounter',()=>{
+  const valid=createBossPhaseScene('dundubhi',2);
+  assert.throws(()=>validateProductionManifest({schemaVersion:1,scenes:{'vrikodara-phase-2':valid}}),/mismatch/);
+  assert.throws(()=>validateProductionManifest({schemaVersion:1,scenes:{'dundubhi-phase2':valid}}),/Unknown/);
+  assert.throws(()=>validateProductionManifest({schemaVersion:1,scenes:{'dundubhi-phase-2':{...valid,backgroundUrl:'https://attacker.example/clip.mp4'}}}),/asset URL/);
+  assert.throws(()=>validateProductionManifest({schemaVersion:2,scenes:{}}),/manifest/);
+  assert.throws(()=>validateProductionManifest({schemaVersion:1,scenes:{'rogue':valid}}),/Unknown/);
+  assert.equal(resolveProductionScene('dundubhi',2,{schemaVersion:1,scenes:{'dundubhi-phase-2':{...valid,boss:'vrikodara'}}}).title,valid.title);
+  assert.equal(resolveProductionScene('dundubhi',2,{schemaVersion:1,scenes:{'dundubhi-phase-2':valid}}).id,valid.id);
 });
