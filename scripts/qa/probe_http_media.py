@@ -19,12 +19,12 @@ BYTES_TO_READ = 1024
 HTTP_TIMEOUT = 12
 
 
-def probe_url(url, timeout=HTTP_TIMEOUT):
+def probe_url(url, timeout=HTTP_TIMEOUT, skip_head=False):
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https") or not parsed.netloc:
         raise ValueError("A complete http:// or https:// URL is required")
-    result = {"url": url, "head": {}, "range_get": {}}
-    for method in ("HEAD", "GET"):
+    result = {"url": url, "head": {"status": "skipped"} if skip_head else {}, "range_get": {}}
+    for method in (("GET",) if skip_head else ("HEAD", "GET")):
         headers = {"User-Agent": "Kaliyuga-QA-Media-Probe/1.0", "Cache-Control": "no-cache"}
         if method == "GET":
             headers["Range"] = f"bytes=0-{BYTES_TO_READ - 1}"
@@ -64,7 +64,7 @@ def probe_url(url, timeout=HTTP_TIMEOUT):
     return result
 
 
-def audit(base_url, paths, timeout=HTTP_TIMEOUT):
+def audit(base_url, paths, timeout=HTTP_TIMEOUT, skip_head=False):
     base = base_url.rstrip("/") + "/"
     if not base_url.startswith(("http://", "https://")):
         raise ValueError("Base URL must be http(s)")
@@ -75,11 +75,12 @@ def audit(base_url, paths, timeout=HTTP_TIMEOUT):
         target = urljoin(base, path.lstrip("/"))
         if urlparse(target).netloc != urlparse(base).netloc:
             raise ValueError("Asset URL unexpectedly leaves the specified server")
-        reports.append(probe_url(target, timeout))
+        reports.append(probe_url(target, timeout, skip_head=skip_head))
     return {
         "scope": "bounded HEAD and Range GET on one given preview server",
         "probed_at_utc": datetime.now(timezone.utc).isoformat(),
         "requested_paths": paths,
+        "head_preflight_skipped": skip_head,
         "responses": reports,
         "supports_206_count": sum(x["range_response"] == "supports_206" for x in reports),
         "human_runtime_approval": "NOT_REVIEWED",
@@ -98,10 +99,11 @@ def main(argv=None):
     p.add_argument("--path", action="append", required=True, help="Root-relative media URL, repeatable")
     p.add_argument("--output-dir", type=Path, default=Path("artifacts/qa-independent"))
     p.add_argument("--timeout", type=float, default=HTTP_TIMEOUT)
+    p.add_argument("--skip-head", action="store_true", help="Avoid priming server cache via HEAD before the first GET")
     args = p.parse_args(argv)
     if not 0 < args.timeout <= 60:
         p.error("Timeout must be in (0, 60] seconds")
-    report = audit(args.base_url, args.path, args.timeout)
+    report = audit(args.base_url, args.path, args.timeout, skip_head=args.skip_head)
     args.output_dir.mkdir(parents=True, exist_ok=True)
     (args.output_dir/"http-range-probe.json").write_text(json.dumps(report, indent=2)+"\n", encoding="utf-8")
     print("Range 206 responses:", report["supports_206_count"], "/", len(report["responses"]))
