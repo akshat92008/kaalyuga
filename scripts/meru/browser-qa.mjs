@@ -264,4 +264,39 @@ try{
   console.log('MERU_PORTAL_QA: Vaitarani walk-to-gate, poster gate, Skip, real chamber handoff, input release PASS');
   await ferryPage.close();
 
+  // Act I story sequence runs the exact component now mounted in the actual
+  // preserver_interlude. The preview route does not mutate combat saves.
+  const storyPage=await context.newPage();
+  const storyErrors=[];
+  storyPage.on('pageerror',error=>storyErrors.push(error.message));
+  const storyResponse=await storyPage.goto('http://127.0.0.1:3000/meru-story-preview',{
+    waitUntil:'domcontentloaded',timeout:90000,
+  });
+  assert.equal(storyResponse?.status(),200,'Meru story director preview must resolve');
+  const film=storyPage.getByTestId('meru-story-cinematic');
+  await film.waitFor({timeout:25000});
+  assert.equal(await film.getAttribute('data-meru-story-shot'),'rudra-looks-up');
+  assert.equal(await storyPage.locator('video').count(),1,
+    'MacBook Air cinematic must use only one video decoder');
+  await storyPage.waitForFunction(()=>{
+    return document.querySelector('[data-testid="meru-story-cinematic"]')
+      ?.getAttribute('data-meru-story-shot')==='rudra-close';
+  },null,{timeout:16000});
+  await storyPage.screenshot({path:join(out,'meru-preserver-four-shot-preview.png'),animations:'disabled'});
+  await storyPage.getByRole('button',{name:'Skip Preserver memory and return to combat'}).click();
+  await film.waitFor({state:'detached',timeout:5000});
+  await storyPage.getByText('Playback completed.',{exact:false}).waitFor();
+  // Accessibility: reduced-motion preview uses source painting only; there
+  // must not be a hidden looping MP4 decoding behind the requested still.
+  await storyPage.emulateMedia({reducedMotion:'reduce'});
+  await storyPage.getByRole('button',{name:'Replay four-shot cinematic'}).click();
+  await film.waitFor();
+  assert.equal(await film.getAttribute('data-meru-story-clip-status'),'still');
+  assert.equal(await storyPage.locator('video').count(),0);
+  assert.match(await storyPage.locator('#meru-story-narration').textContent()??'',/sky opened/i);
+  await storyPage.getByRole('button',{name:'Skip Preserver memory and return to combat'}).click();
+  assert.equal(storyErrors.length,0,'Preserver film must not cause uncaught browser errors');
+  console.log('MERU_STORY_QA: four-shot narrative film, timed cut, story handoff, one decoder, reduced-motion fallback PASS');
+  await storyPage.close();
+
 }finally{await browser.close();}
