@@ -469,13 +469,15 @@ const WATER_DRAGON_FRAGMENT_SHADER = /* glsl */ `
     float dorsal = 1.0 - smoothstep(0.08, 0.44, abs(v - 0.5));
     col = mix(col, ceruleanMist, dorsal * 0.68 + (1.0 - scaleRim) * 0.22);
     // Crisp Sumi-e ink scale contours
-    col = mix(col, sumiInk, scaleRim * 0.52);
+    // Less tiled fish-scale pattern, more translucent flowing indigo water.
+    col = mix(col, sumiInk, scaleRim * 0.18);
     // Lace-like rice-paper seafoam curls along wave edges
     float foamLace = smoothstep(0.72, 0.93, sin(u * 30.0 - uTime * 8.0 + v * 5.0) * 0.5 + 0.5) * smoothstep(0.26, 0.46, abs(v - 0.5));
     col = mix(col, ricePaperFoam, foamLace * 0.82);
     col += paperGrain;
 
-    float alpha = (1.0 - smoothstep(0.72, 1.0, uLife)) * smoothstep(0.0, 0.08, u) * 0.95;
+    float alpha = (1.0 - smoothstep(0.72, 1.0, uLife)) *
+      smoothstep(0.0, 0.09, u) * 0.81;
     if (alpha <= 0.01) discard;
     gl_FragColor = vec4(col * alpha, alpha);
   }
@@ -901,17 +903,21 @@ export function buildForwardPainterlyCleaveGeometry(
   const triangles: number[] = [];
   for (let i = 0; i <= n; i++) {
     const t = i / n;
-    const envelope = Math.pow(Math.max(0, Math.sin(Math.PI * t)), 0.67);
-    const broadInk = 0.82 + 0.24 * Math.sin(t * 22.0 + seed * 1.7)
-      + 0.10 * Math.sin(t * 49.0 + seed * 3.8);
-    const tooth = 0.74 + 0.27 * Math.sin(t * 37.0 + seed * 2.6)
-      + 0.16 * Math.sin(t * 71.0 + seed * 4.1);
-    const root = -len * 0.18;
-    const x = root + len * 1.18 * t;
-    const centerY = -span * 0.24 * Math.sin(t * Math.PI)
-      + span * 0.11 * Math.sin(t * Math.PI * 2.1 + seed) * envelope;
-    const lower = centerY - span * envelope * Math.max(0.22, broadInk) * 0.46;
-    const upper = centerY + span * envelope * Math.max(0.18, tooth) * 0.54;
+    // Large, coherent calligraphy curves. High-frequency 37/71-radian noise
+    // produced a flat red saw-blade silhouette in actual gameplay captures.
+    const envelope = Math.pow(Math.max(0, Math.sin(Math.PI * t)), 0.86);
+    const broadInk = 0.84 + 0.11 * Math.sin(t * Math.PI * 4.1 + seed * 0.7)
+      + 0.05 * Math.sin(t * Math.PI * 8.0 + seed * 1.3);
+    const tooth = 0.86 + 0.14 * Math.sin(t * Math.PI * 5.0 + seed)
+      + 0.065 * Math.sin(t * Math.PI * 9.0 + seed * 2.1);
+    const root = -len * 0.13;
+    const x = root + len * 1.13 * t;
+    const centerY = span * (
+      0.25 * Math.sin(t * Math.PI * 1.16 + seed * 0.23)
+      + 0.13 * Math.sin(t * Math.PI * 2.15 + seed * 0.34)
+    ) * envelope;
+    const lower = centerY - span * envelope * Math.max(0.45, broadInk) * 0.43;
+    const upper = centerY + span * envelope * Math.max(0.42, tooth) * 0.48;
     const lift = 8 * envelope * Math.sin(t * Math.PI);
     positions.push(x, lower, lift * 0.5);
     positions.push(x, upper, lift);
@@ -1270,7 +1276,7 @@ export class WebglDemonSlayerVfxOverlay {
     const coreGeo = buildForwardPainterlyCleaveGeometry(mainLength, mainWidth, 0.55, 52);
     const glowGeo = buildForwardPainterlyCleaveGeometry(mainLength * 1.05, mainWidth * (variant === 'flame' ? 1.15 : 1.25), 1.5, 48);
     const mode = paletteModeIndex(opts.palette ?? (variant === 'guardian' ? 'blood' : 'hinokami'));
-    const inkMat = createRibbonMaterial(pal, mode, 0.97, true, THREE.NormalBlending, 0.36);
+    const inkMat = createRibbonMaterial(pal, mode, variant === 'flame' ? 0.70 : 0.97, true, THREE.NormalBlending, 0.36);
     inkMat.uniforms.uCoreColor.value.copy(pal.ink);
     inkMat.uniforms.uMidColor.value.copy(pal.ink);
     inkMat.uniforms.uEdgeColor.value.copy(pal.ink);
@@ -1295,13 +1301,16 @@ export class WebglDemonSlayerVfxOverlay {
     // so no extra draw passes, radial rings, or independent screen-space origin.
     const extraGeos: THREE.BufferGeometry[] = [];
     if (variant === 'flame') {
-      const fringe = buildTaperedFlameTongueGeometry(mainLength * 0.78, mainWidth * 0.20, 15);
+      const fringe = buildTaperedFlameTongueGeometry(mainLength * 0.54, mainWidth * 0.15, 15);
       extraGeos.push(fringe);
       for (const sign of [-1, 1]) {
+        // Small asymmetrical curls; two giant symmetrical pincers looked like
+        // a glowing crab claw instead of flame in the captured heavy swing.
         const tongue = new THREE.Mesh(fringe, coreMat);
-        tongue.rotation.z = sign * 0.29;
-        tongue.position.set(mainLength * 0.10, sign * mainWidth * 0.24, 4);
-        tongue.scale.y = sign > 0 ? 0.92 : 0.76;
+        tongue.rotation.z = sign > 0 ? 0.12 : -0.17;
+        tongue.position.set(mainLength * (sign > 0 ? 0.24 : 0.34),
+          sign * mainWidth * 0.16, 4);
+        tongue.scale.y = sign > 0 ? 0.88 : 0.72;
         group.add(tongue);
       }
     }
@@ -1453,8 +1462,8 @@ export class WebglDemonSlayerVfxOverlay {
     }
 
     const curve = new THREE.CatmullRomCurve3(pts);
-    const tubeGeo = buildTaperedDragonBodyGeometry(curve, 52, 23, 8);
-    const inkGeo = buildTaperedDragonBodyGeometry(curve, 40, 27.5, 8);
+    const tubeGeo = buildTaperedDragonBodyGeometry(curve, 52, 16, 8);
+    const inkGeo = buildTaperedDragonBodyGeometry(curve, 40, 18.5, 8);
     geos.push(tubeGeo, inkGeo);
 
     const inkMat = new THREE.MeshBasicMaterial({
@@ -1552,14 +1561,14 @@ export class WebglDemonSlayerVfxOverlay {
       new THREE.Vector3(30, 8, 4),
       new THREE.Vector3(44, 13, 2),
     ]);
-    const upperJawGeo = buildTaperedDragonBodyGeometry(snoutCurve, 18, 17.5, 8);
+    const upperJawGeo = buildTaperedDragonBodyGeometry(snoutCurve, 18, 12.5, 8);
 
     const lowerJawCurve = new THREE.CatmullRomCurve3([
       new THREE.Vector3(-12, -6, 1),
       new THREE.Vector3(8, -14, 2),
       new THREE.Vector3(30, -18, 1),
     ]);
-    const lowerJawGeo = buildTaperedDragonBodyGeometry(lowerJawCurve, 14, 11.5, 7);
+    const lowerJawGeo = buildTaperedDragonBodyGeometry(lowerJawCurve, 14, 8.5, 7);
 
     // Sweeping Ukiyo-e seafoam wave-mane plumes behind the brow
     const maneCurve = new THREE.CatmullRomCurve3([
@@ -1567,7 +1576,7 @@ export class WebglDemonSlayerVfxOverlay {
       new THREE.Vector3(-22, 26, 9),
       new THREE.Vector3(-46, 18, 4),
     ]);
-    const crestGeo = buildTaperedDragonBodyGeometry(maneCurve, 14, 13, 7);
+    const crestGeo = buildTaperedDragonBodyGeometry(maneCurve, 14, 9, 7);
 
     geos.push(upperJawGeo, lowerJawGeo, crestGeo, eyeGeo);
     fadeMats.push(
@@ -1692,8 +1701,8 @@ export class WebglDemonSlayerVfxOverlay {
       0,
       dx,
       dy,
-      boltDist > 220 ? 6 : 5,
-      Math.min(58, Math.max(28, boltDist * 0.18)),
+      boltDist > 220 ? 5 : 4,
+      Math.min(32, Math.max(18, boltDist * 0.11)),
       seed
     );
     const branches = opts.lightweight ? [] : computeThunderForkedBranches(mainPts, seed);
@@ -1780,13 +1789,9 @@ export class WebglDemonSlayerVfxOverlay {
     });
     mats.push(starInkMat, starCyanMat, starCoreMat);
 
-    const nodeIndices = opts.lightweight
-      ? [mainPts.length - 1]
-      : [
-          Math.max(1, Math.floor(mainPts.length * 0.34)),
-          Math.max(2, Math.floor(mainPts.length * 0.68)),
-          mainPts.length - 1,
-        ];
+    // Keep one contact glint at the impact tip; three giant elbow stars
+    // obscured the axe and made the bolt feel like generic fireworks.
+    const nodeIndices = [mainPts.length - 1];
     const uniqueNodeIndices = Array.from(new Set(nodeIndices)).filter(
       (idx) => idx > 0 && idx < mainPts.length
     );
