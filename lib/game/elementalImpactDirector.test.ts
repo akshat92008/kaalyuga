@@ -28,14 +28,14 @@ test('heavy release stays bounded on low-end GPU and scales with power', () => {
 
 test('each elemental heavy uses distinct primary geometry and only one shared spark burst', () => {
   const primaryNames: Record<HeavyElement, string> = {
-    agni: 'spawnSlashRibbon',
+    agni: 'spawnPainterlyCleave',
     varuna: 'spawnWaterDragon',
     vayu: 'spawnWindGaleCrescents',
     vajra: 'spawnThunderZigzag',
-    guardian: 'spawnSlashRibbon',
+    guardian: 'spawnPainterlyCleave',
   };
   const methods = [
-    'spawnSolarFlameWheel', 'spawnWaterDragon', 'spawnWindGaleCrescents',
+    'spawnSolarFlameWheel', 'spawnPainterlyCleave', 'spawnWaterDragon', 'spawnWindGaleCrescents',
     'spawnThunderZigzag', 'spawnSlashRibbon', 'spawnShockwaveRing',
     'spawnClashStarburst', 'spawnSparkBurst',
   ];
@@ -55,20 +55,20 @@ test('each elemental heavy uses distinct primary geometry and only one shared sp
   }
 });
 
-test('Agni and guardian heavy silhouettes are directional and avoid circular shockwaves', () => {
+test('Agni and guardian use a single forward painterly cleave, not circular shockwaves', () => {
   for (const element of ['agni', 'guardian'] as const) {
     const log: Array<{kind:string; opts:Record<string, unknown>}> = [];
     const methods = [
-      'spawnSolarFlameWheel', 'spawnWaterDragon', 'spawnWindGaleCrescents',
+      'spawnSolarFlameWheel', 'spawnPainterlyCleave', 'spawnWaterDragon', 'spawnWindGaleCrescents',
       'spawnThunderZigzag', 'spawnSlashRibbon', 'spawnShockwaveRing',
       'spawnClashStarburst', 'spawnSparkBurst',
     ];
     const sink = Object.fromEntries(methods.map(kind => [kind, (opts: Record<string, unknown>) => log.push({kind,opts})])) as unknown as HeavyEffectSink;
     spawnHeavyElementalRelease(sink, {element, x:150, y:100, angle:0.4, radius:180});
-    const trails=log.filter(c=>c.kind==='spawnSlashRibbon');
-    assert.equal(trails.length,2,'dual directional silhouette');
-    assert.ok(trails.every(c=>Number(c.opts.arcSpan)<2.1),'no circular ring-like sweeps');
-    assert.ok(trails.every(c=>Math.abs(Number(c.opts.spinRate))<=0.25),'non-orbiting slash release');
+    const main=log.filter(c=>c.kind==='spawnPainterlyCleave');
+    assert.equal(main.length,1,'one painted forward impact per attack');
+    assert.equal(main[0].opts.angle,0.4);
+    assert.equal(main[0].opts.variant,element==='guardian'?'guardian':'flame');
     assert.ok(!log.some(c=>c.kind==='spawnSolarFlameWheel' || c.kind==='spawnShockwaveRing'));
     assert.equal(log.filter(c=>c.kind==='spawnSparkBurst').length,1);
   }
