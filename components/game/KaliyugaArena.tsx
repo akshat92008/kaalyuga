@@ -5661,28 +5661,30 @@ export default function KaliyugaArena() {
             webglDemonSlayerVfxRef.current?.spawnWindGaleCrescents({
               x: originX, y: originY,
               angle: capturedAngle, radius: arcRadius * 1.02,
-              duration: 0.22, lightweight: true,
+              duration: 0.32, lightweight: true,
             });
           } else if (capturedStance === 'thrust') {
             webglDemonSlayerVfxRef.current?.spawnThunderZigzag({
               x1: originX, y1: originY,
               x2: originX + Math.cos(capturedAngle) * (arcRadius * 1.15),
               y2: originY + Math.sin(capturedAngle) * arcRadius * 0.77,
-              palette: 'thunder', duration: 0.20,
-              width: 11, withFloorRing: false, lightweight: true,
+              palette: 'thunder', duration: 0.30,
+              width: 13, withFloorRing: false, lightweight: true,
             });
           } else {
             webglDemonSlayerVfxRef.current?.spawnPainterlyCleave({
               x: originX, y: originY,
               angle: capturedAngle, radius: arcRadius * 0.84,
-              palette: 'hinokami', duration: 0.21, variant: 'flame',
+              palette: 'hinokami', duration: 0.31, variant: 'flame',
             });
           }
           webglDemonSlayerVfxRef.current?.spawnSparkBurst({
             x: originX + Math.cos(capturedAngle) * 44,
             y: originY + Math.sin(capturedAngle) * 28,
-            count: 6,
-            speed: 310,
+            count: 5,
+            speed: 260,
+            angle: capturedAngle,
+            spread: 1.35,
             palette: lightSlashPalette,
           });
         } else {
