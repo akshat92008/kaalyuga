@@ -1,0 +1,51 @@
+name: "P0 guardian Blender rig inventory (read-only)"
+on:
+  push:
+    branches:
+      - feature/phase1-weapon-socket-combat-proof-20261122
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: p0-guardian-rig-inventory
+  cancel-in-progress: true
+jobs:
+  inventory:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout exact guardian, candidate skeletal clips and QA script
+        uses: actions/checkout@v4
+        with:
+          filter: blob:none
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            scripts/qa/guardian_rig_audit.py
+            new 3D assets and animations/3D Models/Horned_Warlord_of_the_Abyss/
+            new 3D assets and animations/Animations/Creature Pack (4)/mutant breathing idle.fbx
+            new 3D assets and animations/Animations/Creature Pack (4)/mutant roaring.fbx
+            new 3D assets and animations/Animations/Pro Melee Axe Pack (5)/standing melee attack downward.fbx
+            public/kaalyuga/rudra/rigged.fbx
+      - name: Install Blender
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y blender python3-numpy
+          blender --version
+      - name: Inspect FBX bones, skinned meshes and animation channels without modification
+        run: |
+          blender -b -t 2 --python scripts/qa/guardian_rig_audit.py -- \
+            --output artifacts/guardian-rig-report.json \
+            "new 3D assets and animations/3D Models/Horned_Warlord_of_the_Abyss/Meshy_AI_Horned_Warlord_of_the_Abyss_20261120_generate.fbx" \
+            "new 3D assets and animations/3D Models/Horned_Warlord_of_the_Abyss/Meshy_AI_Horned_Warlord_of_the_Abyss_20261120_texture.fbx" \
+            "new 3D assets and animations/Animations/Creature Pack (4)/mutant breathing idle.fbx" \
+            "new 3D assets and animations/Animations/Creature Pack (4)/mutant roaring.fbx" \
+            "new 3D assets and animations/Animations/Pro Melee Axe Pack (5)/standing melee attack downward.fbx" \
+            "public/kaalyuga/rudra/rigged.fbx"
+      - name: Upload factual rig inventory
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: guardian-real-fbx-rig-inventory
+          path: artifacts/guardian-rig-report.json
+          if-no-files-found: warn
+          retention-days: 14
