@@ -146,6 +146,17 @@ def export_rigged_fbx(mesh,rig,path):
     )
 
 
+def evaluated_bounds(mesh):
+    deps = bpy.context.evaluated_depsgraph_get()
+    ob = mesh.evaluated_get(deps)
+    evaluated = ob.to_mesh()
+    coords = [ob.matrix_world @ vert.co for vert in evaluated.vertices]
+    lo = Vector((min(v.x for v in coords),min(v.y for v in coords),min(v.z for v in coords)))
+    hi = Vector((max(v.x for v in coords),max(v.y for v in coords),max(v.z for v in coords)))
+    ob.to_mesh_clear()
+    return lo, hi
+
+
 def render_preview(mesh,rig,action,output):
     try:
         scene = bpy.context.scene
@@ -160,10 +171,12 @@ def render_preview(mesh,rig,action,output):
         scene.display.shading.show_shadows=True
         mesh.color=(0.33,0.13,0.09,1)
         rig.animation_data_create().action=action
+        rig.data.pose_position='POSE' if action else 'REST'
         frame=int((action.frame_range[0]+action.frame_range[1])*0.5) if action else 1
         scene.frame_set(frame)
         bpy.context.view_layer.update()
-        mn,mx = world_bounds(mesh)
+        mn,mx = evaluated_bounds(mesh)
+        print("GUARDIAN_POSE_BOUNDS", output.name, tuple(round(v,3) for v in mn), tuple(round(v,3) for v in mx))
         mid=(mn+mx)*0.5
         size=max((mx-mn).length,1)
         cam_data=bpy.data.cameras.new('GuardianAuditCam')
@@ -270,9 +283,16 @@ def main():
     # runner may lack libEGL and exit the Blender process during render.
     (out/'rigging-report.json').write_text(json.dumps(report,indent=2),encoding='utf-8')
 
+    # Rest screenshot must show the whole original silhouette before any
+    # animation is accepted. Framing uses the evaluated deformed mesh,
+    # not its original undeformed vertex bounding box.
+    render_preview(mesh,rig,None,out/'guardian-rest.png')
+    report['rest_evaluated_bounds']=[list(v) for v in evaluated_bounds(mesh)]
     render_preview(mesh,rig,idle,out/'guardian-idle.png')
+    report['idle_evaluated_bounds']=[list(v) for v in evaluated_bounds(mesh)]
     if attack:
         render_preview(mesh,rig,attack,out/'guardian-heavy.png')
+        report['heavy_evaluated_bounds']=[list(v) for v in evaluated_bounds(mesh)]
     (out/'rigging-report.json').write_text(json.dumps(report,indent=2),encoding='utf-8')
     print("GUARDIAN_RIG_REPORT "+json.dumps(report))
     if not report['mesh_has_armature_modifier'] or report['deforming_vertex_groups']<4:
