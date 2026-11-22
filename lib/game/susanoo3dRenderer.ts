@@ -191,6 +191,7 @@ const SUSANOO_FRAGMENT_SHADER = /* glsl */ `
 
 export const SUSANOO_FBX_URL = '/models_v2/horned_warlord_abyss.fbx';
 const GUARDIAN_RIGGED_QA_URL = '/models_v2/rigged_crimson_guardian_preview.fbx';
+const ABYSS_RIGGED_QA_URL = '/models_v2/kala_bhairava_guardian_rigged.fbx';
 
 const SUSANOO_ANIM_URLS = {
   idle: '/new_3d_assets/Animations/Creature Pack (4)/mutant breathing idle.fbx',
@@ -222,8 +223,10 @@ export class Susanoo3DRenderer {
   private actions: Partial<Record<SusanooClipKey, THREE.AnimationAction>> = {};
   private activeClip: SusanooClipKey | null = null;
   private hasSkinnedBones = false;
-  private readonly riggedPreviewMode =
-    typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('guardianPreview') === '1';
+  private readonly guardianPreviewSource =
+    typeof window === 'undefined' ? '' : (new URLSearchParams(window.location.search).get('guardianPreview') ?? '');
+  private readonly riggedPreviewMode = this.guardianPreviewSource === '1' || this.guardianPreviewSource === 'abyss';
+  private readonly abyssRiggedPreview = this.guardianPreviewSource === 'abyss';
   private generatedPreviewBones: string[] = [];
   private previewArmBone: THREE.Bone | null = null;
   private previewArmAtRest = new THREE.Quaternion();
@@ -302,7 +305,8 @@ export class Susanoo3DRenderer {
     if (this.isLoading || this.isLoaded || this.loadFailed) return;
     this.isLoading = true;
     try {
-      const fbx = await loadFbxCached(this.riggedPreviewMode ? GUARDIAN_RIGGED_QA_URL : SUSANOO_FBX_URL, false);
+      const previewSourceUrl = this.abyssRiggedPreview ? ABYSS_RIGGED_QA_URL : this.riggedPreviewMode ? GUARDIAN_RIGGED_QA_URL : SUSANOO_FBX_URL;
+      const fbx = await loadFbxCached(previewSourceUrl, false);
       // A plain Object3D clone duplicates bones without reliably rebinding
       // SkinnedMesh.skeleton.bones to the cloned bone hierarchy. The avatar
       // can appear frozen or deformed even when an AnimationMixer advances.
@@ -371,7 +375,13 @@ export class Susanoo3DRenderer {
 
       this.isLoaded = true;
 
-      if (this.riggedPreviewMode && this.mixer) {
+      if (this.abyssRiggedPreview && this.mixer) {
+        // The actual approved Abyss sculpt now has a 33-bone skin in a NEW
+        // generated FBX. Drive its own Mixamo-compatible bones using the
+        // original Creature Pack and axe clips, rather than substituting the
+        // Crimson Skull warlord or static orange shader mesh.
+        this.streamSusanooClips(clone, standingHipY);
+      } else if (this.riggedPreviewMode && this.mixer) {
         // The alternative Crimson Skull source is genuinely skinned, but its
         // embedded clip is Running. Build an explicit *preview* animation
         // set that targets exactly its own known Mixamo bone hierarchy;
@@ -483,6 +493,7 @@ export class Susanoo3DRenderer {
     rendered3dFrameCount: number;
     peakPreviewArmRotationRad: number;
     riggedPreviewMode: boolean;
+    guardianPreviewSource: string;
     skeletonAnimationReady: boolean;
     animatedPreviewBoneNames: string[];
   } {
@@ -497,6 +508,7 @@ export class Susanoo3DRenderer {
       rendered3dFrameCount: this.rendered3dFrameCount,
       peakPreviewArmRotationRad: Number(this.peakPreviewArmRotationRad.toFixed(3)),
       riggedPreviewMode: this.riggedPreviewMode,
+      guardianPreviewSource: this.guardianPreviewSource,
       skeletonAnimationReady: this.hasSkinnedBones && Boolean(this.actions.swing1) && Boolean(this.actions.swing2) && Boolean(this.actions.swing3),
       animatedPreviewBoneNames: this.generatedPreviewBones,
     };
