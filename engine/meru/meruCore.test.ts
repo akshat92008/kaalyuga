@@ -6,7 +6,7 @@ import {MeruFrameProbe} from './performanceProbe';
 import {validateProductionManifest,resolveProductionScene,MERU_PRODUCTION_SCENE_IDS,getInstalledProductionSceneIds} from './productionSceneRegistry';
 import {measureSilhouetteCrop} from './silhouetteCrop';
 import {beginPortalTransition,advancePortalTransition,portalPalette} from './portalDirector';
-import {shouldStartDundubhiIntro,shouldStartBossIntro,shouldStartBossPhase,meruStorageKey,meruSceneStorageKey,defaultBossIntro} from './runtimePolicy';
+import {shouldStartDundubhiIntro,shouldStartBossIntro,shouldStartBossPhase,meruStorageKey,meruSceneStorageKey,defaultBossIntro,allowLocalStudioPreview} from './runtimePolicy';
 
 test('canonical Dundubhi sequence validates and produces finite frames at every sample',()=>{
   const scene=createDundubhiScene();
@@ -339,4 +339,11 @@ test('invalid or spoofed shipped scenes cannot override another encounter',()=>{
   assert.throws(()=>validateProductionManifest({schemaVersion:1,scenes:{'rogue':valid}}),/Unknown/);
   assert.equal(resolveProductionScene('dundubhi',2,{schemaVersion:1,scenes:{'dundubhi-phase-2':{...valid,boss:'vrikodara'}}}).title,valid.title);
   assert.equal(resolveProductionScene('dundubhi',2,{schemaVersion:1,scenes:{'dundubhi-phase-2':valid}}).id,valid.id);
+});
+
+test('production players ignore browser drafts; authoring Studio still loads its own preview',()=>{
+  assert.equal(allowLocalStudioPreview('production'),false);
+  assert.equal(allowLocalStudioPreview('development'),true);
+  assert.equal(allowLocalStudioPreview('test'),true);
+  assert.equal(allowLocalStudioPreview('production',true),true);
 });
