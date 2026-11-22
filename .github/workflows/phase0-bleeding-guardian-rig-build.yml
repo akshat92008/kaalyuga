@@ -1,0 +1,49 @@
+name: "P0 Bleeding Guardian real Blender rig candidate"
+on:
+  push:
+    branches:
+      - feature/p0-bleeding-guardian-rig-candidate-20261122
+    paths:
+      - scripts/qa/rig_kalabhairava.py
+      - .github/workflows/phase0-bleeding-guardian-rig-build.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: p0-bleeding-guardian-rig-build
+  cancel-in-progress: true
+jobs:
+  rig-candidate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Fetch original guardian model and Mixamo source clips without altering originals
+        uses: actions/checkout@v4
+        with:
+          filter: blob:none
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            scripts/qa/rig_kalabhairava.py
+            new 3D assets and animations/3D Models/Kaliyuga_the_Bleeding_Guardian/Meshy_AI_Kaliyuga_the_Bleeding_Guardian_20261111_generate.fbx
+            new 3D assets and animations/Animations/Creature Pack (4)/mutant breathing idle.fbx
+            new 3D assets and animations/Animations/Pro Melee Axe Pack (5)/standing melee attack downward.fbx
+      - name: Install Blender for real skinning and FBX export
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y blender python3-numpy libegl1 libgl1 libgl1-mesa-dri xvfb
+          blender --version
+      - name: Build skin-bound 3D candidate and actual Blender pose screenshots
+        run: |
+          blender -b -t 2 --python scripts/qa/rig_kalabhairava.py -- \
+            --mesh "new 3D assets and animations/3D Models/Kaliyuga_the_Bleeding_Guardian/Meshy_AI_Kaliyuga_the_Bleeding_Guardian_20261111_generate.fbx" \
+            --idle "new 3D assets and animations/Animations/Creature Pack (4)/mutant breathing idle.fbx" \
+            --heavy "new 3D assets and animations/Animations/Pro Melee Axe Pack (5)/standing melee attack downward.fbx" \
+            --output build/bleeding-guardian
+      - name: Publish new candidate only as an artifact pending visual approval
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bleeding-guardian-skinning-and-pose-candidate
+          path: build/bleeding-guardian
+          if-no-files-found: warn
+          retention-days: 14
