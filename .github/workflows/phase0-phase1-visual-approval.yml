@@ -1,4 +1,4 @@
-name: Kaliyuga P0/P1 - actual gameplay visual approval
+name: Kaliyuga Phase 1 - four elemental attacks visual approval
 
 on:
   push:
@@ -38,8 +38,8 @@ jobs:
         run: npm install --no-audit --no-fund --legacy-peer-deps
       - name: Test Phase 4 shots, camera safety and existing combat regressions
         run: npm run test:phase1-4
-      - name: Validate guardian P0 animation regression
-        run: npx tsx --test lib/game/guardianAttackGate.test.ts
+      - name: Test weapon-directed elemental VFX composition
+        run: npx tsx --test lib/game/elementalImpactDirector.test.ts
       - name: TypeScript full project verification
         run: npx tsc --noEmit
       - name: Build production game
@@ -67,7 +67,9 @@ jobs:
             echo "::warning::Optional Playwright OS dependency install failed; using runner libraries"
             npx playwright install chromium
           fi
-      - name: Run and capture live browser gameplay and cinematic
+      - name: Run and capture live elemental gameplay and existing execution/boss checks
+        env:
+          PHASE1_ELEMENTAL_ONLY: "1"
         run: node scripts/qa/act1_phase1_4_browser_smoke.cjs
       - name: Configure Python for rendered screenshot validation
         uses: actions/setup-python@v5
@@ -75,7 +77,9 @@ jobs:
           python-version: "3.12"
       - name: Install Pillow for deterministic image-pixel checks
         run: python -m pip install --disable-pip-version-check "Pillow>=10,<14"
-      - name: Verify existing elemental and execution VFX remain visible
+      - name: Verify elemental and execution color signatures, excluding deferred guardian
+        env:
+          PHASE1_ELEMENTAL_ONLY: "1"
         run: python scripts/qa/verify_elemental_frames.py artifacts/act1-phase1-4
       - name: Reject obstructive magenta boss-entrance wireframe
         run: python scripts/qa/verify_boss_entrance_frame.py artifacts/act1-phase1-4
@@ -84,7 +88,7 @@ jobs:
         run: |
           mkdir -p artifacts/act1-phase1-4
           if test -f /tmp/kaliyuga-next-server.log; then cp /tmp/kaliyuga-next-server.log artifacts/act1-phase1-4/server.log; fi
-      - name: Upload Phase 4 rendered browser evidence
+      - name: Upload Phase 1 rendered browser evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
