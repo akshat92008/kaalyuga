@@ -11,7 +11,7 @@ permissions:
 
 concurrency:
   group: p0-p1-visual-approval-20261122
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   game:
