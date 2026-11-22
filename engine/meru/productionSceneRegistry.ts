@@ -13,8 +13,8 @@ import {
 
 export const MERU_PRODUCTION_SCENE_IDS=[
   'dundubhi-entrance','vrikodara-entrance',
-  'dundubhi-phase2','dundubhi-phase3',
-  'vrikodara-phase2','vrikodara-phase3',
+  'dundubhi-phase-2','dundubhi-phase-3',
+  'vrikodara-phase-2','vrikodara-phase-3',
 ] as const;
 export type MeruProductionSceneId=typeof MERU_PRODUCTION_SCENE_IDS[number];
 
