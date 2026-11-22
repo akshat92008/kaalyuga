@@ -170,12 +170,13 @@ def render_preview(mesh,rig,action,output):
         scene.display.shading.show_cavity=True
         scene.display.shading.show_shadows=True
         mesh.color=(0.33,0.13,0.09,1)
-        rig.animation_data_create().action=action
-        rig.data.pose_position='POSE' if action else 'REST'
+        if rig is not None:
+            rig.animation_data_create().action=action
+            rig.data.pose_position='POSE' if action else 'REST'
         frame=int((action.frame_range[0]+action.frame_range[1])*0.5) if action else 1
         scene.frame_set(frame)
         bpy.context.view_layer.update()
-        mn,mx = evaluated_bounds(mesh)
+        mn,mx = evaluated_bounds(mesh) if rig is not None else world_bounds(mesh)
         print("GUARDIAN_POSE_BOUNDS", output.name, tuple(round(v,3) for v in mn), tuple(round(v,3) for v in mx))
         mid=(mn+mx)*0.5
         size=max((mx-mn).length,1)
@@ -223,6 +224,10 @@ def main():
         modifier=mesh.modifiers.new("GuardianRuntimeLOD","DECIMATE")
         modifier.ratio=max(0.26, 44000/original_verts)
         bpy.ops.object.modifier_apply(modifier=modifier.name)
+
+    # Control image: original sculpt BEFORE any skeleton, skinning or action.
+    # This proves what the model should look like independent of rigging.
+    render_preview(mesh,None,None,out/'guardian-source-unrigged.png')
 
     previous=set(bpy.data.actions)
     idle_objs=import_fbx(args.idle)
