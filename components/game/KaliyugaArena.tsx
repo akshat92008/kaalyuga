@@ -5524,16 +5524,9 @@ export default function KaliyugaArena() {
     p.scaleY = isRiposteStrike || isDashStrike ? 0.89 : p.comboStep === 4 ? 0.93 : 0.97;
     p.weaponSwingProgress = 0.0;
     p.attackSerial += 1;
-    if (p.transformTimer > 0) {
-      // Kala-Bhairava Susanoo colossal spectral Parashu shockwave on every swing
-      spawnShockwave(
-        p.x + Math.cos(p.slashAngle) * 58,
-        p.y + Math.sin(p.slashAngle) * 34,
-        138,
-        '#ff5226',
-        0.28
-      );
-    }
+    // Kala-Bhairava's animated arm movement and impact-frame elemental effects
+    // now carry the strike. The former 138px ring played on INPUT, before the
+    // guardian contacted anything, creating a detached red halo on every tap.
     if (isRiposteStrike) {
       p.invulnTimer = Math.max(p.invulnTimer, 0.72);
     }
