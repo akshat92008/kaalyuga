@@ -5497,16 +5497,6 @@ export default function KaliyugaArena() {
     p.scaleY = isRiposteStrike || isDashStrike ? 0.89 : p.comboStep === 4 ? 0.93 : 0.97;
     p.weaponSwingProgress = 0.0;
     p.attackSerial += 1;
-    if (p.transformTimer > 0) {
-      // Kala-Bhairava Susanoo colossal spectral Parashu shockwave on every swing
-      spawnShockwave(
-        p.x + Math.cos(p.slashAngle) * 58,
-        p.y + Math.sin(p.slashAngle) * 34,
-        138,
-        '#ff5226',
-        0.28
-      );
-    }
     if (isRiposteStrike) {
       p.invulnTimer = Math.max(p.invulnTimer, 0.72);
     }
@@ -5650,6 +5640,25 @@ export default function KaliyugaArena() {
         const curP = simRef.current.player;
         const originX = curP.x + curP.facing * 14;
         const originY = curP.y - 24;
+
+        // Guardian visuals begin on the SAME active frame as the Parashu hit.
+        // Previously a 138px ring appeared on keydown, before aim/pose/contact,
+        // reading as a detached blast and obscuring the blade. Keep the ground
+        // pulse small enough that the weapon silhouette remains visible.
+        if (curP.transformTimer > 0) {
+          const impactX = originX + Math.cos(capturedAngle) * 30;
+          const impactY = originY + Math.sin(capturedAngle) * 17;
+          spawnShockwave(impactX, impactY, 68, '#ff5226', 0.22);
+          if (isDebugMode) {
+            qaRecentEventsRef.current.push({
+              name: 'guardian-light-contact', frameTime: performance.now(),
+              meta: 'guardian', progress: curP.weaponSwingProgress,
+              contactX: impactX, contactY: impactY,
+              playerX: curP.x, playerY: curP.y,
+            });
+            if (qaRecentEventsRef.current.length > 50) qaRecentEventsRef.current.shift();
+          }
+        }
 
         if (!isComboFinisher) {
           // Tier 1 Light Attack (Combo 1-3): ONE crisp, razor-clean breathing ribbon + sparse sparks ONLY!
