@@ -4,7 +4,7 @@
  * No fake geometry and no camera orbit around a prerecorded video plate.
  */
 import type { Boss3DRenderer, Boss3DUpdateParams } from '@/lib/game/boss3dRenderer';
-import type { CinematicFrame, MeruCinematic } from './cinematicTimeline';
+import {activeCinematicSubtitle,type CinematicFrame,type MeruCinematic} from './cinematicTimeline';
 import {measureSilhouetteCrop,FULL_SILHOUETTE_CROP,type SilhouetteCrop} from './silhouetteCrop';
 
 export const MERU_FRAME_WIDTH = 960;
@@ -45,10 +45,11 @@ export function paintMeruFrame(
   boss:Boss3DRenderer|null,
   ready:boolean,
   portrait:HTMLImageElement|null,
-  particleMultiplier=1
+  particleMultiplier=1,
+  reducedMotion=false
 ){
   ctx.clearRect(0,0,W,H);
-  const shake=frame.camera.shake;
+  const shake=reducedMotion?0:frame.camera.shake;
   const dx=Math.sin(frame.time*82)*shake*7;
   const dy=Math.cos(frame.time*101)*shake*5;
   ctx.save();
@@ -102,7 +103,7 @@ export function paintMeruFrame(
     const weapon=boss.getCinematicWeaponAnchor();
     const beat=scene.cues.find(c=>c.kind==='vfx' &&
       frame.time>=c.time-0.30 && frame.time<=c.time+0.65);
-    if(weapon && beat){
+    if(weapon && beat && !reducedMotion){
       const diff=frame.time-beat.time;
       const strength=diff<0?clamp(1+diff/0.3,0,1):clamp(1-diff/0.65,0,1);
       const hot=beat.payload==='blood-furnace';
@@ -138,7 +139,7 @@ export function paintMeruFrame(
   // Cue-locked animation. The camera transform is exactly the one used for the
   // boss above: rings, ink lashes and hot debris stay attached to its feet as
   // authored camera moves zoom or shake. No giant composited square textures.
-  const activeImpactCues=scene.cues.filter(c=>c.kind==='vfx'&&frame.time>=c.time&&frame.time<c.time+0.8);
+  const activeImpactCues=reducedMotion?[]:scene.cues.filter(c=>c.kind==='vfx'&&frame.time>=c.time&&frame.time<c.time+0.8);
   for(const cue of activeImpactCues){
     const age=frame.time-cue.time;
     const life=clamp(1-age/0.8,0,1);
@@ -212,7 +213,7 @@ export function paintMeruFrame(
   }
 
   // Deterministic atmosphere: no per-frame allocations for new image textures.
-  for(let i=0;i<Math.round(40*clamp(particleMultiplier,0.15,1));i++){
+  for(let i=0;i<Math.round((reducedMotion?8:40)*clamp(particleMultiplier,0.15,1));i++){
     const ax=((i*179.93+Math.sin(i*2.3+frame.time*0.4)*13)%W+W)%W;
     const ay=((i*47.6-frame.time*(8+i%6*3))%H+H)%H;
     ctx.fillStyle='rgba(255,165,82,'+(0.05+0.30*frame.lighting.ash*(i%5)/4)+')';
@@ -243,7 +244,7 @@ export function paintMeruFrame(
   ctx.fillStyle='rgba(236,103,34,'+clamp((frame.lighting.warmth-0.5)*0.15,0,0.14)+')';
   ctx.fillRect(0,0,W,H);ctx.restore();
 
-  const titleCue=scene.cues.find(c=>c.kind==='subtitle'&&c.time<=frame.time);
+  const titleCue=activeCinematicSubtitle(scene,frame.time);
   if(titleCue && titleCue.payload){
     const alpha=clamp((frame.time-titleCue.time)/0.55,0,1);
     const pieces=titleCue.payload.split('·',2).map(s=>s.trim());
