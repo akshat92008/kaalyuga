@@ -5750,7 +5750,10 @@ export default function KaliyugaArena() {
               sim.hitstopTimer = Math.max(sim.hitstopTimer, 0.042);
               sim.cameraShakeTrauma = Math.min(MAX_CLAMPED_CAMERA_TRAUMA, sim.cameraShakeTrauma + 0.25);
               spawnTengenClashSparks(bloodDemonArtsRef.current, (p.x + e.x) * 0.5, (p.y + e.y) * 0.5 - 22, 16, 360);
-              spawnShockwave((p.x + e.x) * 0.5, (p.y + e.y) * 0.5, 86, '#ffd86b', 0.28);
+              fx?.spawnClashStarburst({
+                x: (p.x + e.x) * 0.5, y: (p.y + e.y) * 0.5 - 22,
+                angle: capturedAngle, scale: 0.40, palette: lightSlashPalette, duration: 0.15,
+              });
               spawnFlipbookVfx(
                 PHASE2_VFX_SHEETS.parryAndHitSparks4x2.url,
                 (p.x + e.x) * 0.5,
@@ -5912,7 +5915,10 @@ export default function KaliyugaArena() {
             if (hitRes.triggeredPostureBreak) {
               sim.runPostureBreaks += 1;
               recordQuestEvent('shatter_posture', 1);
-              spawnShockwave(e.x, e.y, 88, '#ffd86b', 0.28);
+              fx?.spawnClashStarburst({
+                x: e.x, y: e.y - 22, angle: capturedAngle,
+                scale: 0.52, palette: lightSlashPalette, duration: 0.17,
+              });
               spawnFloatingText(
                 e.x,
                 e.y - 68,
@@ -5930,11 +5936,15 @@ export default function KaliyugaArena() {
             }
             if (p.focusOrbs >= 4) p.focusProgress = 1.0;
 
-            // Directional crimson/Prana hit-splatter flipbook (cvl1pe Row 1) oriented along impact vector
-            spawnTengenClashSparks(bloodDemonArtsRef.current, e.x, e.y - 20, p.comboStep === 4 || isCrit ? 12 : 7, 300);
-            webglDemonSlayerVfxRef.current?.spawnSparkBurst({
-              x: e.x, y: e.y - 25, count: isComboFinisher ? 13 : 7, speed: 230, palette: lightSlashPalette,
-            });
+            if (fx?.available) {
+              fx.spawnElementalParticles({
+                x: e.x, y: e.y - 25, angle: hitRes.spray.sprayAngleRad, spread: 0.82,
+                count: isComboFinisher ? 13 : 7, speed: 230, palette: lightSlashPalette,
+                kind: lightSlashPalette === 'water' ? 'water_droplet' : 'spark_needle',
+              });
+            } else {
+              spawnTengenClashSparks(bloodDemonArtsRef.current, e.x, e.y - 20, isComboFinisher || isCrit ? 12 : 7, 300);
+            }
             spawnParticles(
               e.x + Math.cos(hitRes.spray.sprayAngleRad) * 10,
               e.y - 20,
@@ -5957,25 +5967,6 @@ export default function KaliyugaArena() {
               3.2,
               190
             );
-            if (activeFinisherSpec) {
-              spawnShockwave(e.x, e.y, 118, activeFinisherSpec.accentColor, 0.32);
-              const finRow =
-                activeFinisherSpec.variant === 'spin_360_cleave'
-                  ? PARASHU_FLIPBOOK_ROWS.SPIN_360_WHIRLWIND_RING
-                  : PARASHU_FLIPBOOK_ROWS.DOWNWARD_CRUSH_FISSURE;
-              spawnFlipbookVfx(
-                PHASE2_VFX_SHEETS.parashuSlashes3x3.url,
-                e.x,
-                e.y - 18,
-                148,
-                0.28,
-                activeFinisherSpec.variant === 'impaling_lunge' ? p.slashAngle : 0,
-                activeFinisherSpec.variant === 'spin_360_cleave' ? 0.72 : 1,
-                'screen',
-                PHASE2_VFX_SHEETS.parashuSlashes3x3,
-                finRow
-              );
-            }
             spawnFloatingText(
               e.x,
               e.y - 52,
