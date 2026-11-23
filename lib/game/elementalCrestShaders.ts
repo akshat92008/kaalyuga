@@ -22,12 +22,15 @@ export const ELEMENTAL_CREST_GLSL = /* glsl */ `
       // Offset foam curls expose a continuous blue sheet beneath the crest.
       float muzzle = 1.0 - smoothstep(0.79, 0.98, u);
       outer = mix(outer, 0.79 + 0.11 * sin(u * 35.0), 1.0 - muzzle);
-      float foam = brushBand(v, outer - 0.06, 0.10 + 0.06 * broad);
+      float foamClaws = smoothstep(0.18, 0.78, grain * 0.62 + curl * 0.27 + 0.26);
+      float foam = brushBand(v, outer - 0.06, 0.065 + 0.085 * foamClaws);
+      foam *= 0.26 + foamClaws * 0.74;
       float fold = brushBand(v, 0.40 + 0.18 * curl, 0.035 + 0.055 * broad);
       float facet = smoothstep(0.23, 0.70, v + (broad - 0.5) * 0.23);
       col = mix(col, uEdgeColor * 1.18, facet);
       col = mix(col, uMidColor * 1.02, fold * 0.56);
       col = mix(col, uInkColor, brushBand(v, outer - 0.18, 0.035) * 0.80);
+      col = mix(col, uMidColor, brushBand(v, outer - 0.045, 0.09) * 0.60);
       col = mix(col, uCoreColor * 1.12, foam);
       float eye = 1.0 - smoothstep(0.33, 1.0, length((vec2(u, v) - vec2(0.89, 0.59)) * vec2(48.0, 12.0)));
       col = mix(col, uInkColor, eye);

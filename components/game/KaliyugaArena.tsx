@@ -4579,18 +4579,18 @@ export default function KaliyugaArena() {
       1,
       true
     );
-    spawnShockwave(p.x, p.y, 260, '#ff5924', 0.52);
-    webglDemonSlayerVfxRef.current?.spawnShockwaveRing({
+    webglDemonSlayerVfxRef.current?.spawnGroundLightBounce({
       x: p.x,
-      y: p.y,
-      radius: 235,
-      palette: 'hinokami',
-      duration: 0.48,
+      y: p.y + 12,
+      radius: 172,
+      palette: 'blood',
+      duration: 0.52,
+      intensity: 0.76,
     });
     spawnParticles(p.x, p.y - 36, 38, '#ff5924', 240, 5.5, 65);
     sim.devanagariStamps.push(createDevanagariStamp('rage', p.x - p.facing * 104, p.y - 178));
     spawnFloatingText(p.x, p.y - 88, 'KALA-BHAIRAVA SUSANOO! · 100% CHAKRA ARMOR', '#ffd46b', 1.18);
-  }, [spawnFloatingText, spawnParticles, spawnShockwave, updateStoryFlags]);
+  }, [spawnFloatingText, spawnParticles, updateStoryFlags]);
 
   const triggerExecuteBrokenTarget = useCallback(() => {
     const sim = simRef.current;

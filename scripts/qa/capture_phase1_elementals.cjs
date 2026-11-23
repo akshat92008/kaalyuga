@@ -104,7 +104,9 @@ async function main() {
     await press('KeyZ');
     await page.waitForFunction(() => window.__kaliyugaPhaseQA?.transformRemaining > 0);
     await press('KeyK');
-    await page.waitForTimeout(150);
+    await page.waitForFunction(() => window.__kaliyugaPhaseQA.recentEvents.some(
+      (event) => event.name === 'heavy-contact' && event.meta === 'guardian'
+    ), undefined, { timeout: 15000 });
     await capture('guardian-heavy');
     await page.waitForTimeout(90);
     await capture('guardian-heavy-release');

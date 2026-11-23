@@ -173,9 +173,10 @@ const SUSANOO_FRAGMENT_SHADER = /* glsl */ `
     float dissolveTongue = smoothstep(0.04, 0.40, waistMask) * (1.0 - smoothstep(0.42, 0.85, waistMask));
     energyColor += uRimColor * (dissolveTongue * 0.45 + uAttackFlash * 0.22);
 
-    // Keep chest interior translucent (~0.24) so calm-walking Rudra inside stays clearly visible,
-    // while armor rims and horns glow intensely (~0.88)
-    float finalAlpha = uAlpha * waistMask * radialFade * (0.22 + fresnel * 0.68 + ribLines * 0.12);
+    // Hold the upper-body silhouette while the lower body dissolves around Rudra.
+    float upperBody = smoothstep(0.48, 0.98, waistMask);
+    float armorOpacity = 0.20 + upperBody * 0.31 + fresnel * 0.55 + ribLines * 0.09;
+    float finalAlpha = uAlpha * waistMask * radialFade * armorOpacity;
     finalAlpha = clamp(finalAlpha, 0.0, 0.90);
 
     gl_FragColor = vec4(energyColor, finalAlpha);
@@ -509,7 +510,7 @@ export class Susanoo3DRenderer {
     // Spin spectral chakra halo behind shoulders
     this.haloRing.rotation.z = t * 1.1;
     const ringMat = this.haloRing.material as THREE.MeshBasicMaterial;
-    ringMat.opacity = alpha * (0.36 + Math.sin(t * 6.5) * 0.12);
+    ringMat.opacity = alpha * (0.12 + Math.sin(t * 6.5) * 0.05);
 
     renderer.setSize(size, size, false);
     renderer.setClearColor(0x000000, 0);
