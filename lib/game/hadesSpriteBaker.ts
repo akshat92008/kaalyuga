@@ -251,7 +251,7 @@ export class Hades2DSpriteBaker {
   }
 }
 
-export const BASE_CAMERA_ZOOM = 0.96;
+export const BASE_CAMERA_ZOOM = 1.12;
 export const SHARED_STUDIO_OUTLINE_COLOR = '#120806';
 export const SHARED_STUDIO_OUTLINE_THICKNESS = 2.0;
 

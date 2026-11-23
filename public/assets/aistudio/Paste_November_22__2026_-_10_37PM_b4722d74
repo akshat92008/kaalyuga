@@ -1,0 +1,1418 @@
+# **KALIYUGA: THE BLEEDING CROWN**
+
+## **Complete 14-Phase Development & AAA-Quality Polish Roadmap**
+
+Master production plan • Act I only • Reconstructed from our November 21–22 discussions and original 14-phase master document
+
+This is the **14-phase plan we agreed upon**, expanded into detailed execution requirements, visual goals, technical work, expected deliverables, and completion criteria. It includes our later decisions about elemental combat, the Meru Engine, Blender cinematics, MP4 environments, and verification.
+
+The objective is to transform our existing playable *Kaliyuga* Act I into a premium, visually spectacular, technically reliable game experience.
+
+## **1. Our locked creative vision**
+
+[动漫共和国文章大全-动漫共和国Article-「动漫共和国」](https://images.openai.com/static-rsc-4/lhFStCTaJwVN1VB49e9TUmoOG4BEf7jQBAtBgkSWAT1qquekVqFXjsFSN1SKq8lDxK8orwpxu41Swx1uxf9Gfz3SI1uHa7clGwsdABKSIl6Mbd0ww3WU-NyzqIzV7vjkS5SqKWX2RX7NS06N9sEOLhSM-Xzqh9bk1f8Gi70vg-k?purpose=inline)
+
+**Demon Slayer — Elemental visual quality**
+
+Beautiful, large, curved, painterly elemental attacks. Fluid choreography, dramatic impact frames, sophisticated color, lighting and compositing.
+
+[God of War: Ragnarök review on PC — The return of BOY](https://images.openai.com/static-rsc-4/32Jg0IoMsf2m8g7cjnSAG-rNEZ0kpsrvNb_WyP8R1rRZqHmYFm6Nq9O-90sRcj-CUq3r8S4JZH0R_TmRhlhe6bfC8rU7V1rARnHxnMk4_ESMP8GBj3gYv7ON_fQZupETG297QLfeKuPtrHOuX44zJegqyVbkWJTSZlFc2K08Pbc?purpose=inline)
+
+**God of War Ragnarök — Weight and cinematics**
+
+Brutal, physically convincing axe impacts, enemy reactions, memorable executions, and cinematic boss introductions.
+
+[Hades - Un viaggio infernale su PS4](https://images.openai.com/static-rsc-4/x83eiWjO73WvAt7QcPwwz4sGRtGmZPPoznAkSn9CHSNj3U4KUYThSEwZv7jCkmS1mUPrqfNUdZXzpjgVuaHDjOMWGACzPTKNUgGYfirHSHP_BOkDFxAFvvdV4aNvOeIIb3NcASAcRDq4oZBuytDNVhtXmWlzBDJuq_xa-zXGI1s?purpose=inline)
+
+**Hades — Gameplay and readability**
+
+Responsive combat, clear encounters, distinctive painting-inspired environments, and satisfying room progression.
+
+[《影之刃 零》釋出實機遊玩影片 全球試玩活動將依序於各遊戲展舉行《Phantom Blade Zero》 - 巴哈姆特](https://images.openai.com/static-rsc-4/akl87Qyh3rgj5I9o8xSH9aXoeRoNSfQpo4Wg7B5vOeQH_zjpT48IHvFmM3XB_12RrpvQe5sw1Dqd2lqGaMrgssG7nRYrhloal-dzChNBGVT9g6gK4c0iTZknrX-EGVzDXOc9__RlKgiYO_t4GMejZEngLAoc8gdV9smQ-tQj5as?purpose=inline)
+
+**Phantom Blade Zero — Animation choreography**
+
+Elegant combat transitions, precisely timed counters and stylish, deliberate finishing sequences.
+
+[Black Myth Wukong - How To Beat Giant Shigandang](https://images.openai.com/static-rsc-4/dooIBGXcTkuDxZQPwVXzDYdzZyTDnbpFDv9ZDZfSJHmCYH7_hr3OzmV8gJhlD-FYbUBBktZ0P27vfCOfOXB72Hn0e5zM8DQS0IlixYUrhtTRa2WHS4s1C9Xr8cELfh4ZCBi9H1rAfVylRH3OULE7P0Y869NkzdMUGuEbVa3BbJ4?purpose=inline)
+
+**Black Myth: Wukong — Mythological spectacle**
+
+Monumental bosses, dramatic atmosphere, distinctive creature animation, and memorable encounters.
+
+These are our quality benchmarks, not designs to copy. Kaliyuga retains its own Indian mythological identity: dark painterly imagery, Chola bronze, sacred architecture, ash black, bone white, sindoor red, antique bronze, and original Astra effects.
+
+### **Non-negotiable production rules**
+
+- **Act I only:** the existing eight chambers, Vaitarani hub, Dundubhi and Vrikodara. No Prologue or Act II development in these phases.
+- **Preserve the game:** retain current combat, bosses, progression, controls, save compatibility, models, and artwork unless a change is technically justified and approved.
+- **Existing engine:** React, TypeScript, Next.js, Three.js, and relevant Meru Engine systems. No Unreal Engine or Unity migration.
+- **Hardware:** production methods must remain practical on the MacBook M3 Air with 8 GB unified memory.
+- **Existing MP4 arenas:** enhance and integrate them instead of replacing them with generic 3D environments.
+- **Blender:** automated, script-driven animation and cutscene workflows wherever useful; preserve all original source assets.
+- **Testing:** every phase requires real testing and visual verification. Code existing is not proof that a feature works or looks good.
+- **Quality first:** no new bosses, unrelated mechanics, or extra content before the existing Act I is polished.
+
+## **2. The complete roadmap at a glance**
+
+| Phase  | Development area             | Target outcome                                  |
+| ------ | ---------------------------- | ----------------------------------------------- |
+| 0      | Technical and creative audit | Stable, protected development baseline          |
+| **1**  | Elemental combat VFX         | Spectacular, weapon-synchronized attacks        |
+| **2**  | Rudra animation              | Fluid, powerful, reliable combat movement       |
+| **3**  | Blender animation pipeline   | Three high-quality cinematic executions         |
+| **4**  | Cinematic camera             | Reusable, reliable in-game cinematography       |
+| **5**  | Dundubhi                     | Premium mid-boss benchmark encounter            |
+| **6**  | Vrikodara                    | Cinematic, emotionally powerful Act I climax    |
+| **7**  | Enemy combat and readability | Polished, fair, visually distinct enemies       |
+| **8**  | Kala-Bhairava astral avatar  | Complete, animated spectral guardian            |
+| **9**  | Arenas and environment       | Cohesive, living MP4-based world                |
+| **10** | Sound and music              | Cinematic, event-synchronized audio             |
+| **11** | UI, HUD and game feel        | Premium, readable player experience             |
+| **12** | Performance and stability    | Optimized, reliable gameplay                    |
+| **13** | Automated QA                 | Regression-proofed systems                      |
+| **14** | Final Act I QA               | Fully validated, release-quality vertical slice |
+
+**Phase 0 is the prerequisite. Phases 1–14 constitute the actual 14-phase roadmap.**
+
+# **PART I — Foundation and combat spectacle**
+
+## **Phase 0 — Complete technical and creative audit**
+
+**Objective:** Understand the entire existing project, identify the actual blockers, preserve everything that works, and establish a reliable baseline.
+
+### **0.1 Audit the complete gameplay architecture**
+
+Inspect the principal systems, including:
+
+- `KaliyugaArena.tsx` — gameplay integration.
+- `combatPipeline.ts` and `modernCombat.ts` — attack processing.
+- `rules.ts` — combat rules and damage.
+- `enemyArchetypesAndTelegraphs.ts` — enemy behavior and telegraphing.
+- `enemyAiStability.ts` — enemy state reliability.
+- `bossEncounters.ts` — boss mechanics.
+- `assets.ts` — asset manifests and loading.
+
+For each system, identify whether it is functional, partially functional, visually defective, or broken.
+
+### **0.2 Audit character animation and models**
+
+Inspect Rudra's renderer, enemy and boss renderers, skeletons, material setup, animation loaders, and mesh processing.
+
+Confirm the actual rig compatibility of imported FBX/GLB models.
+
+Check for weapon displacement, floating feet, skin deformation, missing animation clips, frozen models, and broken state transitions.
+
+### **0.3 Audit VFX and rendering**
+
+Inspect the existing Demon Slayer-inspired WebGL effects, shaders, flipbooks, sprites, post-processing, and depth compositing.
+
+Specifically identify:
+
+- Weapon effects detached from the Parashu.
+- Effects traveling as straight lines instead of following attack movement.
+- Unwanted rectangular or square clipping.
+- Pink or incorrectly colored geometry.
+- Excessive particles obscuring characters.
+- Incorrect scale, depth and perspective.
+- Performance bottlenecks during heavy attacks.
+- Broken shader and skeletal-material interactions.
+
+### **0.4 Audit assets and environments**
+
+Inventory all eight arena backgrounds/videos, models, music, SFX, cinematics, animations, textures, and other existing assets.
+
+Separate original source assets from processed game-ready assets.
+
+Establish which files are actually loaded at runtime, rather than merely present in the repository.
+
+### **0.5 Establish the protected baseline**
+
+Create a separate development branch, preserve a playable version, and document the commands needed to reproduce the build.
+
+Produce six audit documents:
+
+1. `BASELINE_AUDIT.md`
+2. `ASSET_INVENTORY.md`
+3. `COMBAT_ANIMATION_AUDIT.md`
+4. `VFX_RENDERING_AUDIT.md`
+5. `PERFORMANCE_BASELINE.md`
+6. `IMPLEMENTATION_PLAN.md`
+
+**Phase 0 completion gate:** a reproducible build, verified asset inventory, identified critical defects, documented test baseline, and restorable known-good version.
+
+## **Phase 1 — Demon Slayer-quality elemental combat visuals**
+
+Priority: Critical • Combat visual foundation
+
+**Objective:** Make every Parashu attack visually extraordinary while maintaining precise weapon synchronization and readable gameplay.
+
+This is one of the most important phases in the entire plan.
+
+### **1.1 Establish the visual language**
+
+Every attack is built from five coordinated visual layers.
+
+A
+
+**Physical animation:** Rudra's actual body movement, stance, Parashu rotation, anticipation and release. The effect must begin with a believable attack.
+
+B
+
+**Primary blade trail:** A tapered, curved, multilayered ribbon physically attached to the Parashu's animated trajectory, with an illuminated core and painterly ink contours.
+
+C
+
+**Elemental movement:** Distinct fire, water, wind or lightning shapes. These must flow from the primary strike, not move independently of the weapon.
+
+D
+
+**Impact:** Exact-contact flash, directional sparks, enemy recoil, hit-stop, localized shockwave, camera impulse and synchronized audio.
+
+E
+
+**Environmental response:** Ground dust, debris, scorch marks, brief lighting changes and other restrained interactions that make the world respond to the blow.
+
+### **1.2 Develop four distinct elemental visual identities**
+
+[Que son realmente las espadas carmesí en Demon Slayer](https://images.openai.com/static-rsc-4/fNw9SKhykiHIbVdEiDmcguzeSzkCrXh335XbI1ALfCIf58GB3L2ayw9--uRLljAA5xA3uxl9bAJ6HdPlamRCXB3Dai1nm14HESpwHk0GaOTo1og3JokSzbNxvxnlVGRo4n4mo_Y7vbV-W0Hzaw5nsRYMTluWOz6Zm6NClGWPnA0?purpose=inline)
+
+**Agni — Fire**
+
+Red-orange flame ribbons, golden highlights, burning embers, turbulent flame tongues, and powerful directional combustion.
+
+Light attacks produce clean, rapid flame arcs. Heavy attacks create much larger flame sweeps and grounded combustion events. Fire remains physically connected to the blade.
+
+[Every Breathing Style in Demon Slayer Explained and Ranked  – Rescene Studio](https://images.openai.com/static-rsc-4/GbRqc0gLyqUfDBJNZRh7F5NaWkebnwfN-pctskc2RYZZnSAg97yzEJez72y62kZVJP4clXuD-V-SXUJ6zueeXtLLo5SvAAarLRJAuNveTBcHvC-iMSJCQObnd7uNWkgwEcpaCqdYg7tr_HzIXG48BxAG5PqdLvCBLynKCpX3QMc?purpose=inline)
+
+**Varuna — Water**
+
+Flowing sapphire and cyan water sheets, curved waves, sculptural streams, droplets, foam and serpent-like flowing motion.
+
+Light attacks emphasize speed and elegant fluid trajectories. Heavy attacks use imposing directional waves. Avoid generic circular water rings.
+
+[画像ギャラリー No.020 | 「鬼滅の刃 ヒノカミ血風譚2」プレイアブルキャラクターの伊黒小芭内，不死川実弥，悲鳴嶼行冥の紹介映像を公開。新要素「合体奥義」登場](https://images.openai.com/static-rsc-4/-9yon62wsvc8EFCkv8DPqjrZOeqUHEtj-nci8rRLzzygxqHt2_PmZXo-bkA3Kcygx88mfbRXkNdECVZ7EaXeJF5KV7l46uUEtClzi35WeTzfF0d00TwqI4SrFkrWD-1ofE5JOhF8kCeaRkqGxzH6TPw_6pFjN_irxWOninTf134?purpose=inline)
+
+**Vayu — Emerald wind**
+
+Fast, curling green energy ribbons, turbulent air currents, leaf-like fragments and layered cutting wind.
+
+Light attacks feel fast and cutting. Heavy attacks create wide, sweeping, forceful streams with clear directional movement.
+
+[A close up of a person holding a sword in a field - SeaArt AI](https://images.openai.com/static-rsc-4/Dm8u2G7BkhpMutLb8KSxLORer1fBhcp5rAVQiP1xbPFGR5uJeAgkE3TN3DCTRolOLUnRTp56P_vnvGCCSwBrJgQVAyh0mtLT445-Yp6qTQNQSmjSi09W1Efu90BA4JC2-wNtKEz3UwnzelNs4sliye5XfSDEYRxHzhXsAjN9K4o?purpose=inline)
+
+**Vajra — Thunder**
+
+Angular branching lightning, sharp white-hot cores, blue-violet electrical energy, quick flashes and explosive contact effects.
+
+Light attacks are fast and precise. Heavy attacks build anticipation, then deliver a concentrated electrical impact and shockwave.
+
+Our later decision applies here: **Kala-Bhairava is excluded from Phase 1 and remains a separate Phase 8 task.** Phase 1 should concentrate on making the base elemental combat exceptional without interfering with the guardian implementation.
+
+### **1.3 Upgrade attacks across all combat stances**
+
+The agreed attack design uses Rudra's Smash, Pillar and Thrust stances.
+
+Each existing supported stance/element combination must be evaluated for both light and heavy attacks.
+
+| Attack type | Light attack objective      | Heavy attack objective              |
+| ----------- | --------------------------- | ----------------------------------- |
+| Smash       | Sharp, sweeping impact      | Wide, forceful elemental release    |
+| Pillar      | Controlled defensive strike | Grounded, weighty power impact      |
+| Thrust      | Focused, directional burst  | Concentrated high-force penetration |
+
+The goal is not to apply one identical animation or particle system to every combination.
+
+Each should communicate its stance, elemental identity, attack power and direction.
+
+### **1.4 Precise weapon-to-effect synchronization**
+
+This was one of the main problems we identified in earlier testing.
+
+The system must:
+
+- Find the actual animated Parashu blade position, including its orientation.
+- Generate a blade trail using its motion over successive frames.
+- Support graceful ribbon curves instead of artificial straight lines.
+- Maintain consistent positioning while Rudra turns or moves.
+- Stop generating new trail geometry when the active strike finishes.
+- Ensure effect lifetime is synchronized with animation recovery.
+- Position the impact at the actual contact location.
+- Avoid effects continuing after a dodge, stagger, interruption or death.
+- Prevent hard-cropped rectangles and detached effect canvases.
+- Ensure the effect appears correctly from the isometric gameplay camera.
+
+A bright particle effect that is disconnected from the actual weapon is a failure, regardless of how attractive it looks in isolation.
+
+### **1.5 Light attack choreography**
+
+Every light attack should contain a clear sequence: short anticipation → recognizable blade motion → elegant elemental ribbon → precisely timed impact → immediate recovery.
+
+Light attacks must remain responsive. Their VFX should be striking without producing enormous screen-covering explosions on every hit.
+
+### **1.6 Heavy attack choreography**
+
+Heavy attacks should feel visually and mechanically different.
+
+Requirements include:
+
+- Stronger anticipation and body commitment.
+- Much wider elemental shapes.
+- Higher-contrast illumination and more pronounced impact frames.
+- Larger but controlled shockwaves.
+- Brief, deliberate hit-stop.
+- Meaningful enemy recoil and stagger.
+- Environmental debris and appropriate ground effects.
+- A powerful sound transient with a convincing low-frequency component.
+- A recovery sequence that communicates the weapon's weight.
+
+Our explicit requirement is that heavy attacks should look **large, vibrant, powerful and beautiful**.
+
+However, the player and enemy attack telegraphs must remain visible.
+
+### **1.7 Perfect parry and execution effects**
+
+Perfect parry needs an instantly recognizable contact flash, crisp metallic sound, momentary pause, enemy stagger and clear counterattack opportunity.
+
+Combo finishers receive a distinct elevated visual treatment without turning every intermediate strike into a finisher.
+
+Execution-related VFX must use the exact hit markers provided by the Phase 3 animation pipeline.
+
+### **1.8 Astra-specific effects**
+
+Agneyastra, Vayavyastra and Vajrastra must have different motion geometry and visual behavior rather than simply sharing recolored particles.
+
+Varuna's existing water effects also receive their own light/heavy visual treatment.
+
+Existing Astra meter behavior and withdrawal mechanics should be preserved.
+
+### **1.9 Verification and deliverables**
+
+Create a repeatable visual testing matrix covering every supported elemental and stance combination, light/heavy attacks, parries, combo finishers and interruptions.
+
+Capture each effect from the actual gameplay camera and evaluate weapon alignment, motion shape, readability, frame timing, clipping and impact.
+
+**Phase 1 is complete only when:**
+
+- Every tested attack follows its weapon movement correctly.
+- Fire, water, wind and lightning are visually distinct.
+- Heavy attacks have convincing scale and weight.
+- No detached crescents, random straight-line effects, pink artifacts or visible rectangular clipping remain.
+- Effects do not overwhelm combat readability.
+- All affected combat systems still function.
+- Tests and rendered gameplay evidence demonstrate those conditions.
+
+## **Phase 2 — Rudra's complete animation upgrade**
+
+Priority: Critical • Core combat animation
+
+**Objective:** Make Rudra feel like a physically convincing, powerful warrior rather than a model switching abruptly between unrelated animation clips.
+
+### **2.1 Audit and correct the skeleton**
+
+Identify the canonical character rig and all compatible animation sources.
+
+Verify bone hierarchy, retargeting, root orientation, hip translation, foot grounding and weapon grip.
+
+Fix animation resets, deformation, snapping, floating, misplaced limbs and incorrect movement directions.
+
+### **2.2 Build a proper animation state machine**
+
+The state machine must support:
+
+- Idle, walking, running.
+- Dash and dodge recovery.
+- Light combo attacks 1, 2 and 3.
+- Heavy and charged-heavy attacks.
+- Parry and perfect parry.
+- Stagger, knockback and recovery.
+- Execution preparation, execution and return.
+- Rage activation, attacks and deactivation.
+- Death.
+
+Each animation needs controlled transition and interruption rules.
+
+### **2.3 Animation blending**
+
+Replace sudden changes between poses with appropriate blending.
+
+Important examples:
+
+- Running into attack.
+- Attack completion into movement.
+- Dash into recovery.
+- Parry into counterattack.
+- Heavy attack into idle.
+- Stagger into defensive recovery.
+- Execution back into regular combat.
+
+Preserve the weight of important actions rather than blending them so aggressively that they become visually weak.
+
+### **2.4 Animation events and combat synchronization**
+
+Each attack should have explicit startup, active/contact and recovery timings.
+
+The engine must use those timings to synchronize damage windows, collision detection, SFX, hit-stop and Phase 1 VFX.
+
+The weapon must visibly contact the enemy at the same point the combat system registers the hit.
+
+### **2.5 Procedural refinements**
+
+Where useful, add lightweight corrections for:
+
+- Upper-body facing.
+- Shoulder rotation.
+- Two-handed or single-handed grip alignment as appropriate.
+- Foot placement.
+- Ground contact.
+- Impact recoil.
+- Enemy-facing adjustments.
+
+Procedural movement must not distort the skeleton or override the authored animation's intended force.
+
+### **2.6 Movement and control integrity**
+
+Verify that root motion never produces unexpected teleportation, drift, reversed movement or incorrect collision positioning.
+
+Movement, dash, combo buffering and hit reactions must remain responsive.
+
+### **2.7 Completion gate**
+
+Rudra must move naturally, maintain weapon alignment, blend smoothly between combat states and return to player control reliably after every action.
+
+All critical animations must pass rig validation, in-game runtime checks and visual inspection.
+
+## **Phase 3 — Blender animation pipeline and cinematic executions**
+
+Priority: Critical • Reusable animation production
+
+**Objective:** Create a reliable automated process for producing premium animations, then use it to deliver three signature execution sequences.
+
+### **3.1 Automated Blender pipeline**
+
+Build a repeatable Python/`bpy` process that:
+
+1. Imports the canonical character FBX.
+2. Examines armature structure.
+3. Reads available animation actions.
+4. Imports compatible motion clips.
+5. Performs necessary retargeting.
+6. Adjusts root transforms and orientation.
+7. Corrects timing and selected poses.
+8. Checks weapon and hand attachment.
+9. Validates animation and skeleton compatibility.
+10. Exports game-ready GLB/glTF or compatible FBX assets.
+11. Produces diagnostic previews.
+12. Saves validation reports.
+
+Original source assets remain untouched.
+
+### **3.2 Three signature executions**
+
+[Elden Ring Nightreign Raider Guide: Abilities, Overview, and Tips](https://images.openai.com/static-rsc-4/iX1urDYyYh2ORSA9-4TVbjTHJemHRdbuNnt6a0JbAf-CkjC621NRsl60UnO-gfFlDdY67GZsqhryK5WWxBdRUvQ2zr_dyZdvtKfb72QwaiHqlAcFkFbfg9o6B2MVos7tuywscqJtHkYmgRNxu353etK_UFA7XxUv0otxTMBPyBo?purpose=inline)
+
+**Execution A — Downward Parashu Crush**
+
+Rudra delivers a heavy overhead finishing blow, emphasizing torso rotation, weapon weight, downward force, enemy reaction and contact impact.
+
+[Game review: Godfall (PS5)](https://images.openai.com/static-rsc-4/pr9FWQ6Uydf_IGXnV83q1NZWQMsw5y_FdwRhBlDKRzsQHRHNKYzEIrMSl1Xr6sifwzeu2KuQ8i29Gf19yiNeRSJwzVABaNU4qNTGS-SpSjAvDS6v1q0mjFXbFID9RIKt9ypbvCJWojOLGuxsD8-xhEZs9qLDxH42QuWcEvFu1_g?purpose=inline)
+
+**Execution B — Sweeping Execution**
+
+A broad rotational strike with clear weapon trajectory, staggered enemy alignment and dramatic finishing composition.
+
+[For Honor – Medjay – Hero | Deku Deals](https://images.openai.com/static-rsc-4/bw_0PxhJoLZZwnsw-eJPFFO9XDpgam-DTrXFnEiJil8xgRxjZnFnawBEHLFLmngs50zFMEoo-lhOSNjCI3dCOJFnUklnzjW_SreiNKo4IbFqbvaQRWncxwyeQhwK_Iy4aGrI93Kzw1NfzrZUkiPAYL8ss2YPUfXfkX4pP46VqVk?purpose=inline)
+
+**Execution C — Armor-Break Execution**
+
+A synchronized interaction with an armored opponent: initial forceful impact, visible armor reaction and decisive finishing strike.
+
+### **3.3 Each execution must include**
+
+- Proper Rudra animation.
+- Suitable enemy reaction.
+- Synchronized start positions.
+- Correct character orientation and contact alignment.
+- Collision and hit markers.
+- Controlled camera framing.
+- Sound and VFX event markers.
+- Correct damage/death resolution.
+- Safe return to gameplay.
+- Fallback behavior when the required asset or alignment is unavailable.
+
+### **3.4 Animation quality checks**
+
+Every exported clip must be checked for missing bones, invalid transforms, stretching, floating feet, animation popping, weapon separation and interrupt/recovery behavior.
+
+Avoid unreliable cinematic grabs when the available rigs cannot support convincing character-to-character choreography. A shorter, polished weapon execution is preferable to a longer broken animation.
+
+### **3.5 Completion gate**
+
+All three executions must play correctly with the real in-game character assets, synchronization and recovery. The pipeline must be reproducible without undocumented manual Blender work.
+
+## **Phase 4 — Premium cinematic camera and choreography**
+
+Priority: Critical • In-engine cinematography
+
+**Objective:** Deliver controlled cinematic presentation comparable in discipline to premium action games without damaging Kaliyuga's 2.5D gameplay.
+
+### **4.1 Implement a reusable cinematic camera controller**
+
+The controller should support short zooms, smooth camera movement, target tracking, impact impulses, execution framing, boss entrances, phase transitions and safe return to the normal gameplay view.
+
+### **4.2 Respect the MP4 environment**
+
+Our camera cannot behave like a completely unrestricted 3D camera.
+
+The existing arenas are painterly/MP4 compositions. Excessive camera rotation or perspective changes can expose missing geometry and break the illusion.
+
+Therefore, prefer:
+
+- Controlled zoom and pan.
+- Modest camera offsets.
+- Carefully composed characters.
+- Short and purposeful cinematic movements.
+- Screen-space and world-space effects that reinforce apparent depth.
+- Camera angles validated against each relevant arena.
+
+### **4.3 Implement cinematic state control**
+
+The camera system must safely manage:
+
+- Entry into cinematic mode.
+- Temporary input restrictions.
+- Boss AI start/stop events.
+- Animation and audio cues.
+- Skipping.
+- Interrupted sequences.
+- Camera restoration.
+- Restoring normal gameplay input.
+- Resolution and aspect-ratio changes.
+- Cleanup after death, restart or asset failure.
+
+### **4.4 Integrate execution choreography**
+
+Connect the three Phase 3 executions to the camera controller.
+
+Every execution should have clear anticipation, a recognizable action silhouette, an emphasized moment of impact and controlled return to gameplay.
+
+### **4.5 Establish the boss cinematic framework**
+
+The same system will later support Dundubhi and Vrikodara introductions, phase changes and final blows.
+
+For the Act I boss entrances, our later preferred direction is **real-time in-engine presentation using actual rigged models**, potentially supported by brief illustrated or motion-comic transitions. AI-generated backstory videos remain a separate storytelling option.
+
+### **4.6 Completion gate**
+
+Every cinematic starts and ends reliably, is skippable where appropriate, preserves correct gameplay state, and looks intentional from the actual hybrid renderer.
+
+**Integration checkpoint after Phases 1–4:** verify VFX, Rudra animation, execution animation, cinematic camera, hit events and audio together. None of these four systems may be considered complete merely because they operate separately.
+
+# **PART II — Bosses, enemies and transformations**
+
+## **Phase 5 — Dundubhi: The premium benchmark encounter**
+
+Priority: High • First fully polished boss fight
+
+**Objective:** Turn Dundubhi into the first encounter that demonstrates the complete quality standard of Kaliyuga.
+
+This boss establishes the benchmark for every later boss.
+
+### **5.1 Complete Dundubhi's animation library**
+
+Inspect, refine or produce the following animations:
+
+- Idle breathing and threatening poses.
+- Walking and turning.
+- Charge anticipation.
+- Full-speed charge.
+- Charge cancellation or missed charge recovery.
+- Pillar collision.
+- Armor cracking and breaking.
+- Stagger and posture break.
+- Ground shockwave.
+- Phase transition.
+- Damage reactions.
+- Death and final execution.
+
+Dundubhi must communicate enormous mass. His movement should look physically heavy, not like a model sliding across the ground.
+
+### **5.2 Preserve and polish the pillar mechanic**
+
+The central encounter mechanic remains baiting Dundubhi into charging pillars.
+
+The complete sequence should be:
+
+1. **Anticipation:** Dundubhi lowers his head, adjusts his body, roars and clearly indicates his charge direction.
+2. **Charge:** The boss accelerates with heavy footfalls, dust trails, ground feedback and a distinctive percussion pattern.
+3. **Collision:** Horns and body visibly contact the pillar at the correct location, followed by a powerful impact.
+4. **Armor damage:** The player sees a clear change in armor state, visual fractures, debris and stagger.
+5. **Opportunity:** Dundubhi remains vulnerable for a readable interval, allowing Rudra to capitalize.
+6. **Recovery:** The boss returns to combat without clipping, incorrect collision positioning or state-machine failures.
+
+### **5.3 Premium boss entrance**
+
+The entrance must use the actual in-game Dundubhi model and appropriate arena composition.
+
+The preferred approach uses a small number of reliable, polished cinematic beats rather than a long, mechanically fragile sequence.
+
+The entrance should establish the boss's silhouette, war-drum identity, threat and physical presence.
+
+Include appropriate environmental motion, synchronized roar and score, an imposing final pose, and a seamless handoff into combat.
+
+### **5.4 Upgrade Dundubhi's attack presentation**
+
+Improve the charge, shockwave, heavy strikes, armor damage, collisions, recovery and phase attacks.
+
+Each move requires a visible anticipation, correct impact frame, appropriate enemy/player reaction and consistent sound design.
+
+Do not mask unfair hitboxes with excessive effects.
+
+### **5.5 Boss-specific cinematic finishing move**
+
+Design a bespoke ending to the encounter based on Dundubhi's cracked armor and drum identity.
+
+Use a synchronized Rudra/boss animation, Phase 4 camera framing, precise sound and VFX cues, then transition into the intended post-fight progression.
+
+### **5.6 Fairness and difficulty validation**
+
+Test:
+
+- Normal attacks and charge behavior.
+- Pillar collision at different angles.
+- Player dodges and perfect parries.
+- Stagger and vulnerability windows.
+- Camera visibility during the fight.
+- Boss death during different states.
+- Restarts and repeat attempts.
+- Skipping the introduction.
+- Performance during maximum visual intensity.
+
+**Phase 5 completion gate:** Dundubhi is a complete, fair, memorable and repeatably reliable premium boss encounter, including entrance, mechanics, animations and defeat sequence.
+
+## **Phase 6 — Vrikodara: Act I's cinematic climax**
+
+Priority: High • Final boss and emotional payoff
+
+**Objective:** Make Vrikodara more imposing, visually complex and emotionally significant than Dundubhi.
+
+Vrikodara is not simply another giant enemy. He is Rudra's blood-brother, and the encounter must support both the game's action and its story.
+
+### **6.1 Establish a unique boss identity**
+
+Vrikodara's visual language centers on furnace heat, starvation, molten bronze, ash and destructive physical force.
+
+His effects should feature dark furnace-red energy, molten slag, white-hot highlights, smoke and controlled ash turbulence.
+
+Do not recolor Dundubhi's existing attacks and call them a new boss.
+
+### **6.2 Refine the full animation set**
+
+Improve:
+
+- Heavy idle breathing and body movement.
+- Furnace-belly animation.
+- Walking, turning and targeting.
+- Melee attack anticipation and execution.
+- Vacuum attack animation.
+- Ground-contact reactions.
+- Heavy staggering.
+- Damage and posture-break animation.
+- Transitions between combat phases.
+- Death and final blow.
+
+### **6.3 Phase-one encounter**
+
+The initial phase emphasizes Vrikodara's enormous body, furnace attacks and destructive strength.
+
+Key requirements:
+
+- Recognizable attack telegraphs.
+- Strong physical movement.
+- Furnace illumination that responds to attacks.
+- Distinct melee and ranged visual signatures.
+- Clear opportunities for counterattack.
+- Controlled visual intensity.
+
+### **6.4 Phase-two encounter**
+
+The later starved form should feel physically and visually different.
+
+Use changes in pose, motion rhythm, attack intensity, visual design and audio to communicate his transformation.
+
+Preserve the established mechanics while improving their clarity and presentation.
+
+### **6.5 Cinematic phase transition**
+
+Create a short, skippable sequence showing the transformation.
+
+The camera should emphasize the boss's body language and the furnace theme without exposing missing environment geometry.
+
+Animation, VFX, audio and player-control restoration must be synchronized.
+
+### **6.6 Final execution**
+
+Vrikodara's defeat must feel consequential rather than being just another enemy death animation.
+
+Use a unique finishing sequence, strong but restrained cinematography, appropriate music and carefully controlled pacing.
+
+### **6.7 Emotional aftermath and Shard #1**
+
+After the fight, transition into the agreed first memory-shard revelation.
+
+The mood changes from violent spectacle to silence, guilt and recognition.
+
+The healer's tent and lamp, the revelation of Shishira, and Sanjaya's correction must receive clear narrative presentation.
+
+The sequence should naturally lead toward the ferry and Savitri.
+
+### **6.8 Completion gate**
+
+Vrikodara must have distinct combat phases, impressive and readable visuals, reliable cinematic transitions, a powerful defeat sequence and the correctly integrated first memory revelation.
+
+## **Phase 7 — Complete enemy combat and readability polish**
+
+Priority: High • Every ordinary encounter
+
+**Objective:** Bring the regular enemies closer to the visual and mechanical standards of the boss encounters.
+
+### **7.1 Establish archetype identities**
+
+Review the existing regular enemy roster, including its melee, ranged, shield and heavy archetypes.
+
+Each enemy must have a distinct purpose, recognizable silhouette and predictable combat language.
+
+| Archetype      | Primary role           | Polish target                                  |
+| -------------- | ---------------------- | ---------------------------------------------- |
+| Charnel Grunt  | Basic melee pressure   | Readable strikes, responsive stagger and death |
+| Spear Wraith   | Ranged pressure        | Clear aim and projectile telegraphs            |
+| Guardian       | Defensive/shield enemy | Understandable blocking and posture breaks     |
+| Rakshasa Brute | Heavy threat           | Weighty attacks and clear recovery windows     |
+
+Preserve other existing Act I enemies and apply the same standards.
+
+### **7.2 Upgrade attack animations**
+
+For each archetype:
+
+- Improve anticipation poses.
+- Correct attack ranges and contact frames.
+- Match the animation to damage timing.
+- Add convincing reactions to being hit.
+- Improve stagger and knockback.
+- Refine recovery after missed attacks.
+- Polish death animations.
+- Prevent models from sliding or snapping.
+
+### **7.3 Improve enemy coordination**
+
+Preserve and refine the existing group-attack coordination logic.
+
+The objective is to produce difficult but understandable fights, not simultaneous chaotic attacks from every enemy.
+
+Test coordinated melee, ranged and heavy pressure, including how enemies reposition and recover.
+
+### **7.4 Improve combat telegraphs**
+
+Establish a consistent visual hierarchy for:
+
+- Normal attacks.
+- Parriable attacks.
+- Unblockable attacks.
+- Area hazards.
+- Safe zones.
+- Enemy projectiles.
+- Player attacks.
+
+Important distinctions must use shapes, motion and timing as well as color.
+
+### **7.5 Hit and death feedback**
+
+A heavy Parashu strike against an ordinary enemy should produce convincing physical and visual feedback.
+
+Use directional recoil, stagger, posture changes, animation timing, death effects and sound.
+
+Avoid exaggerated enemy reactions that make light attacks look stronger than heavy attacks.
+
+### **7.6 Reduce visual clutter**
+
+When several enemies attack simultaneously, their telegraphs must still be readable under Rudra's elemental VFX.
+
+Ensure that ordinary enemies never produce effects that visually overpower the bosses.
+
+### **7.7 Completion gate**
+
+Every regular archetype must have reliable animations, understandable combat behavior, visually clear telegraphs and convincing hit reactions.
+
+The player's defeats should generally be explainable through the encounter mechanics.
+
+## **Phase 8 — Kala-Bhairava astral avatar upgrade**
+
+Priority: High • Dedicated transformation system
+
+**Objective:** Complete our monumental spectral guardian transformation as a properly animated, visually spectacular, technically stable game mechanic.
+
+As agreed in our latest discussion, **this work is kept separate from Phase 1**.
+
+### **8.1 Repair the existing rendering problems**
+
+Inspect the current `susanoo3dRenderer.ts` and `kalaBhairavaSusanoo.ts` implementations.
+
+Correct:
+
+- Incorrect skinning and skeletal shader behavior.
+- Missing or unreliable animation playback.
+- Large rectangular glow artifacts.
+- Improper transparency.
+- Incorrect positioning relative to Rudra.
+- Floating or misplaced feet.
+- Clipping at effect boundaries.
+- Visual instability when activating the transformation.
+
+### **8.2 Establish the final guardian appearance**
+
+The desired guardian is an enormous Indian mythological astral warrior.
+
+Its design includes:
+
+- Monumental silhouette.
+- Chola-inspired armor.
+- Dark antique bronze surfaces.
+- Crimson spectral energy.
+- Ancient sacred motifs.
+- Powerful articulated arms.
+- Ethereal but readable body materials.
+- Distinctive weapon and attack motion.
+
+The guardian must feel like a colossal entity, not simply a particle cloud surrounding Rudra.
+
+### **8.3 Correct character and guardian animation**
+
+The guardian should have coordinated activation, idle, attacks and deactivation.
+
+Its attacks must correspond to the actual combat actions, with appropriate timing, body movement and effects.
+
+Avoid the previous failure in which Rudra continued repeatedly attacking within a large disconnected visual overlay.
+
+### **8.4 Proper compositing and camera scale**
+
+Ensure that Rudra remains grounded and readable inside or beneath the guardian.
+
+Correct the rendering order, transparency, environment integration, shadowing, scale and projection.
+
+The transformation should not expose flat rectangular effect surfaces or mask the player model.
+
+### **8.5 Transformation choreography**
+
+Develop a distinctive but reliable sequence for:
+
+- Activation.
+- Full manifestation.
+- Idle and movement.
+- Light attacks.
+- Heavy attacks.
+- Major impact effects.
+- Deactivation.
+- Interrupted transformation.
+
+### **8.6 Gameplay and balancing**
+
+Preserve the existing transformation rules until changes are explicitly approved.
+
+Measure how its current full-damage-immunity behavior affects boss difficulty.
+
+Evaluate possible alternatives if necessary, but do not silently change a defining mechanic.
+
+### **8.7 Performance**
+
+Stress-test the guardian alongside multiple enemies, other VFX, video arenas and boss effects.
+
+Use efficient materials and rendering techniques without destroying the visual identity.
+
+### **8.8 Completion gate**
+
+The guardian is a fully animated, stable, properly synchronized, readable and visually impressive transformation.
+
+No broken skeletal rendering, rectangular overlays, detached attacks or unexpected player animation loops remain.
+
+# **PART III — World presentation, audio and player experience**
+
+## **Phase 9 — Environment, MP4 arenas and visual cohesion**
+
+Priority: High • Living world and chamber transitions
+
+**Objective:** Make the painted environments, rendered characters, combat effects and chamber progression feel like a single cohesive game world.
+
+### **9.1 Retain the existing MP4 arena approach**
+
+Our plan is to preserve high-quality painted arenas and animated backgrounds.
+
+Do not replace them with generic full-3D rooms simply to gain unrestricted camera movement.
+
+Instead, enhance their presentation through rendering, compositing, interaction and environmental animation.
+
+### **9.2 Audit all eight chambers**
+
+Each chamber requires evaluation of:
+
+- Art direction.
+- Color composition.
+- Background resolution.
+- Animation loop quality.
+- Foreground and background integration.
+- Depth and perspective.
+- Character scaling.
+- Floor placement.
+- Lighting.
+- Combat visibility.
+- Loading behavior.
+- Transition quality.
+
+### **9.3 Fix static-image-to-video snapping**
+
+One of our identified problems was the visible switch from a static background to the animated MP4.
+
+Implement a reliable preload and display strategy.
+
+The first visible frame should correspond appropriately to the video content.
+
+Never replace a well-composed background with an unrelated-looking video during gameplay.
+
+### **9.4 Improve character/environment integration**
+
+Rudra, enemies and bosses must appear grounded within the scene.
+
+Improve contact shadows, feet positioning, foreground occlusion, depth sorting, lighting direction, color grading and environment scale.
+
+This is especially important because the game combines 3D characters with painterly arena backgrounds.
+
+### **9.5 Add environmental responsiveness**
+
+Where technically practical, incorporate:
+
+- Ground dust from impacts.
+- Ambient particles.
+- Heat and atmospheric effects.
+- Subtle background motion.
+- Localized lighting changes.
+- Collision debris.
+- Environmental effects appropriate to each chamber.
+
+These elements must support the existing artwork rather than obscure it.
+
+### **9.6 Improve portals and room transitions**
+
+Our later discussions specifically added higher-quality portal and chamber-transition presentation.
+
+The portal system should communicate where the player is going and when a chamber has been completed.
+
+Improve the visual entrance and exit treatment, transition timing, environmental continuity and loading reliability.
+
+Ensure reliable movement between the Vaitarani hub and the existing chambers, including restart and post-boss flows.
+
+### **9.7 Hub and chamber cohesion**
+
+Savitri's boat and the Vaitarani should remain visually distinct but consistent with the larger game's art direction.
+
+Environmental lighting, audio atmosphere, player presentation and progression transitions should reinforce the mood.
+
+### **9.8 Completion gate**
+
+Every chamber looks coherent, the characters appear grounded, MP4 backgrounds transition smoothly, room progression is reliable, and environment effects enhance rather than distract from gameplay.
+
+## **Phase 10 — Complete sound design and adaptive music**
+
+Priority: High • Cinematic audio
+
+**Objective:** Make combat feel physically powerful and emotionally engaging through precise sound and music synchronization.
+
+### **10.1 Build a complete combat sound event map**
+
+Cover all major gameplay events:
+
+| Event                | Sound requirement                           |
+| -------------------- | ------------------------------------------- |
+| Light Parashu strike | Sharp, responsive attack transient          |
+| Heavy strike         | Layered, weighty impact                     |
+| Perfect parry        | Crisp metallic contact                      |
+| Dash and dodge       | Short, recognizable movement sound          |
+| Footsteps            | Surface-appropriate movement                |
+| Armor damage         | Metallic cracks and fragments               |
+| Enemy stagger        | Convincing impact reaction                  |
+| Enemy death          | Distinct finishing feedback                 |
+| Boss roar            | Character-specific signature                |
+| Pillar collision     | Large stone-and-body impact                 |
+| Astra activation     | Distinct elemental identity                 |
+| Rage activation      | Major transformation cue                    |
+| Execution            | Precisely synchronized layered audio        |
+| Shrine interaction   | Recognizable magical/environmental response |
+| Victory and defeat   | Appropriate musical and interface feedback  |
+
+### **10.2 Element-specific sound design**
+
+Agni, Varuna, Vayu and Vajra should have distinct acoustic identities.
+
+The sound should reinforce the type of energy being used, its speed, its mass and the moment of contact.
+
+Avoid attaching one identical generic explosion sound to every powerful attack.
+
+### **10.3 Boss audio design**
+
+Dundubhi receives a powerful drum/percussion and beastly identity.
+
+Vrikodara receives a distinctive furnace, heat and physical-mass identity.
+
+Important boss transitions, attacks, roars and final blows require synchronized cues.
+
+### **10.4 Adaptive soundtrack**
+
+Preserve existing soundtrack routing while improving meaningful transitions.
+
+The music system should support:
+
+- Ambient or low-intensity exploration.
+- Regular encounter escalation.
+- Boss introduction.
+- Boss combat.
+- Phase transition.
+- Rage escalation.
+- Victory.
+- Post-boss emotional resolution.
+
+Avoid restarting entire tracks repeatedly when a short musical cue or transition is more appropriate.
+
+### **10.5 Mixing and priority**
+
+Balance music, combat impacts, voices, environmental ambience and UI sounds.
+
+Important sounds must remain audible in dense battles.
+
+Avoid unwanted volume peaks, excessive overlapping effects and harsh repetition.
+
+### **10.6 Completion gate**
+
+Every major action has synchronized audio, distinct elemental attacks sound different, boss music responds to encounter states, and the mix remains clear and consistent.
+
+## **Phase 11 — Premium UI, HUD and overall game feel**
+
+Priority: Medium-high • Player-facing polish
+
+**Objective:** Make the interface look cohesive with Kaliyuga's mythological aesthetic while remaining easy to understand during combat.
+
+### **11.1 Rework HUD hierarchy**
+
+Prioritize immediate visibility of:
+
+- Player health.
+- Stamina and posture.
+- Astra availability.
+- Rage or transformation state.
+- Boss health and phase.
+- Relevant combat status.
+- Context-sensitive interactions.
+
+Important information must remain legible over fire, lightning and other bright effects.
+
+### **11.2 Improve HUD visual design**
+
+Use the existing art direction rather than generic game-interface styling.
+
+Potential treatments include antique bronze framing, muted dark surfaces, controlled crimson accents and subtle mythological motifs.
+
+Keep decorative elements subordinate to gameplay information.
+
+### **11.3 Combat feedback**
+
+Make successful hits, damage received, posture breaks, perfect parries and resource changes clearly understandable.
+
+Use appropriate HUD animation and visual feedback without filling the screen with unnecessary floating labels.
+
+### **11.4 Menus and interaction**
+
+Polish the pause menu, settings, upgrade selection, interaction prompts and gameplay tutorials.
+
+Input should never accidentally trigger interface buttons behind an active menu or modal.
+
+### **11.5 Boss presentation**
+
+Improve boss name presentation, health-bar behavior, phase-transition indicators and victory feedback.
+
+Important cinematic moments should not be undermined by inappropriate HUD clutter.
+
+### **11.6 Death, restart and victory flow**
+
+Improve the player's experience when defeated or victorious.
+
+Menus must be reliable, transitions should feel intentional, and restart behavior must preserve correct gameplay state.
+
+### **11.7 Completion gate**
+
+The HUD and menus are readable, cohesive, responsive and free of obvious developer-only artifacts. Critical information remains legible even during the most spectacular effects.
+
+# **PART IV — Optimization, testing and release validation**
+
+## **Phase 12 — Performance optimization and stability**
+
+Priority: Critical • Hardware and runtime reliability
+
+**Objective:** Deliver smooth, stable gameplay without unnecessarily sacrificing Kaliyuga's visual ambitions.
+
+### **12.1 Establish measured performance baselines**
+
+Collect real measurements for:
+
+- Average FPS and frame-time distribution.
+- CPU and GPU time where available.
+- Draw calls.
+- Triangle counts.
+- Texture and render-target memory.
+- WebGL resource counts.
+- Asset loading times.
+- Video decoding overhead.
+- Animation processing cost.
+- VFX processing cost.
+- Memory growth during repeated runs.
+- Boss transitions.
+- Astral transformation activation.
+
+Measure ordinary combat and worst-case combat separately.
+
+### **12.2 Implement three graphics quality profiles**
+
+**Performance**
+
+Lower internal rendering resolution, reduced secondary particles and restrained post-processing. Preserve important attack shapes and telegraphs.
+
+**Balanced**
+
+Full combat readability and essential painterly elemental effects, with moderate particle counts and processing cost.
+
+**Cinematic**
+
+Highest practical visual quality for supported hardware, including richer particles, lighting and compositing without compromising gameplay.
+
+### **12.3 Optimize combat VFX**
+
+Reuse effect geometry, particle systems and materials where appropriate.
+
+Avoid excessive allocations per attack.
+
+Cap secondary effects during unusually dense battles without removing important combat feedback.
+
+### **12.4 Optimize character assets**
+
+Review mesh complexity, material count, texture sizes, rig processing and animation-loading behavior.
+
+Preserve important silhouette and visual details while eliminating unnecessary runtime work.
+
+### **12.5 Improve video and asset loading**
+
+Preload critical assets, avoid unnecessary video-decoding work, optimize release textures and prevent uncontrolled asset-cache growth.
+
+### **12.6 Address memory leaks and cleanup**
+
+Verify disposal of:
+
+- Geometries.
+- Textures.
+- Render targets.
+- Temporary materials.
+- Animation resources.
+- Effects.
+- Unused video resources.
+
+Check repeated restarts and chamber transitions for memory growth.
+
+### **12.7 Handle graphics failures gracefully**
+
+Test WebGL context loss where practical, asset-load failures and missing media.
+
+The game should avoid unrecoverable black screens or permanent input loss.
+
+### **12.8 Performance target**
+
+Aim for stable 60 FPS where the hardware permits, with a measured and playable lower-performance profile.
+
+Do not claim a specific frame-rate result without measurements on representative hardware.
+
+### **12.9 Completion gate**
+
+The game has documented performance metrics, functional graphics presets, controlled memory usage, optimized major effects and stable operation through repeated gameplay sessions.
+
+## **Phase 13 — Automated testing and regression protection**
+
+Priority: Critical • Every major system verified
+
+**Objective:** Establish a testing system that catches gameplay, rendering-state and progression regressions before they reach the player.
+
+### **13.1 Establish a reliable test pipeline**
+
+Create documented commands for:
+
+- TypeScript/type checks.
+- Production build.
+- Unit tests.
+- Integration tests.
+- Browser smoke tests where available.
+- Asset validation.
+- Relevant performance checks.
+
+Integrate appropriate checks into continuous integration.
+
+### **13.2 Combat mechanics testing**
+
+Automated tests should cover:
+
+- Attack calculations.
+- Damage resolution.
+- Stamina/posture behavior.
+- Perfect parry timing.
+- Combo progression.
+- Heavy attack handling.
+- Execution eligibility.
+- Execution interruption.
+- Astra availability and state transitions.
+- Rage activation and expiration.
+
+### **13.3 Enemy testing**
+
+Verify enemy state transitions, stagger recovery, attack cooldowns, telegraph timing, death resolution and behavior during repeated encounters.
+
+### **13.4 Boss testing**
+
+Test Dundubhi's charge/pillar mechanics and Vrikodara's combat phases.
+
+Confirm reliable entrance, transition, stagger, defeat and restart behavior.
+
+### **13.5 Cinematic testing**
+
+Test that cinematics:
+
+- Start at the correct event.
+- Do not replay unintentionally.
+- Are skippable as designed.
+- Restore the camera.
+- Restore player control.
+- Resume the correct AI state.
+- Release temporary resources.
+- Handle missing animations or media.
+
+### **13.6 Progression and save testing**
+
+Verify hub-to-chamber travel, room completion, boss progression, save persistence, victory/defeat flow and restart behavior.
+
+### **13.7 Browser smoke testing**
+
+Where available, automate a basic playable journey through the Act I progression.
+
+Run tests using multiple resolutions and graphics profiles.
+
+### **13.8 Visual regression evidence**
+
+Automated code checks cannot determine whether a fire effect is beautiful, a boss looks physically convincing or a camera composition is good.
+
+Maintain separate screenshot/video inspection procedures for those judgments.
+
+### **13.9 Completion gate**
+
+Critical systems have repeatable regression tests, the production build passes, and no known critical gameplay failures are hidden behind passing unit tests.
+
+## **Phase 14 — Final Act I quality assurance and release gate**
+
+Priority: Final • Full vertical-slice validation
+
+**Objective:** Verify that all previous work forms one coherent, polished, enjoyable Act I experience.
+
+This phase is not a simple final build check. It is a complete quality review.
+
+### **14.1 Perform a fresh-save Act I playthrough**
+
+Start with a clean save and complete the actual Act I progression.
+
+Verify:
+
+- Initial entry into the game.
+- Vaitarani hub.
+- Each of the existing eight chambers.
+- Regular encounters.
+- Shrine and interaction systems.
+- Dundubhi's complete encounter.
+- Vrikodara's complete encounter.
+- First memory-shard revelation.
+- Return or progression into the intended post-fight state.
+
+### **14.2 Test every chamber individually**
+
+For each chamber, evaluate:
+
+- Loading behavior.
+- Environment composition.
+- Character visibility.
+- Animation quality.
+- Enemy AI.
+- Combat balance.
+- Elemental VFX.
+- Frame-rate stability.
+- Audio.
+- Progression and exit behavior.
+
+### **14.3 Test repeated attempts**
+
+Play the same combat sections repeatedly.
+
+Test death, restart, victory, interruption, cinematic skipping, resource changes and returning to earlier states.
+
+Important gameplay systems must behave consistently across attempts.
+
+### **14.4 Complete visual-quality review**
+
+Capture before-and-after screenshots and short recordings under comparable conditions.
+
+Evaluate:
+
+| Quality dimension  | Required result                               |
+| ------------------ | --------------------------------------------- |
+| Animation          | Fluid and visually convincing                 |
+| Combat VFX         | Beautiful and precisely synchronized          |
+| Impact             | Strong, responsive, physically readable       |
+| Cinematography     | Deliberate composition and safe recovery      |
+| Enemy presentation | Clear silhouettes, telegraphs and reactions   |
+| Boss presentation  | Memorable, fair and distinctive               |
+| Environment        | Cohesive, grounded and appropriately animated |
+| UI                 | Attractive and easy to understand             |
+| Audio              | Synchronized, balanced and effective          |
+| Performance        | Measured and stable                           |
+
+Inspect both the normal gameplay camera and cinematic close-ups.
+
+### **14.5 Evaluate actual gameplay experience**
+
+Review the game as both a technical director and a player.
+
+Questions to answer include:
+
+- Does combat feel responsive?
+- Are attacks satisfying even without excessive VFX?
+- Are light and heavy attacks meaningfully different?
+- Can players understand enemy behavior?
+- Is the difficulty demanding but fair?
+- Are the bosses memorable?
+- Are the environments cohesive?
+- Does the player want to continue after a defeat?
+- Does the first memory revelation deliver the intended emotional contrast?
+
+### **14.6 Test failure scenarios**
+
+Simulate or test slower asset loading, missing media, different graphics settings, unexpected restarts and repeated transitions.
+
+Check that these conditions do not permanently break the experience.
+
+### **14.7 Correct regressions before release**
+
+If an improvement increases visual spectacle but damages performance or combat readability, revise it rather than accepting the regression.
+
+Every major defect must have a reproducible test, corrective implementation and verification evidence.
+
+### **14.8 Final acceptance**
+
+The vertical slice is ready only when the complete experience is playable, visually coherent, technically stable and free from critical failures.
+
+A successful build alone does not qualify.
+
+# **PART V — Agreed execution structure**
+
+## **3. Development order and dependencies**
+
+The 14 phases are organized by feature, but the actual work should respect dependencies rather than being implemented in one enormous unverified change.
+
+1. **Foundation**
+
+   Phase 0 audit, protected baseline, initial test safeguards and performance measurements.
+2. **Core combat**
+
+   Phases 2 and 1 work closely together: stabilize Rudra's animation and synchronize his weapon attacks with elemental VFX.
+3. **Cinematic integration**
+
+   Phase 3 Blender animation production and Phase 4 cinematic camera. Build and validate a complete execution before expanding to further cinematics.
+4. **First benchmark boss**
+
+   Phase 5 Dundubhi establishes the completed boss quality standard.
+5. **Combat content polish**
+
+   Phase 7 regular enemies and Phase 6 Vrikodara apply the established combat and cinematic standards.
+6. **Special systems and environment**
+
+   Phase 8 guardian work and Phase 9 arena cohesion, including video transitions and portals.
+7. **Full player experience**
+
+   Phases 10 and 11 integrate final audio, music, UI and game-feel polish.
+8. **Continuous engineering validation**
+
+   Phases 12 and 13 run throughout production as independent safeguards, then receive final comprehensive passes.
+9. **Final release validation**
+
+   Phase 14 combines all systems into a fresh-save, complete Act I acceptance test.
+
+## **4. Parallel work allocation**
+
+Our later discussions established that multiple agents could work simultaneously, provided they do not overwrite one another or destabilize gameplay.
+
+| Workstream                       | Main responsibility                                                                                            |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Neon / gameplay agent            | Core combat, animation integration, VFX, enemy behavior, boss mechanics and gameplay environment systems       |
+| Codex / cinematic agent          | Blender animation and cutscene production, cinematic exports, execution choreography and related visual assets |
+| Independent QA/optimization work | Phase 12 measurements and optimization, Phase 13 tests, independent audio audits                               |
+| Shared integration               | Review of cinematic/gameplay interfaces, asset contracts, performance and final quality acceptance             |
+
+The core principle is **isolated responsibilities with controlled integration**. Two agents must not independently rewrite the same combat renderer or cinematic system without coordination.
+
+## **5. Mandatory completion protocol for every phase**
+
+**Phase acceptance checklist**
+
+0/10 criteria checked
+
+Inspect the existing implementation and assets before changing anything.
+
+Define the visible quality target and specific defects being corrected.
+
+Implement the planned feature without removing unrelated functionality.
+
+Run relevant build, type and unit checks.
+
+Test the affected feature in the actual game runtime.
+
+Capture screenshot or video evidence where visuals are involved.
+
+Compare the result with the prior known-good baseline.
+
+Fix failures and rerun the relevant tests.
+
+Preserve original assets and commit tested changes.
+
+Document what was implemented, verified and still incomplete.
+
+Reset checklist
+
+These are verification requirements, not a claim that any particular phase has already passed.
+
+## **6. The final Kaliyuga quality standard**
+
+Our goal is not to create a game that merely has flashy particles, working bosses and multiple chambers. All those components must work together.
+
+The intended final Act I should deliver:
+
+- **Demon Slayer-inspired elemental spectacle** through original, beautifully shaped fire, water, wind and lightning effects.
+- **God of War-style combat weight** through synchronized animation, powerful weapon impacts, camera emphasis and enemy reactions.
+- **Hades-quality gameplay clarity** through responsive controls, understandable encounters and recognizable visual design.
+- **Phantom Blade Zero-inspired combat choreography** through smooth transitions and controlled executions.
+- **Black Myth: Wukong-inspired boss presentation** through imposing mythological creatures and dramatic cinematics.
+- **A distinctly Kaliyuga identity** through Indian mythological imagery, a dark painterly world, Rudra's journey, the tragedy of Vrikodara and the first shard revelation.
+
+The actual target is the **highest achievable premium indie quality within our existing engine and hardware**, not an unsupported guarantee of full AAA production parity.
+
+**The final deliverable is one completely integrated, polished, tested Act I vertical slice—not 14 isolated technical demonstrations.**
+
+This preserves the scope, structure and completion rules of our original master plan, together with the subsequent decisions to keep the elemental VFX work and Kala-Bhairava work separate, retain MP4 arenas, and validate every major change.&#x20;
+
+Pasted text.txt

@@ -3,6 +3,14 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { isSoftwareWebGLRenderer } from './hadesSpriteBaker';
+import {
+  getOrCreatePainterlyVfxAtlas,
+  PainterlyVfxAtlas,
+} from './painterlyVfxAtlas';
+import {
+  ArenaBladeSample,
+  writeSweptBladeRibbonBuffers,
+} from './bladeTrailSampler';
 
 export type DemonSlayerVfxPalette =
   | 'hinokami'
@@ -15,54 +23,82 @@ export type DemonSlayerVfxPalette =
   | 'magma'
   | 'bronze';
 
+export type VfxQualityPreset = 'performance' | 'balanced' | 'cinematic';
+
+export type ElementalParticleKind =
+  | 'spark_needle'
+  | 'water_droplet'
+  | 'rock_shard'
+  | 'wind_shard'
+  | 'soot_flake';
+
+export interface VfxTelemetrySnapshot {
+  qualityPreset: VfxQualityPreset;
+  isSoftwareGl: boolean;
+  activeRibbons: number;
+  activeBladeTrails: number;
+  activeParticles: number;
+  maxParticles: number;
+  activeFloorEffects: number;
+  activeBackEffects: number;
+  drawCalls: number;
+}
+
 interface RibbonPaletteColors {
   core: THREE.Color;
   mid: THREE.Color;
   edge: THREE.Color;
+  deep: THREE.Color;
   ink: THREE.Color;
   glow: THREE.Color;
 }
 
 const RIBBON_PALETTES: Record<DemonSlayerVfxPalette, RibbonPaletteColors> = {
   hinokami: {
-    core: new THREE.Color('#fffce6'),
-    mid: new THREE.Color('#ffaa14'),
-    edge: new THREE.Color('#eb1e00'),
-    ink: new THREE.Color('#140604'),
-    glow: new THREE.Color('#ff6a00'),
+    core: new THREE.Color('#fffbe0'),
+    mid: new THREE.Color('#ffaa12'),
+    edge: new THREE.Color('#ee2800'),
+    deep: new THREE.Color('#7a0c02'),
+    ink: new THREE.Color('#120605'),
+    glow: new THREE.Color('#ff6c08'),
   },
   sun: {
     core: new THREE.Color('#ffffff'),
     mid: new THREE.Color('#ffd633'),
-    edge: new THREE.Color('#ff3300'),
-    ink: new THREE.Color('#120604'),
+    edge: new THREE.Color('#f53200'),
+    deep: new THREE.Color('#801000'),
+    ink: new THREE.Color('#100604'),
     glow: new THREE.Color('#ff7b00'),
   },
   water: {
     core: new THREE.Color('#ffffff'),
-    mid: new THREE.Color('#38e8ff'),
-    edge: new THREE.Color('#005ce6'),
-    ink: new THREE.Color('#040d21'),
-    glow: new THREE.Color('#1ca8ff'),
+    mid: new THREE.Color('#42f2ff'),
+    edge: new THREE.Color('#0a74e6'),
+    deep: new THREE.Color('#042a63'),
+    ink: new THREE.Color('#030b1e'),
+    glow: new THREE.Color('#20ccff'),
   },
   thunder: {
     core: new THREE.Color('#ffffff'),
-    mid: new THREE.Color('#ffe94d'),
+    mid: new THREE.Color('#ffea3d'),
     edge: new THREE.Color('#38e8ff'),
-    ink: new THREE.Color('#120e04'),
-    glow: new THREE.Color('#ffd426'),
+    deep: new THREE.Color('#d98800'),
+    ink: new THREE.Color('#100c04'),
+    glow: new THREE.Color('#ffd824'),
   },
   wind: {
-    core: new THREE.Color('#eefff7'),
-    mid: new THREE.Color('#26f78d'),
-    edge: new THREE.Color('#047857'),
-    ink: new THREE.Color('#04120c'),
-    glow: new THREE.Color('#10b981'),
+    core: new THREE.Color('#ecfff6'),
+    mid: new THREE.Color('#22f58a'),
+    edge: new THREE.Color('#068c5c'),
+    deep: new THREE.Color('#043f2d'),
+    ink: new THREE.Color('#05120c'),
+    glow: new THREE.Color('#12c97a'),
   },
   blood: {
     core: new THREE.Color('#ffe4ec'),
     mid: new THREE.Color('#ff1744'),
     edge: new THREE.Color('#88001f'),
+    deep: new THREE.Color('#3d000f'),
     ink: new THREE.Color('#0d0205'),
     glow: new THREE.Color('#ff1f5a'),
   },
@@ -70,6 +106,7 @@ const RIBBON_PALETTES: Record<DemonSlayerVfxPalette, RibbonPaletteColors> = {
     core: new THREE.Color('#ffd6f5'),
     mid: new THREE.Color('#e11d74'),
     edge: new THREE.Color('#4b0c3b'),
+    deep: new THREE.Color('#21051a'),
     ink: new THREE.Color('#0a0208'),
     glow: new THREE.Color('#ff2478'),
   },
@@ -77,6 +114,7 @@ const RIBBON_PALETTES: Record<DemonSlayerVfxPalette, RibbonPaletteColors> = {
     core: new THREE.Color('#fff4c4'),
     mid: new THREE.Color('#ff6a18'),
     edge: new THREE.Color('#a31808'),
+    deep: new THREE.Color('#4a0b04'),
     ink: new THREE.Color('#120705'),
     glow: new THREE.Color('#ff4818'),
   },
@@ -84,9 +122,22 @@ const RIBBON_PALETTES: Record<DemonSlayerVfxPalette, RibbonPaletteColors> = {
     core: new THREE.Color('#ffffff'),
     mid: new THREE.Color('#38e8ff'),
     edge: new THREE.Color('#0284c7'),
+    deep: new THREE.Color('#06284d'),
     ink: new THREE.Color('#04101f'),
     glow: new THREE.Color('#00d4ff'),
   },
+};
+
+const QUALITY_PARTICLE_CAP: Record<VfxQualityPreset, number> = {
+  performance: 96,
+  balanced: 180,
+  cinematic: 260,
+};
+
+const QUALITY_PIXEL_RATIO: Record<VfxQualityPreset, number> = {
+  performance: 0.9,
+  balanced: 1.15,
+  cinematic: 1.4,
 };
 
 export interface ZigzagPoint2D {
@@ -117,7 +168,7 @@ export function computeThunderZigzagVertices(
   for (let i = 1; i < safeSegs; i++) {
     const t = i / safeSegs;
     const sign = i % 2 === 0 ? 1 : -1;
-    const jitter = 0.72 + ((Math.sin(i * 12.9898 + seed * 78.233) * 43758.5453) % 1 + 1) * 0.28;
+    const jitter = 0.72 + (((Math.sin(i * 12.9898 + seed * 78.233) * 43758.5453) % 1) + 1) * 0.28;
     const offset = sign * amplitude * jitter * Math.sin(t * Math.PI);
     pts.push({
       x: startX + dx * t + nx * offset,
@@ -130,7 +181,7 @@ export function computeThunderZigzagVertices(
 
 /**
  * Pure deterministic generator for 3-5 forked secondary Zenitsu crackling lightning arcs
- * branching off the interior elbow vertices of a primary lightning bolt.
+ * strictly anchored at the exact `(x, y)` interior elbow vertices of the primary lightning bolt.
  */
 export function computeThunderForkedBranches(
   mainPts: ZigzagPoint2D[],
@@ -149,12 +200,12 @@ export function computeThunderForkedBranches(
     const baseAngle = Math.atan2(next.y - prev.y, next.x - prev.x);
     const side = i % 2 === 0 ? 1 : -1;
     const h = Math.abs(Math.sin(i * 31.7 + seed * 17.3));
-    const branchAngle = baseAngle + side * (0.48 + h * 0.56);
-    const branchLen = totalLen * (0.28 + h * 0.24);
+    const branchAngle = baseAngle + side * (0.46 + h * 0.52);
+    const branchLen = totalLen * (0.26 + h * 0.22);
     const endX = origin.x + Math.cos(branchAngle) * branchLen;
     const endY = origin.y + Math.sin(branchAngle) * branchLen;
     branches.push(
-      computeThunderZigzagVertices(origin.x, origin.y, endX, endY, 3, 18 + h * 14, seed + i * 7)
+      computeThunderZigzagVertices(origin.x, origin.y, endX, endY, 3, 16 + h * 14, seed + i * 7)
     );
   }
   return branches;
@@ -181,7 +232,6 @@ export function buildTaperedThunderRibbonGeometry(
     return empty;
   }
 
-  // Compute cumulative arc length for smooth UV progression along bolt travel
   const cumLen: number[] = [0];
   for (let i = 1; i < pts.length; i++) {
     cumLen.push(cumLen[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y));
@@ -234,7 +284,6 @@ export function buildTaperedThunderRibbonGeometry(
       }
     }
 
-    // Dramatic Zenitsu whip taper: punchy electric root -> crisp spear tip
     const widthCurve = startWidth + (endWidth - startWidth) * Math.pow(u, 0.82);
     const halfW = Math.max(1.5, widthCurve * 0.5) * miterScale;
 
@@ -258,7 +307,7 @@ export function buildTaperedThunderRibbonGeometry(
 }
 
 /**
- * Builds a sharp multi-point anime comic starburst polygon (e.g. 8-point Zenitsu lightning bounce burst).
+ * Builds a sharp multi-point anime comic starburst polygon (e.g. 8- or 12-point clash burst).
  */
 export function buildStarburstPolygonGeometry(
   points = 8,
@@ -272,7 +321,6 @@ export function buildStarburstPolygonGeometry(
   for (let i = 0; i < safePts * 2; i++) {
     const a = (i / (safePts * 2)) * Math.PI * 2;
     const isOuter = i % 2 === 0;
-    // Alternate long cardinal spikes & medium diagonal spikes for authentic anime comic impact energy
     const spikeMul = isOuter ? (i % 4 === 0 ? 1.18 : 0.84) : 1.0;
     const r = (isOuter ? outerRadius : innerRadius) * spikeMul;
     positions.push(Math.cos(a) * r, Math.sin(a) * r, 0);
@@ -292,12 +340,42 @@ export function buildStarburstPolygonGeometry(
   return geo;
 }
 
+/**
+ * Builds a razor-sharp 4-vertex tapered diamond lens-flare needle (<===>)
+ * with pinpoint tips and zero blunt rectangular box ends!
+ */
+export function buildTaperedDiamondLensFlareGeometry(
+  length: number,
+  thickness: number
+): THREE.BufferGeometry {
+  const hl = length * 0.5;
+  const ht = thickness * 0.5;
+  const positions = new Float32Array([
+    -hl, 0, 0,
+    0, -ht, 0,
+    hl, 0, 0,
+    0, ht, 0,
+  ]);
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geo.setIndex([0, 1, 2, 0, 2, 3]);
+  geo.computeVertexNormals();
+  return geo;
+}
+
 export function selectDemonSlayerPaletteForStance(stance: string): DemonSlayerVfxPalette {
   if (stance === 'pillar') return 'wind';
   if (stance === 'thrust') return 'thunder';
   if (stance === 'water' || stance === 'varuna') return 'water';
   return 'hinokami';
 }
+
+// ============================================================================
+// PHASE 1 — UFOTABLE / DEMON SLAYER PAINTERLY BRUSHWORK + SUMI-E INK SHADER
+// Samples our procedural painterly brushwork atlas and traces crisp pitch-black
+// Sumi-e ink outlines around EVERY curling flame tongue, Hokusai foam claw, and
+// razor emerald wind-blade silhouette!
+// ============================================================================
 
 const RIBBON_VERTEX_SHADER = /* glsl */ `
   varying vec2 vUv;
@@ -307,22 +385,22 @@ const RIBBON_VERTEX_SHADER = /* glsl */ `
   }
 `;
 
-// Authentic Ufotable / Demon Slayer 3-band stepped FBM cel shader with:
-// - Mode 0: Hinokami / Sun / Blood ragged flame licks + pitch-black Sumi-e ink border
-// - Mode 1: Ukiyo-e Hokusai parallel indigo/cyan wave stripes + curled white seafoam crests
-// - Mode 2: Zenitsu sharp geometric lightning zigzag ridges + HDR white-gold core
-// - Mode 3: Sanemi layered emerald razor gale blades + dark ink streaks
 const RIBBON_FRAGMENT_SHADER = /* glsl */ `
   uniform float uTime;
   uniform float uLife;
   uniform vec3 uCoreColor;
   uniform vec3 uMidColor;
   uniform vec3 uEdgeColor;
+  uniform vec3 uDeepColor;
   uniform vec3 uInkColor;
   uniform float uOpacity;
   uniform float uInkBorder;
   uniform float uMode;
   uniform float uHdrBoost;
+  uniform float uUseAtlas;
+  uniform float uUvRepeat;
+  uniform float uScrollSpeed;
+  uniform sampler2D uAtlasTex;
 
   varying vec2 vUv;
 
@@ -343,179 +421,184 @@ const RIBBON_FRAGMENT_SHADER = /* glsl */ `
     return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
   }
 
-  float fbm(vec2 p) {
-    float v = 0.0;
-    float a = 0.55;
-    for (int i = 0; i < 3; i++) {
-      v += a * noise2(p);
-      p = p * 2.08 + vec2(1.7, 9.2);
-      a *= 0.5;
-    }
-    return v;
-  }
-
   void main() {
     float u = vUv.x;
     float v = vUv.y;
 
-    float arcTaper = smoothstep(0.0, 0.14, u) * smoothstep(1.0, 0.72, u);
+    // Calligraphic head & tail silhouette envelope along ribbon arc
+    float headMask = smoothstep(0.0, 0.12, u) * smoothstep(1.0, 0.84, u);
+    // Tail-to-tip brush-grain erosion as uLife advances
+    float grain = noise2(vec2(u * 14.0 - uTime * 3.2, v * 6.0));
+    float dissolveGate = uLife * 0.92;
+    float erosion = smoothstep(dissolveGate - 0.16, dissolveGate + 0.12, u * 0.72 + grain * 0.34);
+    float lifeFade = (1.0 - smoothstep(0.74, 1.0, uLife)) * erosion;
+    if (lifeFade <= 0.015) discard;
+
+    // Selective HDR gain strictly reserved for the narrow white-hot cutting spine
+    float spineHdr = clamp(uHdrBoost, 1.0, 1.85);
+
+    if (uUseAtlas > 0.5) {
+      // Sample painterly brushwork atlas with seamless scrolling along ribbon U
+      float scrollU = u * uUvRepeat - uTime * uScrollSpeed;
+      // Subtle organic fluid sway on V so tongues & wave crests breathe alive
+      float swayAmp = (uMode > 1.5 && uMode < 2.5) ? 0.0 : 0.025;
+      float sampleV = clamp(v + sin(u * 10.0 - uTime * 7.0) * swayAmp, 0.01, 0.99);
+      vec2 suv = vec2(scrollU, sampleV);
+      vec4 tex = texture2D(uAtlasTex, suv);
+
+      // Silhouette-traced pitch-black Sumi-e ink outline via 4-neighbor alpha gradient!
+      vec2 px = vec2(0.0085, 0.016);
+      float aL = texture2D(uAtlasTex, suv + vec2(-px.x, 0.0)).a;
+      float aR = texture2D(uAtlasTex, suv + vec2(px.x, 0.0)).a;
+      float aU = texture2D(uAtlasTex, vec2(suv.x, clamp(suv.y + px.y, 0.0, 1.0))).a;
+      float aD = texture2D(uAtlasTex, vec2(suv.x, clamp(suv.y - px.y, 0.0, 1.0))).a;
+      float maxNeighborA = max(max(aL, aR), max(aU, aD));
+      float minNeighborA = min(min(aL, aR), min(aU, aD));
+
+      float bodyAlpha = smoothstep(0.32, 0.56, tex.a) * headMask;
+      float outerOutline = smoothstep(0.36, 0.62, maxNeighborA) * (1.0 - bodyAlpha) * headMask;
+      float innerRim = bodyAlpha * (1.0 - smoothstep(0.38, 0.62, minNeighborA));
+      float silhouetteInk = clamp(outerOutline + innerRim * 0.78, 0.0, 1.0) * uInkBorder;
+
+      float totalAlpha = max(bodyAlpha, silhouetteInk) * lifeFade * uOpacity;
+      if (totalAlpha <= 0.02) discard;
+
+      vec3 col = uEdgeColor;
+
+      if (uMode > 0.5 && uMode < 1.5) {
+        // VARUNA — Ukiyo-e Hokusai Woodblock Waves + Carved Striations + Clawed White Seafoam!
+        float striation = tex.g;
+        float foamClaw = smoothstep(0.45, 0.72, tex.b);
+        float deepStep = step(0.32, striation);
+        float brightStep = step(0.70, striation);
+        col = mix(uDeepColor, uEdgeColor, deepStep);
+        col = mix(col, uMidColor * 1.10, brightStep);
+        // Sculpted clawed seafoam crests pop crisp rice-paper white with selective HDR sheen
+        col = mix(col, uCoreColor * min(spineHdr, 1.24), foamClaw);
+        // Subtle crisp navy woodblock ink crease right beneath the seafoam claws
+        float foamCrease = smoothstep(0.22, 0.44, tex.b) * (1.0 - foamClaw);
+        col = mix(col, uInkColor, foamCrease * 0.68 * uInkBorder);
+      } else if (uMode > 1.5 && uMode < 2.5) {
+        // VAJRA — Zenitsu Angular Faceted Lightning (zero soft blur!)
+        float boltCore = smoothstep(0.84, 0.96, tex.g);
+        float goldBand = smoothstep(0.42, 0.68, tex.g);
+        float cyanSpark = smoothstep(0.55, 0.80, tex.b);
+        col = mix(uDeepColor, uMidColor * 1.15, goldBand);
+        col = mix(col, uEdgeColor * 1.22, cyanSpark * (1.0 - boltCore));
+        col = mix(col, uCoreColor * spineHdr, boltCore);
+      } else if (uMode > 2.5) {
+        // VAYU — Sanemi Triple-Layered Razor Emerald Wind Blades + Pitch-Black Sumi-e Tear-Streaks!
+        float bladeTone = tex.g;
+        float inkTear = smoothstep(0.48, 0.74, tex.b);
+        float midBlade = step(0.46, bladeTone);
+        float razorCore = smoothstep(0.86, 0.96, bladeTone);
+        col = mix(uDeepColor, uEdgeColor * 1.12, midBlade);
+        col = mix(col, uMidColor * 1.18, smoothstep(0.68, 0.82, bladeTone));
+        col = mix(col, uCoreColor * spineHdr, razorCore);
+        // Aggressive pitch-black sumi-e tear-streaks ripping directly through the wind!
+        col = mix(col, uInkColor, inkTear * 0.94);
+      } else {
+        // AGNI — Hinokami Kagura / Rengoku 4-Step Cel Fire + Dark Charcoal Smoke Hollows!
+        float heat = tex.g;
+        float smokeHollow = smoothstep(0.42, 0.74, tex.b);
+        float vermilion = smoothstep(0.18, 0.34, heat);
+        float amberGold = smoothstep(0.56, 0.72, heat);
+        float whiteHotSpine = smoothstep(0.86, 0.96, heat);
+        col = mix(uDeepColor, uEdgeColor * 1.12, vermilion);
+        col = mix(col, uMidColor * 1.14, amberGold);
+        col = mix(col, uCoreColor * spineHdr, whiteHotSpine);
+        // Iconic Ufotable dark charcoal smoke pockets inside curling flame eddies!
+        vec3 charcoalHollow = vec3(0.11, 0.05, 0.05);
+        col = mix(col, charcoalHollow, smokeHollow * 0.88 * (1.0 - whiteHotSpine));
+      }
+
+      // Apply razor-sharp Sumi-e calligraphy contour strictly on silhouette edges
+      col = mix(col, uInkColor, silhouetteInk * 0.96);
+
+      gl_FragColor = vec4(col * totalAlpha, totalAlpha);
+      return;
+    }
+
+    // Procedural fallback path (used by shockwave/ink layers without atlas)
     float distFromCenter = abs(v - 0.5) * 2.0;
-
-    float flowSpeed = uMode > 1.5 && uMode < 2.5 ? 8.2 : 4.8;
-    float n = fbm(vec2(u * 9.5 - uTime * flowSpeed, v * 4.5 + uTime * 1.4));
-    float n2 = fbm(vec2(u * 18.0 - uTime * (flowSpeed * 1.45), v * 7.5 - uTime * 2.1));
-
-    float tongueBias = (uMode > 1.5 && uMode < 2.5) ? 0.96 : (uMode > 0.5 && uMode < 1.5) ? 0.70 : 0.88;
-    float licks = (n * 0.62 + n2 * 0.38 - 0.40) * tongueBias;
-    float waveCurl = sin(u * 15.0 - uTime * 9.5) * 0.12 * (1.0 - u * 0.6);
-    float bodyDist = distFromCenter - (licks + waveCurl) * (0.50 + 0.50 * (1.0 - u * 0.22));
-    float radiusMask = arcTaper * (1.0 - uLife * 0.26);
-
-    float outerAlpha = smoothstep(radiusMask + 0.08, radiusMask - 0.08, bodyDist);
+    float radiusMask = headMask * (1.0 - uLife * 0.24);
+    float outerAlpha = smoothstep(radiusMask + 0.08, radiusMask - 0.08, distFromCenter);
     if (outerAlpha <= 0.02) discard;
-
-    // Keep saturation rich and anime-crisp (never clip entire ribbon to solid white!)
-    float coreGain = clamp(uHdrBoost, 1.0, 1.38);
-    vec3 col;
-    if (uMode > 0.5 && uMode < 1.5) {
-      // Ukiyo-e Hokusai parallel wave stripes + curled cel-shaded white seafoam crests
-      float stripeWave = sin((v * 6.2 + n * 1.05 - u * 2.4 - uTime * 2.2) * 6.28318);
-      float stripeStep = smoothstep(-0.18, 0.18, stripeWave);
-      float deepBand = smoothstep(0.12, 0.52, abs(v - 0.5) * 2.0);
-      float foamCrest = smoothstep(0.58, 0.80, n2 + (1.0 - distFromCenter) * 0.24);
-      col = mix(uMidColor, uEdgeColor, deepBand * 0.72);
-      col = mix(col * 0.72, uMidColor * 1.12, stripeStep);
-      col = mix(col, uCoreColor * coreGain, foamCrest * 0.88);
-    } else if (uMode > 1.5 && uMode < 2.5) {
-      // Zenitsu sharp geometric lightning zigzag core
-      float zig = abs(fract(u * 16.0 - uTime * 14.0) * 2.0 - 1.0);
-      float boltCore = 1.0 - smoothstep(0.05, 0.16, abs(v - (0.5 + (zig - 0.5) * 0.40)));
-      float midBand = smoothstep(radiusMask * 0.80, radiusMask * 0.34, bodyDist);
-      col = mix(uEdgeColor * 1.05, uMidColor * 1.12, midBand);
-      col = mix(col, uCoreColor * coreGain, max(boltCore, smoothstep(radiusMask * 0.22, radiusMask * 0.05, bodyDist)));
-    } else if (uMode > 2.5) {
-      // Sanemi layered emerald razor gale blades
-      float bladeStripes = smoothstep(0.48, 0.72, sin((v * 5.0 - u * 1.8) * 6.28318 + uTime * 7.5) * 0.5 + 0.5);
-      float coreBand = smoothstep(radiusMask * 0.26, radiusMask * 0.06, bodyDist);
-      col = mix(uEdgeColor, uMidColor * 1.15, max(bladeStripes * 0.82, smoothstep(radiusMask * 0.82, radiusMask * 0.38, bodyDist)));
-      col = mix(col, uCoreColor * coreGain, coreBand);
-    } else {
-      // Hinokami Kagura / Rengoku 4-band stepped fire cel shader (deep vermilion -> blazing amber -> narrow golden-white spine!)
-      float outerRed = smoothstep(radiusMask * 0.94, radiusMask * 0.58, bodyDist + (n - 0.5) * 0.16);
-      float midGold = smoothstep(radiusMask * 0.64, radiusMask * 0.28, bodyDist + (n2 - 0.5) * 0.14);
-      float spineHot = smoothstep(radiusMask * 0.26, radiusMask * 0.07, bodyDist + (n2 - 0.5) * 0.08);
-      col = mix(uEdgeColor * 0.85, uEdgeColor * 1.12, outerRed);
-      col = mix(col, uMidColor * 1.10, midGold);
-      col = mix(col, uCoreColor * coreGain, spineHot);
-    }
-
-    // Crisp pitch-black Sumi-e calligraphy rim on outer edge
+    vec3 col = mix(uEdgeColor, uMidColor, smoothstep(0.75, 0.32, distFromCenter));
+    col = mix(col, uCoreColor * spineHdr, smoothstep(0.26, 0.06, distFromCenter));
     if (uInkBorder > 0.5) {
-      float rimZone = smoothstep(radiusMask - 0.11, radiusMask + 0.02, bodyDist);
-      col = mix(col, uInkColor, rimZone * 0.94);
+      float rim = smoothstep(radiusMask - 0.14, radiusMask + 0.02, distFromCenter);
+      col = mix(col, uInkColor, rim * 0.94);
     }
-
-    float dissolve = smoothstep(uLife * 0.86 - 0.08, uLife * 0.86 + 0.16, n * 0.74 + u * 0.26);
-    float finalAlpha = outerAlpha * dissolve * (1.0 - smoothstep(0.68, 1.0, uLife)) * uOpacity;
-    if (finalAlpha <= 0.01) discard;
-
+    float finalAlpha = outerAlpha * lifeFade * uOpacity;
     gl_FragColor = vec4(col * finalAlpha, finalAlpha);
   }
 `;
 
-// Dedicated Ukiyo-e Hokusai Painterly Watercolor Water Dragon Shader (Prussian indigo, slate-cerulean, rice-paper seafoam & Sumi-e ink)
-const WATER_DRAGON_FRAGMENT_SHADER = /* glsl */ `
+// Ground Light Bounce & Elemental Floor Fracture Shader (integrates VFX into the MP4 arena floor!)
+const GROUND_BOUNCE_FRAGMENT_SHADER = /* glsl */ `
   uniform float uTime;
   uniform float uLife;
-  varying vec2 vUv;
-
-  float hash21(vec2 p) {
-    p = fract(p * vec2(123.34, 456.21));
-    p += dot(p, p + 45.32);
-    return fract(p.x * p.y);
-  }
-
-  void main() {
-    float u = vUv.x;
-    float v = vUv.y;
-
-    // Flowing Ukiyo-e brush striations + overlapping semicircular dragon scales
-    float waveFlow = u * 16.0 - uTime * 5.8;
-    float scaleX = fract(waveFlow);
-    float scaleY = fract(v * 6.5 + floor(waveFlow) * 0.5);
-    float scaleArc = length(vec2(scaleX - 0.5, scaleY - 0.5));
-    float scaleRim = smoothstep(0.37, 0.49, scaleArc);
-
-    float brushRipple = sin((v * 7.0 + sin(u * 11.0 - uTime * 4.2) * 0.32) * 6.28318);
-    float washMask = smoothstep(-0.35, 0.45, brushRipple);
-    float paperGrain = (hash21(floor(vec2(u * 90.0, v * 40.0))) - 0.5) * 0.06;
-
-    // Painterly Hokusai woodblock palette (replaces garish flat neon cyan/royal blue)
-    vec3 deepPrussian = vec3(0.04, 0.12, 0.29);
-    vec3 ukiyoSlateBlue = vec3(0.09, 0.34, 0.57);
-    vec3 ceruleanMist = vec3(0.34, 0.72, 0.85);
-    vec3 ricePaperFoam = vec3(0.93, 0.96, 0.98);
-    vec3 sumiInk = vec3(0.02, 0.04, 0.10);
-
-    vec3 col = mix(deepPrussian, ukiyoSlateBlue, washMask);
-    // Soft cerulean watercolor crest along dorsal ridge
-    float dorsal = 1.0 - smoothstep(0.08, 0.44, abs(v - 0.5));
-    col = mix(col, ceruleanMist, dorsal * 0.68 + (1.0 - scaleRim) * 0.22);
-    // Crisp Sumi-e ink scale contours
-    col = mix(col, sumiInk, scaleRim * 0.52);
-    // Lace-like rice-paper seafoam curls along wave edges
-    float foamLace = smoothstep(0.72, 0.93, sin(u * 30.0 - uTime * 8.0 + v * 5.0) * 0.5 + 0.5) * smoothstep(0.26, 0.46, abs(v - 0.5));
-    col = mix(col, ricePaperFoam, foamLace * 0.82);
-    col += paperGrain;
-
-    float alpha = (1.0 - smoothstep(0.72, 1.0, uLife)) * smoothstep(0.0, 0.08, u) * 0.95;
-    if (alpha <= 0.01) discard;
-    gl_FragColor = vec4(col * alpha, alpha);
-  }
-`;
-
-// Sculpted Fresnel Ink-Rimmed Painterly Shader for Water Dragon Head, Mane Crest & Pearl Antlers
-const WATER_DRAGON_HEAD_VERTEX_SHADER = /* glsl */ `
-  varying vec2 vUv;
-  varying vec3 vViewNormal;
-  void main() {
-    vUv = uv;
-    vViewNormal = normalize(normalMatrix * normal);
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-  }
-`;
-
-const WATER_DRAGON_HEAD_FRAGMENT_SHADER = /* glsl */ `
-  uniform float uTime;
-  uniform float uLife;
-  uniform vec3 uBaseColor;
+  uniform float uMode; // 0=Agni scorch/ember pool, 1=Varuna caustic ripple, 2=Vajra lightning cracks, 3=Vayu dust gale ring
+  uniform vec3 uCoreColor;
   uniform vec3 uMidColor;
-  uniform vec3 uHighlightColor;
+  uniform vec3 uInkColor;
+  uniform float uIntensity;
   varying vec2 vUv;
-  varying vec3 vViewNormal;
 
   void main() {
-    vec3 n = normalize(vViewNormal);
-    float ndotv = clamp(abs(n.z), 0.0, 1.0);
-    float fresnelInk = smoothstep(0.26, 0.05, ndotv);
-    float ridgeLight = smoothstep(0.12, 0.82, n.y * 0.5 + 0.5);
-    float waterStreak = sin(vUv.y * 16.0 - uTime * 7.5 + vUv.x * 8.0) * 0.5 + 0.5;
-    float foamCrest = smoothstep(0.56, 0.92, ridgeLight * 0.62 + waterStreak * 0.48);
+    vec2 p = (vUv - 0.5) * 2.0;
+    float r = length(p);
+    if (r > 1.0) discard;
+    float ang = atan(p.y, p.x);
 
-    vec3 col = mix(uBaseColor, uMidColor, clamp(ridgeLight * 0.72 + waterStreak * 0.34, 0.0, 1.0));
-    col = mix(col, uHighlightColor, foamCrest * 0.82);
-    // Crisp Ukiyo-e Prussian-sumi brush contour strictly along outer silhouette edges
-    vec3 sumiInk = vec3(0.03, 0.09, 0.22);
-    col = mix(col, sumiInk, fresnelInk * 0.62);
+    float fadeIn = smoothstep(0.0, 0.12, uLife);
+    float fadeOut = 1.0 - smoothstep(0.45, 1.0, uLife);
+    float env = fadeIn * fadeOut * uIntensity;
+    if (env <= 0.01) discard;
 
-    float fade = 1.0 - smoothstep(0.68, 1.0, uLife);
-    float alpha = fade * 0.96;
-    if (alpha <= 0.01) discard;
+    // Soft ambient elemental floor bounce pool
+    float bouncePool = pow(clamp(1.0 - r, 0.0, 1.0), 1.9) * 0.52;
+    vec3 col = uMidColor;
+    float detail = 0.0;
+
+    if (uMode > 1.5 && uMode < 2.5) {
+      // VAJRA — Sharp angular radiating lightning cracks burned across the stone floor!
+      float sector = 6.2831853 / 8.0;
+      float localA = mod(ang + sector * 0.5, sector) - sector * 0.5;
+      float jag = sin(r * 22.0 + floor((ang + 3.14159) / sector) * 4.7) * 0.045;
+      float crack = (1.0 - smoothstep(0.012, 0.036, abs(r * sin(localA) + jag))) * step(0.10, r) * (1.0 - smoothstep(0.75, 0.98, r));
+      float centerFlash = exp(-r * r * 7.0);
+      detail = max(crack * 0.95, centerFlash * 0.72);
+      col = mix(uMidColor * 1.15, uCoreColor * 1.32, smoothstep(0.35, 0.85, detail));
+    } else if (uMode > 0.5 && uMode < 1.5) {
+      // VARUNA — Concentric Hokusai water caustic ripples
+      float ring1 = 1.0 - smoothstep(0.02, 0.07, abs(r - (0.34 + uLife * 0.42)));
+      float ring2 = 1.0 - smoothstep(0.02, 0.06, abs(r - (0.18 + uLife * 0.34)));
+      float ripple = sin(ang * 8.0 - uTime * 7.0 + r * 14.0) * 0.5 + 0.5;
+      detail = max(ring1 * (0.65 + ripple * 0.35), ring2 * 0.75);
+      col = mix(uMidColor, uCoreColor * 1.15, detail * 0.78);
+    } else if (uMode > 2.5) {
+      // VAYU — Sweeping emerald wind shear ring + carved ground dust arcs
+      float ring = (1.0 - smoothstep(0.03, 0.11, abs(r - (0.38 + uLife * 0.44))));
+      float slashGap = smoothstep(0.25, 0.65, sin(ang * 5.0 + uTime * 9.0) * 0.5 + 0.5);
+      detail = ring * slashGap * 0.88;
+      col = mix(uMidColor, uCoreColor * 1.15, detail * 0.7);
+    } else {
+      // AGNI — Glowing ember scorch ring + radial heat cracks
+      float ring = 1.0 - smoothstep(0.04, 0.14, abs(r - (0.32 + uLife * 0.38)));
+      float heatWaves = sin(ang * 7.0 - uTime * 6.0) * 0.5 + 0.5;
+      detail = ring * (0.55 + heatWaves * 0.45);
+      col = mix(uMidColor * 1.08, uCoreColor * 1.2, detail * 0.65);
+    }
+
+    float alpha = clamp((bouncePool + detail * 0.72) * env, 0.0, 0.86);
+    if (alpha <= 0.015) discard;
     gl_FragColor = vec4(col * alpha, alpha);
   }
 `;
 
-// Akaza Destructive Death: Compass Needle 12-Point Snowflake Mandala Floor Shader (luminous cyan, zero white clip!)
+// Akaza Destructive Death: Compass Needle 12-Point Snowflake Mandala Floor Shader
 const COMPASS_MANDALA_FRAGMENT_SHADER = /* glsl */ `
   uniform float uTime;
   uniform float uLife;
@@ -533,7 +616,6 @@ const COMPASS_MANDALA_FRAGMENT_SHADER = /* glsl */ `
     float rotA = ang + uTime * 0.42;
     float rotB = ang - uTime * 0.26;
 
-    // 12-fold snowflake compass symmetry
     float sector = 6.2831853 / 12.0;
     float localA = mod(rotA + sector * 0.5, sector) - sector * 0.5;
     float symX = r * cos(localA);
@@ -544,13 +626,11 @@ const COMPASS_MANDALA_FRAGMENT_SHADER = /* glsl */ `
     float barb1 = (1.0 - smoothstep(0.007, 0.018, abs(symY - (symX - 0.36) * 0.58))) * step(0.36, symX) * step(symX, 0.66);
     float barb2 = (1.0 - smoothstep(0.007, 0.018, abs(symY - (0.84 - symX) * 0.54))) * step(0.54, symX) * step(symX, 0.85);
 
-    // Nested geometric hexagons
     float hexAngle = mod(rotB + 3.14159265 / 6.0, 3.14159265 / 3.0) - 3.14159265 / 6.0;
     float hexR = cos(hexAngle) * r;
     float outerHex = 1.0 - smoothstep(0.009, 0.024, abs(hexR - 0.78));
     float innerHex = 1.0 - smoothstep(0.009, 0.022, abs(hexR - 0.44));
 
-    // Concentric compass circles
     float outerRing = 1.0 - smoothstep(0.010, 0.026, abs(r - 0.90));
     float midRing = 1.0 - smoothstep(0.008, 0.020, abs(r - 0.56));
     float hubRing = 1.0 - smoothstep(0.012, 0.030, abs(r - 0.20));
@@ -577,7 +657,7 @@ const COMPASS_MANDALA_FRAGMENT_SHADER = /* glsl */ `
   }
 `;
 
-// Feathered Volumetric Light Mist Column Shader (silky Akaza rising glow — zero boxy rectangles!)
+// Feathered Volumetric Light Mist Column Shader
 const VOLUMETRIC_BEAM_FRAGMENT_SHADER = /* glsl */ `
   uniform float uTime;
   uniform float uOpacity;
@@ -596,82 +676,15 @@ const VOLUMETRIC_BEAM_FRAGMENT_SHADER = /* glsl */ `
   }
 `;
 
-interface ActiveWebglRibbon {
-  group: THREE.Group;
-  inkMesh: THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>;
-  coreMesh: THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>;
-  glowMesh: THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>;
-  worldX: number;
-  worldY: number;
-  baseRotZ: number;
-  tiltX: number;
-  tiltY: number;
-  spinRate: number;
-  life: number;
-  maxLife: number;
-  scale: number;
-}
-
-interface ActiveWebglCyclone {
-  group: THREE.Group;
-  rings: Array<{
-    mesh: THREE.Mesh<THREE.TorusGeometry, THREE.ShaderMaterial>;
-    spinX: number;
-    spinY: number;
-    spinZ: number;
-  }>;
-  worldX: number;
-  worldY: number;
-  life: number;
-  maxLife: number;
-  maxRadius: number;
-}
-
-interface ActiveWebglSpark {
-  mesh: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
-  worldX: number;
-  worldY: number;
-  vx: number;
-  vy: number;
-  vz: number;
-  z: number;
-  life: number;
-  maxLife: number;
-}
-
-interface ActiveSolarWheel {
-  group: THREE.Group;
-  mats: THREE.ShaderMaterial[];
-  geos: THREE.BufferGeometry[];
-  worldX: number;
-  worldY: number;
-  baseAngle: number;
-  spinRate: number;
-  life: number;
-  maxLife: number;
-}
-
-interface ActiveWaterDragon {
-  group: THREE.Group;
-  bodyMat: THREE.ShaderMaterial;
-  fadeMats: THREE.MeshBasicMaterial[];
-  geos: THREE.BufferGeometry[];
-  worldX: number;
-  worldY: number;
-  angle: number;
-  speed: number;
-  life: number;
-  maxLife: number;
-}
-
-// Bespoke Ufotable Zenitsu Thunder Breathing Procedural GLSL Plasma Lightning Shader:
-// Crisp pitch-black Sumi-e serrated border + Electric Cyan corona + Blazing Thunder Gold mid + White-Gold plasma core
+// Bespoke Ufotable Zenitsu Thunder Breathing Procedural GLSL Plasma Lightning Shader
+// Zero disconnected gap at origin (vUv.x=0 stays full-width welded to parent elbow!)
 const THUNDER_BOLT_FRAGMENT_SHADER = /* glsl */ `
   uniform float uTime;
   uniform float uLife;
   uniform float uSeed;
   uniform float uOpacity;
   uniform float uIsHalo;
+  uniform float uIsBranch;
   uniform vec3 uCoreColor;
   uniform vec3 uGoldColor;
   uniform vec3 uCyanColor;
@@ -693,62 +706,212 @@ const THUNDER_BOLT_FRAGMENT_SHADER = /* glsl */ `
   }
 
   void main() {
-    // Progressive lightning whip-travel from origin (vUv.x=0) to impact tip (vUv.x=1)
-    float headReveal = smoothstep(0.0, 0.14, uLife);
-    float tailDissolve = smoothstep(0.54, 1.0, uLife);
-    if (vUv.x > headReveal + 0.04) discard;
+    float headReveal = smoothstep(0.0, 0.10, uLife);
+    float tailDissolve = smoothstep(0.58, 1.0, uLife);
+    if (vUv.x > headReveal + 0.08) discard;
 
-    // High-frequency quantized anime snap-crackle displacement (steps at ~18fps like hand-drawn sakuga)
+    // Quantized 18fps sakuga lightning flicker, pinned strictly to 0 at branch root (vUv.x=0)
+    // so forked branches NEVER pull away from their parent elbow vertex!
     float snapTime = floor(uTime * 18.0 + uSeed * 3.1);
-    float jag1 = (thNoise(vec2(vUv.x * 16.0 - snapTime * 0.7, uSeed * 5.0)) - 0.5) * 0.34;
-    float jag2 = (thNoise(vec2(vUv.x * 38.0 + snapTime * 1.3, uSeed * 9.0)) - 0.5) * 0.16;
+    float pinRoot = uIsBranch > 0.5 ? smoothstep(0.0, 0.22, vUv.x) : smoothstep(0.0, 0.08, vUv.x);
+    float jag1 = (thNoise(vec2(vUv.x * 14.0 - snapTime * 0.7, uSeed * 5.0)) - 0.5) * 0.24 * pinRoot;
+    float jag2 = (thNoise(vec2(vUv.x * 34.0 + snapTime * 1.3, uSeed * 9.0)) - 0.5) * 0.11 * pinRoot;
     float center = 0.5 + jag1 + jag2;
     float dist = abs(vUv.y - center) * 2.0;
 
-    // Electric surge pulse racing along the bolt
-    float surge = 0.78 + 0.22 * sin(vUv.x * 24.0 - uTime * 46.0 + uSeed * 6.0);
-    // Crisp crackling decay holes near end of life
+    float surge = 0.84 + 0.16 * sin(vUv.x * 24.0 - uTime * 46.0 + uSeed * 6.0);
     float crackleMask = thNoise(vec2(vUv.x * 22.0 + uSeed, snapTime * 0.9));
-    float widthScale = (1.0 - tailDissolve * 0.58) * (0.85 + 0.15 * sin(vUv.x * 3.14159));
+    float widthScale = (1.0 - tailDissolve * 0.50);
 
     if (uIsHalo > 0.5) {
-      float halo = exp(-dist * dist * 4.2) * (1.0 - tailDissolve) * surge;
-      vec3 haloCol = mix(uCyanColor, uGoldColor, smoothstep(0.55, 0.12, dist));
-      float alpha = halo * uOpacity * 0.58;
+      float halo = exp(-dist * dist * 3.8) * (1.0 - tailDissolve) * surge;
+      vec3 haloCol = mix(uCyanColor, uGoldColor, smoothstep(0.52, 0.14, dist));
+      float alpha = halo * uOpacity * 0.55;
       if (alpha < 0.02) discard;
-      gl_FragColor = vec4(haloCol * 1.35, alpha);
+      gl_FragColor = vec4(haloCol * 1.35 * alpha, alpha);
       return;
     }
 
-    // Eroding electric sparks at end of bolt life
-    if (tailDissolve > 0.05 && crackleMask < tailDissolve * 0.72) discard;
+    if (tailDissolve > 0.08 && crackleMask < tailDissolve * 0.65) discard;
 
-    float outerBound = 0.88 * widthScale;
+    float outerBound = 0.92 * widthScale;
     if (dist > outerBound) discard;
 
-    // 4-Band Stepped Ufotable Zenitsu Thunder Composition:
-    // Band 1: Pitch-black Sumi-e jagged ink border
-    // Band 2: Vivid Electric Cyan edge corona
-    // Band 3: Blazing Zenitsu Thunder Gold mid-band
-    // Band 4: Blistering White-Gold core filament
-    float inkEdge = smoothstep(outerBound, outerBound - 0.14, dist);
-    float cyanBand = smoothstep(outerBound - 0.12, outerBound - 0.24, dist);
-    float goldBand = smoothstep(0.56 * widthScale, 0.36 * widthScale, dist);
-    float coreBand = smoothstep(0.24 * widthScale, 0.09 * widthScale, dist);
+    // Crisp 4-Band Stepped Zenitsu Thunder Composition:
+    // Pitch-black Sumi-e serrated contour -> Electric Cyan edge -> Zenitsu Gold -> White-hot plasma core
+    float inkEdge = smoothstep(outerBound, outerBound - 0.12, dist);
+    float cyanBand = smoothstep(outerBound - 0.14, outerBound - 0.26, dist);
+    float goldBand = smoothstep(0.62 * widthScale, 0.42 * widthScale, dist);
+    float coreBand = smoothstep(0.28 * widthScale, 0.11 * widthScale, dist);
 
     vec3 col = uInkColor;
-    col = mix(col, uCyanColor * 1.25, cyanBand);
-    col = mix(col, uGoldColor * (1.18 * surge), goldBand);
-    col = mix(col, uCoreColor * 1.32, coreBand);
+    col = mix(col, uCyanColor * 1.24, cyanBand);
+    col = mix(col, uGoldColor * (1.20 * surge), goldBand);
+    col = mix(col, uCoreColor * 1.38, coreBand);
 
     float fadeOut = 1.0 - smoothstep(0.72, 1.0, uLife);
-    float tipFade = smoothstep(0.0, 0.04, vUv.x) * (1.0 - smoothstep(0.95, 1.0, vUv.x));
-    float alpha = clamp(inkEdge * 0.98 * fadeOut * (0.35 + 0.65 * tipFade) * uOpacity, 0.0, 1.0);
+    // Branches stay 100% solid at root (vUv.x=0) so they weld seamlessly into parent elbow!
+    float rootFade = uIsBranch > 0.5 ? 1.0 : smoothstep(0.0, 0.03, vUv.x);
+    float tipFade = 1.0 - smoothstep(0.94, 1.0, vUv.x);
+    float alpha = clamp(inkEdge * 0.99 * fadeOut * (0.45 + 0.55 * rootFade * tipFade) * uOpacity, 0.0, 1.0);
     if (alpha < 0.03) discard;
 
-    gl_FragColor = vec4(col, alpha);
+    gl_FragColor = vec4(col * alpha, alpha);
   }
 `;
+
+// Pooled InstancedMesh Particle Shader (samples 2x2 impactSprites atlas:
+// (0,0) 12-pt Starburst, (1,0) Ink Water Droplet, (0,1) Razor Speed-Spark Needle, (1,1) Shattered Rock Shard)
+const INSTANCED_PARTICLE_VERTEX_SHADER = /* glsl */ `
+  attribute vec2 aCellOffset;
+  attribute vec3 aColor;
+  attribute float aAlpha;
+  varying vec2 vUv;
+  varying vec3 vColor;
+  varying float vAlpha;
+
+  void main() {
+    vUv = uv * 0.5 + aCellOffset;
+    vColor = aColor;
+    vAlpha = aAlpha;
+    gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
+  }
+`;
+
+const INSTANCED_PARTICLE_FRAGMENT_SHADER = /* glsl */ `
+  uniform sampler2D uSpriteAtlas;
+  varying vec2 vUv;
+  varying vec3 vColor;
+  varying float vAlpha;
+
+  void main() {
+    if (vAlpha <= 0.01) discard;
+    vec4 tex = texture2D(uSpriteAtlas, vUv);
+    float alpha = tex.a * vAlpha;
+    if (alpha <= 0.02) discard;
+    // Preserve dark painted Sumi-e ink outlines embedded in sprite atlas while tinting bright core!
+    float luma = dot(tex.rgb, vec3(0.299, 0.587, 0.114));
+    vec3 col = mix(tex.rgb, tex.rgb * vColor, smoothstep(0.18, 0.55, luma));
+    gl_FragColor = vec4(col * alpha, alpha);
+  }
+`;
+
+// ============================================================================
+// INTERNAL DATA STRUCTURES
+// ============================================================================
+
+interface ActiveWebglRibbon {
+  group: THREE.Group;
+  backGroup?: THREE.Group;
+  coreMesh: THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>;
+  glowMesh: THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>;
+  backMesh?: THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>;
+  worldX: number;
+  worldY: number;
+  baseRotZ: number;
+  tiltX: number;
+  tiltY: number;
+  spinRate: number;
+  life: number;
+  maxLife: number;
+  scale: number;
+}
+
+interface PooledBladeTrail {
+  id: string | null;
+  active: boolean;
+  ending: boolean;
+  palette: DemonSlayerVfxPalette;
+  widthBoostPx: number;
+  fadeElapsed: number;
+  fadeDuration: number;
+  samples: ArenaBladeSample[];
+  maxSpine: number;
+  // Back pass (behind Rudra, depthZ < 0)
+  backGeo: THREE.BufferGeometry;
+  backPos: Float32Array;
+  backUv: Float32Array;
+  backDepth: Float32Array;
+  backIdx: Uint16Array;
+  backMat: THREE.ShaderMaterial;
+  backMesh: THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>;
+  // Front pass (in front of Rudra, depthZ >= 0)
+  frontGeo: THREE.BufferGeometry;
+  frontPos: Float32Array;
+  frontUv: Float32Array;
+  frontDepth: Float32Array;
+  frontIdx: Uint16Array;
+  frontMat: THREE.ShaderMaterial;
+  frontMesh: THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>;
+  // World-to-screen transform parent
+  backGroup: THREE.Group;
+  frontGroup: THREE.Group;
+}
+
+interface ActiveWebglCyclone {
+  group: THREE.Group;
+  rings: Array<{
+    mesh: THREE.Mesh<THREE.TorusGeometry, THREE.ShaderMaterial>;
+    spinX: number;
+    spinY: number;
+    spinZ: number;
+  }>;
+  worldX: number;
+  worldY: number;
+  life: number;
+  maxLife: number;
+  maxRadius: number;
+}
+
+interface PooledParticleSlot {
+  active: boolean;
+  kind: ElementalParticleKind;
+  worldX: number;
+  worldY: number;
+  vx: number;
+  vy: number;
+  z: number;
+  vz: number;
+  gravity: number;
+  drag: number;
+  rot: number;
+  rotSpeed: number;
+  scaleX: number;
+  scaleY: number;
+  alignToVelocity: boolean;
+  r: number;
+  g: number;
+  b: number;
+  life: number;
+  maxLife: number;
+}
+
+interface ActiveSolarWheel {
+  frontGroup: THREE.Group;
+  backGroup: THREE.Group;
+  mats: THREE.ShaderMaterial[];
+  geos: THREE.BufferGeometry[];
+  worldX: number;
+  worldY: number;
+  baseAngle: number;
+  spinRate: number;
+  life: number;
+  maxLife: number;
+}
+
+interface ActiveWaterDragon {
+  frontGroup: THREE.Group;
+  backGroup: THREE.Group;
+  bodyMat: THREE.ShaderMaterial;
+  fadeMats: THREE.Material[];
+  geos: THREE.BufferGeometry[];
+  worldX: number;
+  worldY: number;
+  angle: number;
+  speed: number;
+  life: number;
+  maxLife: number;
+}
 
 interface ActiveThunderZigzag {
   group: THREE.Group;
@@ -763,16 +926,10 @@ interface ActiveThunderZigzag {
 }
 
 interface ActiveWindGale {
-  group: THREE.Group;
+  frontGroup: THREE.Group;
+  backGroup: THREE.Group;
   ribbonMats: THREE.ShaderMaterial[];
-  shardMeshes: Array<{
-    mesh: THREE.Mesh;
-    vx: number;
-    vy: number;
-    spin: number;
-  }>;
   geos: THREE.BufferGeometry[];
-  shardMats: THREE.MeshBasicMaterial[];
   worldX: number;
   worldY: number;
   angle: number;
@@ -785,6 +942,15 @@ interface ActiveCompassMandala {
   mandalaMat: THREE.ShaderMaterial;
   beamMat: THREE.ShaderMaterial;
   geos: THREE.BufferGeometry[];
+  worldX: number;
+  worldY: number;
+  radius: number;
+  life: number;
+  maxLife: number;
+}
+
+interface ActiveGroundBounce {
+  mesh: THREE.Mesh<THREE.PlaneGeometry, THREE.ShaderMaterial>;
   worldX: number;
   worldY: number;
   radius: number;
@@ -829,7 +995,7 @@ function buildCurvedRibbonGeometry(
   width: number,
   arcSpan: number,
   direction: 1 | -1,
-  segments = 28
+  segments = 30
 ): THREE.BufferGeometry {
   const positions: number[] = [];
   const uvs: number[] = [];
@@ -839,20 +1005,20 @@ function buildCurvedRibbonGeometry(
   for (let i = 0; i <= segments; i++) {
     const t = i / segments;
     const angle = startA + arcSpan * t * direction;
-    const rCenter = radius * (0.86 + Math.sin(t * Math.PI * 0.75) * 0.22);
+    const rCenter = radius * (0.86 + Math.sin(t * Math.PI * 0.78) * 0.22);
     const taper = Math.sin(Math.pow(t, 0.72) * Math.PI);
-    const halfW = width * 0.5 * (0.16 + taper * 0.92);
+    const halfW = width * 0.5 * (0.18 + taper * 0.92);
 
     const cosA = Math.cos(angle);
     const sinA = Math.sin(angle);
-    const zLift = Math.sin(t * Math.PI) * (width * 0.42);
+    const zLift = Math.sin(t * Math.PI) * (width * 0.34);
 
     const ix = cosA * Math.max(8, rCenter - halfW);
     const iy = sinA * Math.max(8, rCenter - halfW);
     const ox = cosA * (rCenter + halfW);
     const oy = sinA * (rCenter + halfW);
 
-    positions.push(ix, iy, zLift * 0.6);
+    positions.push(ix, iy, zLift * 0.5);
     positions.push(ox, oy, zLift);
     uvs.push(t, 0);
     uvs.push(t, 1);
@@ -872,87 +1038,23 @@ function buildCurvedRibbonGeometry(
   return geo;
 }
 
-/** Painterly flame tongues taper to a fine, curling point rather than another glowing circle. */
-function buildTaperedFlameTongueGeometry(length: number, width: number, segments = 11): THREE.BufferGeometry {
-  const positions: number[] = [];
-  const uvs: number[] = [];
-  const indices: number[] = [];
-  for (let i = 0; i <= segments; i++) {
-    const t = i / segments;
-    const halfWidth = width * Math.pow(1 - t, 0.68) * (0.5 + 0.55 * Math.sin(t * Math.PI));
-    const curveY = Math.sin(t * Math.PI * 1.35) * length * 0.12 + t * t * length * 0.11;
-    const lift = Math.sin(t * Math.PI) * length * 0.10;
-    positions.push(t * length, curveY - halfWidth, lift);
-    positions.push(t * length, curveY + halfWidth, lift + 0.3);
-    uvs.push(t, 0, t, 1);
-    if (i < segments) {
-      const b = i * 2;
-      indices.push(b, b + 1, b + 2, b + 1, b + 3, b + 2);
-    }
-  }
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-  geometry.setIndex(indices);
-  geometry.computeVertexNormals();
-  return geometry;
+function paletteModeIndex(palette: DemonSlayerVfxPalette): number {
+  if (palette === 'water' || palette === 'bronze') return 1.0;
+  if (palette === 'thunder') return 2.0;
+  if (palette === 'wind') return 3.0;
+  return 0.0;
 }
 
-/**
- * Builds a variable-radius tapered serpentine Eastern Dragon body mesh (whip tail -> muscular torso -> neck!)
- */
-function buildTaperedDragonBodyGeometry(
-  curve: THREE.CatmullRomCurve3,
-  tubularSegments: number,
-  maxRadius: number,
-  radialSegments = 8
-): THREE.BufferGeometry {
-  const frames = curve.computeFrenetFrames(tubularSegments, false);
-  const positions: number[] = [];
-  const uvs: number[] = [];
-  const indices: number[] = [];
-  const P = new THREE.Vector3();
-  const v = new THREE.Vector3();
-
-  for (let i = 0; i <= tubularSegments; i++) {
-    const u = i / tubularSegments;
-    curve.getPointAt(u, P);
-    // Graceful serpentine taper: sharp whip tail (u=0) -> muscular mid-coil -> sculpted neck (u=1)
-    const taper = Math.pow(Math.sin(Math.min(1, u * 0.88 + 0.08) * Math.PI * 0.72), 0.78);
-    const radius = Math.max(2.2, maxRadius * (0.14 + taper * 0.92));
-
-    const N = frames.normals[i];
-    const B = frames.binormals[i];
-    for (let j = 0; j <= radialSegments; j++) {
-      const theta = (j / radialSegments) * Math.PI * 2;
-      const sin = Math.sin(theta);
-      const cos = -Math.cos(theta);
-      v.set(
-        P.x + radius * (cos * N.x + sin * B.x),
-        P.y + radius * (cos * N.y + sin * B.y),
-        P.z + radius * (cos * N.z + sin * B.z)
-      );
-      positions.push(v.x, v.y, v.z);
-      uvs.push(u, j / radialSegments);
-    }
-  }
-
-  for (let i = 0; i < tubularSegments; i++) {
-    for (let j = 0; j < radialSegments; j++) {
-      const a = i * (radialSegments + 1) + j;
-      const b = (i + 1) * (radialSegments + 1) + j;
-      const c = (i + 1) * (radialSegments + 1) + (j + 1);
-      const d = i * (radialSegments + 1) + (j + 1);
-      indices.push(a, b, d, b, c, d);
-    }
-  }
-
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-  geo.setIndex(indices);
-  geo.computeVertexNormals();
-  return geo;
+function pickAtlasTextureForPalette(
+  atlas: PainterlyVfxAtlas | null,
+  palette: DemonSlayerVfxPalette
+): THREE.Texture | null {
+  if (!atlas) return null;
+  const mode = paletteModeIndex(palette);
+  if (mode === 1.0) return atlas.waterWaveSheet;
+  if (mode === 2.0) return atlas.lightningSheet;
+  if (mode === 3.0) return atlas.windBladeSheet;
+  return atlas.flameSheet;
 }
 
 function createRibbonMaterial(
@@ -961,7 +1063,10 @@ function createRibbonMaterial(
   opacity: number,
   inkBorder: boolean,
   blending: THREE.Blending,
-  hdrBoost = 1.65
+  hdrBoost = 1.32,
+  atlasTex: THREE.Texture | null = null,
+  uvRepeat = 1.4,
+  scrollSpeed = 1.35
 ): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     uniforms: {
@@ -970,11 +1075,16 @@ function createRibbonMaterial(
       uCoreColor: { value: pal.core.clone() },
       uMidColor: { value: pal.mid.clone() },
       uEdgeColor: { value: pal.edge.clone() },
+      uDeepColor: { value: pal.deep.clone() },
       uInkColor: { value: pal.ink.clone() },
       uOpacity: { value: opacity },
       uInkBorder: { value: inkBorder ? 1.0 : 0.0 },
       uMode: { value: mode },
       uHdrBoost: { value: hdrBoost },
+      uUseAtlas: { value: atlasTex ? 1.0 : 0.0 },
+      uUvRepeat: { value: uvRepeat },
+      uScrollSpeed: { value: scrollSpeed },
+      uAtlasTex: { value: atlasTex },
     },
     vertexShader: RIBBON_VERTEX_SHADER,
     fragmentShader: RIBBON_FRAGMENT_SHADER,
@@ -986,15 +1096,31 @@ function createRibbonMaterial(
   });
 }
 
-function paletteModeIndex(palette: DemonSlayerVfxPalette): number {
-  if (palette === 'water' || palette === 'bronze') return 1.0;
-  if (palette === 'thunder') return 2.0;
-  if (palette === 'wind') return 3.0;
-  return 0.0;
+function particleCellOffset(kind: ElementalParticleKind): [number, number] {
+  // Remember Three.js CanvasTexture flipY = true:
+  // Canvas top half (y 0..256) maps to UV v in [0.5..1.0], bottom half maps to v in [0.0..0.5]
+  switch (kind) {
+    case 'water_droplet':
+      return [0.5, 0.5]; // Top-Right cell (1,0)
+    case 'spark_needle':
+      return [0.0, 0.0]; // Bot-Left cell (0,1)
+    case 'rock_shard':
+    case 'wind_shard':
+    case 'soot_flake':
+      return [0.5, 0.0]; // Bot-Right cell (1,1)
+    default:
+      return [0.0, 0.0];
+  }
 }
+
+// ============================================================================
+// MAIN WEBGL DEMON SLAYER VFX OVERLAY (PHASE 1 UPGRADED)
+// 4-Pass Architecture: FloorCanvas -> BackCanvas -> Actors -> FrontCanvas + BloomCanvas
+// ============================================================================
 
 export class WebglDemonSlayerVfxOverlay {
   public readonly canvas: HTMLCanvasElement;
+  public readonly backCanvas: HTMLCanvasElement;
   public readonly floorCanvas: HTMLCanvasElement;
   public readonly bloomCanvas: HTMLCanvasElement;
   public hasBloomFrame = false;
@@ -1004,24 +1130,44 @@ export class WebglDemonSlayerVfxOverlay {
   private bloomPass: UnrealBloomPass | null = null;
   private bloomCtx: CanvasRenderingContext2D | null = null;
   private floorCtx: CanvasRenderingContext2D | null = null;
+  private backCtx: CanvasRenderingContext2D | null = null;
+  private atlas: PainterlyVfxAtlas | null = null;
 
   private scene: THREE.Scene;
+  private backScene: THREE.Scene;
   private floorScene: THREE.Scene;
   private camera: THREE.OrthographicCamera;
 
   private ribbons: ActiveWebglRibbon[] = [];
+  private bladeTrailPool: PooledBladeTrail[] = [];
   private cyclones: ActiveWebglCyclone[] = [];
-  private sparks: ActiveWebglSpark[] = [];
   private solarWheels: ActiveSolarWheel[] = [];
   private waterDragons: ActiveWaterDragon[] = [];
   private thunderBolts: ActiveThunderZigzag[] = [];
   private windGales: ActiveWindGale[] = [];
   private mandalas: ActiveCompassMandala[] = [];
+  private groundBounces: ActiveGroundBounce[] = [];
   private bloodCages: ActiveBloodCage[] = [];
   private starbursts: ActiveStarburst[] = [];
   private shockwaveRings: ActiveShockwaveRing[] = [];
 
-  private sparkGeo: THREE.PlaneGeometry;
+  // Shared Geometries & Pooled InstancedMesh Particle System (Zero per-spark GC!)
+  private groundBounceGeo: THREE.PlaneGeometry;
+  private particleCapacity = 260;
+  private particleSlots: PooledParticleSlot[] = [];
+  private particleInstancedMesh: THREE.InstancedMesh | null = null;
+  private particleCellAttr: THREE.InstancedBufferAttribute | null = null;
+  private particleColorAttr: THREE.InstancedBufferAttribute | null = null;
+  private particleAlphaAttr: THREE.InstancedBufferAttribute | null = null;
+  private particleMat: THREE.ShaderMaterial | null = null;
+  private particleGeo: THREE.PlaneGeometry | null = null;
+  private dummyMatrix = new THREE.Matrix4();
+  private dummyPos = new THREE.Vector3();
+  private dummyQuat = new THREE.Quaternion();
+  private dummyScale = new THREE.Vector3();
+  private dummyEuler = new THREE.Euler();
+
+  private qualityPreset: VfxQualityPreset = 'balanced';
   private elapsed = 0;
   private width = 1440;
   private height = 900;
@@ -1032,6 +1178,10 @@ export class WebglDemonSlayerVfxOverlay {
     this.canvas = document.createElement('canvas');
     this.canvas.width = 1440;
     this.canvas.height = 900;
+    this.backCanvas = document.createElement('canvas');
+    this.backCanvas.width = 1440;
+    this.backCanvas.height = 900;
+    this.backCtx = this.backCanvas.getContext('2d');
     this.floorCanvas = document.createElement('canvas');
     this.floorCanvas.width = 1440;
     this.floorCanvas.height = 900;
@@ -1042,13 +1192,17 @@ export class WebglDemonSlayerVfxOverlay {
     this.bloomCtx = this.bloomCanvas.getContext('2d');
 
     this.scene = new THREE.Scene();
+    this.backScene = new THREE.Scene();
     this.floorScene = new THREE.Scene();
     this.camera = new THREE.OrthographicCamera(-720, 720, 450, -450, -900, 900);
     this.camera.position.z = 500;
-    this.sparkGeo = new THREE.PlaneGeometry(1, 1);
+    this.groundBounceGeo = new THREE.PlaneGeometry(2, 2);
 
     try {
       this.isSoftwareGl = isSoftwareWebGLRenderer();
+      this.qualityPreset = this.isSoftwareGl ? 'performance' : 'balanced';
+      this.atlas = getOrCreatePainterlyVfxAtlas();
+
       this.renderer = new THREE.WebGLRenderer({
         canvas: this.canvas,
         alpha: true,
@@ -1058,9 +1212,9 @@ export class WebglDemonSlayerVfxOverlay {
       });
       this.renderer.setClearColor(0x000000, 0);
       this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-      this.renderer.toneMappingExposure = 1.12;
+      this.renderer.toneMappingExposure = 1.08;
 
-      // Selective HDR UnrealBloomPass on GPU devices (skipped on software WebGL so CPU never stalls)
+      // Selective HDR UnrealBloomPass on GPU devices (threshold 1.04 so ONLY white-hot cores bloom!)
       if (!this.isSoftwareGl) {
         const halfW = 720;
         const halfH = 450;
@@ -1073,17 +1227,219 @@ export class WebglDemonSlayerVfxOverlay {
         this.bloomComposer.addPass(renderPass);
         this.bloomPass = new UnrealBloomPass(
           new THREE.Vector2(halfW, halfH),
-          0.68, // strength
-          0.42, // radius
-          0.95 // selective HDR threshold (only brightest elemental spines bloom!)
+          0.78, // luminous 8K Ufotable HDR selective glow on white-hot cores
+          0.48, // rich optical halation radius
+          1.02  // HDR-only threshold: black sumi-e outlines & mid-tones stay razor-sharp!
         );
         this.bloomComposer.addPass(this.bloomPass);
       }
 
+      this.initBladeTrailPool();
+      this.initInstancedParticlePool();
       this.resize(1440, 900);
     } catch {
       this.renderer = null;
     }
+  }
+
+  private initBladeTrailPool(): void {
+    const slotCount = 8;
+    const maxSpine = 64;
+    const maxVerts = maxSpine * 2;
+    const maxIndices = (maxSpine - 1) * 6;
+    const defaultPal = RIBBON_PALETTES.hinokami;
+    const defaultTex = pickAtlasTextureForPalette(this.atlas, 'hinokami');
+
+    for (let i = 0; i < slotCount; i++) {
+      const backPos = new Float32Array(maxVerts * 3);
+      const backUv = new Float32Array(maxVerts * 2);
+      const backDepth = new Float32Array(maxVerts);
+      const backIdx = new Uint16Array(maxIndices);
+      const backGeo = new THREE.BufferGeometry();
+      backGeo.setAttribute('position', new THREE.BufferAttribute(backPos, 3));
+      backGeo.setAttribute('uv', new THREE.BufferAttribute(backUv, 2));
+      backGeo.setIndex(new THREE.BufferAttribute(backIdx, 1));
+      backGeo.setDrawRange(0, 0);
+
+      const frontPos = new Float32Array(maxVerts * 3);
+      const frontUv = new Float32Array(maxVerts * 2);
+      const frontDepth = new Float32Array(maxVerts);
+      const frontIdx = new Uint16Array(maxIndices);
+      const frontGeo = new THREE.BufferGeometry();
+      frontGeo.setAttribute('position', new THREE.BufferAttribute(frontPos, 3));
+      frontGeo.setAttribute('uv', new THREE.BufferAttribute(frontUv, 2));
+      frontGeo.setIndex(new THREE.BufferAttribute(frontIdx, 1));
+      frontGeo.setDrawRange(0, 0);
+
+      const backMat = createRibbonMaterial(
+        defaultPal,
+        0,
+        0.96,
+        true,
+        THREE.NormalBlending,
+        1.26,
+        defaultTex,
+        1.35,
+        1.65
+      );
+      const frontMat = createRibbonMaterial(
+        defaultPal,
+        0,
+        0.98,
+        true,
+        THREE.NormalBlending,
+        1.38,
+        defaultTex,
+        1.35,
+        1.65
+      );
+
+      const backMesh = new THREE.Mesh(backGeo, backMat);
+      backMesh.frustumCulled = false;
+      const frontMesh = new THREE.Mesh(frontGeo, frontMat);
+      frontMesh.frustumCulled = false;
+
+      const backGroup = new THREE.Group();
+      backGroup.visible = false;
+      backGroup.add(backMesh);
+      this.backScene.add(backGroup);
+
+      const frontGroup = new THREE.Group();
+      frontGroup.visible = false;
+      frontGroup.add(frontMesh);
+      this.scene.add(frontGroup);
+
+      this.bladeTrailPool.push({
+        id: null,
+        active: false,
+        ending: false,
+        palette: 'hinokami',
+        widthBoostPx: 54,
+        fadeElapsed: 0,
+        fadeDuration: 0.24,
+        samples: [],
+        maxSpine,
+        backGeo,
+        backPos,
+        backUv,
+        backDepth,
+        backIdx,
+        backMat,
+        backMesh,
+        frontGeo,
+        frontPos,
+        frontUv,
+        frontDepth,
+        frontIdx,
+        frontMat,
+        frontMesh,
+        backGroup,
+        frontGroup,
+      });
+    }
+  }
+
+  private initInstancedParticlePool(): void {
+    const cap = this.particleCapacity;
+    this.particleGeo = new THREE.PlaneGeometry(1, 1);
+
+    const cellData = new Float32Array(cap * 2);
+    const colorData = new Float32Array(cap * 3);
+    const alphaData = new Float32Array(cap);
+
+    this.particleCellAttr = new THREE.InstancedBufferAttribute(cellData, 2);
+    this.particleColorAttr = new THREE.InstancedBufferAttribute(colorData, 3);
+    this.particleAlphaAttr = new THREE.InstancedBufferAttribute(alphaData, 1);
+
+    this.particleGeo.setAttribute('aCellOffset', this.particleCellAttr);
+    this.particleGeo.setAttribute('aColor', this.particleColorAttr);
+    this.particleGeo.setAttribute('aAlpha', this.particleAlphaAttr);
+
+    this.particleMat = new THREE.ShaderMaterial({
+      uniforms: {
+        uSpriteAtlas: { value: this.atlas?.impactSprites ?? null },
+      },
+      vertexShader: INSTANCED_PARTICLE_VERTEX_SHADER,
+      fragmentShader: INSTANCED_PARTICLE_FRAGMENT_SHADER,
+      transparent: true,
+      premultipliedAlpha: true,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+
+    this.particleInstancedMesh = new THREE.InstancedMesh(this.particleGeo, this.particleMat, cap);
+    this.particleInstancedMesh.frustumCulled = false;
+    this.particleInstancedMesh.count = 0;
+    this.particleInstancedMesh.position.z = 31;
+    this.scene.add(this.particleInstancedMesh);
+
+    this.particleSlots = [];
+    for (let i = 0; i < cap; i++) {
+      this.particleSlots.push({
+        active: false,
+        kind: 'spark_needle',
+        worldX: 0,
+        worldY: 0,
+        vx: 0,
+        vy: 0,
+        z: 0,
+        vz: 0,
+        gravity: 440,
+        drag: 3.4,
+        rot: 0,
+        rotSpeed: 0,
+        scaleX: 20,
+        scaleY: 8,
+        alignToVelocity: true,
+        r: 1,
+        g: 1,
+        b: 1,
+        life: 0,
+        maxLife: 0.3,
+      });
+    }
+  }
+
+  public setQualityPreset(preset: VfxQualityPreset): void {
+    this.qualityPreset = preset;
+    if (this.renderer) {
+      const pr = this.isSoftwareGl
+        ? 0.75
+        : Math.min(window.devicePixelRatio || 1, QUALITY_PIXEL_RATIO[preset]);
+      this.renderer.setPixelRatio(pr);
+      this.renderer.setSize(this.width, this.height, false);
+    }
+  }
+
+  public getQualityPreset(): VfxQualityPreset {
+    return this.qualityPreset;
+  }
+
+  public getTelemetry(): VfxTelemetrySnapshot {
+    let activeParticles = 0;
+    for (let i = 0; i < this.particleSlots.length; i++) {
+      if (this.particleSlots[i].active) activeParticles++;
+    }
+    let activeBladeTrails = 0;
+    for (let i = 0; i < this.bladeTrailPool.length; i++) {
+      if (this.bladeTrailPool[i].active) activeBladeTrails++;
+    }
+    return {
+      qualityPreset: this.qualityPreset,
+      isSoftwareGl: this.isSoftwareGl,
+      activeRibbons: this.ribbons.length,
+      activeBladeTrails,
+      activeParticles,
+      maxParticles: QUALITY_PARTICLE_CAP[this.qualityPreset],
+      activeFloorEffects:
+        this.mandalas.length + this.shockwaveRings.length + this.groundBounces.length,
+      activeBackEffects:
+        activeBladeTrails +
+        this.solarWheels.length +
+        this.waterDragons.length +
+        this.windGales.length,
+      drawCalls: this.renderer?.info.render.calls ?? 0,
+    };
   }
 
   public resize(vw: number, vh: number): void {
@@ -1092,8 +1448,11 @@ export class WebglDemonSlayerVfxOverlay {
     if (safeW === this.width && safeH === this.height) return;
     this.width = safeW;
     this.height = safeH;
-    this.floorCanvas.width = safeW;
-    this.floorCanvas.height = safeH;
+    const auxScale = this.isSoftwareGl ? 0.75 : 1;
+    this.backCanvas.width = Math.max(160, Math.round(safeW * auxScale));
+    this.backCanvas.height = Math.max(120, Math.round(safeH * auxScale));
+    this.floorCanvas.width = Math.max(160, Math.round(safeW * auxScale));
+    this.floorCanvas.height = Math.max(120, Math.round(safeH * auxScale));
     this.camera.left = -safeW * 0.5;
     this.camera.right = safeW * 0.5;
     this.camera.top = safeH * 0.5;
@@ -1101,7 +1460,9 @@ export class WebglDemonSlayerVfxOverlay {
     this.camera.updateProjectionMatrix();
 
     if (this.renderer) {
-      const pr = this.isSoftwareGl ? 0.65 : Math.min(window.devicePixelRatio || 1, 1.35);
+      const pr = this.isSoftwareGl
+        ? 0.75
+        : Math.min(window.devicePixelRatio || 1, QUALITY_PIXEL_RATIO[this.qualityPreset]);
       this.renderer.setPixelRatio(pr);
       this.renderer.setSize(safeW, safeH, false);
     }
@@ -1114,6 +1475,209 @@ export class WebglDemonSlayerVfxOverlay {
       this.bloomPass.resolution.set(bw, bh);
     }
   }
+
+  // ============================================================================
+  // LIVE POOLED PARASHU BLADE-TRAIL RIBBON API (TRUE 3D BLADE TRACKING!)
+  // ============================================================================
+
+  public beginBladeTrail(
+    id: string,
+    opts: {
+      palette: DemonSlayerVfxPalette;
+      widthBoostPx?: number;
+      fadeDuration?: number;
+      opacity?: number;
+    }
+  ): void {
+    if (!this.renderer || this.disposed) return;
+
+    let slot = this.bladeTrailPool.find((s) => s.id === id);
+    if (!slot) {
+      slot = this.bladeTrailPool.find((s) => !s.active);
+    }
+    if (!slot) {
+      // Recycle oldest fading trail
+      slot = this.bladeTrailPool.reduce((prev, cur) =>
+        cur.fadeElapsed > prev.fadeElapsed ? cur : prev
+      );
+    }
+
+    const pal = RIBBON_PALETTES[opts.palette];
+    const mode = paletteModeIndex(opts.palette);
+    const tex = pickAtlasTextureForPalette(this.atlas, opts.palette);
+    const uvRepeat = mode === 2 ? 2.2 : mode === 3 ? 1.55 : 1.35;
+    const scrollSpeed = mode === 2 ? 3.8 : mode === 3 ? 2.4 : 1.75;
+
+    const configureMat = (mat: THREE.ShaderMaterial, op: number, hdr: number) => {
+      mat.uniforms.uCoreColor.value.copy(pal.core);
+      mat.uniforms.uMidColor.value.copy(pal.mid);
+      mat.uniforms.uEdgeColor.value.copy(pal.edge);
+      mat.uniforms.uDeepColor.value.copy(pal.deep);
+      mat.uniforms.uInkColor.value.copy(pal.ink);
+      mat.uniforms.uMode.value = mode;
+      mat.uniforms.uOpacity.value = op;
+      mat.uniforms.uHdrBoost.value = hdr;
+      mat.uniforms.uAtlasTex.value = tex;
+      mat.uniforms.uUseAtlas.value = tex ? 1.0 : 0.0;
+      mat.uniforms.uUvRepeat.value = uvRepeat;
+      mat.uniforms.uScrollSpeed.value = scrollSpeed;
+      mat.uniforms.uLife.value = 0;
+    };
+
+    const baseOp = opts.opacity ?? 0.98;
+    configureMat(slot.backMat, baseOp * 0.94, 1.24);
+    configureMat(slot.frontMat, baseOp, 1.38);
+
+    slot.id = id;
+    slot.active = true;
+    slot.ending = false;
+    slot.palette = opts.palette;
+    slot.widthBoostPx = opts.widthBoostPx ?? 58;
+    slot.fadeElapsed = 0;
+    slot.fadeDuration = opts.fadeDuration ?? 0.24;
+    slot.samples.length = 0;
+    slot.backGeo.setDrawRange(0, 0);
+    slot.frontGeo.setDrawRange(0, 0);
+    slot.backGroup.visible = true;
+    slot.frontGroup.visible = true;
+  }
+
+  public pushBladeTrailSample(id: string, sample: ArenaBladeSample): void {
+    if (!this.renderer || this.disposed) return;
+    const slot = this.bladeTrailPool.find((s) => s.active && s.id === id);
+    if (!slot || slot.ending) return;
+
+    // Avoid duplicate coincident points so Catmull-Rom tangents stay crisp
+    const prev = slot.samples[slot.samples.length - 1];
+    if (prev) {
+      const dist = Math.hypot(sample.tipX - prev.tipX, sample.tipY - prev.tipY);
+      if (dist < 2.2 && slot.samples.length >= 2) return;
+    }
+
+    slot.samples.push({ ...sample });
+    if (slot.samples.length > 22) {
+      slot.samples.shift();
+    }
+    this.rebuildBladeTrailSlotGeometry(slot);
+  }
+
+  public endBladeTrail(id: string, immediateCut = false): void {
+    const slot = this.bladeTrailPool.find((s) => s.active && s.id === id);
+    if (!slot) return;
+    slot.ending = true;
+    if (immediateCut) {
+      // Instant clean cutoff on dodge / stagger / parry / death (zero phantom trails!)
+      slot.fadeDuration = 0.055;
+      slot.fadeElapsed = Math.min(slot.fadeElapsed, 0.01);
+    }
+  }
+
+  private rebuildBladeTrailSlotGeometry(slot: PooledBladeTrail): void {
+    if (slot.samples.length < 2) {
+      slot.backGeo.setDrawRange(0, 0);
+      slot.frontGeo.setDrawRange(0, 0);
+      return;
+    }
+
+    const backRes = writeSweptBladeRibbonBuffers(
+      slot.samples,
+      slot.backPos,
+      slot.backUv,
+      slot.backDepth,
+      slot.backIdx,
+      {
+        subdivisions: 4,
+        widthBoostPx: slot.widthBoostPx,
+        rootInsetPx: 8,
+        depthFilter: 'back',
+        maxSpineSamples: slot.maxSpine,
+      }
+    );
+    (slot.backGeo.getAttribute('position') as THREE.BufferAttribute).needsUpdate = true;
+    (slot.backGeo.getAttribute('uv') as THREE.BufferAttribute).needsUpdate = true;
+    if (slot.backGeo.index) slot.backGeo.index.needsUpdate = true;
+    slot.backGeo.setDrawRange(0, backRes.indexCount);
+
+    const frontRes = writeSweptBladeRibbonBuffers(
+      slot.samples,
+      slot.frontPos,
+      slot.frontUv,
+      slot.frontDepth,
+      slot.frontIdx,
+      {
+        subdivisions: 4,
+        widthBoostPx: slot.widthBoostPx,
+        rootInsetPx: 8,
+        depthFilter: 'front',
+        maxSpineSamples: slot.maxSpine,
+      }
+    );
+    (slot.frontGeo.getAttribute('position') as THREE.BufferAttribute).needsUpdate = true;
+    (slot.frontGeo.getAttribute('uv') as THREE.BufferAttribute).needsUpdate = true;
+    if (slot.frontGeo.index) slot.frontGeo.index.needsUpdate = true;
+    slot.frontGeo.setDrawRange(0, frontRes.indexCount);
+  }
+
+  // ============================================================================
+  // GROUND LIGHT BOUNCE & ELEMENTAL FLOOR INTEGRATION (MP4 ARENA INTEGRATION!)
+  // ============================================================================
+
+  public spawnGroundLightBounce(opts: {
+    x: number;
+    y: number;
+    radius?: number;
+    palette?: DemonSlayerVfxPalette;
+    duration?: number;
+    intensity?: number;
+  }): void {
+    if (!this.renderer || this.disposed) return;
+    if (this.groundBounces.length >= 10) {
+      const oldest = this.groundBounces.shift();
+      if (oldest) {
+        this.floorScene.remove(oldest.mesh);
+        oldest.mesh.material.dispose();
+      }
+    }
+
+    const palette = opts.palette ?? 'hinokami';
+    const pal = RIBBON_PALETTES[palette];
+    const mode = paletteModeIndex(palette);
+    const mat = new THREE.ShaderMaterial({
+      uniforms: {
+        uTime: { value: this.elapsed },
+        uLife: { value: 0 },
+        uMode: { value: mode },
+        uCoreColor: { value: pal.core.clone() },
+        uMidColor: { value: pal.glow.clone() },
+        uInkColor: { value: pal.ink.clone() },
+        uIntensity: { value: opts.intensity ?? 0.92 },
+      },
+      vertexShader: RIBBON_VERTEX_SHADER,
+      fragmentShader: GROUND_BOUNCE_FRAGMENT_SHADER,
+      transparent: true,
+      premultipliedAlpha: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+
+    const mesh = new THREE.Mesh(this.groundBounceGeo, mat);
+    mesh.position.z = -14;
+    this.floorScene.add(mesh);
+
+    this.groundBounces.push({
+      mesh,
+      worldX: opts.x,
+      worldY: opts.y,
+      radius: opts.radius ?? 155,
+      life: 0,
+      maxLife: opts.duration ?? 0.42,
+    });
+  }
+
+  // ============================================================================
+  // CORE ELEMENTAL SLASH RIBBON (NOW PAINTERLY ATLAS-DRIVEN WITH SILHOUETTE INK!)
+  // ============================================================================
 
   public spawnSlashRibbon(opts: {
     x: number;
@@ -1128,9 +1692,9 @@ export class WebglDemonSlayerVfxOverlay {
     tiltX?: number;
     tiltY?: number;
     spinRate?: number;
+    withBackWrap?: boolean;
   }): void {
     if (!this.renderer || this.disposed) return;
-    // Strict visual clarity cap: never stack 20+ ribbons into noisy soup
     if (this.ribbons.length >= 6) {
       const oldest = this.ribbons.shift();
       if (oldest) this.disposeRibbon(oldest);
@@ -1139,53 +1703,94 @@ export class WebglDemonSlayerVfxOverlay {
     const palette = opts.palette ?? 'hinokami';
     const pal = RIBBON_PALETTES[palette];
     const mode = paletteModeIndex(palette);
-    const radius = opts.radius ?? 160;
-    const width = opts.width ?? 62;
+    const atlasTex = pickAtlasTextureForPalette(this.atlas, palette);
+    const radius = opts.radius ?? 162;
+    const width = opts.width ?? 74;
     const arcSpan = opts.arcSpan ?? 2.75;
     const direction = opts.direction ?? 1;
 
-    const inkGeo = buildCurvedRibbonGeometry(radius, width * 1.18, arcSpan, direction, 26);
-    const coreGeo = buildCurvedRibbonGeometry(radius, width, arcSpan, direction, 26);
-    const glowGeo = buildCurvedRibbonGeometry(radius, width * 1.78, arcSpan, direction, 24);
+    const coreGeo = buildCurvedRibbonGeometry(radius, width, arcSpan, direction, 30);
+    const glowGeo = buildCurvedRibbonGeometry(radius, width * 1.38, arcSpan, direction, 24);
 
-    const inkMat = createRibbonMaterial(pal, mode, 0.88, true, THREE.NormalBlending, 0.35);
-    inkMat.uniforms.uCoreColor.value.copy(pal.ink);
-    inkMat.uniforms.uMidColor.value.copy(pal.ink);
-    inkMat.uniforms.uEdgeColor.value.copy(pal.ink);
+    const uvRepeat = mode === 2 ? 2.1 : mode === 3 ? 1.55 : 1.35;
+    const scrollSpeed = mode === 2 ? 3.5 : 1.75;
 
-    const coreMat = createRibbonMaterial(pal, mode, 0.98, true, THREE.NormalBlending, 1.85);
-    const glowMat = createRibbonMaterial(pal, mode, 0.72, false, THREE.AdditiveBlending, 2.05);
+    const coreMat = createRibbonMaterial(
+      pal,
+      mode,
+      0.99,
+      true,
+      THREE.NormalBlending,
+      1.36,
+      atlasTex,
+      uvRepeat,
+      scrollSpeed
+    );
+    const glowMat = createRibbonMaterial(
+      pal,
+      mode,
+      0.42,
+      false,
+      THREE.AdditiveBlending,
+      1.42,
+      atlasTex,
+      uvRepeat,
+      scrollSpeed
+    );
 
-    const inkMesh = new THREE.Mesh(inkGeo, inkMat);
     const coreMesh = new THREE.Mesh(coreGeo, coreMat);
     const glowMesh = new THREE.Mesh(glowGeo, glowMat);
-    inkMesh.position.z = -2;
-    glowMesh.position.z = 3;
+    glowMesh.position.z = 2;
 
     const group = new THREE.Group();
-    group.add(inkMesh, coreMesh, glowMesh);
+    group.add(coreMesh, glowMesh);
     this.scene.add(group);
+
+    let backGroup: THREE.Group | undefined;
+    let backMesh: THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial> | undefined;
+    if (opts.withBackWrap) {
+      const backGeo = buildCurvedRibbonGeometry(radius * 0.94, width * 0.88, arcSpan * 0.72, -direction as 1 | -1, 24);
+      const backMat = createRibbonMaterial(
+        pal,
+        mode,
+        0.92,
+        true,
+        THREE.NormalBlending,
+        1.18,
+        atlasTex,
+        uvRepeat,
+        scrollSpeed
+      );
+      backMesh = new THREE.Mesh(backGeo, backMat);
+      backGroup = new THREE.Group();
+      backGroup.add(backMesh);
+      this.backScene.add(backGroup);
+    }
 
     this.ribbons.push({
       group,
-      inkMesh,
+      backGroup,
       coreMesh,
       glowMesh,
+      backMesh,
       worldX: opts.x,
       worldY: opts.y,
       baseRotZ: -opts.angle,
-      tiltX: opts.tiltX ?? 0.62,
-      tiltY: opts.tiltY ?? (direction === 1 ? -0.18 : 0.18),
+      tiltX: opts.tiltX ?? 0.56,
+      tiltY: opts.tiltY ?? (direction === 1 ? -0.16 : 0.16),
       spinRate: opts.spinRate ?? direction * 1.45,
       life: 0,
-      maxLife: opts.duration ?? 0.34,
+      maxLife: opts.duration ?? 0.36,
       scale: 1,
     });
   }
 
-  /**
-   * Hinokami Kagura / Rengoku Flame Breathing: Dual Counter-Rotating 3D Solar Flame Wheels!
-   */
+  // ============================================================================
+  // ELEMENT 1: AGNI — HINOKAMI KAGURA / RENGOKU CONTINUOUS CALLIGRAPHIC FIRE RIVER
+  // Completely replaces the old 13 floating chili-pepper blobs with wide, curling
+  // painterly flame ribbons wrapping BEHIND & IN FRONT of Rudra + ground bounce!
+  // ============================================================================
+
   public spawnSolarFlameWheel(opts: {
     x: number;
     y: number;
@@ -1200,89 +1805,141 @@ export class WebglDemonSlayerVfxOverlay {
       if (oldest) this.disposeSolarWheel(oldest);
     }
 
-    const pal = RIBBON_PALETTES[opts.palette ?? 'hinokami'];
-    const radius = opts.radius ?? 195;
-    const group = new THREE.Group();
+    const palette = opts.palette ?? 'hinokami';
+    const pal = RIBBON_PALETTES[palette];
+    const flameTex = pickAtlasTextureForPalette(this.atlas, palette);
+    const radius = (opts.radius ?? 225) * 1.24;
+    const frontGroup = new THREE.Group();
+    const backGroup = new THREE.Group();
     const mats: THREE.ShaderMaterial[] = [];
     const geos: THREE.BufferGeometry[] = [];
 
-    for (let i = 0; i < 2; i++) {
-      const dir: 1 | -1 = i === 0 ? 1 : -1;
-      // Offset two OPEN, tapered arcs; full 360-degree neon donuts conceal the
-      // axe and read as generic rings rather than living fire brushstrokes.
-      const r = radius * (i === 0 ? 1.0 : 0.79);
-      const w = i === 0 ? 49 : 32;
-      const openArc = Math.PI * (i === 0 ? 1.59 : 1.26);
-      const geo = buildCurvedRibbonGeometry(r, w, openArc, dir, 34);
-      const inkGeo = buildCurvedRibbonGeometry(r, w * 1.16, openArc + 0.04, dir, 30);
+    // 1. Back-wrapping wide Hinokami combustion wave curling BEHIND Rudra's torso!
+    const backGeo = buildCurvedRibbonGeometry(radius * 1.08, 118, Math.PI * 1.48, -1, 38);
+    const backMat = createRibbonMaterial(
+      pal,
+      0,
+      0.97,
+      true,
+      THREE.NormalBlending,
+      1.48,
+      flameTex,
+      1.75,
+      1.95
+    );
+    const backMesh = new THREE.Mesh(backGeo, backMat);
+    backMesh.rotation.set(0.54, 0.22, Math.PI * 0.72);
+    backGroup.add(backMesh);
+    geos.push(backGeo);
+    mats.push(backMat);
 
-      const inkMat = createRibbonMaterial(pal, 0, 0.90, true, THREE.NormalBlending, 0.25);
-      inkMat.uniforms.uCoreColor.value.copy(pal.ink);
-      inkMat.uniforms.uMidColor.value.copy(pal.ink);
-      inkMat.uniforms.uEdgeColor.value.copy(pal.ink);
+    // 2. Primary hero sweeping Hinokami fire-river ribbon (thick painterly S-curls + charcoal hollows + HDR core!)
+    const heroGeo = buildCurvedRibbonGeometry(radius * 1.06, 134, Math.PI * 1.64, 1, 42);
+    const heroMat = createRibbonMaterial(
+      pal,
+      0,
+      0.99,
+      true,
+      THREE.NormalBlending,
+      1.72,
+      flameTex,
+      1.85,
+      2.2
+    );
+    const heroGlowMat = createRibbonMaterial(
+      pal,
+      0,
+      0.56,
+      false,
+      THREE.AdditiveBlending,
+      1.78,
+      flameTex,
+      1.85,
+      2.2
+    );
+    const heroSub = new THREE.Group();
+    const heroMesh = new THREE.Mesh(heroGeo, heroMat);
+    const heroGlow = new THREE.Mesh(heroGeo, heroGlowMat);
+    heroGlow.position.z = 3;
+    heroGlow.scale.set(1.06, 1.06, 1);
+    heroSub.add(heroMesh, heroGlow);
+    heroSub.rotation.set(0.50, -0.18, 0.14);
+    frontGroup.add(heroSub);
+    geos.push(heroGeo);
+    mats.push(heroMat, heroGlowMat);
 
-      const flameMat = createRibbonMaterial(pal, 0, 0.98, true, THREE.NormalBlending, 2.15);
-      const glowMat = createRibbonMaterial(pal, 0, 0.68, false, THREE.AdditiveBlending, 2.3);
+    // 3. Secondary inner rising fire-crest crescent (staggered angle & depth for volumetric anime mass!)
+    const innerGeo = buildCurvedRibbonGeometry(radius * 0.76, 92, Math.PI * 1.32, -1, 34);
+    const innerMat = createRibbonMaterial(
+      pal,
+      0,
+      0.97,
+      true,
+      THREE.NormalBlending,
+      1.64,
+      flameTex,
+      1.45,
+      2.45
+    );
+    const innerSub = new THREE.Group();
+    innerSub.add(new THREE.Mesh(innerGeo, innerMat));
+    innerSub.rotation.set(0.68, 0.28, -0.82);
+    innerSub.position.z = 7;
+    frontGroup.add(innerSub);
+    geos.push(innerGeo);
+    mats.push(innerMat);
 
-      const sub = new THREE.Group();
-      const inkMesh = new THREE.Mesh(inkGeo, inkMat);
-      inkMesh.position.z = -3;
-      const flameMesh = new THREE.Mesh(geo, flameMat);
-      const glowMesh = new THREE.Mesh(geo, glowMat);
-      glowMesh.position.z = 3;
-      sub.add(inkMesh, flameMesh, glowMesh);
-      sub.rotation.set(i === 0 ? 0.56 : 0.92, i === 0 ? -0.22 : 0.26, i * 1.3);
-      group.add(sub);
+    this.backScene.add(backGroup);
+    this.scene.add(frontGroup);
 
-      geos.push(geo, inkGeo);
-      mats.push(inkMat, flameMat, glowMat);
-    }
-
-    // Thirteen staggered, tapered ink-edged flame tongues break the formerly
-    // symmetric donut into a brush-painted inferno without growing the
-    // fullscreen VFX budget; shared geometry/materials remain GPU-light.
-    // Shared geometry/materials avoid unbounded GPU cost on the M3 Air.
-    const tongueGeo = buildTaperedFlameTongueGeometry(radius * 0.49, radius * 0.086, 11);
-    geos.push(tongueGeo);
-    const tongueInk = createRibbonMaterial(pal, 0, 0.74, true, THREE.NormalBlending, 0.80);
-    tongueInk.uniforms.uCoreColor.value.copy(pal.ink);
-    tongueInk.uniforms.uMidColor.value.copy(pal.ink);
-    tongueInk.uniforms.uEdgeColor.value.copy(pal.ink);
-    const tongueFire = createRibbonMaterial(pal, 0, 0.95, true, THREE.NormalBlending, 1.45);
-    mats.push(tongueInk, tongueFire);
-    for (let d = 0; d < 13; d++) {
-      const a = (d / 13) * Math.PI * 2 + (d % 3) * 0.09;
-      const orbit = radius * (0.66 + (d % 4) * 0.087);
-      const tongue = new THREE.Group();
-      tongue.position.set(Math.cos(a) * orbit, Math.sin(a) * orbit * 0.86, 8 + (d % 2) * 3);
-      tongue.rotation.z = a + ((d % 4) - 1.5) * 0.19;
-      const ink = new THREE.Mesh(tongueGeo, tongueInk);
-      ink.position.z = -1.5;
-      ink.scale.set(1.06, 1.25, 1);
-      const core = new THREE.Mesh(tongueGeo, tongueFire);
-      core.scale.set(0.94 + (d % 3) * 0.09, 0.90, 1);
-      tongue.add(ink, core);
-      group.add(tongue);
-    }
-
-    this.scene.add(group);
     this.solarWheels.push({
-      group,
+      frontGroup,
+      backGroup,
       mats,
       geos,
       worldX: opts.x,
       worldY: opts.y,
       baseAngle: -(opts.angle ?? 0),
-      spinRate: 4.8,
+      spinRate: 3.6,
       life: 0,
-      maxLife: opts.duration ?? 0.52,
+      maxLife: opts.duration ?? 0.62,
+    });
+
+    // Blazing HDR Hinokami ground light bounce illuminating the dark stone floor under Rudra!
+    this.spawnGroundLightBounce({
+      x: opts.x,
+      y: opts.y + 24,
+      radius: radius * 1.42,
+      palette,
+      duration: (opts.duration ?? 0.62) * 0.92,
+      intensity: 1.25,
+    });
+
+    // Dark charcoal orbiting soot chunks (Tanjiro vs Rui / Rengoku vs Akaza contrast!)
+    this.spawnElementalParticles({
+      x: opts.x,
+      y: opts.y,
+      count: 22,
+      speed: 360,
+      palette,
+      kind: 'soot_flake',
+    });
+
+    // Long razor-tapered blazing golden-orange ember streaks ripping across the frame!
+    this.spawnElementalParticles({
+      x: opts.x,
+      y: opts.y,
+      count: 32,
+      speed: 620,
+      palette,
+      kind: 'spark_needle',
     });
   }
 
-  /**
-   * Varuna — Tenth Form Constant Flux: Sculpted 3D Coiled Water Dragon with Hokusai Wave Shader,
-   * Sumi-e Navy Ink Hull, Horned Dragon Head, Glowing Cyan Eyes & Flowing Whiskers!
-   */
+  // ============================================================================
+  // ELEMENT 2: VARUNA — UKIYO-E HOKUSAI WATER DRAGON + CLAWED SEAFOAM WAKE + DROPLETS
+  // ============================================================================
+
   public spawnWaterDragon(opts: {
     x: number;
     y: number;
@@ -1297,247 +1954,151 @@ export class WebglDemonSlayerVfxOverlay {
     }
 
     const pal = RIBBON_PALETTES.water;
-    const baseR = opts.radius ?? 145;
-    const group = new THREE.Group();
+    const waveTex = pickAtlasTextureForPalette(this.atlas, 'water');
+    const baseR = (opts.radius ?? 190) * 1.24;
+    const frontGroup = new THREE.Group();
+    const backGroup = new THREE.Group();
     const geos: THREE.BufferGeometry[] = [];
-    const fadeMats: THREE.MeshBasicMaterial[] = [];
+    const fadeMats: THREE.Material[] = [];
 
-    // Tapered serpentine 3D coiled Eastern Water Dragon spine
-    const pts: THREE.Vector3[] = [];
-    const steps = 36;
-    for (let i = 0; i <= steps; i++) {
-      const t = i / steps;
-      // An OPEN, progressive serpent stroke, not a circular blue portal.
-      // The former 2.18-PI coil closed around the fighter and read as
-      // concentric neon water rings in captured real gameplay.
-      const theta = t * Math.PI * 1.46 - Math.PI * 0.75;
-      const rad = baseR * (0.30 + t * 0.90);
-      const x = Math.cos(theta) * rad + (t - 0.5) * baseR * 0.32;
-      const y = Math.sin(theta) * rad * 0.66 + Math.sin(t * Math.PI) * 44;
-      const z = Math.sin(t * Math.PI * 1.75) * 36 + t * 30;
-      pts.push(new THREE.Vector3(x, y, z));
-    }
-
-    const curve = new THREE.CatmullRomCurve3(pts);
-    const tubeGeo = buildTaperedDragonBodyGeometry(curve, 52, 23, 8);
-    const inkGeo = buildTaperedDragonBodyGeometry(curve, 40, 27.5, 8);
-    geos.push(tubeGeo, inkGeo);
-
-    const inkMat = new THREE.MeshBasicMaterial({
-      color: 0x040b1d,
-      side: THREE.BackSide,
-      transparent: true,
-      opacity: 0.94,
-      depthWrite: false,
-    });
-    fadeMats.push(inkMat);
-
-    // Dedicated Hokusai Dragon Scale & Parallel Wave Striation Shader (rich cobalt/cyan, never blown-out white!)
-    const bodyMat = new THREE.ShaderMaterial({
-      uniforms: {
-        uTime: { value: 0 },
-        uLife: { value: 0 },
-      },
-      vertexShader: RIBBON_VERTEX_SHADER,
-      fragmentShader: WATER_DRAGON_FRAGMENT_SHADER,
-      transparent: true,
-      premultipliedAlpha: true,
-      depthWrite: false,
-      side: THREE.DoubleSide,
-    });
-    const inkBody = new THREE.Mesh(inkGeo, inkMat);
-    inkBody.position.z = -2;
-    const dragonBody = new THREE.Mesh(tubeGeo, bodyMat);
-    group.add(inkBody, dragonBody);
-
-    // Companion swirling Hokusai woodblock wave crest ribbons embracing the coiled dragon
-    // A shorter, offset open crest follows the dragon's wake rather than
-    // drawing the generic near-complete water halo around Rudra.
-    const waveSplashGeo = buildCurvedRibbonGeometry(baseR * 0.95, 34, Math.PI * 1.24, 1, 30);
-    geos.push(waveSplashGeo);
-    const waveSplashMat = createRibbonMaterial(pal, 1.0, 0.92, true, THREE.NormalBlending, 1.15);
-    const waveSplashMesh = new THREE.Mesh(waveSplashGeo, waveSplashMat);
-    waveSplashMesh.rotation.set(0.55, -0.18, 0.35);
-    waveSplashMesh.position.z = -4;
-    group.add(waveSplashMesh);
-    // Keep shader updated via bodyMat? Use fadeMats/custom cleanup: attach waveSplashMat to fadeMats via cast or dispose cleanly
-    fadeMats.push(waveSplashMat as unknown as THREE.MeshBasicMaterial);
-
-    // Sculpted Painterly Ukiyo-e Eastern Dragon Head (Organic Fresnel Watercolor Snout + Open Jaw + Swept Wave Mane + Curved Pearl Antlers + Ribbon Whiskers + Trailing Ink Droplets)
-    const headPos = pts[pts.length - 1];
-    const headTan = curve.getTangent(1).normalize();
-    const headGroup = new THREE.Group();
-    headGroup.position.copy(headPos);
-    headGroup.rotation.z = Math.atan2(headTan.y, headTan.x);
-
-    const makeHeadWatercolorMat = (baseHex: string, midHex: string, hiHex: string) =>
-      new THREE.ShaderMaterial({
-        uniforms: {
-          uTime: { value: 0 },
-          uLife: { value: 0 },
-          uBaseColor: { value: new THREE.Color(baseHex) },
-          uMidColor: { value: new THREE.Color(midHex) },
-          uHighlightColor: { value: new THREE.Color(hiHex) },
-        },
-        vertexShader: WATER_DRAGON_HEAD_VERTEX_SHADER,
-        fragmentShader: WATER_DRAGON_HEAD_FRAGMENT_SHADER,
-        transparent: true,
-        premultipliedAlpha: true,
-        depthWrite: false,
-        side: THREE.DoubleSide,
-      });
-
-    const snoutMat = makeHeadWatercolorMat('#15558c', '#3db8e0', '#f4fdff');
-    const jawMat = makeHeadWatercolorMat('#0e3c6b', '#2689ba', '#b8f2ff');
-    const maneMat = makeHeadWatercolorMat('#165a8f', '#52c8e8', '#f7feff');
-    const antlerMat = makeHeadWatercolorMat('#5d809c', '#bae0ec', '#fff9eb');
-
-    const headInkMat = new THREE.MeshBasicMaterial({
-      color: 0x0b2c52,
-      transparent: true,
-      opacity: 0.78,
-      depthWrite: false,
-    });
-    const eyeGeo = new THREE.SphereGeometry(4.2, 8, 8);
-    const eyeMat = new THREE.MeshBasicMaterial({
-      color: new THREE.Color('#ffffff'),
-      transparent: true,
-      opacity: 1.0,
-      depthWrite: false,
-    });
-    const dropletMat = new THREE.MeshBasicMaterial({
-      color: new THREE.Color('#9eeeff'),
-      transparent: true,
-      opacity: 0.86,
-      depthWrite: false,
-    });
-
-    // Organic sculpted snout & jaw using curved tapered TubeGeometry splines (no flat geometric cones!)
-    const snoutCurve = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(-18, 4, 2),
-      new THREE.Vector3(6, 11, 5),
-      new THREE.Vector3(30, 8, 4),
-      new THREE.Vector3(44, 13, 2),
-    ]);
-    const upperJawGeo = buildTaperedDragonBodyGeometry(snoutCurve, 18, 17.5, 8);
-
-    const lowerJawCurve = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(-12, -6, 1),
-      new THREE.Vector3(8, -14, 2),
-      new THREE.Vector3(30, -18, 1),
-    ]);
-    const lowerJawGeo = buildTaperedDragonBodyGeometry(lowerJawCurve, 14, 11.5, 7);
-
-    // Sweeping Ukiyo-e seafoam wave-mane plumes behind the brow
-    const maneCurve = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(-2, 16, 6),
-      new THREE.Vector3(-22, 26, 9),
-      new THREE.Vector3(-46, 18, 4),
-    ]);
-    const crestGeo = buildTaperedDragonBodyGeometry(maneCurve, 14, 13, 7);
-
-    geos.push(upperJawGeo, lowerJawGeo, crestGeo, eyeGeo);
-    fadeMats.push(
-      snoutMat as unknown as THREE.MeshBasicMaterial,
-      jawMat as unknown as THREE.MeshBasicMaterial,
-      maneMat as unknown as THREE.MeshBasicMaterial,
-      antlerMat as unknown as THREE.MeshBasicMaterial,
-      headInkMat,
-      eyeMat,
-      dropletMat
+    // 1. Back-wrapping Hokusai woodblock wave crest sweeping BEHIND Rudra's silhouette!
+    const backWaveGeo = buildCurvedRibbonGeometry(baseR * 1.12, 110, Math.PI * 1.48, -1, 38);
+    const backWaveMat = createRibbonMaterial(
+      pal,
+      1.0,
+      0.97,
+      true,
+      THREE.NormalBlending,
+      1.38,
+      waveTex,
+      1.85,
+      1.85
     );
+    const backWaveMesh = new THREE.Mesh(backWaveGeo, backWaveMat);
+    backWaveMesh.rotation.set(0.54, 0.24, Math.PI * 0.65);
+    backGroup.add(backWaveMesh);
+    geos.push(backWaveGeo);
+    fadeMats.push(backWaveMat);
 
-    const upperJaw = new THREE.Mesh(upperJawGeo, snoutMat);
-    const lowerJaw = new THREE.Mesh(lowerJawGeo, jawMat);
-    const browCrest = new THREE.Mesh(crestGeo, maneMat);
-    headGroup.add(upperJaw, lowerJaw, browCrest);
+    // 2. Massive Foreshortened Hero Hokusai Clawed-Seafoam Wave Crest (Zero cartoon dragon clipart!)
+    const heroWaveGeo = buildCurvedRibbonGeometry(baseR * 1.10, 128, Math.PI * 1.56, 1, 42);
+    geos.push(heroWaveGeo);
+    const bodyMat = createRibbonMaterial(
+      pal,
+      1.0,
+      0.99,
+      true,
+      THREE.NormalBlending,
+      1.58,
+      waveTex,
+      1.95,
+      2.15
+    );
+    const heroGlowMat = createRibbonMaterial(
+      pal,
+      1.0,
+      0.48,
+      false,
+      THREE.AdditiveBlending,
+      1.66,
+      waveTex,
+      1.95,
+      2.15
+    );
+    const heroWaveMesh = new THREE.Mesh(heroWaveGeo, bodyMat);
+    heroWaveMesh.rotation.set(0.46, -0.20, 0.22);
+    heroWaveMesh.position.z = 4;
+    const heroWaveGlow = new THREE.Mesh(heroWaveGeo, heroGlowMat);
+    heroWaveGlow.rotation.copy(heroWaveMesh.rotation);
+    heroWaveGlow.position.z = 6;
+    heroWaveGlow.scale.set(1.05, 1.05, 1);
+    frontGroup.add(heroWaveMesh, heroWaveGlow);
+    fadeMats.push(heroGlowMat);
 
-    for (const side of [-1, 1]) {
-      // Swept curved sea-pearl dragon antlers
-      const hornCurve = new THREE.CatmullRomCurve3([
-        new THREE.Vector3(-10, side * 12, 8),
-        new THREE.Vector3(-24, side * 26, 14),
-        new THREE.Vector3(-44, side * 34, 10),
-      ]);
-      const hornGeo = buildTaperedDragonBodyGeometry(hornCurve, 10, 4.4, 6);
-      geos.push(hornGeo);
-      headGroup.add(new THREE.Mesh(hornGeo, antlerMat));
+    // 3. Surging Inner Turquoise Foam Whirlpool Ribbons (layered Ukiyo-e tidal depth!)
+    const innerWaveGeo = buildCurvedRibbonGeometry(baseR * 0.78, 96, Math.PI * 1.34, -1, 34);
+    geos.push(innerWaveGeo);
+    const innerWaveMat = createRibbonMaterial(
+      pal,
+      1.0,
+      0.97,
+      true,
+      THREE.NormalBlending,
+      1.52,
+      waveTex,
+      1.55,
+      2.45
+    );
+    const innerWaveMesh = new THREE.Mesh(innerWaveGeo, innerWaveMat);
+    innerWaveMesh.rotation.set(0.66, 0.26, -0.78);
+    innerWaveMesh.position.z = 9;
+    frontGroup.add(innerWaveMesh);
+    fadeMats.push(innerWaveMat);
 
-      // Luminous seafoam eyes with deep indigo brow socket
-      const eyeInk = new THREE.Mesh(eyeGeo, headInkMat);
-      eyeInk.position.set(12, side * 9, 12.5);
-      eyeInk.scale.setScalar(1.26);
-      headGroup.add(eyeInk);
+    // 4. Sweeping Upper Spray Crest Arc (dramatic foreshortened foam claws reaching across the duel)
+    const sprayArcGeo = buildCurvedRibbonGeometry(baseR * 1.32, 76, Math.PI * 1.08, 1, 32);
+    geos.push(sprayArcGeo);
+    const sprayArcMat = createRibbonMaterial(
+      pal,
+      1.0,
+      0.92,
+      true,
+      THREE.NormalBlending,
+      1.62,
+      waveTex,
+      2.15,
+      2.65
+    );
+    const sprayArcMesh = new THREE.Mesh(sprayArcGeo, sprayArcMat);
+    sprayArcMesh.rotation.set(0.34, -0.14, -0.35);
+    sprayArcMesh.position.z = 11;
+    frontGroup.add(sprayArcMesh);
+    fadeMats.push(sprayArcMat);
 
-      const eye = new THREE.Mesh(eyeGeo, eyeMat);
-      eye.position.set(12, side * 9, 14);
-      headGroup.add(eye);
-
-      // Flowing undulating calligraphic ribbon whiskers
-      const wPts = [
-        new THREE.Vector3(32, side * 6, 5),
-        new THREE.Vector3(14, side * 32, 14),
-        new THREE.Vector3(-18, side * 24, 9),
-        new THREE.Vector3(-52, side * 44, 2),
-      ];
-      const wGeo = buildTaperedDragonBodyGeometry(new THREE.CatmullRomCurve3(wPts), 14, 2.8, 5);
-      geos.push(wGeo);
-      headGroup.add(new THREE.Mesh(wGeo, maneMat));
-    }
-
-    // Soft translucent seafoam spray droplets trailing around the coiled crest
-    const dropGeo = new THREE.SphereGeometry(3.8, 6, 6);
-    geos.push(dropGeo);
-    const dropletOffsets = [
-      [26, 26, 8],
-      [-6, -28, 6],
-      [-34, 30, 5],
-      [40, -10, 7],
-      [-48, -22, 4],
-    ];
-    for (const [dx, dy, dz] of dropletOffsets) {
-      const dHalo = new THREE.Mesh(dropGeo, headInkMat);
-      dHalo.position.set(dx, dy, dz - 0.5);
-      dHalo.scale.set(1.18, 1.18, 1.18);
-      const dCore = new THREE.Mesh(dropGeo, dropletMat);
-      dCore.position.set(dx, dy, dz);
-      dCore.scale.set(0.88, 0.88, 0.88);
-      headGroup.add(dHalo, dCore);
-    }
-
-    group.add(headGroup);
-    this.scene.add(group);
+    this.backScene.add(backGroup);
+    this.scene.add(frontGroup);
 
     this.waterDragons.push({
-      group,
+      frontGroup,
+      backGroup,
       bodyMat,
       fadeMats,
       geos,
       worldX: opts.x,
       worldY: opts.y,
       angle: opts.angle,
-      speed: 220,
+      speed: 255,
       life: 0,
-      maxLife: opts.duration ?? 0.68,
+      maxLife: opts.duration ?? 0.74,
     });
 
-    // Accompanying water spray spark burst
-    this.spawnSparkBurst({
+    // Luminous sapphire caustic ground light bounce illuminating the darkened stone floor!
+    this.spawnGroundLightBounce({
+      x: opts.x,
+      y: opts.y + 22,
+      radius: baseR * 1.38,
+      palette: 'water',
+      duration: 0.66,
+      intensity: 1.22,
+    });
+
+    // 34 glowing white-cyan ink-rimmed Hokusai splash droplets & mist arcs!
+    this.spawnElementalParticles({
       x: opts.x,
       y: opts.y,
-      count: 22,
-      speed: 440,
+      count: 34,
+      speed: 520,
       palette: 'water',
+      kind: 'water_droplet',
     });
   }
 
-  /**
-   * Zenitsu Thunderclap & Flash: Razor Geometric Zigzag Lightning Bolts + Starburst Bounce Nodes!
-   * Rebuilt Zenitsu Thunder Breathing (Thunderclap & Flash — Godspeed):
-   * Procedural GLSL plasma lightning ribbons with miter-joined whip taper, 3-5 forked
-   * crackling sub-arcs, sculpted 8-point ink-outlined comic starburst bounce nodes,
-   * electric cyan/gold corona, pitch-black Sumi-e ink borders, and floor ionization rings!
-   */
+  // ============================================================================
+  // ELEMENT 4: VAJRA — ZENITSU CONNECTED BRANCHING LIGHTNING + SHATTERED STONE DEBRIS
+  // Zero floating twigs: every branch welds directly into its parent elbow with
+  // a bright overlapping flash cap + cracked electric floor veins!
+  // ============================================================================
+
   public spawnThunderZigzag(opts: {
     x1: number;
     y1: number;
@@ -1557,7 +2118,7 @@ export class WebglDemonSlayerVfxOverlay {
     const pal = RIBBON_PALETTES[opts.palette ?? 'thunder'];
     const dx = opts.x2 - opts.x1;
     const dy = -(opts.y2 - opts.y1);
-    const boltDist = Math.max(60, Math.hypot(dx, dy));
+    const boltDist = Math.max(80, Math.hypot(dx, dy));
     const seed = this.elapsed * 19 + this.thunderBolts.length * 3.7 + 1.3;
     const mainPts = computeThunderZigzagVertices(
       0,
@@ -1565,7 +2126,7 @@ export class WebglDemonSlayerVfxOverlay {
       dx,
       dy,
       boltDist > 220 ? 6 : 5,
-      Math.min(58, Math.max(28, boltDist * 0.18)),
+      Math.min(62, Math.max(30, boltDist * 0.19)),
       seed
     );
     const branches = computeThunderForkedBranches(mainPts, seed);
@@ -1575,10 +2136,11 @@ export class WebglDemonSlayerVfxOverlay {
     const mats: THREE.MeshBasicMaterial[] = [];
     const starGroups: THREE.Group[] = [];
     const geos: THREE.BufferGeometry[] = [];
-    const boltW = opts.width ?? 26;
+    const boltW = Math.max(24, opts.width ?? 32);
 
     const createBoltShaderMat = (
       isHalo: boolean,
+      isBranch: boolean,
       subSeed: number,
       opacity: number
     ): THREE.ShaderMaterial =>
@@ -1591,104 +2153,127 @@ export class WebglDemonSlayerVfxOverlay {
           uSeed: { value: subSeed },
           uOpacity: { value: opacity },
           uIsHalo: { value: isHalo ? 1.0 : 0.0 },
-          uCoreColor: { value: new THREE.Color('#fffef2') },
+          uIsBranch: { value: isBranch ? 1.0 : 0.0 },
+          uCoreColor: { value: new THREE.Color('#ffffff') },
           uGoldColor: { value: pal.mid.clone() },
           uCyanColor: { value: pal.edge.clone() },
           uInkColor: { value: pal.ink.clone() },
         },
         transparent: true,
+        premultipliedAlpha: true,
         depthWrite: false,
         side: THREE.DoubleSide,
         blending: isHalo ? THREE.AdditiveBlending : THREE.NormalBlending,
       });
 
-    // Layer 1: Primary tapered GLSL plasma bolt trunk + electric glow halo
-    const mainHaloGeo = buildTaperedThunderRibbonGeometry(mainPts, boltW * 2.15, boltW * 0.85, 17);
-    const mainCoreGeo = buildTaperedThunderRibbonGeometry(mainPts, boltW * 1.15, boltW * 0.42, 21);
-    const mainHaloMat = createBoltShaderMat(true, seed, 0.88);
-    const mainCoreMat = createBoltShaderMat(false, seed, 1.0);
+    // Layer 1: Bold primary whip-tapered angular Zenitsu plasma bolt trunk + outer corona
+    const mainHaloGeo = buildTaperedThunderRibbonGeometry(mainPts, boltW * 2.35, boltW * 0.95, 17);
+    const mainCoreGeo = buildTaperedThunderRibbonGeometry(mainPts, boltW * 1.38, boltW * 0.56, 21);
+    const mainHaloMat = createBoltShaderMat(true, false, seed, 0.85);
+    const mainCoreMat = createBoltShaderMat(false, false, seed, 1.0);
     geos.push(mainHaloGeo, mainCoreGeo);
     shaderMats.push(mainHaloMat, mainCoreMat);
     group.add(new THREE.Mesh(mainHaloGeo, mainHaloMat), new THREE.Mesh(mainCoreGeo, mainCoreMat));
 
-    // Layer 2: Forked secondary crackling sub-arcs peeling off main Zenitsu elbow bends
+    // Layer 2: Strictly CONNECTED forked crackling sub-arcs welded onto each interior elbow vertex!
     branches.forEach((bPts, idx) => {
-      const bWidth = Math.max(8, boltW * (0.52 - idx * 0.04));
-      const bHaloGeo = buildTaperedThunderRibbonGeometry(bPts, bWidth * 1.85, 3.2, 18);
-      const bCoreGeo = buildTaperedThunderRibbonGeometry(bPts, bWidth, 2.2, 22);
-      const bHaloMat = createBoltShaderMat(true, seed + 11.4 * (idx + 1), 0.72);
-      const bCoreMat = createBoltShaderMat(false, seed + 11.4 * (idx + 1), 0.94);
+      const bWidth = Math.max(13, boltW * (0.68 - idx * 0.04));
+      const bHaloGeo = buildTaperedThunderRibbonGeometry(bPts, bWidth * 2.1, 5.0, 18);
+      const bCoreGeo = buildTaperedThunderRibbonGeometry(bPts, bWidth, 3.2, 22);
+      const bHaloMat = createBoltShaderMat(true, true, seed + 11.4 * (idx + 1), 0.86);
+      const bCoreMat = createBoltShaderMat(false, true, seed + 11.4 * (idx + 1), 1.0);
       geos.push(bHaloGeo, bCoreGeo);
       shaderMats.push(bHaloMat, bCoreMat);
       group.add(new THREE.Mesh(bHaloGeo, bHaloMat), new THREE.Mesh(bCoreGeo, bCoreMat));
     });
 
-    // Layer 3: Sculpted 8-point ink-outlined anime comic starburst bounce nodes at elbows & impact tip
-    const inkStarGeo = buildStarburstPolygonGeometry(8, boltW * 1.48, boltW * 0.44);
-    const cyanStarGeo = buildStarburstPolygonGeometry(8, boltW * 1.24, boltW * 0.34);
-    const coreStarGeo = buildStarburstPolygonGeometry(8, boltW * 0.78, boltW * 0.22);
-    geos.push(inkStarGeo, cyanStarGeo, coreStarGeo);
+    // Layer 2b: Hairline secondary plasma whip arc shadowing the main trunk for 8K Zenitsu crackle density
+    const hairlinePts = computeThunderZigzagVertices(
+      0,
+      0,
+      dx,
+      dy,
+      7,
+      Math.min(76, Math.max(38, boltDist * 0.24)),
+      seed + 29.7
+    );
+    const hairlineGeo = buildTaperedThunderRibbonGeometry(hairlinePts, boltW * 0.42, boltW * 0.16, 23);
+    const hairlineMat = createBoltShaderMat(false, false, seed + 29.7, 0.94);
+    geos.push(hairlineGeo);
+    shaderMats.push(hairlineMat);
+    group.add(new THREE.Mesh(hairlineGeo, hairlineMat));
 
-    const starInkMat = new THREE.MeshBasicMaterial({
-      color: pal.ink,
+    // Layer 3: Sleek Tapered Diamond Anamorphic Plasma Cross-Flares ONLY at origin & impact tip
+    // (zero blunt square ends or chunky clipart stars!)
+    const flareBeamH = buildTaperedDiamondLensFlareGeometry(boltW * 5.6, boltW * 0.34);
+    const flareBeamV = buildTaperedDiamondLensFlareGeometry(boltW * 3.0, boltW * 0.24);
+    const flareGlowH = buildTaperedDiamondLensFlareGeometry(boltW * 6.8, boltW * 0.92);
+    geos.push(flareBeamH, flareBeamV, flareGlowH);
+
+    const flareGlowMat = new THREE.MeshBasicMaterial({
+      color: pal.mid.clone().lerp(pal.edge, 0.35).multiplyScalar(1.6),
       transparent: true,
-      opacity: 0.96,
+      opacity: 0.88,
+      blending: THREE.AdditiveBlending,
       side: THREE.DoubleSide,
       depthWrite: false,
     });
-    const starCyanMat = new THREE.MeshBasicMaterial({
-      color: pal.edge.clone().lerp(pal.mid, 0.35),
-      transparent: true,
-      opacity: 0.96,
-      side: THREE.DoubleSide,
-      depthWrite: false,
-    });
-    const starCoreMat = new THREE.MeshBasicMaterial({
-      color: new THREE.Color('#fffef0'),
+    const flareCoreMat = new THREE.MeshBasicMaterial({
+      color: new THREE.Color('#ffffff').multiplyScalar(1.75),
       transparent: true,
       opacity: 1.0,
+      blending: THREE.AdditiveBlending,
       side: THREE.DoubleSide,
       depthWrite: false,
     });
-    mats.push(starInkMat, starCyanMat, starCoreMat);
+    mats.push(flareGlowMat, flareCoreMat);
 
-    const nodeIndices = [
-      Math.max(1, Math.floor(mainPts.length * 0.34)),
-      Math.max(2, Math.floor(mainPts.length * 0.68)),
-      mainPts.length - 1,
-    ];
-    const uniqueNodeIndices = Array.from(new Set(nodeIndices)).filter(
-      (idx) => idx > 0 && idx < mainPts.length
-    );
-
-    for (const idx of uniqueNodeIndices) {
+    const boltAngle = Math.atan2(dy, dx);
+    for (const idx of [0, mainPts.length - 1]) {
       const pt = mainPts[idx];
       const isImpactTip = idx === mainPts.length - 1;
       const nodeGroup = new THREE.Group();
       nodeGroup.position.set(pt.x, pt.y, 24);
-      const baseScale = isImpactTip ? 1.25 : 0.76;
-      nodeGroup.scale.setScalar(baseScale);
-      nodeGroup.rotation.z = idx * 0.62;
+      nodeGroup.scale.setScalar(isImpactTip ? 1.48 : 0.85);
+      nodeGroup.rotation.z = boltAngle + (isImpactTip ? 0.18 : -0.12);
 
-      const inkM = new THREE.Mesh(inkStarGeo, starInkMat);
-      inkM.position.z = -1;
-      const cyanM = new THREE.Mesh(cyanStarGeo, starCyanMat);
-      cyanM.position.z = 0;
-      const coreM = new THREE.Mesh(coreStarGeo, starCoreMat);
-      coreM.position.z = 1;
-      nodeGroup.add(inkM, cyanM, coreM);
+      const gH = new THREE.Mesh(flareGlowH, flareGlowMat);
+      gH.position.z = 0;
+      const cH = new THREE.Mesh(flareBeamH, flareCoreMat);
+      cH.position.z = 1;
+      const cV = new THREE.Mesh(flareBeamV, flareCoreMat);
+      cV.rotation.z = Math.PI * 0.5;
+      cV.position.z = 1;
+      nodeGroup.add(gH, cH, cV);
       group.add(nodeGroup);
       starGroups.push(nodeGroup);
     }
 
-    // Layer 4: Crackling floor ionization ring at impact point for weighty grounded presence
+    // Layer 4: Intense radiating cracked-ground lightning floor bounce + shattered stone debris + white-gold sparks!
     if (opts.withFloorRing !== false) {
-      this.spawnShockwaveRing({
+      this.spawnGroundLightBounce({
         x: opts.x2,
         y: opts.y2 + 12,
-        radius: Math.max(76, Math.min(138, boltDist * 0.36)),
+        radius: Math.max(150, Math.min(250, boltDist * 0.62)),
         palette: 'thunder',
-        duration: 0.38,
+        duration: 0.54,
+        intensity: 1.35,
+      });
+      this.spawnElementalParticles({
+        x: opts.x2,
+        y: opts.y2,
+        count: 18,
+        speed: 480,
+        palette: 'thunder',
+        kind: 'rock_shard',
+      });
+      this.spawnElementalParticles({
+        x: opts.x2,
+        y: opts.y2 - 8,
+        count: 26,
+        speed: 620,
+        palette: 'thunder',
+        kind: 'spark_needle',
       });
     }
 
@@ -1708,7 +2293,6 @@ export class WebglDemonSlayerVfxOverlay {
 
   /**
    * Subtle 4-point anime blade-edge startup glint on Rudra's Parashu axe head during windup
-   * so anticipation feels crisp without spawning premature slash arcs.
    */
   public spawnBladeGlint(opts: {
     x: number;
@@ -1728,7 +2312,7 @@ export class WebglDemonSlayerVfxOverlay {
 
     const outerGeo = buildStarburstPolygonGeometry(4, 34, 4.5);
     const outerMat = new THREE.MeshBasicMaterial({
-      color: pal.mid.clone().multiplyScalar(1.45),
+      color: pal.mid.clone().multiplyScalar(1.35),
       transparent: true,
       opacity: 0.92,
       blending: THREE.AdditiveBlending,
@@ -1741,7 +2325,7 @@ export class WebglDemonSlayerVfxOverlay {
 
     const coreGeo = buildStarburstPolygonGeometry(4, 22, 3.2);
     const coreMat = new THREE.MeshBasicMaterial({
-      color: pal.core.clone().multiplyScalar(1.8),
+      color: pal.core.clone().multiplyScalar(1.5),
       transparent: true,
       opacity: 0.98,
       blending: THREE.AdditiveBlending,
@@ -1769,9 +2353,11 @@ export class WebglDemonSlayerVfxOverlay {
     });
   }
 
-  /**
-   * Sanemi Wind Breathing: Layered Emerald Razor Gale Crescents + Flying Pitch-Black Sumi-e Ink Shards!
-   */
+  // ============================================================================
+  // ELEMENT 3: VAYU — SANEMI TRIPLE-LAYERED RAZOR EMERALD GALE CRESCENTS + INK SHARDS
+  // Dramatically enlarged, aggressive silhouette wrapping behind & in front of Rudra!
+  // ============================================================================
+
   public spawnWindGaleCrescents(opts: {
     x: number;
     y: number;
@@ -1786,83 +2372,119 @@ export class WebglDemonSlayerVfxOverlay {
     }
 
     const pal = RIBBON_PALETTES.wind;
-    const radius = opts.radius ?? 190;
-    const group = new THREE.Group();
+    const windTex = pickAtlasTextureForPalette(this.atlas, 'wind');
+    const radius = (opts.radius ?? 230) * 1.38;
+    const frontGroup = new THREE.Group();
+    const backGroup = new THREE.Group();
     const ribbonMats: THREE.ShaderMaterial[] = [];
     const geos: THREE.BufferGeometry[] = [];
-    const shardMats: THREE.MeshBasicMaterial[] = [];
-    const shardMeshes: ActiveWindGale['shardMeshes'] = [];
 
-    for (let i = 0; i < 3; i++) {
-      const r = radius * (0.72 + i * 0.22);
-      const w = 54 + i * 16;
+    // 1. Massive emerald wind-blade crescent sweeping BEHIND Rudra's shoulders!
+    const backGeo = buildCurvedRibbonGeometry(radius * 1.04, 114, 2.95, -1, 38);
+    const backMat = createRibbonMaterial(
+      pal,
+      3.0,
+      0.96,
+      true,
+      THREE.NormalBlending,
+      1.42,
+      windTex,
+      1.75,
+      2.65
+    );
+    const backMesh = new THREE.Mesh(backGeo, backMat);
+    backMesh.rotation.set(0.56, 0.26, -opts.angle + Math.PI * 0.65);
+    backGroup.add(backMesh);
+    geos.push(backGeo);
+    ribbonMats.push(backMat);
+
+    // 2. Quad-layered full-arena razor emerald vacuum crescents with pitch-black sumi-e ink tears!
+    for (let i = 0; i < 4; i++) {
+      const r = radius * (0.68 + i * 0.22);
+      const w = 94 + i * 16;
       const dir: 1 | -1 = i % 2 === 0 ? 1 : -1;
-      const geo = buildCurvedRibbonGeometry(r, w, 2.65 + i * 0.28, dir, 26);
-      const mat = createRibbonMaterial(pal, 3.0, 0.96 - i * 0.08, true, THREE.NormalBlending, 1.85);
-      const glowMat = createRibbonMaterial(pal, 3.0, 0.62, false, THREE.AdditiveBlending, 2.0);
+      const geo = buildCurvedRibbonGeometry(r, w, 2.68 + i * 0.22, dir, 38);
+      const mat = createRibbonMaterial(
+        pal,
+        3.0,
+        0.99 - i * 0.04,
+        true,
+        THREE.NormalBlending,
+        1.68,
+        windTex,
+        1.65 + i * 0.24,
+        2.9 + i * 0.42
+      );
+      const glowMat = createRibbonMaterial(
+        pal,
+        3.0,
+        0.48,
+        false,
+        THREE.AdditiveBlending,
+        1.74,
+        windTex,
+        1.65 + i * 0.24,
+        2.9 + i * 0.42
+      );
 
       const m = new THREE.Mesh(geo, mat);
-      m.rotation.set(0.55 + i * 0.18, (i - 1) * 0.28, -opts.angle + (i - 1) * 0.45);
+      m.rotation.set(0.46 + i * 0.12, (i - 1.5) * 0.22, -opts.angle + (i - 1.5) * 0.38);
+      m.position.z = i * 4;
       const gm = new THREE.Mesh(geo, glowMat);
       gm.rotation.copy(m.rotation);
-      gm.position.z = 3;
-      group.add(m, gm);
+      gm.position.z = i * 4 + 2;
+      frontGroup.add(m, gm);
 
       geos.push(geo);
       ribbonMats.push(mat, glowMat);
     }
 
-    // Subtle brush-ink wisps support the green blades without opaque black triangles
-    // obscuring Rudra, weapon contact, or enemies.
-    const shardGeo = new THREE.BufferGeometry();
-    shardGeo.setAttribute(
-      'position',
-      new THREE.Float32BufferAttribute([0, 13, 0, -4.5, -9, 0, 7, -4, 0], 3)
-    );
-    geos.push(shardGeo);
-    const inkShardMat = new THREE.MeshBasicMaterial({
-      color: 0x10271f,
-      transparent: true,
-      opacity: 0.66,
-      side: THREE.DoubleSide,
-      depthWrite: false,
-    });
-    shardMats.push(inkShardMat);
+    this.backScene.add(backGroup);
+    this.scene.add(frontGroup);
 
-    for (let s = 0; s < 9; s++) {
-      const a = -opts.angle + (s / 9) * Math.PI * 2;
-      const dist = radius * (0.35 + (s % 4) * 0.18);
-      const mesh = new THREE.Mesh(shardGeo, inkShardMat);
-      mesh.position.set(Math.cos(a) * dist, Math.sin(a) * dist * 0.7, 18);
-      const sc = 0.48 + (s % 3) * 0.16;
-      mesh.scale.set(sc * 1.12, sc, 1);
-      mesh.rotation.z = a;
-      group.add(mesh);
-      shardMeshes.push({
-        mesh,
-        vx: Math.cos(a) * (220 + (s % 4) * 55),
-        vy: Math.sin(a) * (160 + (s % 4) * 40),
-        spin: (s % 2 === 0 ? 1 : -1) * (5.2 + s * 0.32),
-      });
-    }
-
-    this.scene.add(group);
     this.windGales.push({
-      group,
+      frontGroup,
+      backGroup,
       ribbonMats,
-      shardMeshes,
       geos,
-      shardMats,
       worldX: opts.x,
       worldY: opts.y,
       angle: opts.angle,
       life: 0,
-      maxLife: opts.duration ?? 0.68,
+      maxLife: opts.duration ?? 0.72,
+    });
+
+    // Emerald ground dust shear ring + blazing floor light bounce
+    this.spawnGroundLightBounce({
+      x: opts.x,
+      y: opts.y + 22,
+      radius: radius * 1.24,
+      palette: 'wind',
+      duration: 0.62,
+      intensity: 1.18,
+    });
+
+    // Flying pitch-black sumi-e ink wind-shards + razor emerald-white tear needles!
+    this.spawnElementalParticles({
+      x: opts.x,
+      y: opts.y,
+      count: 24,
+      speed: 560,
+      palette: 'wind',
+      kind: 'wind_shard',
+    });
+    this.spawnElementalParticles({
+      x: opts.x,
+      y: opts.y,
+      count: 26,
+      speed: 660,
+      palette: 'wind',
+      kind: 'spark_needle',
     });
   }
 
   /**
-   * Akaza Destructive Death: Compass Needle — 12-Point Glowing Snowflake Floor Mandala + Vertical Light Columns!
+   * Akaza Destructive Death: Compass Needle — 12-Point Glowing Snowflake Floor Mandala + Light Columns
    */
   public spawnCompassMandala(opts: {
     x: number;
@@ -1901,11 +2523,10 @@ export class WebglDemonSlayerVfxOverlay {
     const planeGeo = new THREE.PlaneGeometry(radius * 2, radius * 2);
     geos.push(planeGeo);
     const floorDisc = new THREE.Mesh(planeGeo, mandalaMat);
-    floorDisc.scale.set(1, 0.58, 1); // Isometric floor perspective
+    floorDisc.scale.set(1, 0.58, 1);
     floorDisc.position.z = -12;
     group.add(floorDisc);
 
-    // 6 soft-feathered rising volumetric Akaza light mist columns (zero hard rectangular edges!)
     const beamGeo = new THREE.PlaneGeometry(54, radius * 1.05);
     geos.push(beamGeo);
     const beamMat = new THREE.ShaderMaterial({
@@ -1933,7 +2554,6 @@ export class WebglDemonSlayerVfxOverlay {
       group.add(beam);
     }
 
-    // Add to floorScene so Bosses & Rudra stand ON TOP of the glowing Akaza mandala!
     this.floorScene.add(group);
     this.mandalas.push({
       group,
@@ -1949,7 +2569,7 @@ export class WebglDemonSlayerVfxOverlay {
   }
 
   /**
-   * Rui Lower Five: 3D Crisscrossing Crimson Blood Thread Cage snapping taut across the arena!
+   * Rui Lower Five: 3D Crisscrossing Crimson Blood Thread Cage
    */
   public spawnBloodThreadCage(opts: {
     x: number;
@@ -1979,14 +2599,14 @@ export class WebglDemonSlayerVfxOverlay {
       depthWrite: false,
     });
     const threadMat = new THREE.MeshBasicMaterial({
-      color: pal.mid.clone().multiplyScalar(2.1),
+      color: pal.mid.clone().multiplyScalar(1.85),
       transparent: true,
       opacity: 0.95,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     });
     const coreMat = new THREE.MeshBasicMaterial({
-      color: pal.core.clone().multiplyScalar(2.2),
+      color: pal.core.clone().multiplyScalar(1.9),
       transparent: true,
       opacity: 0.85,
       blending: THREE.AdditiveBlending,
@@ -2039,7 +2659,8 @@ export class WebglDemonSlayerVfxOverlay {
   }
 
   /**
-   * 6-Point Anime Weapon Clash & Perfect Parry Starburst!
+   * Ufotable Anamorphic Weapon-Clash & Perfect Parry Cross-Flare!
+   * Sleek razor lens needles + pitch-black sumi-e diamond core (zero clipart asterisk!).
    */
   public spawnClashStarburst(opts: {
     x: number;
@@ -2058,10 +2679,10 @@ export class WebglDemonSlayerVfxOverlay {
     const group = new THREE.Group();
     const mats: THREE.MeshBasicMaterial[] = [];
     const geos: THREE.BufferGeometry[] = [];
-    const rot = 0.24 + (this.elapsed * 3.1) % 0.7;
+    const rot = ((this.elapsed * 2.7) % 0.5) - 0.25;
 
-    // 1. Pitch-black Sumi-e outer ink silhouette (crisp ufotable anime comic starburst)
-    const inkGeo = buildStarburstPolygonGeometry(8, 62, 13);
+    // 1. Crisp pitch-black Sumi-e 4-point diamond ink core
+    const inkGeo = buildStarburstPolygonGeometry(4, 52, 8);
     const inkMat = new THREE.MeshBasicMaterial({
       color: 0x09080f,
       transparent: true,
@@ -2074,37 +2695,45 @@ export class WebglDemonSlayerVfxOverlay {
     inkMesh.rotation.z = rot;
     inkMesh.position.z = 24;
 
-    // 2. Vibrant elemental mid-corona starburst
-    const midGeo = buildStarburstPolygonGeometry(8, 54, 11);
+    // 2. Wide tapered diamond anamorphic horizontal & counter-diagonal saturated elemental flare needles
+    const beamHGeo = buildTaperedDiamondLensFlareGeometry(250, 22);
+    const beamDGeo = buildTaperedDiamondLensFlareGeometry(156, 14);
     const midMat = new THREE.MeshBasicMaterial({
-      color: pal.mid.clone().multiplyScalar(1.6),
+      color: pal.mid.clone().multiplyScalar(1.65),
       transparent: true,
-      opacity: 0.96,
-      blending: THREE.NormalBlending,
-      depthWrite: false,
-      side: THREE.DoubleSide,
-    });
-    const midMesh = new THREE.Mesh(midGeo, midMat);
-    midMesh.rotation.z = rot;
-    midMesh.position.z = 25;
-
-    // 3. Blistering white-hot inner needle core
-    const coreGeo = buildStarburstPolygonGeometry(8, 36, 8);
-    const coreMat = new THREE.MeshBasicMaterial({
-      color: pal.core.clone().multiplyScalar(1.85),
-      transparent: true,
-      opacity: 0.98,
+      opacity: 0.92,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
       side: THREE.DoubleSide,
     });
-    const coreMesh = new THREE.Mesh(coreGeo, coreMat);
-    coreMesh.rotation.z = rot;
-    coreMesh.position.z = 26;
+    const beamH = new THREE.Mesh(beamHGeo, midMat);
+    beamH.rotation.z = rot;
+    beamH.position.z = 25;
+    const beamD = new THREE.Mesh(beamDGeo, midMat);
+    beamD.rotation.z = rot + 1.18;
+    beamD.position.z = 25;
 
-    group.add(inkMesh, midMesh, coreMesh);
+    // 3. Blinding white-hot razor diamond needle core (pinpoint tips!)
+    const coreHGeo = buildTaperedDiamondLensFlareGeometry(216, 7);
+    const coreVGeo = buildTaperedDiamondLensFlareGeometry(118, 6);
+    const coreMat = new THREE.MeshBasicMaterial({
+      color: pal.core.clone().multiplyScalar(1.85),
+      transparent: true,
+      opacity: 1.0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    const coreH = new THREE.Mesh(coreHGeo, coreMat);
+    coreH.rotation.z = rot;
+    coreH.position.z = 26;
+    const coreV = new THREE.Mesh(coreVGeo, coreMat);
+    coreV.rotation.z = rot + 1.18;
+    coreV.position.z = 26;
+
+    group.add(inkMesh, beamH, beamD, coreH, coreV);
     mats.push(inkMat, midMat, coreMat);
-    geos.push(inkGeo, midGeo, coreGeo);
+    geos.push(inkGeo, beamHGeo, beamDGeo, coreHGeo, coreVGeo);
 
     this.scene.add(group);
     this.starbursts.push({
@@ -2113,14 +2742,113 @@ export class WebglDemonSlayerVfxOverlay {
       geos,
       worldX: opts.x,
       worldY: opts.y,
-      maxScale: opts.scale ?? 1.15,
+      maxScale: opts.scale ?? 1.28,
       life: 0,
       maxLife: opts.duration ?? 0.24,
     });
   }
 
   /**
-   * From-scratch Ufotable Sumi-e Cel Ground Shockwave Ring (replaces legacy PNG flipbook shockwaves!)
+   * Two-Sided Boss Warfare: Gyutaro-style Crimson-and-Black Serrated Blood Demon Art Sickles!
+   */
+  public spawnBloodDemonSlash(opts: {
+    x: number;
+    y: number;
+    angle: number;
+    radius?: number;
+    duration?: number;
+  }): void {
+    if (!this.renderer || this.disposed) return;
+    const radius = opts.radius ?? 235;
+    const dur = opts.duration ?? 0.48;
+    this.spawnSlashRibbon({
+      x: opts.x,
+      y: opts.y - 22,
+      angle: opts.angle,
+      radius,
+      width: 98,
+      arcSpan: 2.95,
+      direction: 1,
+      palette: 'blood',
+      duration: dur,
+      withBackWrap: true,
+    });
+    this.spawnSlashRibbon({
+      x: opts.x,
+      y: opts.y - 16,
+      angle: opts.angle + 0.35,
+      radius: radius * 0.84,
+      width: 72,
+      arcSpan: 2.45,
+      direction: -1,
+      palette: 'void',
+      duration: dur * 0.9,
+      withBackWrap: false,
+    });
+    this.spawnGroundLightBounce({
+      x: opts.x,
+      y: opts.y + 12,
+      radius: radius * 1.3,
+      palette: 'blood',
+      duration: dur * 1.15,
+      intensity: 1.22,
+    });
+    this.spawnElementalParticles({
+      x: opts.x,
+      y: opts.y - 18,
+      count: 24,
+      speed: 560,
+      palette: 'blood',
+      kind: 'spark_needle',
+    });
+  }
+
+  /**
+   * Two-Sided Boss Warfare: Akaza-style Destructive Death Electric-Cyan Shockwave Burst!
+   */
+  public spawnAkazaShockwavePulse(opts: {
+    x: number;
+    y: number;
+    radius?: number;
+    duration?: number;
+  }): void {
+    if (!this.renderer || this.disposed) return;
+    const radius = opts.radius ?? 240;
+    const dur = opts.duration ?? 0.46;
+    this.spawnShockwaveRing({
+      x: opts.x,
+      y: opts.y + 8,
+      radius,
+      palette: 'bronze',
+      duration: dur,
+    });
+    this.spawnClashStarburst({
+      x: opts.x,
+      y: opts.y - 24,
+      scale: 1.5,
+      palette: 'bronze',
+      duration: 0.28,
+    });
+    this.spawnGroundLightBounce({
+      x: opts.x,
+      y: opts.y + 12,
+      radius: radius * 1.38,
+      palette: 'bronze',
+      duration: dur * 1.2,
+      intensity: 1.32,
+    });
+    this.spawnElementalParticles({
+      x: opts.x,
+      y: opts.y - 18,
+      count: 26,
+      speed: 600,
+      palette: 'bronze',
+      kind: 'spark_needle',
+    });
+  }
+
+  /**
+   * Ufotable Sumi-e Cel Ground Shockwave Ring + Companion Ground Light Bounce!
    */
   public spawnShockwaveRing(opts: {
     x: number;
@@ -2130,22 +2858,43 @@ export class WebglDemonSlayerVfxOverlay {
     duration?: number;
   }): void {
     if (!this.renderer || this.disposed) return;
-    if (this.shockwaveRings.length >= 12) {
+    if (this.shockwaveRings.length >= 10) {
       const oldest = this.shockwaveRings.shift();
       if (oldest) this.disposeShockwaveRing(oldest);
     }
     const palette = opts.palette ?? 'hinokami';
     const pal = RIBBON_PALETTES[palette];
     const mode = paletteModeIndex(palette);
-    const radius = opts.radius ?? 140;
+    const atlasTex = pickAtlasTextureForPalette(this.atlas, palette);
+    const radius = opts.radius ?? 145;
 
-    const inkGeo = buildCurvedRibbonGeometry(radius, 34, Math.PI * 1.98, 1, 28);
-    const coreGeo = buildCurvedRibbonGeometry(radius, 24, Math.PI * 1.98, 1, 28);
-    const inkMat = createRibbonMaterial(pal, mode, 0.88, true, THREE.NormalBlending, 0.25);
+    // Always pair with elemental ground light bounce so the arena floor lights up!
+    this.spawnGroundLightBounce({
+      x: opts.x,
+      y: opts.y,
+      radius: radius * 1.18,
+      palette,
+      duration: (opts.duration ?? 0.38) * 1.15,
+      intensity: 0.85,
+    });
+
+    const inkGeo = buildCurvedRibbonGeometry(radius, 36, Math.PI * 1.96, 1, 30);
+    const coreGeo = buildCurvedRibbonGeometry(radius, 28, Math.PI * 1.96, 1, 30);
+    const inkMat = createRibbonMaterial(pal, mode, 0.82, true, THREE.NormalBlending, 0.25, null);
     inkMat.uniforms.uCoreColor.value.copy(pal.ink);
     inkMat.uniforms.uMidColor.value.copy(pal.ink);
     inkMat.uniforms.uEdgeColor.value.copy(pal.ink);
-    const coreMat = createRibbonMaterial(pal, mode, 0.96, true, THREE.NormalBlending, 1.95);
+    const coreMat = createRibbonMaterial(
+      pal,
+      mode,
+      0.96,
+      true,
+      THREE.NormalBlending,
+      1.32,
+      atlasTex,
+      2.0,
+      1.6
+    );
 
     const group = new THREE.Group();
     const inkMesh = new THREE.Mesh(inkGeo, inkMat);
@@ -2162,7 +2911,7 @@ export class WebglDemonSlayerVfxOverlay {
       worldX: opts.x,
       worldY: opts.y,
       life: 0,
-      maxLife: opts.duration ?? 0.36,
+      maxLife: opts.duration ?? 0.38,
     });
   }
 
@@ -2175,7 +2924,7 @@ export class WebglDemonSlayerVfxOverlay {
     ringCount?: number;
   }): void {
     if (!this.renderer || this.disposed) return;
-    if (this.cyclones.length >= 8) {
+    if (this.cyclones.length >= 6) {
       const oldest = this.cyclones.shift();
       if (oldest) this.disposeCyclone(oldest);
     }
@@ -2183,14 +2932,25 @@ export class WebglDemonSlayerVfxOverlay {
     const palette = opts.palette ?? 'wind';
     const pal = RIBBON_PALETTES[palette];
     const mode = paletteModeIndex(palette);
-    const maxRadius = opts.radius ?? 210;
+    const atlasTex = pickAtlasTextureForPalette(this.atlas, palette);
+    const maxRadius = opts.radius ?? 215;
     const count = Math.max(2, Math.min(4, opts.ringCount ?? 3));
 
     const group = new THREE.Group();
     const rings: ActiveWebglCyclone['rings'] = [];
     for (let i = 0; i < count; i++) {
-      const torus = new THREE.TorusGeometry(maxRadius * (0.58 + i * 0.22), 20 + i * 6, 8, 36);
-      const mat = createRibbonMaterial(pal, mode, 0.92 - i * 0.1, i === 0, THREE.AdditiveBlending, 1.9);
+      const torus = new THREE.TorusGeometry(maxRadius * (0.58 + i * 0.22), 24 + i * 7, 8, 36);
+      const mat = createRibbonMaterial(
+        pal,
+        mode,
+        0.94 - i * 0.08,
+        true,
+        THREE.NormalBlending,
+        1.32,
+        atlasTex,
+        2.0,
+        2.2
+      );
       const mesh = new THREE.Mesh(torus, mat);
       mesh.rotation.set(0.88 + i * 0.18, (i - 1) * 0.35, i * 1.1);
       group.add(mesh);
@@ -2209,9 +2969,130 @@ export class WebglDemonSlayerVfxOverlay {
       worldX: opts.x,
       worldY: opts.y,
       life: 0,
-      maxLife: opts.duration ?? 0.56,
+      maxLife: opts.duration ?? 0.58,
       maxRadius,
     });
+  }
+
+  // ============================================================================
+  // POOLED INSTANCED ELEMENTAL PARTICLES (ZERO PER-SPARK ALLOCATIONS!)
+  // ============================================================================
+
+  public spawnElementalParticles(opts: {
+    x: number;
+    y: number;
+    count?: number;
+    speed?: number;
+    palette?: DemonSlayerVfxPalette;
+    kind?: ElementalParticleKind;
+    angle?: number;
+    spread?: number;
+  }): void {
+    if (!this.renderer || this.disposed || this.particleSlots.length === 0) return;
+
+    const palette = opts.palette ?? 'hinokami';
+    const pal = RIBBON_PALETTES[palette];
+    const kind: ElementalParticleKind =
+      opts.kind ??
+      (palette === 'water'
+        ? 'water_droplet'
+        : palette === 'wind'
+          ? 'wind_shard'
+          : 'spark_needle');
+    const maxCap = QUALITY_PARTICLE_CAP[this.qualityPreset];
+    const desired = Math.min(34, Math.max(1, Math.round(opts.count ?? 14)));
+    const baseSpeed = opts.speed ?? 400;
+
+    let spawned = 0;
+    for (let i = 0; i < maxCap && spawned < desired; i++) {
+      const slot = this.particleSlots[i];
+      if (slot.active) continue;
+
+      const ang =
+        opts.angle !== undefined
+          ? opts.angle + (Math.random() - 0.5) * (opts.spread ?? 1.4)
+          : (spawned / desired) * Math.PI * 2 + (Math.random() - 0.5) * 0.45;
+      const spd = baseSpeed * (0.52 + Math.random() * 0.88);
+
+      slot.active = true;
+      slot.kind = kind;
+      slot.worldX = opts.x + (Math.random() - 0.5) * 14;
+      slot.worldY = opts.y + (Math.random() - 0.5) * 10;
+      slot.vx = Math.cos(ang) * spd;
+      slot.vy = Math.sin(ang) * spd * 0.72;
+      slot.z = 10 + Math.random() * 14;
+      slot.vz =
+        kind === 'rock_shard'
+          ? 180 + Math.random() * 200
+          : kind === 'soot_flake'
+            ? 85 + Math.random() * 140
+            : 100 + Math.random() * 160;
+      slot.gravity =
+        kind === 'rock_shard'
+          ? 680
+          : kind === 'water_droplet'
+            ? 520
+            : kind === 'soot_flake'
+              ? 65
+              : 240;
+      slot.drag = kind === 'rock_shard' ? 1.8 : kind === 'soot_flake' ? 2.1 : 2.8;
+      slot.rot = -ang;
+      slot.rotSpeed =
+        kind === 'rock_shard' || kind === 'wind_shard' || kind === 'soot_flake'
+          ? (Math.random() > 0.5 ? 1 : -1) * (5 + Math.random() * 8)
+          : 0;
+      slot.alignToVelocity = kind === 'spark_needle' || kind === 'water_droplet';
+      slot.life = 0;
+
+      if (kind === 'water_droplet') {
+        const s = 14 + Math.random() * 13;
+        slot.scaleX = s;
+        slot.scaleY = s * 1.28;
+        slot.maxLife = 0.36 + Math.random() * 0.26;
+        const c = spawned % 2 === 0 ? pal.core : pal.mid;
+        slot.r = c.r * 1.15;
+        slot.g = c.g * 1.15;
+        slot.b = c.b * 1.15;
+      } else if (kind === 'soot_flake') {
+        const s = 12 + Math.random() * 16;
+        slot.scaleX = s * 1.22;
+        slot.scaleY = s * 0.72;
+        slot.maxLife = 0.52 + Math.random() * 0.36;
+        // Dark volcanic charcoal soot flakes contrasting against blazing Hinokami flames!
+        slot.r = 0.11;
+        slot.g = 0.06;
+        slot.b = 0.06;
+      } else if (kind === 'rock_shard') {
+        const s = 14 + Math.random() * 15;
+        slot.scaleX = s;
+        slot.scaleY = s * 0.84;
+        slot.maxLife = 0.40 + Math.random() * 0.26;
+        // Slate stone shards with subtle golden-electric rim tint
+        slot.r = 0.85;
+        slot.g = 0.82;
+        slot.b = 0.74;
+      } else if (kind === 'wind_shard') {
+        const s = 18 + Math.random() * 14;
+        slot.scaleX = s * 1.45;
+        slot.scaleY = s * 0.58;
+        slot.maxLife = 0.32 + Math.random() * 0.22;
+        // Pitch-black sumi-e & dark jade wind tear shards!
+        slot.r = spawned % 3 === 0 ? 0.16 : 0.06;
+        slot.g = spawned % 3 === 0 ? 0.96 : 0.14;
+        slot.b = spawned % 3 === 0 ? 0.55 : 0.10;
+      } else {
+        // Long high-velocity Ufotable horizontal/radial blazing ember streak needle!
+        slot.scaleX = 40 + Math.random() * 38;
+        slot.scaleY = 6.5 + Math.random() * 3.0;
+        slot.maxLife = 0.24 + Math.random() * 0.24;
+        const c = spawned % 3 === 0 ? pal.core : pal.mid;
+        slot.r = c.r * 1.45;
+        slot.g = c.g * 1.45;
+        slot.b = c.b * 1.45;
+      }
+
+      spawned++;
+    }
   }
 
   public spawnSparkBurst(opts: {
@@ -2221,70 +3102,74 @@ export class WebglDemonSlayerVfxOverlay {
     speed?: number;
     palette?: DemonSlayerVfxPalette;
   }): void {
-    if (!this.renderer || this.disposed) return;
-    const pal = RIBBON_PALETTES[opts.palette ?? 'hinokami'];
-    const count = Math.min(28, opts.count ?? 14);
-    for (let i = 0; i < count; i++) {
-      if (this.sparks.length >= 110) {
-        const oldest = this.sparks.shift();
-        if (oldest) {
-          this.scene.remove(oldest.mesh);
-          oldest.mesh.material.dispose();
-        }
-      }
-      const ang = (i / count) * Math.PI * 2 + (Math.random() - 0.5) * 0.5;
-      const spd = (opts.speed ?? 380) * (0.55 + Math.random() * 0.85);
-      const mat = new THREE.MeshBasicMaterial({
-        color: (i % 3 === 0 ? pal.core : pal.mid).clone().multiplyScalar(1.9),
-        transparent: true,
-        opacity: 0.95,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-      });
-      const mesh = new THREE.Mesh(this.sparkGeo, mat);
-      mesh.scale.set(22 + Math.random() * 18, 4.2, 1);
-      mesh.rotation.z = -ang;
-      this.scene.add(mesh);
-      this.sparks.push({
-        mesh,
-        worldX: opts.x,
-        worldY: opts.y,
-        vx: Math.cos(ang) * spd,
-        vy: Math.sin(ang) * spd * 0.72,
-        vz: 90 + Math.random() * 140,
-        z: 10,
-        life: 0,
-        maxLife: 0.22 + Math.random() * 0.22,
-      });
-    }
+    const palette = opts.palette ?? 'hinokami';
+    const kind: ElementalParticleKind =
+      palette === 'water' ? 'water_droplet' : 'spark_needle';
+    this.spawnElementalParticles({
+      x: opts.x,
+      y: opts.y,
+      count: opts.count ?? 14,
+      speed: opts.speed ?? 410,
+      palette,
+      kind,
+    });
   }
 
   public hasActiveFloorEffects(): boolean {
-    return this.mandalas.length > 0 || this.shockwaveRings.length > 0;
+    return (
+      this.mandalas.length > 0 ||
+      this.shockwaveRings.length > 0 ||
+      this.groundBounces.length > 0
+    );
+  }
+
+  public hasActiveBackEffects(): boolean {
+    if (
+      this.solarWheels.length > 0 ||
+      this.waterDragons.length > 0 ||
+      this.windGales.length > 0
+    ) {
+      return true;
+    }
+    for (let i = 0; i < this.bladeTrailPool.length; i++) {
+      if (this.bladeTrailPool[i].active) return true;
+    }
+    for (let i = 0; i < this.ribbons.length; i++) {
+      if (this.ribbons[i].backGroup) return true;
+    }
+    return false;
   }
 
   public hasActiveForegroundEffects(): boolean {
-    return (
+    if (
       this.ribbons.length > 0 ||
       this.cyclones.length > 0 ||
-      this.sparks.length > 0 ||
       this.solarWheels.length > 0 ||
       this.waterDragons.length > 0 ||
       this.thunderBolts.length > 0 ||
       this.windGales.length > 0 ||
       this.bloodCages.length > 0 ||
       this.starbursts.length > 0
-    );
+    ) {
+      return true;
+    }
+    for (let i = 0; i < this.bladeTrailPool.length; i++) {
+      if (this.bladeTrailPool[i].active) return true;
+    }
+    for (let i = 0; i < this.particleSlots.length; i++) {
+      if (this.particleSlots[i].active) return true;
+    }
+    return false;
   }
 
   public hasActiveEffects(): boolean {
-    return this.hasActiveFloorEffects() || this.hasActiveForegroundEffects();
+    return (
+      this.hasActiveFloorEffects() ||
+      this.hasActiveBackEffects() ||
+      this.hasActiveForegroundEffects()
+    );
   }
 
-  /**
-   * Returns a subtle cinema contrast dim factor [0..0.18] while a Major Breathing Ultimate
-   * (Solar Flame Wheel, Water Dragon, Wind Gale, or Thunderclap) peaks so the element pops cleanly.
-   */
   public getUltimateSpotlightAlpha(): number {
     let peak = 0;
     const scoreList = (items: Array<{ life: number; maxLife: number }>, weight: number) => {
@@ -2301,10 +3186,10 @@ export class WebglDemonSlayerVfxOverlay {
     return Math.min(0.18, peak);
   }
 
-  /**
-   * Renders Floor-Layer VFX (Akaza 12-Point Snowflake Compass Mandalas & Sumi-e Ground Shockwave Rings)
-   * into `this.floorCanvas` BEFORE characters/bosses are drawn so actors stand ON TOP of the floor VFX!
-   */
+  // ============================================================================
+  // PASS 1: FLOOR LAYER (DRAWN ON TOP OF MP4 ARENA, UNDERNEATH ALL ACTORS)
+  // ============================================================================
+
   public updateAndRenderFloorPass(
     dt: number,
     camX: number,
@@ -2321,7 +3206,25 @@ export class WebglDemonSlayerVfxOverlay {
     const toScreenX = (wx: number) => (wx - camX - cw * 0.5) * zoom;
     const toScreenY = (wy: number) => -((wy - camY - ch * 0.5) * zoom);
 
-    // Akaza 12-Point Compass Needle Floor Mandalas
+    // 1. Elemental Ground Light Bounce Pools & Cracks
+    for (let i = this.groundBounces.length - 1; i >= 0; i--) {
+      const gb = this.groundBounces[i];
+      gb.life += dt;
+      const norm = gb.life / Math.max(0.01, gb.maxLife);
+      if (norm >= 1) {
+        this.floorScene.remove(gb.mesh);
+        gb.mesh.material.dispose();
+        this.groundBounces.splice(i, 1);
+        continue;
+      }
+      const expand = zoom * gb.radius * (0.72 + Math.sin(Math.min(1, norm * 1.4) * Math.PI * 0.5) * 0.36);
+      gb.mesh.position.set(toScreenX(gb.worldX), toScreenY(gb.worldY), -14);
+      gb.mesh.scale.set(expand, expand * 0.56, 1);
+      gb.mesh.material.uniforms.uTime.value = floorTime;
+      gb.mesh.material.uniforms.uLife.value = norm;
+    }
+
+    // 2. Akaza 12-Point Compass Needle Floor Mandalas
     for (let i = this.mandalas.length - 1; i >= 0; i--) {
       const m = this.mandalas[i];
       m.life += dt;
@@ -2342,7 +3245,7 @@ export class WebglDemonSlayerVfxOverlay {
       m.beamMat.uniforms.uOpacity.value = 0.52 * fadeIn * fadeOut;
     }
 
-    // Sumi-e Cel Ground Shockwave Rings
+    // 3. Sumi-e Cel Ground Shockwave Rings
     for (let i = this.shockwaveRings.length - 1; i >= 0; i--) {
       const sr = this.shockwaveRings[i];
       sr.life += dt;
@@ -2372,6 +3275,84 @@ export class WebglDemonSlayerVfxOverlay {
     return true;
   }
 
+  // ============================================================================
+  // PASS 2: BACK-DEPTH LAYER (DRAWN IMMEDIATELY BEFORE RUDRA SO RIBBONS WRAP BEHIND HIM!)
+  // ============================================================================
+
+  public updateAndRenderBackPass(
+    camX: number,
+    camY: number,
+    zoom: number,
+    cw: number,
+    ch: number
+  ): boolean {
+    if (!this.renderer || !this.backCtx || this.disposed) return false;
+    this.resize(cw, ch);
+    if (!this.hasActiveBackEffects()) return false;
+
+    const toScreenX = (wx: number) => (wx - camX - cw * 0.5) * zoom;
+    const toScreenY = (wy: number) => -((wy - camY - ch * 0.5) * zoom);
+    const originX = (-camX - cw * 0.5) * zoom;
+    const originY = -((-camY - ch * 0.5) * zoom);
+
+    // Position pooled blade trails (world coordinates stored directly in vertices!)
+    for (let i = 0; i < this.bladeTrailPool.length; i++) {
+      const slot = this.bladeTrailPool[i];
+      if (!slot.active) continue;
+      slot.backGroup.position.set(originX, originY, -6);
+      slot.backGroup.scale.set(zoom, zoom, 1);
+      slot.backMat.uniforms.uTime.value = this.elapsed;
+    }
+
+    // Position back-wrapping sweeps of ribbons, Agni wheels, Varuna wakes, Vayu gales
+    for (let i = 0; i < this.ribbons.length; i++) {
+      const r = this.ribbons[i];
+      if (!r.backGroup) continue;
+      const norm = r.life / Math.max(0.01, r.maxLife);
+      const s = zoom * (0.9 + norm * 0.24) * r.scale;
+      r.backGroup.position.set(toScreenX(r.worldX), toScreenY(r.worldY), -8);
+      r.backGroup.scale.set(s, s, s);
+      r.backGroup.rotation.set(r.tiltX, r.tiltY, r.baseRotZ - r.spinRate * r.life);
+    }
+
+    for (let i = 0; i < this.solarWheels.length; i++) {
+      const w = this.solarWheels[i];
+      const norm = w.life / Math.max(0.01, w.maxLife);
+      const expand = zoom * (0.78 + Math.sin(Math.min(1, norm * 1.25) * Math.PI * 0.5) * 0.42);
+      w.backGroup.position.set(toScreenX(w.worldX), toScreenY(w.worldY), -8);
+      w.backGroup.scale.set(expand, expand * 0.84, expand);
+      w.backGroup.rotation.z = w.baseAngle + w.spinRate * 0.65 * w.life;
+    }
+
+    for (let i = 0; i < this.waterDragons.length; i++) {
+      const d = this.waterDragons[i];
+      const norm = d.life / Math.max(0.01, d.maxLife);
+      const grow = zoom * (0.72 + Math.sin(Math.min(1, norm * 1.35) * Math.PI * 0.5) * 0.46);
+      d.backGroup.position.set(toScreenX(d.worldX), toScreenY(d.worldY), -8);
+      d.backGroup.scale.set(grow, grow, grow);
+      d.backGroup.rotation.z = -d.angle + norm * 1.4;
+    }
+
+    for (let i = 0; i < this.windGales.length; i++) {
+      const g = this.windGales[i];
+      const norm = g.life / Math.max(0.01, g.maxLife);
+      const expand = zoom * (0.76 + norm * 0.44);
+      g.backGroup.position.set(toScreenX(g.worldX), toScreenY(g.worldY), -8);
+      g.backGroup.scale.set(expand, expand, expand);
+    }
+
+    this.renderer.setClearColor(0x000000, 0);
+    this.renderer.clear();
+    this.renderer.render(this.backScene, this.camera);
+    this.backCtx.clearRect(0, 0, this.backCanvas.width, this.backCanvas.height);
+    this.backCtx.drawImage(this.canvas, 0, 0, this.backCanvas.width, this.backCanvas.height);
+    return true;
+  }
+
+  // ============================================================================
+  // PASS 3 & 4: FRONT-DEPTH LAYER + SELECTIVE HDR BLOOM (DRAWN AFTER ACTORS)
+  // ============================================================================
+
   public updateAndRender(
     dt: number,
     camX: number,
@@ -2391,6 +3372,47 @@ export class WebglDemonSlayerVfxOverlay {
     this.elapsed += dt;
     const toScreenX = (wx: number) => (wx - camX - cw * 0.5) * zoom;
     const toScreenY = (wy: number) => -((wy - camY - ch * 0.5) * zoom);
+    const originX = (-camX - cw * 0.5) * zoom;
+    const originY = -((-camY - ch * 0.5) * zoom);
+
+    // 0. Live Pooled Swept Blade-Trail Ribbons
+    for (let i = 0; i < this.bladeTrailPool.length; i++) {
+      const slot = this.bladeTrailPool[i];
+      if (!slot.active) continue;
+
+      if (slot.ending) {
+        slot.fadeElapsed += dt;
+      } else {
+        // Age old samples slightly during long sweeps so tail flows forward organically
+        for (let s = 0; s < slot.samples.length; s++) {
+          slot.samples[s].ageSec += dt;
+        }
+        while (slot.samples.length > 4 && slot.samples[0].ageSec > 0.24) {
+          slot.samples.shift();
+          this.rebuildBladeTrailSlotGeometry(slot);
+        }
+      }
+
+      const norm = slot.ending ? slot.fadeElapsed / Math.max(0.02, slot.fadeDuration) : 0;
+      if (norm >= 1) {
+        slot.active = false;
+        slot.id = null;
+        slot.ending = false;
+        slot.samples.length = 0;
+        slot.backGeo.setDrawRange(0, 0);
+        slot.frontGeo.setDrawRange(0, 0);
+        slot.backGroup.visible = false;
+        slot.frontGroup.visible = false;
+        continue;
+      }
+
+      slot.frontGroup.position.set(originX, originY, 22);
+      slot.frontGroup.scale.set(zoom, zoom, 1);
+      slot.frontMat.uniforms.uTime.value = this.elapsed;
+      slot.frontMat.uniforms.uLife.value = norm;
+      slot.backMat.uniforms.uTime.value = this.elapsed;
+      slot.backMat.uniforms.uLife.value = norm;
+    }
 
     // 1. Slash Ribbons
     for (let i = this.ribbons.length - 1; i >= 0; i--) {
@@ -2410,13 +3432,14 @@ export class WebglDemonSlayerVfxOverlay {
       r.group.scale.set(s, s, s);
       r.group.rotation.set(r.tiltX, r.tiltY, r.baseRotZ - r.spinRate * r.life);
 
-      for (const m of [r.inkMesh, r.coreMesh, r.glowMesh]) {
+      for (const m of [r.coreMesh, r.glowMesh, r.backMesh]) {
+        if (!m) continue;
         m.material.uniforms.uTime.value = this.elapsed;
         m.material.uniforms.uLife.value = norm;
       }
     }
 
-    // 2. Hinokami Dual Solar Flame Wheels
+    // 2. Agni Hinokami Continuous Calligraphic Fire Vortex
     for (let i = this.solarWheels.length - 1; i >= 0; i--) {
       const w = this.solarWheels[i];
       w.life += dt;
@@ -2426,12 +3449,12 @@ export class WebglDemonSlayerVfxOverlay {
         this.solarWheels.splice(i, 1);
         continue;
       }
-      const expand = zoom * (0.76 + Math.sin(Math.min(1, norm * 1.2) * Math.PI * 0.5) * 0.42);
-      w.group.position.set(toScreenX(w.worldX), toScreenY(w.worldY), 22);
-      w.group.scale.set(expand, expand * 0.84, expand);
-      w.group.rotation.z = w.baseAngle - w.spinRate * w.life;
-      if (w.group.children[1]) {
-        w.group.children[1].rotation.z += w.spinRate * 1.4 * dt;
+      const expand = zoom * (0.78 + Math.sin(Math.min(1, norm * 1.25) * Math.PI * 0.5) * 0.42);
+      w.frontGroup.position.set(toScreenX(w.worldX), toScreenY(w.worldY), 22);
+      w.frontGroup.scale.set(expand, expand * 0.84, expand);
+      w.frontGroup.rotation.z = w.baseAngle - w.spinRate * w.life;
+      if (w.frontGroup.children[1]) {
+        w.frontGroup.children[1].rotation.z += w.spinRate * 1.35 * dt;
       }
       for (const m of w.mats) {
         m.uniforms.uTime.value = this.elapsed;
@@ -2439,7 +3462,7 @@ export class WebglDemonSlayerVfxOverlay {
       }
     }
 
-    // 3. 3D Coiled Water Dragon
+    // 3. Varuna Sculpted 3D Water Dragon + Hokusai Clawed Wave Wake
     for (let i = this.waterDragons.length - 1; i >= 0; i--) {
       const d = this.waterDragons[i];
       d.life += dt;
@@ -2451,11 +3474,11 @@ export class WebglDemonSlayerVfxOverlay {
       }
       d.worldX += Math.cos(d.angle) * d.speed * dt * (1 - norm * 0.45);
       d.worldY += Math.sin(d.angle) * d.speed * dt * 0.72 * (1 - norm * 0.45);
-      const grow = zoom * (0.68 + Math.sin(Math.min(1, norm * 1.35) * Math.PI * 0.5) * 0.48);
-      d.group.position.set(toScreenX(d.worldX), toScreenY(d.worldY), 24);
-      d.group.scale.set(grow, grow, grow);
-      d.group.rotation.z = -d.angle + norm * 1.9;
-      d.group.rotation.x = 0.26 * Math.sin(norm * Math.PI);
+      const grow = zoom * (0.72 + Math.sin(Math.min(1, norm * 1.35) * Math.PI * 0.5) * 0.46);
+      d.frontGroup.position.set(toScreenX(d.worldX), toScreenY(d.worldY), 24);
+      d.frontGroup.scale.set(grow, grow, grow);
+      d.frontGroup.rotation.z = -d.angle + norm * 1.85;
+      d.frontGroup.rotation.x = 0.24 * Math.sin(norm * Math.PI);
       d.bodyMat.uniforms.uTime.value = this.elapsed * 1.4;
       d.bodyMat.uniforms.uLife.value = norm;
       const fade = 1 - Math.max(0, (norm - 0.65) / 0.35);
@@ -2463,13 +3486,13 @@ export class WebglDemonSlayerVfxOverlay {
         if (fm instanceof THREE.ShaderMaterial && fm.uniforms?.uTime && fm.uniforms?.uLife) {
           fm.uniforms.uTime.value = this.elapsed * 1.4;
           fm.uniforms.uLife.value = norm;
-        } else {
-          fm.opacity = fade * 0.96;
+        } else if ('opacity' in fm) {
+          (fm as THREE.MeshBasicMaterial).opacity = fade * 0.96;
         }
       }
     }
 
-    // 4. Rebuilt Zenitsu GLSL Plasma Thunderclap Bolts + Forked Arcs + Sculpted Starbursts
+    // 4. Vajra Connected Branching Lightning Bolts + 12-Pt Elbow Starbursts
     for (let i = this.thunderBolts.length - 1; i >= 0; i--) {
       const b = this.thunderBolts[i];
       b.life += dt;
@@ -2485,8 +3508,10 @@ export class WebglDemonSlayerVfxOverlay {
         sm.uniforms.uTime.value = this.elapsed;
         sm.uniforms.uLife.value = norm;
       }
-      const starPop = Math.sin(Math.min(1, norm * 2.1) * Math.PI * 0.5) * (1 - Math.max(0, (norm - 0.55) / 0.45));
-      const flicker = 0.84 + Math.sin(this.elapsed * 58 + i * 5) * 0.16;
+      const starPop =
+        Math.sin(Math.min(1, norm * 2.2) * Math.PI * 0.5) *
+        (1 - Math.max(0, (norm - 0.55) / 0.45));
+      const flicker = 0.86 + Math.sin(this.elapsed * 58 + i * 5) * 0.14;
       const starFade = Math.max(0, starPop * flicker);
       for (const sg of b.starGroups) {
         sg.rotation.z += dt * 4.2;
@@ -2496,7 +3521,7 @@ export class WebglDemonSlayerVfxOverlay {
       }
     }
 
-    // 5. Sanemi Wind Gale Crescents + Sumi-e Ink Shards
+    // 5. Vayu Triple-Layered Razor Emerald Wind Gale Crescents
     for (let i = this.windGales.length - 1; i >= 0; i--) {
       const g = this.windGales[i];
       g.life += dt;
@@ -2506,25 +3531,16 @@ export class WebglDemonSlayerVfxOverlay {
         this.windGales.splice(i, 1);
         continue;
       }
-      const expand = zoom * (0.72 + norm * 0.45);
-      g.group.position.set(toScreenX(g.worldX), toScreenY(g.worldY), 20);
-      g.group.scale.set(expand, expand, expand);
+      const expand = zoom * (0.76 + norm * 0.44);
+      g.frontGroup.position.set(toScreenX(g.worldX), toScreenY(g.worldY), 20);
+      g.frontGroup.scale.set(expand, expand, expand);
       for (const rm of g.ribbonMats) {
-        rm.uniforms.uTime.value = this.elapsed * 1.3;
+        rm.uniforms.uTime.value = this.elapsed * 1.35;
         rm.uniforms.uLife.value = norm;
-      }
-      for (const sh of g.shardMeshes) {
-        sh.mesh.position.x += sh.vx * dt;
-        sh.mesh.position.y += sh.vy * dt;
-        sh.mesh.rotation.z += sh.spin * dt;
-      }
-      const shardFade = 1 - Math.max(0, (norm - 0.55) / 0.45);
-      for (const sm of g.shardMats) {
-        sm.opacity = shardFade * 0.94;
       }
     }
 
-    // 7. Rui 3D Crimson Blood Thread Cages
+    // 6. Blood Thread Cages
     for (let i = this.bloodCages.length - 1; i >= 0; i--) {
       const c = this.bloodCages[i];
       c.life += dt;
@@ -2543,7 +3559,7 @@ export class WebglDemonSlayerVfxOverlay {
       }
     }
 
-    // 8. 6-Point Weapon Clash Starbursts
+    // 7. 12-Point Weapon Clash & Perfect Parry Starbursts
     for (let i = this.starbursts.length - 1; i >= 0; i--) {
       const st = this.starbursts[i];
       st.life += dt;
@@ -2553,17 +3569,17 @@ export class WebglDemonSlayerVfxOverlay {
         this.starbursts.splice(i, 1);
         continue;
       }
-      const sc = zoom * st.maxScale * (0.35 + Math.sin(norm * Math.PI * 0.65) * 0.95);
+      const sc = zoom * st.maxScale * (0.38 + Math.sin(norm * Math.PI * 0.65) * 0.96);
       st.group.position.set(toScreenX(st.worldX), toScreenY(st.worldY), 32);
       st.group.scale.set(sc, sc, 1);
-      st.group.rotation.z = norm * 0.85;
+      st.group.rotation.z = norm * 0.78;
       const fade = 1 - norm * norm;
       for (const mat of st.mats) {
         mat.opacity = Math.max(0, fade);
       }
     }
 
-    // 9. Cyclones
+    // 8. Cyclones
     for (let i = this.cyclones.length - 1; i >= 0; i--) {
       const c = this.cyclones[i];
       c.life += dt;
@@ -2589,28 +3605,60 @@ export class WebglDemonSlayerVfxOverlay {
       }
     }
 
-    // 10. Sparks
-    for (let i = this.sparks.length - 1; i >= 0; i--) {
-      const sp = this.sparks[i];
-      sp.life += dt;
-      const norm = sp.life / Math.max(0.01, sp.maxLife);
-      if (norm >= 1) {
-        this.scene.remove(sp.mesh);
-        sp.mesh.material.dispose();
-        this.sparks.splice(i, 1);
-        continue;
-      }
-      sp.worldX += sp.vx * dt;
-      sp.worldY += sp.vy * dt;
-      sp.z += sp.vz * dt;
-      sp.vz -= 420 * dt;
-      sp.vx *= Math.max(0, 1 - dt * 3.8);
-      sp.vy *= Math.max(0, 1 - dt * 3.8);
+    // 9. Pooled InstancedMesh Elemental Particles (1 draw call for all sparks, droplets, rock/wind shards!)
+    if (
+      this.particleInstancedMesh &&
+      this.particleCellAttr &&
+      this.particleColorAttr &&
+      this.particleAlphaAttr
+    ) {
+      let instanceIdx = 0;
+      const maxCap = QUALITY_PARTICLE_CAP[this.qualityPreset];
+      for (let i = 0; i < maxCap; i++) {
+        const p = this.particleSlots[i];
+        if (!p.active) continue;
+        p.life += dt;
+        const norm = p.life / Math.max(0.01, p.maxLife);
+        if (norm >= 1) {
+          p.active = false;
+          continue;
+        }
+        p.worldX += p.vx * dt;
+        p.worldY += p.vy * dt;
+        p.z += p.vz * dt;
+        p.vz -= p.gravity * dt;
+        const dragMul = Math.max(0, 1 - dt * p.drag);
+        p.vx *= dragMul;
+        p.vy *= dragMul;
+        if (p.alignToVelocity) {
+          p.rot = Math.atan2(-(p.vy - p.vz * 0.25), p.vx);
+          if (p.kind === 'water_droplet') p.rot -= Math.PI * 0.5;
+        } else {
+          p.rot += p.rotSpeed * dt;
+        }
 
-      sp.mesh.position.set(toScreenX(sp.worldX), toScreenY(sp.worldY - sp.z * 0.3), 30);
-      sp.mesh.scale.x = Math.max(8, (26 - norm * 18) * zoom);
-      sp.mesh.scale.y = Math.max(1.5, (4.4 - norm * 2.5) * zoom);
-      sp.mesh.material.opacity = Math.max(0, 1 - norm * norm);
+        const shrink = p.kind === 'spark_needle' ? 1 - norm * 0.55 : 1 - norm * 0.35;
+        this.dummyPos.set(toScreenX(p.worldX), toScreenY(p.worldY - p.z * 0.3), 0);
+        this.dummyEuler.set(0, 0, p.rot);
+        this.dummyQuat.setFromEuler(this.dummyEuler);
+        this.dummyScale.set(p.scaleX * shrink * zoom, p.scaleY * shrink * zoom, 1);
+        this.dummyMatrix.compose(this.dummyPos, this.dummyQuat, this.dummyScale);
+        this.particleInstancedMesh.setMatrixAt(instanceIdx, this.dummyMatrix);
+
+        const [cellU, cellV] = particleCellOffset(p.kind);
+        this.particleCellAttr.setXY(instanceIdx, cellU, cellV);
+        this.particleColorAttr.setXYZ(instanceIdx, p.r, p.g, p.b);
+        this.particleAlphaAttr.setX(instanceIdx, Math.max(0, 1 - norm * norm));
+        instanceIdx++;
+      }
+
+      this.particleInstancedMesh.count = instanceIdx;
+      if (instanceIdx > 0) {
+        this.particleInstancedMesh.instanceMatrix.needsUpdate = true;
+        this.particleCellAttr.needsUpdate = true;
+        this.particleColorAttr.needsUpdate = true;
+        this.particleAlphaAttr.needsUpdate = true;
+      }
     }
 
     // Pass A (GPU-only): Selective HDR UnrealBloomPass into offscreen additive bloomCanvas
@@ -2628,7 +3676,7 @@ export class WebglDemonSlayerVfxOverlay {
       this.hasBloomFrame = true;
     }
 
-    // Pass B (All devices): Crisp alpha-transparent Sumi-e ink + cel VFX render
+    // Pass B (All devices): Crisp alpha-transparent painterly cel + Sumi-e ink VFX render
     this.renderer.setClearColor(0x000000, 0);
     this.renderer.clear();
     this.renderer.render(this.scene, this.camera);
@@ -2637,12 +3685,15 @@ export class WebglDemonSlayerVfxOverlay {
 
   private disposeRibbon(r: ActiveWebglRibbon): void {
     this.scene.remove(r.group);
-    r.inkMesh.geometry.dispose();
-    r.inkMesh.material.dispose();
     r.coreMesh.geometry.dispose();
     r.coreMesh.material.dispose();
     r.glowMesh.geometry.dispose();
     r.glowMesh.material.dispose();
+    if (r.backGroup && r.backMesh) {
+      this.backScene.remove(r.backGroup);
+      r.backMesh.geometry.dispose();
+      r.backMesh.material.dispose();
+    }
   }
 
   private disposeCyclone(c: ActiveWebglCyclone): void {
@@ -2654,13 +3705,15 @@ export class WebglDemonSlayerVfxOverlay {
   }
 
   private disposeSolarWheel(w: ActiveSolarWheel): void {
-    this.scene.remove(w.group);
+    this.scene.remove(w.frontGroup);
+    this.backScene.remove(w.backGroup);
     w.geos.forEach((g) => g.dispose());
     w.mats.forEach((m) => m.dispose());
   }
 
   private disposeWaterDragon(d: ActiveWaterDragon): void {
-    this.scene.remove(d.group);
+    this.scene.remove(d.frontGroup);
+    this.backScene.remove(d.backGroup);
     d.geos.forEach((g) => g.dispose());
     d.bodyMat.dispose();
     d.fadeMats.forEach((m) => m.dispose());
@@ -2674,10 +3727,10 @@ export class WebglDemonSlayerVfxOverlay {
   }
 
   private disposeWindGale(g: ActiveWindGale): void {
-    this.scene.remove(g.group);
+    this.scene.remove(g.frontGroup);
+    this.backScene.remove(g.backGroup);
     g.geos.forEach((geo) => geo.dispose());
     g.ribbonMats.forEach((m) => m.dispose());
-    g.shardMats.forEach((m) => m.dispose());
   }
 
   private disposeMandala(m: ActiveCompassMandala): void {
@@ -2706,12 +3759,17 @@ export class WebglDemonSlayerVfxOverlay {
     sr.coreMat.dispose();
   }
 
-  /**
-   * Purge previous VFX between deterministic in-arena QA shots. Resource
-   * disposal is identical to shutdown, but shared geometry and the WebGL
-   * renderer remain alive so every next attack starts from a clean frame.
-   */
   public clearActiveEffects(): void {
+    for (const slot of this.bladeTrailPool) {
+      slot.active = false;
+      slot.id = null;
+      slot.ending = false;
+      slot.samples.length = 0;
+      slot.backGeo.setDrawRange(0, 0);
+      slot.frontGeo.setDrawRange(0, 0);
+      slot.backGroup.visible = false;
+      slot.frontGroup.visible = false;
+    }
     while (this.ribbons.length) {
       const r = this.ribbons.pop();
       if (r) this.disposeRibbon(r);
@@ -2740,6 +3798,13 @@ export class WebglDemonSlayerVfxOverlay {
       const m = this.mandalas.pop();
       if (m) this.disposeMandala(m);
     }
+    while (this.groundBounces.length) {
+      const gb = this.groundBounces.pop();
+      if (gb) {
+        this.floorScene.remove(gb.mesh);
+        gb.mesh.material.dispose();
+      }
+    }
     while (this.bloodCages.length) {
       const c = this.bloodCages.pop();
       if (c) this.disposeBloodCage(c);
@@ -2752,14 +3817,14 @@ export class WebglDemonSlayerVfxOverlay {
       const sr = this.shockwaveRings.pop();
       if (sr) this.disposeShockwaveRing(sr);
     }
-    while (this.sparks.length) {
-      const s = this.sparks.pop();
-      if (s) {
-        this.scene.remove(s.mesh);
-        s.mesh.material.dispose();
-      }
+    for (const p of this.particleSlots) {
+      p.active = false;
+    }
+    if (this.particleInstancedMesh) {
+      this.particleInstancedMesh.count = 0;
     }
     this.hasBloomFrame = false;
+    this.backCtx?.clearRect(0, 0, this.backCanvas.width, this.backCanvas.height);
     this.floorCtx?.clearRect(0, 0, this.floorCanvas.width, this.floorCanvas.height);
     this.bloomCtx?.clearRect(0, 0, this.bloomCanvas.width, this.bloomCanvas.height);
     this.renderer?.clear();
@@ -2769,7 +3834,23 @@ export class WebglDemonSlayerVfxOverlay {
     if (this.disposed) return;
     this.disposed = true;
     this.clearActiveEffects();
-    this.sparkGeo.dispose();
+    for (const slot of this.bladeTrailPool) {
+      this.backScene.remove(slot.backGroup);
+      this.scene.remove(slot.frontGroup);
+      slot.backGeo.dispose();
+      slot.backMat.dispose();
+      slot.frontGeo.dispose();
+      slot.frontMat.dispose();
+    }
+    this.bladeTrailPool = [];
+    if (this.particleInstancedMesh) {
+      this.scene.remove(this.particleInstancedMesh);
+      this.particleInstancedMesh.dispose();
+      this.particleInstancedMesh = null;
+    }
+    this.particleGeo?.dispose();
+    this.particleMat?.dispose();
+    this.groundBounceGeo.dispose();
     this.bloomPass?.dispose();
     this.bloomComposer?.dispose();
     this.bloomComposer = null;

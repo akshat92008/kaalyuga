@@ -23,6 +23,7 @@ import { loadFbxCached, simplifyBufferGeometry } from './meshSimplifier';
 import {
   computeCameraFootAnchorRatio,
 } from './kalaBhairavaSusanoo';
+import type { BakedBladePose } from './bladeTrailSampler';
 
 export type RudraAnimState =
   | 'idle'
@@ -275,6 +276,21 @@ export class Rudra3DRenderer {
   private blendDurationSec = 0;
   private blendElapsedSec = 0;
   private frameCache: Map<string, HTMLCanvasElement> = new Map();
+  private bladePoseCache: Map<string, BakedBladePose> = new Map();
+  private latestBladePose: BakedBladePose = {
+    rootU: 0.5,
+    rootV: 0.48,
+    tipU: 0.72,
+    tipV: 0.42,
+    depthZ: 0.12,
+    valid: false,
+  };
+  private bladeRootAnchor: THREE.Object3D | null = null;
+  private bladeTipAnchor: THREE.Object3D | null = null;
+  private torsoDepthAnchor: THREE.Object3D | null = null;
+  private readonly _vRoot = new THREE.Vector3();
+  private readonly _vTip = new THREE.Vector3();
+  private readonly _vTorso = new THREE.Vector3();
   private celMaterials: THREE.Material[] = [];
   private parashuAuraMat: THREE.ShaderMaterial | null = null;
   private studioRimLight: THREE.DirectionalLight | null = null;
@@ -282,6 +298,10 @@ export class Rudra3DRenderer {
   private prewarmQueue: Array<() => void> = [];
   private prewarmTimer: number | null = null;
   public readonly footAnchorRatio: number;
+
+  public getLatestBladePose(): BakedBladePose {
+    return this.latestBladePose;
+  }
 
   constructor(size = 256) {
     this.size = size;
@@ -453,8 +473,18 @@ export class Rudra3DRenderer {
           weaponGroup.position.set(0.26 * maxDim * localWepScale, 0, 0);
           weaponSocket.add(weaponGroup);
 
+          // Attach exact Parashu blade root & outer cutting-edge tip anchors for Phase 1 blade-tracked VFX
+          const wepLocalLen = maxDim * localWepScale;
+          const bladeRoot = new THREE.Object3D();
+          bladeRoot.position.set(0.14 * wepLocalLen, 0, 0);
+          const bladeTip = new THREE.Object3D();
+          bladeTip.position.set(0.76 * wepLocalLen, 0, 0);
+          weaponSocket.add(bladeRoot, bladeTip);
+          this.bladeRootAnchor = bladeRoot;
+          this.bladeTipAnchor = bladeTip;
+
           // Subtle golden-amber blade edge accent around the Parashu axe head
-          const flameSheath = createParashuFlameSheathGroup(maxDim * localWepScale);
+          const flameSheath = createParashuFlameSheathGroup(wepLocalLen);
           const sheathMesh = flameSheath.children[0] as THREE.Mesh | undefined;
           if (sheathMesh && sheathMesh.material instanceof THREE.ShaderMaterial) {
             this.parashuAuraMat = sheathMesh.material;
@@ -471,6 +501,10 @@ export class Rudra3DRenderer {
           outlineRatio: 0.0048,
         });
 
+        const torsoAnchor = new THREE.Object3D();
+        torsoAnchor.position.set(0, 0.84, 0);
+        this.wrapper.add(torsoAnchor);
+        this.torsoDepthAnchor = torsoAnchor;
         this.wrapper.add(baseGroup);
         this.model = baseGroup;
         this.mixer = new THREE.AnimationMixer(baseGroup);
@@ -743,7 +777,13 @@ export class Rudra3DRenderer {
     const cacheKey = `rudra:${state}:${stanceTag}:y${yawIndex}:f${stepIndex}:${flashTag}`;
 
     const cached = this.frameCache.get(cacheKey);
-    if (cached) return cached;
+    if (cached) {
+      const cachedPose = this.bladePoseCache.get(cacheKey);
+      if (cachedPose) {
+        this.latestBladePose = cachedPose;
+      }
+      return cached;
+    }
 
     const renderer = getSharedStudioWebGLRenderer(this.size);
     if (!renderer) return null;
@@ -755,75 +795,121 @@ export class Rudra3DRenderer {
       this.mixer.setTime(quantizedTime);
     }
 
-    // Stance-synced + Kala-Bhairava Susanoo molten rim & under-glow on Rudra's 3D cel model
+    // Stance-synced + 4-element (Agni / Varuna / Vayu / Vajra) rim & under-glow on Rudra's 3D cel model
     const isPillar = stance === 'pillar';
     const isThrust = stance === 'thrust';
+    const isWater = stance === 'water' || stance === 'varuna';
     const stanceRimHex = susanooActive
       ? 0xff7038
-      : isPillar
-        ? 0x6ee7b7
-        : isThrust
-          ? 0x7dd3fc
-          : 0xffd27d;
+      : isWater
+        ? 0x7dd3fc
+        : isPillar
+          ? 0x6ee7b7
+          : isThrust
+            ? 0xfef08a
+            : 0xffd27d;
     const stanceGlowHex = susanooActive
       ? 0xff3b18
-      : isPillar
-        ? 0x10b981
-        : isThrust
-          ? 0x38e8ff
-          : 0xff6a18;
+      : isWater
+        ? 0x0ea5e9
+        : isPillar
+          ? 0x10b981
+          : isThrust
+            ? 0xfacc15
+            : 0xff5a18;
     const activeBoost = susanooActive
       ? 1.0
       : state === 'cast' || state === 'heavy'
         ? 1.0
         : isAttack
-          ? 0.72
+          ? 0.78
           : state === 'block'
-            ? 0.55
+            ? 0.58
             : 0.0;
 
     if (this.celMaterials.length > 0) {
       setCelRimStyle(
         this.celMaterials,
         activeBoost > 0 ? stanceRimHex : 0xffe4b8,
-        activeBoost > 0 ? 0.36 + activeBoost * 0.28 : 0.28
+        activeBoost > 0 ? 0.40 + activeBoost * 0.34 : 0.28
       );
-      setCelUnderGlow(this.celMaterials, stanceGlowHex, activeBoost * 0.52);
+      setCelUnderGlow(this.celMaterials, stanceGlowHex, activeBoost * 0.58);
     }
     if (this.studioRimLight) {
       this.studioRimLight.color.setHex(activeBoost > 0 ? stanceRimHex : 0xffe8c2);
-      this.studioRimLight.intensity = susanooActive ? 1.55 : activeBoost > 0 ? 1.25 : 1.05;
+      this.studioRimLight.intensity = susanooActive ? 1.55 : activeBoost > 0 ? 1.38 : 1.05;
     }
     if (this.parashuAuraMat) {
       this.parashuAuraMat.uniforms.uTime.value = quantizedTime * 3.5;
       if (susanooActive) {
         this.parashuAuraMat.uniforms.uMidColor.value.setHex(0xff4a1c);
         this.parashuAuraMat.uniforms.uOuterColor.value.setHex(0x990f1a);
+      } else if (isWater) {
+        this.parashuAuraMat.uniforms.uMidColor.value.setHex(0x38e8ff);
+        this.parashuAuraMat.uniforms.uOuterColor.value.setHex(0x0c4a9e);
       } else if (isPillar) {
         this.parashuAuraMat.uniforms.uMidColor.value.setHex(0x26f78d);
         this.parashuAuraMat.uniforms.uOuterColor.value.setHex(0x047857);
       } else if (isThrust) {
-        this.parashuAuraMat.uniforms.uMidColor.value.setHex(0x38e8ff);
-        this.parashuAuraMat.uniforms.uOuterColor.value.setHex(0x0284c7);
+        this.parashuAuraMat.uniforms.uMidColor.value.setHex(0xffe838);
+        this.parashuAuraMat.uniforms.uOuterColor.value.setHex(0x38e8ff);
       } else {
         this.parashuAuraMat.uniforms.uMidColor.value.setHex(0xff9f2e);
-        this.parashuAuraMat.uniforms.uOuterColor.value.setHex(0xe64d1c);
+        this.parashuAuraMat.uniforms.uOuterColor.value.setHex(0xd91c08);
       }
     }
 
     this.wrapper.rotation.y = Math.PI * 0.5 - quantizedYaw;
     this.wrapper.rotation.x = 0;
 
+    // Project real 3D Parashu root/tip + camera-space depthZ before rendering baked frame
+    this.scene.updateMatrixWorld(true);
+    this.camera.updateMatrixWorld(true);
+    let bakedPose: BakedBladePose = {
+      rootU: 0.5,
+      rootV: 0.48,
+      tipU: 0.72,
+      tipV: 0.42,
+      depthZ: 0.12,
+      valid: false,
+    };
+    if (this.bladeRootAnchor && this.bladeTipAnchor && this.torsoDepthAnchor) {
+      this.bladeRootAnchor.getWorldPosition(this._vRoot);
+      this.bladeTipAnchor.getWorldPosition(this._vTip);
+      this.torsoDepthAnchor.getWorldPosition(this._vTorso);
+
+      // Compute camera-space Z relative to Rudra's torso (+Z = closer to camera = IN FRONT of Rudra)
+      const invCam = this.camera.matrixWorldInverse;
+      const rootCamZ = this._vRoot.clone().applyMatrix4(invCam).z;
+      const tipCamZ = this._vTip.clone().applyMatrix4(invCam).z;
+      const torsoCamZ = this._vTorso.clone().applyMatrix4(invCam).z;
+      const depthZ = (rootCamZ + tipCamZ) * 0.5 - torsoCamZ;
+
+      this._vRoot.project(this.camera);
+      this._vTip.project(this.camera);
+
+      bakedPose = {
+        rootU: Math.max(-0.25, Math.min(1.25, this._vRoot.x * 0.5 + 0.5)),
+        rootV: Math.max(-0.25, Math.min(1.25, 0.5 - this._vRoot.y * 0.5)),
+        tipU: Math.max(-0.25, Math.min(1.25, this._vTip.x * 0.5 + 0.5)),
+        tipV: Math.max(-0.25, Math.min(1.25, 0.5 - this._vTip.y * 0.5)),
+        depthZ,
+        valid: true,
+      };
+    }
+
     renderer.render(this.scene, this.camera);
 
     const rimRgba = susanooActive
       ? 'rgba(255, 92, 42, 0.52)'
       : activeBoost > 0
-        ? isPillar
-          ? 'rgba(52, 245, 165, 0.36)'
-          : isThrust
-            ? 'rgba(72, 228, 255, 0.38)'
-            : 'rgba(255, 178, 72, 0.38)'
+        ? isWater
+          ? 'rgba(56, 232, 255, 0.44)'
+          : isPillar
+            ? 'rgba(52, 245, 165, 0.42)'
+            : isThrust
+              ? 'rgba(255, 232, 72, 0.44)'
+              : 'rgba(255, 148, 48, 0.46)'
         : 'rgba(255, 242, 214, 0.30)';
 
     const baked = bake2DSpriteFrameFromCanvas(renderer.domElement, cacheKey, {
@@ -837,9 +923,14 @@ export class Rudra3DRenderer {
 
     if (this.frameCache.size > 1100) {
       const oldest = this.frameCache.keys().next().value;
-      if (oldest) this.frameCache.delete(oldest);
+      if (oldest) {
+        this.frameCache.delete(oldest);
+        this.bladePoseCache.delete(oldest);
+      }
     }
     this.frameCache.set(cacheKey, baked);
+    this.bladePoseCache.set(cacheKey, bakedPose);
+    this.latestBladePose = bakedPose;
 
     return baked;
   }
@@ -852,6 +943,7 @@ export class Rudra3DRenderer {
       this.prewarmTimer = null;
     }
     this.frameCache.clear();
+    this.bladePoseCache.clear();
   }
 }
 

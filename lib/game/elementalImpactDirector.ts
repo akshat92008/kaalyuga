@@ -54,7 +54,7 @@ export function heavyElementFromStance(
 
 export function resolveHeavyReleaseProfile(input: HeavyReleaseInput): HeavyReleaseProfile {
   const orbBoost = clamp(input.energyOrbs ?? 0, 0, 4);
-  const radius = clamp(input.radius, 105, 220) + orbBoost * 9;
+  const radius = clamp(input.radius, 155, 295) + orbBoost * 14;
   const palette: Record<HeavyElement, DemonSlayerVfxPalette> = {
     agni: 'hinokami',
     varuna: 'water',
@@ -66,15 +66,16 @@ export function resolveHeavyReleaseProfile(input: HeavyReleaseInput): HeavyRelea
     element: input.element,
     palette: palette[input.element],
     radius,
-    reach: radius * (input.element === 'vajra' ? 1.62 : 1.14),
-    sparks: Math.round(clamp(11 + orbBoost * 2, 11, 19)),
-    duration: input.element === 'guardian' ? 0.74 : 0.64,
+    reach: radius * (input.element === 'vajra' ? 1.82 : 1.28),
+    sparks: Math.round(clamp(18 + orbBoost * 3, 18, 30)),
+    duration: input.element === 'guardian' ? 0.78 : 0.68,
   };
 }
 
 /**
- * One primary silhouette + localized supporting flare. Each style has distinct geometry:
- * fire wheel, serpent-shaped water, emerald crescent gale, branching bolt, crimson guardian.
+ * Full-frame Ufotable heavy elemental release per element:
+ * Hinokami fire cyclone, Hokusai clawed-seafoam tidal surge, razor emerald vacuum gale,
+ * blazing forked plasma thunderbolt, and crimson guardian sweep.
  */
 export function spawnHeavyElementalRelease(
   fx: HeavyEffectSink | null | undefined,
@@ -89,47 +90,47 @@ export function spawnHeavyElementalRelease(
   const { radius, reach, palette, duration } = profile;
   switch (input.element) {
     case 'agni':
-      fx.spawnSolarFlameWheel({ x, y: y - 18, angle, radius, duration, palette });
-      fx.spawnShockwaveRing({ x, y, radius: radius * 0.92, duration: 0.39, palette });
+      fx.spawnSolarFlameWheel({ x, y: y - 18, angle, radius: radius * 1.26, duration, palette });
+      fx.spawnShockwaveRing({ x, y: y + 8, radius: radius * 1.18, duration: 0.45, palette });
       break;
     case 'varuna':
-      fx.spawnWaterDragon({ x, y: y - 20, angle, radius: radius * 0.96, duration });
+      fx.spawnWaterDragon({ x, y: y - 20, angle, radius: radius * 1.22, duration: duration + 0.1 });
       fx.spawnSlashRibbon({
-        x, y: y - 22, angle, radius: radius * 1.04, width: 49,
-        arcSpan: 2.65, direction: 1, duration: 0.38, palette,
+        x, y: y - 22, angle, radius: radius * 1.24, width: 108,
+        arcSpan: 2.95, direction: 1, duration: 0.48, palette, withBackWrap: true,
       });
       break;
     case 'vayu':
-      fx.spawnWindGaleCrescents({ x, y: y - 18, angle, radius, duration });
+      fx.spawnWindGaleCrescents({ x, y: y - 18, angle, radius: radius * 1.32, duration: duration + 0.08 });
       fx.spawnSlashRibbon({
-        x, y: y - 20, angle, radius: radius * 0.86, width: 36,
-        arcSpan: 2.82, direction: -1, duration: 0.34, palette,
+        x, y: y - 20, angle, radius: radius * 1.22, width: 104,
+        arcSpan: 3.05, direction: -1, duration: 0.46, palette, withBackWrap: true,
       });
       break;
     case 'vajra':
       fx.spawnThunderZigzag({
-        x1: x - Math.cos(angle) * 38,
-        y1: y - 20 - Math.sin(angle) * 20,
-        x2: x + Math.cos(angle) * reach,
-        y2: y - 20 + Math.sin(angle) * reach * 0.68,
-        width: 29, duration, palette, withFloorRing: true,
+        x1: x - Math.cos(angle) * 56,
+        y1: y - 22 - Math.sin(angle) * 24,
+        x2: x + Math.cos(angle) * reach * 1.22,
+        y2: y - 22 + Math.sin(angle) * reach * 0.78,
+        width: 44, duration, palette, withFloorRing: true,
       });
-      fx.spawnClashStarburst({ x, y: y - 24, scale: 1.10, duration: 0.30, palette });
+      fx.spawnClashStarburst({ x, y: y - 24, scale: 1.55, duration: 0.34, palette });
       break;
     case 'guardian':
       fx.spawnSlashRibbon({
-        x, y: y - 34, angle, radius: radius * 1.14, width: 68,
-        arcSpan: 2.95, direction: 1, palette, duration, tiltX: 0.58,
+        x, y: y - 34, angle, radius: radius * 1.26, width: 92,
+        arcSpan: 3.1, direction: 1, palette, duration, tiltX: 0.56,
       });
-      fx.spawnShockwaveRing({ x, y, radius: radius * 1.04, duration: 0.43, palette });
-      fx.spawnClashStarburst({ x, y: y - 24, scale: 1.55, duration: 0.3, palette });
+      fx.spawnShockwaveRing({ x, y, radius: radius * 1.18, duration: 0.46, palette });
+      fx.spawnClashStarburst({ x, y: y - 24, scale: 1.72, duration: 0.32, palette });
       break;
   }
   fx.spawnSparkBurst({
-    x: x + Math.cos(angle) * 22,
-    y: y - 24 + Math.sin(angle) * 12,
+    x: x + Math.cos(angle) * 26,
+    y: y - 24 + Math.sin(angle) * 14,
     count: profile.sparks,
-    speed: 400,
+    speed: 480,
     palette,
   });
   return profile;

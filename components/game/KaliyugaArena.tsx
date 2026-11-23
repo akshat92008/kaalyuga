@@ -229,8 +229,29 @@ import {
 } from '@/lib/game/bloodDemonArts';
 import {
   DemonSlayerVfxPalette,
+  VfxQualityPreset,
   WebglDemonSlayerVfxOverlay,
 } from '@/lib/game/webglDemonSlayerVfx';
+import {
+  ActiveStrikeSyncState,
+  ArenaBladeSample,
+  SpriteDrawRect,
+  cancelActiveStrike,
+  projectBakedBladePoseToArena,
+} from '@/lib/game/bladeTrailSampler';
+import {
+  SakugaDirectorState,
+  SakugaElement,
+  createSakugaDirectorState,
+  renderChiaroscuroAndFloorBlowouts,
+  renderCrispVedicWardShield,
+  renderDynamicElementalCastShadow,
+  renderSakugaCrossBeams,
+  renderSakugaScreenPostPass,
+  spawnSakugaFloorBlowout,
+  stepSakugaDirector,
+  triggerSakugaImpact,
+} from '@/lib/game/sakugaImpactDirector';
 import {
   classifyEnemyVfxTier,
   evaluateStrikeActiveFrameGate,
@@ -541,11 +562,54 @@ export default function KaliyugaArena() {
   const enemy3dRef = useRef<Enemy3DRenderer | null>(null);
   const susanoo3dRef = useRef<Susanoo3DRenderer | null>(null);
   const webglDemonSlayerVfxRef = useRef<WebglDemonSlayerVfxOverlay | null>(null);
+  const sakugaDirectorRef = useRef<SakugaDirectorState>(createSakugaDirectorState());
+  const liveBladeTrailActiveIdRef = useRef<string | null>(null);
   const pendingStrikeVfxRef = useRef<{
     fired: boolean;
     triggerThreshold: number;
     execute: () => void;
   } | null>(null);
+  const activeStrikeRef = useRef<{
+    sync: ActiveStrikeSyncState;
+    trailId: string;
+    palette: DemonSlayerVfxPalette;
+    widthBoostPx: number;
+    direction: 1 | -1;
+    reachPx: number;
+    startVfx: () => void;
+    evaluateHits: () => void;
+  } | null>(null);
+  const varunaInfusionTimerRef = useRef<number>(0);
+  const rudraSpriteRectRef = useRef<SpriteDrawRect>({
+    drawX: 0,
+    drawY: 0,
+    drawW: 154,
+    drawH: 154,
+  });
+  const debugBladeSamplesRef = useRef<ArenaBladeSample[]>([]);
+  const debugTimeScaleRef = useRef<number>(1);
+  const debugPausedRef = useRef<boolean>(false);
+  const debugStepFramesRef = useRef<number>(0);
+  const debugShowBladeOverlayRef = useRef<boolean>(false);
+  const [debugTimeScale, setDebugTimeScale] = useState<number>(1);
+  const [debugPaused, setDebugPaused] = useState<boolean>(false);
+  const [debugShowBladeOverlay, setDebugShowBladeOverlay] = useState<boolean>(false);
+  const [vfxQualityPreset, setVfxQualityPreset] = useState<VfxQualityPreset>('balanced');
+
+  const abortActiveStrike = useCallback(() => {
+    const active = activeStrikeRef.current;
+    if (active) {
+      cancelActiveStrike(active.sync);
+      webglDemonSlayerVfxRef.current?.endBladeTrail(active.trailId, true);
+      activeStrikeRef.current = null;
+    }
+    if (liveBladeTrailActiveIdRef.current) {
+      webglDemonSlayerVfxRef.current?.endBladeTrail(liveBladeTrailActiveIdRef.current, true);
+      liveBladeTrailActiveIdRef.current = null;
+    }
+    pendingStrikeVfxRef.current = null;
+  }, []);
+
   const pendingExecutionRef = useRef<{
     variant: ParashuFinisherVariant;
     fired: boolean;
@@ -1185,6 +1249,19 @@ export default function KaliyugaArena() {
           })(),
           rudra3dReady: rudra3dRef.current?.isReady ?? false,
           webglVfxReady: Boolean(webglDemonSlayerVfxRef.current),
+          vfxTelemetry: webglDemonSlayerVfxRef.current?.getTelemetry() ?? null,
+          bladePose: rudra3dRef.current?.getLatestBladePose() ?? null,
+          varunaInfusionRemaining: varunaInfusionTimerRef.current,
+          activeStrike: activeStrikeRef.current
+            ? {
+                attackSerial: activeStrikeRef.current.sync.attackSerial,
+                tier: activeStrikeRef.current.sync.tier,
+                element: activeStrikeRef.current.sync.element,
+                vfxStarted: activeStrikeRef.current.sync.vfxStarted,
+                hitCount: activeStrikeRef.current.sync.hitEnemyIds.size,
+                cancelled: activeStrikeRef.current.sync.cancelled,
+              }
+            : null,
           recentEvents: qaRecentEventsRef.current.slice(-36),
         };
       },
@@ -1218,7 +1295,10 @@ export default function KaliyugaArena() {
         // spark pools obscure the next stance or execution contact screenshot.
         // Normal gameplay retains its original effect lifetime semantics.
         sim.lightningArcs.length = 0;
+        varunaInfusionTimerRef.current = 0;
+        abortActiveStrike();
         webglDemonSlayerVfxRef.current?.clearActiveEffects();
+        sakugaDirectorRef.current = createSakugaDirectorState();
         sim.chamberClearTimer = 0;
         for (const enemy of sim.enemies) {
           enemy.hp = Math.max(9000, enemy.hp);
@@ -3187,6 +3267,7 @@ export default function KaliyugaArena() {
       const p = sim.player;
       const next = targetStance ?? getNextStaffStance(p.stance);
       p.stance = next;
+      varunaInfusionTimerRef.current = 0;
       const cfg = STANCE_CONFIGS[next];
       spawnShockwave(p.x, p.y, 64, '#f2c45a', 0.28);
       spawnParticles(p.x, p.y - 25, 10, '#f2c45a', 95, 3.5, 40);
@@ -3624,11 +3705,21 @@ export default function KaliyugaArena() {
           duration: 0.38,
         });
       }
+      const sakugaAstraElem: SakugaElement =
+        astraId === 'agneyastra' ? 'agni' : astraId === 'vayavyastra' ? 'vayu' : 'vajra';
+      triggerSakugaImpact(sakugaDirectorRef.current, {
+        kind: 'astra_burst',
+        element: sakugaAstraElem,
+        worldX: p.x + Math.cos(aimAngle) * 28,
+        worldY: p.y + Math.sin(aimAngle) * 16,
+        angle: aimAngle,
+        intensity: 1.28,
+      });
       webglDemonSlayerVfxRef.current?.spawnSparkBurst({
         x: p.x,
         y: p.y - 24,
-        count: 14,
-        speed: 440,
+        count: 22,
+        speed: 520,
         palette: astraPalette,
       });
 
@@ -4063,6 +4154,7 @@ export default function KaliyugaArena() {
       }
       if (!frameInfo.canChainImmediately) return;
     }
+    abortActiveStrike();
     const boonMods = computeBoonModifiers(sim.activeBoons);
     p.parryCd = Number((3.2 * boonMods.spellCooldownMultiplier).toFixed(2));
     p.action = 'parry';
@@ -4072,53 +4164,42 @@ export default function KaliyugaArena() {
     p.invulnTimer = Math.max(p.invulnTimer, 0.32);
     recordQuestEvent('kalaripayattu_parries', 1);
     soundEngine.playSpell('parry');
-    spawnShockwave(p.x, p.y, 148, '#ffd86b', 0.34);
-    spawnSunHaloRing(bloodDemonArtsRef.current, {
-      x: p.x,
-      y: p.y - 20,
-      radius: 112,
-      palette: 'thunder',
-    });
-    spawnTengenClashSparks(bloodDemonArtsRef.current, p.x + p.facing * 18, p.y - 24, 16, 360);
     webglDemonSlayerVfxRef.current?.spawnSlashRibbon({
       x: p.x + p.facing * 12,
       y: p.y - 24,
       angle: p.facing > 0 ? 0 : Math.PI,
-      radius: 132,
-      width: 56,
-      arcSpan: 2.5,
+      radius: 138,
+      width: 66,
+      arcSpan: 2.55,
       direction: 1,
       palette: 'thunder',
       duration: 0.30,
       tiltX: 0.52,
+      withBackWrap: true,
     });
     webglDemonSlayerVfxRef.current?.spawnClashStarburst({
-      x: p.x + p.facing * 18,
-      y: p.y - 24,
-      scale: 1.15,
-      palette: 'thunder',
-      duration: 0.24,
+      x: p.x + p.facing * 20,
+      y: p.y - 26,
+      scale: 1.38,
+      palette: 'sun',
+      duration: 0.26,
     });
-    webglDemonSlayerVfxRef.current?.spawnSparkBurst({
-      x: p.x + p.facing * 18,
-      y: p.y - 24,
-      count: 20,
-      speed: 440,
-      palette: 'thunder',
+    webglDemonSlayerVfxRef.current?.spawnGroundLightBounce({
+      x: p.x + p.facing * 14,
+      y: p.y + 4,
+      radius: 138,
+      palette: 'sun',
+      duration: 0.36,
+      intensity: 0.96,
     });
-    spawnFlipbookVfx(
-      PHASE2_VFX_SHEETS.parryAndHitSparks4x2.url,
-      p.x + p.facing * 18,
-      p.y - 24,
-      188,
-      0.28,
-      0,
-      1,
-      'screen',
-      PHASE2_VFX_SHEETS.parryAndHitSparks4x2,
-      PARRY_SPARKS_FLIPBOOK_ROWS.VEDIC_PARRY_FLASH
-    );
-    spawnParticles(p.x, p.y - 28, 28, '#ffd86b', 185, 4.6, 80);
+    webglDemonSlayerVfxRef.current?.spawnElementalParticles({
+      x: p.x + p.facing * 20,
+      y: p.y - 26,
+      count: 24,
+      speed: 480,
+      palette: 'sun',
+      kind: 'spark_needle',
+    });
 
     // Proactive God-of-War / Sekiro Instant Golden Deflect if an enemy is winding up a parriable strike within 215px!
     let instantDeflected = false;
@@ -4226,12 +4307,21 @@ export default function KaliyugaArena() {
         palette: 'sun',
         duration: 0.32,
       });
+      triggerSakugaImpact(sakugaDirectorRef.current, {
+        kind: 'parry_clash',
+        element: 'parry',
+        enemyElement: 'blood',
+        worldX: p.x + p.facing * 20,
+        worldY: p.y,
+        angle: p.facing >= 0 ? 0.34 : Math.PI - 0.34,
+        intensity: 1.38,
+      });
       webglDemonSlayerVfxRef.current?.spawnWaterDragon({
         x: p.x,
         y: p.y - 20,
         angle: p.facing >= 0 ? 0 : Math.PI,
-        radius: 145,
-        duration: 0.62,
+        radius: 175,
+        duration: 0.68,
       });
       soundEngine.playSpatialMaterialFoley('golden_parry', p.x, p.y, p.x, p.y, sim.viewportW);
       spawnShockwave(p.x, p.y, 175, '#ffd86b', 0.42);
@@ -4990,9 +5080,17 @@ export default function KaliyugaArena() {
           x: syncImpactX,
           y: syncImpactY,
           angle: heavySlashAngle,
-          radius: heavyCleaveRadius * 0.95,
+          radius: heavyCleaveRadius * 1.05,
           energyOrbs: orbsUsed,
           element: heavyElement,
+        });
+        triggerSakugaImpact(sakugaDirectorRef.current, {
+          kind: 'heavy_hit',
+          element: heavyElement,
+          worldX: syncImpactX,
+          worldY: syncImpactY,
+          angle: heavySlashAngle,
+          intensity: 1.12 + orbsUsed * 0.08,
         });
         if (isDebugMode) {
           qaRecentEventsRef.current.push({
@@ -5690,11 +5788,27 @@ export default function KaliyugaArena() {
               duration: 0.48,
             });
           }
+          const finisherSakugaElem: SakugaElement =
+            capturedStance === 'pillar'
+              ? 'vayu'
+              : capturedStance === 'thrust'
+              ? 'vajra'
+              : varunaInfusionTimerRef.current > 0
+              ? 'varuna'
+              : 'agni';
+          triggerSakugaImpact(sakugaDirectorRef.current, {
+            kind: 'heavy_hit',
+            element: finisherSakugaElem,
+            worldX: originX,
+            worldY: originY,
+            angle: capturedAngle,
+            intensity: 1.08,
+          });
           webglDemonSlayerVfxRef.current?.spawnSparkBurst({
             x: originX + Math.cos(capturedAngle) * 52,
             y: originY + Math.sin(capturedAngle) * 34,
-            count: 10,
-            speed: 370,
+            count: 16,
+            speed: 440,
             palette: lightSlashPalette,
           });
         }
@@ -6117,6 +6231,7 @@ export default function KaliyugaArena() {
       );
       return;
     }
+    abortActiveStrike();
     p.stamina = dashRes.nextStamina;
     p.dashCharges = dashRes.nextCharges;
     p.dashRechargeTimer = dashRes.nextRechargeTimer;
@@ -6481,19 +6596,20 @@ export default function KaliyugaArena() {
         if (e.altKey) triggerSwitchWeapon('trishula_great');
         else triggerSwitchStance('thrust');
       } else if (e.code === 'Digit4') {
-        // [4] -> Varuna Tenth Form: Constant Flux (Devastating Coiled 3D Water Dragon Surge with Inward Vortex Pull & Execute!)
+        // [4] -> Varuna Tenth Form: Constant Flux (Sculpted Hokusai Water Dragon + 6.5s Varuna Blade Infusion!)
         e.preventDefault();
         const p = sim.player;
         const aimAng = Math.atan2(
           sim.input.pointerActive ? sim.input.pointerY - p.y : p.lastMoveDirY,
           sim.input.pointerActive ? sim.input.pointerX - p.x : p.lastMoveDirX || p.facing
         );
+        varunaInfusionTimerRef.current = 6.5;
         soundEngine.playBreathingStyle('water');
         if (isDebugMode) {
           qaRecentEventsRef.current.push({ name: 'varuna-water-dragon', frameTime: performance.now(), meta: 'varuna' });
           if (qaRecentEventsRef.current.length > 50) qaRecentEventsRef.current.shift();
         }
-        // Tier 3 Cinema Ultimate: Coiled Hokusai Water Dragon + Dual Tidal Vortex Ripples + Foam Spark Burst
+        // Tier 3 Cinema Ultimate: Coiled Hokusai Water Dragon + Clawed Seafoam Wake + Ink-Rimmed Water Droplets
         webglDemonSlayerVfxRef.current?.spawnWaterDragon({
           x: p.x,
           y: p.y - 22,
@@ -6503,26 +6619,19 @@ export default function KaliyugaArena() {
         });
         webglDemonSlayerVfxRef.current?.spawnShockwaveRing({
           x: p.x,
-          y: p.y,
-          radius: 265,
+          y: p.y + 8,
+          radius: 245,
           palette: 'water',
-          duration: 0.52,
+          duration: 0.54,
         });
-        webglDemonSlayerVfxRef.current?.spawnShockwaveRing({
-          x: p.x,
-          y: p.y,
-          radius: 165,
-          palette: 'water',
-          duration: 0.36,
+        triggerSakugaImpact(sakugaDirectorRef.current, {
+          kind: 'astra_burst',
+          element: 'varuna',
+          worldX: p.x + Math.cos(aimAng) * 26,
+          worldY: p.y + Math.sin(aimAng) * 14,
+          angle: aimAng,
+          intensity: 1.28,
         });
-        webglDemonSlayerVfxRef.current?.spawnSparkBurst({
-          x: p.x,
-          y: p.y - 20,
-          count: 24,
-          speed: 440,
-          palette: 'water',
-        });
-        spawnParticles(p.x, p.y - 16, 26, '#38e8ff', 240, 4.6, 65);
         sim.cameraShakeTrauma = Math.min(1, sim.cameraShakeTrauma + 0.42);
         let hitAnyFlux = false;
         const fluxDmgMult = p.transformTimer > 0 ? KALA_BHAIRAVA_DAMAGE_MULT : 1.0;
@@ -8827,6 +8936,42 @@ export default function KaliyugaArena() {
               e.scaleY = 1.0;
               e.slashArcAlpha = 1.0;
 
+              // Two-Sided Ufotable Boss Warfare: Bosses unleash distinct Blood Demon Art / Shockwave VFX!
+              if (e.isBoss || e.type === 'semi_boss_bloodforge') {
+                if (e.type === 'dundubhi') {
+                  webglDemonSlayerVfxRef.current?.spawnAkazaShockwavePulse({
+                    x: e.x,
+                    y: e.y,
+                    radius: 235,
+                    duration: 0.48,
+                  });
+                  spawnSakugaFloorBlowout(sakugaDirectorRef.current, {
+                    worldX: e.x,
+                    worldY: e.y + 8,
+                    radius: 270,
+                    element: 'varuna',
+                    duration: 0.52,
+                    intensity: 1.05,
+                  });
+                } else {
+                  webglDemonSlayerVfxRef.current?.spawnBloodDemonSlash({
+                    x: e.x,
+                    y: e.y,
+                    angle: e.aimAngle,
+                    radius: e.isBoss ? 250 : 195,
+                    duration: 0.5,
+                  });
+                  spawnSakugaFloorBlowout(sakugaDirectorRef.current, {
+                    worldX: e.x,
+                    worldY: e.y + 8,
+                    radius: e.isBoss ? 275 : 210,
+                    element: 'blood',
+                    duration: 0.52,
+                    intensity: 1.08,
+                  });
+                }
+              }
+
               // Execute Enemy/Boss Attack with distinct multi-projectile patterns & Demon Slayer Blood Demon Arts!
               let yantraBurstHitPlayer = false;
               if (
@@ -10077,9 +10222,20 @@ export default function KaliyugaArena() {
         offsetX: sim.cameraKickX + activeShot.offsetX + cameraShake.x,
         offsetY: sim.cameraKickY + activeShot.offsetY + cameraShake.y,
       });
+      // Step Ufotable Sakuga Impact & Chiaroscuro Director in real dt (smooth during hitstop!)
+      stepSakugaDirector(sakugaDirectorRef.current, dt, {
+        isBossChamber: sim.enemies.some((en) => en.isBoss && en.aiState !== 'ko'),
+        isHubMode:
+          sliceStageRef.current === 'vaitarani_hub' || sliceStageRef.current === 'opening_wake',
+        hasActiveElementalVfx: Boolean(webglDemonSlayerVfxRef.current?.hasActiveEffects()),
+      });
+
       ctx.translate(cw * 0.5, ch * 0.5);
       if (Math.abs(safeCamera.zoom - 1) > 0.0005) {
         ctx.scale(safeCamera.zoom, safeCamera.zoom);
+      }
+      if (Math.abs(sakugaDirectorRef.current.dutchTiltRad) > 0.0005) {
+        ctx.rotate(sakugaDirectorRef.current.dutchTiltRad);
       }
       // A steady, world-bounded hit impulse cannot expose black edges from
       // the static poster or animated chamber MP4.
@@ -10447,6 +10603,27 @@ export default function KaliyugaArena() {
       }
       ctx.restore();
 
+      // 2.4. Pillar 1 — Ufotable Chiaroscuro Twilight Arena Grading + Blazing HDR Floor Light Blowout Pools!
+      {
+        const stanceElem: SakugaElement =
+          varunaInfusionTimerRef.current > 0
+            ? 'varuna'
+            : sim.player.stance === 'pillar'
+            ? 'vayu'
+            : sim.player.stance === 'thrust'
+            ? 'vajra'
+            : 'agni';
+        renderChiaroscuroAndFloorBlowouts(ctx, sakugaDirectorRef.current, {
+          camX: sim.camX,
+          camY: sim.camY,
+          cw,
+          ch,
+          playerX: sim.player.x,
+          playerY: sim.player.y,
+          stanceElement: stanceElem,
+        });
+      }
+
       // 2.5. From-Scratch Ufotable WebGL Floor Pass (Akaza 12-Point Snowflake Compass Mandala & Sumi-e Shockwave Rings)
       // Rendered BEFORE characters & bosses so Dundubhi, Vrikodara, and Rudra stand cleanly ON TOP of the glowing floor mandala!
       {
@@ -10548,18 +10725,14 @@ export default function KaliyugaArena() {
           e.postureBrokenTimer <= 0 &&
           e.aiState !== 'recover'
         ) {
-          // Ironmaw Gladiator / Semi-Boss active front shield indicator via subtle Vedic spark arc
-          drawAdditiveFlipbookCell(ctx, {
-            sheetSpec: PHASE2_VFX_SHEETS.parryAndHitSparks4x2,
-            col: 0,
-            row: PARRY_SPARKS_FLIPBOOK_ROWS.VEDIC_PARRY_FLASH,
-            x: e.x + Math.cos(e.aimAngle) * 14,
-            y: e.y - 12 + Math.sin(e.aimAngle) * 8,
-            width: 30,
-            height: 30,
-            rotationRad: e.aimAngle,
-            scaleY: 0.72,
-            alpha: 0.34,
+          // Crisp ink-rimmed Vedic Ward Shield Arc (replaces blurry yellow dandelion-ball PNG!)
+          renderCrispVedicWardShield(ctx, {
+            x: e.x,
+            y: e.y - 16,
+            angle: e.aimAngle,
+            radius: 26,
+            isWindup: false,
+            nowMs: now,
           });
         }
       });
@@ -11284,6 +11457,13 @@ export default function KaliyugaArena() {
               });
 
             if (renderedEnemy3D && enemy3d) {
+              renderDynamicElementalCastShadow(
+                ctx,
+                sakugaDirectorRef.current,
+                e.x + lungeOffsetX,
+                e.y + lungeOffsetY,
+                e.isBoss ? 34 : 20
+              );
               drawGrounded3DContactShadow(ctx, {
                 worldX: e.x + lungeOffsetX,
                 worldY: e.y + lungeOffsetY,
@@ -11343,30 +11523,22 @@ export default function KaliyugaArena() {
           }
 
           if ((e.ironGuardWindupTimer || 0) > 0 && e.aiState !== 'ko') {
-            // Visible gold Vedic parry shield windup telegraph at chest/shield height before Iron Guard becomes active
-            const wProg = Math.max(0, Math.min(1, 1 - (e.ironGuardWindupTimer || 0) / 0.22));
-            drawAdditiveFlipbookCell(ctx, {
-              sheetSpec: PHASE2_VFX_SHEETS.parryAndHitSparks4x2,
-              col: wProg > 0.55 ? 2 : 0,
-              row: PARRY_SPARKS_FLIPBOOK_ROWS.VEDIC_PARRY_FLASH,
-              x: e.x + e.facing * (e.isBoss ? 24 : 14),
-              y: e.y - (e.isBoss ? 86 : 44),
-              width: e.isBoss ? 58 : 44,
-              height: e.isBoss ? 58 : 44,
-              rotationRad: e.facing >= 0 ? 0 : Math.PI,
-              alpha: 0.56,
+            renderCrispVedicWardShield(ctx, {
+              x: e.x,
+              y: e.y - (e.isBoss ? 72 : 34),
+              angle: e.facing >= 0 ? 0 : Math.PI,
+              radius: e.isBoss ? 48 : 30,
+              isWindup: true,
+              nowMs: now,
             });
           } else if (e.parryStanceTimer > 0 && e.aiState !== 'ko') {
-            drawAdditiveFlipbookCell(ctx, {
-              sheetSpec: PHASE2_VFX_SHEETS.parryAndHitSparks4x2,
-              col: Math.floor(now * 0.008) % 2 === 0 ? 0 : 2,
-              row: PARRY_SPARKS_FLIPBOOK_ROWS.VEDIC_PARRY_FLASH,
-              x: e.x + e.facing * (e.isBoss ? 24 : 14),
-              y: e.y - (e.isBoss ? 86 : 44),
-              width: e.isBoss ? 56 : 42,
-              height: e.isBoss ? 56 : 42,
-              rotationRad: e.facing >= 0 ? 0 : Math.PI,
-              alpha: 0.62,
+            renderCrispVedicWardShield(ctx, {
+              x: e.x,
+              y: e.y - (e.isBoss ? 72 : 34),
+              angle: e.facing >= 0 ? 0 : Math.PI,
+              radius: e.isBoss ? 52 : 32,
+              isWindup: false,
+              nowMs: now,
             });
           }
 
@@ -11407,23 +11579,23 @@ export default function KaliyugaArena() {
             renderWeaponTipStarburstGlint(ctx, weaponGlint, now);
           }
 
-          if (e.immobilizedTimer > 0 && decalsAsset && decalsAsset.frames.length > 0) {
-            const mf = decalsAsset.frames[0];
+          if (e.immobilizedTimer > 0 && e.aiState !== 'ko') {
+            // Crisp grounded ink-rimmed Vedic binding ring at enemy feet (replaces blurry yellow circular torso blob!)
             ctx.save();
-            ctx.globalCompositeOperation = 'screen';
-            ctx.translate(e.x, e.y - 20);
-            ctx.rotate(now * 0.003);
-            ctx.drawImage(
-              decalsAsset.goldCanvas,
-              mf.sx,
-              mf.sy,
-              mf.sw,
-              mf.sh,
-              -22,
-              -22,
-              44,
-              44
-            );
+            ctx.translate(e.x, e.y + 2);
+            ctx.scale(1, 0.56);
+            ctx.strokeStyle = 'rgba(10, 7, 14, 0.88)';
+            ctx.lineWidth = 5.5;
+            ctx.beginPath();
+            ctx.arc(0, 0, e.isBoss ? 38 : 22, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.strokeStyle = 'rgba(255, 206, 92, 0.85)';
+            ctx.lineWidth = 2.2;
+            ctx.setLineDash([10, 6]);
+            ctx.lineDashOffset = -now * 0.03;
+            ctx.beginPath();
+            ctx.arc(0, 0, e.isBoss ? 38 : 22, 0, Math.PI * 2);
+            ctx.stroke();
             ctx.restore();
           }
 
@@ -11599,20 +11771,85 @@ export default function KaliyugaArena() {
           }
 
           if (rendered3D && rudra3d) {
+            // Heroic Rudra Scale Authority + Exact Camera-Projected Ground Foot Anchor
+            const drawSize = HEROIC_DRAW_SIZES.rudra;
+            const anchorX = -drawSize * 0.5;
+            const anchorY = -drawSize * rudra3d.footAnchorRatio;
+            rudraSpriteRectRef.current = {
+              drawX: p.x + anchorX,
+              drawY: p.y + anchorY,
+              drawW: drawSize,
+              drawH: drawSize,
+            };
+
+            // Live 3D Parashu Blade-Trail Sampling synced directly to Rudra's actual 3D axe root & tip!
+            const webglVfxLive = webglDemonSlayerVfxRef.current;
+            if (
+              webglVfxLive &&
+              coreLock.rudraIsAttacking &&
+              p.weaponSwingProgress >= 0.14 &&
+              p.weaponSwingProgress <= 0.90
+            ) {
+              const liveTrailKey = `rudra-live-${p.attackSerial}`;
+              if (liveBladeTrailActiveIdRef.current !== liveTrailKey) {
+                if (liveBladeTrailActiveIdRef.current) {
+                  webglVfxLive.endBladeTrail(liveBladeTrailActiveIdRef.current, false);
+                }
+                const livePalette: DemonSlayerVfxPalette =
+                  varunaInfusionTimerRef.current > 0
+                    ? 'water'
+                    : p.stance === 'pillar'
+                    ? 'wind'
+                    : p.stance === 'thrust'
+                    ? 'thunder'
+                    : 'hinokami';
+                webglVfxLive.beginBladeTrail(liveTrailKey, {
+                  palette: livePalette,
+                  widthBoostPx: coreLock.rudraIsHeavyAttack ? 78 : 54,
+                  fadeDuration: 0.22,
+                });
+                liveBladeTrailActiveIdRef.current = liveTrailKey;
+              }
+              const latestPose = rudra3d.getLatestBladePose();
+              if (latestPose) {
+                const sample = projectBakedBladePoseToArena(
+                  latestPose,
+                  rudraSpriteRectRef.current,
+                  now * 0.001
+                );
+                if (sample) {
+                  webglVfxLive.pushBladeTrailSample(liveTrailKey, sample);
+                  if (isDebugMode) {
+                    debugBladeSamplesRef.current.push(sample);
+                    if (debugBladeSamplesRef.current.length > 24) debugBladeSamplesRef.current.shift();
+                  }
+                }
+              }
+            } else if (liveBladeTrailActiveIdRef.current && webglVfxLive) {
+              webglVfxLive.endBladeTrail(liveBladeTrailActiveIdRef.current, false);
+              liveBladeTrailActiveIdRef.current = null;
+            }
+
+            // Pillar 5 — WebGL Back-Depth Pass rendered IMMEDIATELY BEHIND Rudra so 3D flames,
+            // Hokusai waves, wind crescents, and live Parashu blade trails wrap around his torso!
+            if (webglVfxLive && webglVfxLive.updateAndRenderBackPass(sim.camX, sim.camY, 1, cw, ch)) {
+              ctx.save();
+              ctx.globalCompositeOperation = 'source-over';
+              ctx.drawImage(webglVfxLive.backCanvas, sim.camX, sim.camY, cw, ch);
+              ctx.restore();
+            }
+
+            renderDynamicElementalCastShadow(ctx, sakugaDirectorRef.current, p.x, p.y, 22);
+
             drawGrounded3DContactShadow(ctx, {
               worldX: p.x,
               worldY: p.y,
-              baseRadius: 15,
+              baseRadius: 17,
               elevationY: 0,
               lightSourceX: primaryLightX,
               accentColor: p.transformTimer > 0 ? '#ff5226' : '#eab308',
               isPlayer: true,
             });
-
-            // Balanced Heroic Rudra Scale Authority (136px) + Exact Camera-Projected Ground Foot Anchor
-            const drawSize = HEROIC_DRAW_SIZES.rudra;
-            const anchorX = -drawSize * 0.5;
-            const anchorY = -drawSize * rudra3d.footAnchorRatio;
 
             ctx.save();
             ctx.translate(p.x, p.y);
@@ -11829,31 +12066,57 @@ export default function KaliyugaArena() {
       void drawAdditiveFlipbookRowProgress;
       void renderLightningArcFlipbooks;
 
-      // 8.1. Dynamic Elemental Bounce Glow over Hero Torso during Active Breathing Strikes & Astras
+      // 8.1. Pillar 4 — Dynamic Split Elemental Bounce Rim-Light over Hero & Nearby Enemies during Active Clashes
       {
         const p = sim.player;
-        if (
+        const sakuga = sakugaDirectorRef.current;
+        const isHeroStriking =
           p.action === 'light_attack' ||
           p.action === 'heavy_unleash' ||
           p.action === 'execute' ||
-          p.action === 'astra'
-        ) {
+          p.action === 'astra';
+        if (isHeroStriking || sakuga.activeLightIntensity > 0.08) {
           const bounceRgb =
-            p.stance === 'pillar'
+            sakuga.activeLightIntensity > 0.12
+              ? `${sakuga.activeLightRgb[0]}, ${sakuga.activeLightRgb[1]}, ${sakuga.activeLightRgb[2]}`
+              : varunaInfusionTimerRef.current > 0
+              ? '45, 226, 255'
+              : p.stance === 'pillar'
               ? '38, 247, 141'
               : p.stance === 'thrust'
-              ? '56, 232, 255'
-              : '255, 168, 48';
+              ? '255, 232, 64'
+              : '255, 138, 28';
+          const intensity = Math.max(isHeroStriking ? 0.36 : 0, sakuga.activeLightIntensity * 0.44);
           ctx.save();
           ctx.globalCompositeOperation = 'lighter';
-          const bGrad = ctx.createRadialGradient(p.x, p.y - 34, 4, p.x, p.y - 34, 86);
-          bGrad.addColorStop(0, `rgba(${bounceRgb}, 0.26)`);
-          bGrad.addColorStop(0.55, `rgba(${bounceRgb}, 0.10)`);
+          const bGrad = ctx.createRadialGradient(p.x, p.y - 42, 6, p.x, p.y - 42, 110);
+          bGrad.addColorStop(0, `rgba(${bounceRgb}, ${Math.min(0.46, intensity).toFixed(3)})`);
+          bGrad.addColorStop(0.55, `rgba(${bounceRgb}, ${(intensity * 0.36).toFixed(3)})`);
           bGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
           ctx.fillStyle = bGrad;
           ctx.beginPath();
-          ctx.arc(p.x, p.y - 34, 86, 0, Math.PI * 2);
+          ctx.arc(p.x, p.y - 42, 110, 0, Math.PI * 2);
           ctx.fill();
+
+          // Bounce light also hits nearby enemies inside the clash radius (Tengen-vs-Gyutaro split lighting!)
+          if (sakuga.activeLightIntensity > 0.14) {
+            for (let ei = 0; ei < sim.enemies.length; ei++) {
+              const foe = sim.enemies[ei];
+              if (foe.aiState === 'ko') continue;
+              const distL = Math.hypot(foe.x - sakuga.activeLightX, foe.y - sakuga.activeLightY);
+              if (distL > 340) continue;
+              const falloff = (1 - distL / 340) * sakuga.activeLightIntensity;
+              const eRad = foe.isBoss ? 128 : 74;
+              const eGrad = ctx.createRadialGradient(foe.x, foe.y - 40, 4, foe.x, foe.y - 40, eRad);
+              eGrad.addColorStop(0, `rgba(${bounceRgb}, ${(falloff * 0.38).toFixed(3)})`);
+              eGrad.addColorStop(0.6, `rgba(${bounceRgb}, ${(falloff * 0.14).toFixed(3)})`);
+              eGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+              ctx.fillStyle = eGrad;
+              ctx.beginPath();
+              ctx.arc(foe.x, foe.y - 40, eRad, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          }
           ctx.restore();
         }
       }
@@ -11903,6 +12166,9 @@ export default function KaliyugaArena() {
       // 9.5. Render Calligraphic Devanagari Combat Impact Stamps (रौद्र / प्रहार / विच्छेद / अवहेलना)
       renderDevanagariCombatStamps(ctx, sim.devanagariStamps);
 
+      // 9.6. Tengen-vs-Gyutaro World-Space Cross-Cutting Razor Slash Beams!
+      renderSakugaCrossBeams(ctx, sakugaDirectorRef.current);
+
       // End World-Space Camera Pass (-sim.camX, -sim.camY)
       ctx.restore();
 
@@ -11921,7 +12187,7 @@ export default function KaliyugaArena() {
         ctx.drawImage(webglVfx.canvas, 0, 0, cw, ch);
         if (webglVfx.hasBloomFrame) {
           ctx.globalCompositeOperation = 'lighter';
-          ctx.globalAlpha = 0.85;
+          ctx.globalAlpha = 0.92;
           ctx.drawImage(webglVfx.bloomCanvas, 0, 0, cw, ch);
         }
         ctx.restore();
@@ -11944,6 +12210,15 @@ export default function KaliyugaArena() {
         sim.camY,
         sim.gateWipeTimer > 0 ? 1 - sim.gateWipeTimer / 0.44 : 0
       );
+
+      // 9.75. Pillar 2 — Screen-Space 2-3 Frame Sakuga Impact Frames, Pitch-Black Speed-Lines & Chromatic Split!
+      renderSakugaScreenPostPass(ctx, sakugaDirectorRef.current, {
+        cw,
+        ch,
+        camX: sim.camX,
+        camY: sim.camY,
+        zoom: safeCamera.zoom,
+      });
 
       void getLanternLightState;
       void renderLanternAtmosphereAndAshStorm;

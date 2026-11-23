@@ -329,31 +329,31 @@ export interface DynamicCameraInput {
  * - Susanoo active: subtly widens by `-0.04` so the towering spectral torso breathes cleanly
  */
 export function computeDynamicArenaCameraZoom(input: DynamicCameraInput): number {
-  let target = 0.94;
+  let target = 1.12;
   if (input.isHub) {
-    target = 0.96;
+    target = 1.06;
   } else if (input.hasActiveBoss) {
-    target = input.bossKind === 'semi_boss' ? 0.86 : 0.81;
+    target = input.bossKind === 'semi_boss' ? 1.0 : 0.94;
   }
   if (input.susanooActive && !input.isHub) {
-    target = Math.max(0.76, target - 0.04);
+    target = Math.max(0.88, target - 0.04);
   }
   const t = Math.min(1, Math.max(0, input.dt * 2.8));
   return input.currentZoom + (target - input.currentZoom) * t;
 }
 
 /**
- * Heroic Character Draw Sizes (calibrated so Rudra never feels oversized while
+ * Heroic Character Draw Sizes (calibrated for Ufotable anime combat intimacy while
  * bosses retain towering monumental scale under dynamic zoom).
  */
 export const HEROIC_DRAW_SIZES = {
-  rudra: 136,
-  susanoo: 340,
-  regularMin: 122,
-  regularMax: 146,
-  semiBoss: 224,
-  dundubhi: 274,
-  vrikodara: 294,
-  savitriHub: 148,
-  lohakaraHub: 172,
+  rudra: 154,
+  susanoo: 368,
+  regularMin: 134,
+  regularMax: 158,
+  semiBoss: 242,
+  dundubhi: 296,
+  vrikodara: 316,
+  savitriHub: 158,
+  lohakaraHub: 184,
 } as const;

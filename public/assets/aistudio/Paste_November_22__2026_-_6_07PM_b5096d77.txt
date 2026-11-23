@@ -1,0 +1,1250 @@
+# KALIYUGA: THE BLEEDING CROWN
+# GOOGLE NEON — MASTER EXECUTION PLAN
+## Combined Phase 0 + Phase 1
+### Production Specification v1.0
+
+**Development environment:** Google AI Studio Build  
+**Target output:** Standalone, playable, exportable React/TypeScript + Three.js combat prototype  
+**Integration target:** Existing Kaliyuga web game  
+**Target platform:** PC, with MacBook M3 Air performance considerations  
+**Budget:** No paid assets, services, or mandatory subscriptions beyond existing access
+
+---
+
+# PART A — PROJECT RULES
+
+## A1. Mission
+
+Create the most visually polished combat prototype feasible inside Google AI Studio Build.
+
+The result must combine:
+
+- Responsive, satisfying combat.
+- Beautiful, original elemental VFX.
+- Convincing Parashu weapon movement.
+- Accurate hit synchronization.
+- Cinematic impact feedback.
+- Readable isometric presentation.
+- Reusable code suitable for later integration.
+- Performance-aware implementation.
+
+The aesthetic ambition is the spectacle and fluidity associated with premium anime action games, adapted into an original dark Indian mythological visual language.
+
+**The goal is not to copy Demon Slayer. The goal is to achieve comparable visual clarity, dramatic movement, power and elegance through Kaliyuga's own designs.**
+
+## A2. Strict environment limitations
+
+Neon is working inside Google AI Studio Build.
+
+Therefore:
+
+1. Do not assume access to the Kaliyuga GitHub repository.
+2. Do not invent information about existing game source files.
+3. Do not claim to have fixed bugs in the original game.
+4. Do not attempt repository branches, commits or pull requests.
+5. Do not require Blender or Unreal Engine.
+6. Do not depend on paid external APIs.
+7. Do not require proprietary art, models or audio that has not been supplied.
+8. Do not pretend a static illustration is an actual animated effect.
+
+Where original models or animations are unavailable, create clearly labeled temporary replacements.
+
+The replacement assets should have similar visual proportions and attachment points so they can be exchanged during integration.
+
+## A3. Required deliverable
+
+Produce **one playable application** containing the complete Phase 0 foundation and Phase 1 effects.
+
+It must include an interactive arena, a controllable warrior, an enemy target, working attack states, all required elemental attacks, a quality selector and an optional developer inspection panel.
+
+All effects must be rendered by the running application.
+
+A collection of demonstration videos, concept images or separate experimental pages is not an acceptable substitute.
+
+---
+
+# PART B — PHASE 0: COMBAT FOUNDATION
+
+## P0.1 — Project architecture
+
+**Objective:** Establish a clean structure before creating complex VFX.
+
+Use React and TypeScript for the application and Three.js with WebGL for real-time rendering.
+
+The main scene should not be recreated whenever an attack happens or a React state variable changes.
+
+Organize the application into these logical modules:
+
+| Module | Responsibility |
+|---|---|
+| GameScene | Three.js renderer, scene lifecycle and animation loop |
+| GameCamera | Isometric camera, framing and shake |
+| InputController | Keyboard and mouse input |
+| PlayerController | Movement, stance and action states |
+| CombatController | Attack scheduling, damage and recovery |
+| WeaponTracker | Parashu transforms and blade-tip trajectory |
+| EnemyController | Dummy enemy health, posture and reactions |
+| VfxDirector | Starts, updates and ends elemental effects |
+| EffectPool | Reuses particles, geometry and effects |
+| ElementRenderers | Fire, wind, thunder, water and guardian visuals |
+| AudioDirector | Optional original sound playback and impact timing |
+| PerformanceMonitor | FPS, frame times, effect counts and quality settings |
+| DebugPanel | Visual test controls and diagnostics |
+
+**Architecture rule:** Combat logic must remain separate from VFX rendering.
+
+The player should still be able to move, attack and damage the dummy when decorative effects are disabled.
+
+### Acceptance gate
+
+- Application opens without fatal errors.
+- A Three.js scene renders successfully.
+- Input works.
+- The renderer updates continuously.
+- Scene objects are not recreated unnecessarily.
+- Modules have clear responsibilities.
+
+---
+
+## P0.2 — Establish the isometric presentation
+
+Create a small, atmospheric combat arena inspired by Kaliyuga's Charnel Plains.
+
+The arena should include:
+
+- Ancient cracked stone flooring.
+- Ash-darkened terrain.
+- Scattered bronze architectural debris.
+- Subtle distant embers.
+- A restrained crimson atmospheric glow.
+- Readable shadows beneath characters.
+- Enough empty space to inspect combat effects.
+
+The environment is a **testing stage**, not a replacement for the existing game's MP4 arenas.
+
+### Camera requirements
+
+Use an orthographic or carefully controlled perspective camera that reads as isometric 2.5D.
+
+Its composition should resemble a playable action roguelite, not a close-up third-person action game.
+
+Rudra and his target must remain large enough to inspect without misrepresenting how effects look at actual gameplay scale.
+
+Implement two inspection modes:
+
+**Gameplay mode:** Normal isometric distance, used for all mandatory acceptance tests.
+
+**Detail mode:** Closer inspection for weapon trajectories, shaders, particles and attachment points.
+
+A beautiful effect visible only in Detail mode fails gameplay-readability acceptance.
+
+### Acceptance gate
+
+Rudra, the enemy, the ground and their effects must remain clearly distinguishable at normal gameplay distance.
+
+---
+
+## P0.3 — Build the player and weapon system
+
+### Rudra
+
+If an actual Rudra model is not available, create a stylized temporary warrior with:
+
+- Dark bronze and bone-colored armor.
+- Crimson cloth accents.
+- Readable head, shoulders, torso, arms and legs.
+- Strong silhouette.
+- A visible two-handed or one-handed Parashu grip appropriate to the attack.
+- Distinct idle and attack poses.
+
+The temporary model is not expected to match the finished Rudra art.
+
+However, it must be more useful than a floating cube or an unanimated capsule.
+
+### Parashu
+
+Create a recognizable axe with:
+
+- A visible blade.
+- A clearly defined grip or hand attachment.
+- A defined blade root.
+- A defined blade tip.
+- A blade orientation suitable for tracking attacks.
+
+The weapon should rotate and translate during attacks, not simply sit in the player's hand while effects animate independently.
+
+### Weapon attachment interface
+
+Every frame, the system must make the following information available:
+
+- Player world position.
+- Player facing direction.
+- Weapon world transform.
+- Blade root position.
+- Blade-tip position.
+- Previous-frame blade-tip position.
+- Weapon-tip velocity.
+- Current attack identifier.
+- Normalized attack progress from 0 to 1.
+
+This is the foundation of synchronization.
+
+**Do not build the main VFX using fixed arbitrary offsets from the character.**
+
+---
+
+## P0.4 — Implement movement and controls
+
+### Required controls
+
+| Input | Behavior |
+|---|---|
+| WASD | Movement |
+| Left mouse button | Light attack |
+| Right mouse button | Heavy attack |
+| 1 | Smash stance |
+| 2 | Pillar stance |
+| 3 | Thrust stance |
+| Z | Agni |
+| X | Vayu |
+| C | Vajra |
+| V | Varuna |
+| G | Guardian rage mode |
+| Space | Dash |
+| F | Parry |
+| Q / E / R | Astra demonstrations |
+| Escape | Close panels or exit inspection mode |
+
+Provide keyboard alternatives for light and heavy attacks so the application remains testable when mouse capture behaves differently in the AI Studio preview.
+
+Prevent the browser context menu from interrupting right-click attacks inside the game canvas.
+
+The player should turn toward the intended attack direction and transition naturally between movement, anticipation, attack and recovery.
+
+### Acceptance gate
+
+Repeated movement, attacks and stance changes must not freeze the player, produce stuck inputs or break camera tracking.
+
+---
+
+## P0.5 — Combat state machine
+
+Implement a finite-state combat controller.
+
+Suggested states:
+
+| State | Description |
+|---|---|
+| Idle | Standing ready |
+| Moving | Walking or repositioning |
+| Windup | Attack anticipation |
+| Active | Damage-producing attack frames |
+| Recovery | Attack completion and return to control |
+| Dashing | Short evasive movement |
+| Parrying | Defensive window |
+| Staggered | Hit reaction |
+| Guardian | Temporary transformed combat state |
+
+These are combat states, not separate visual effects.
+
+### Attack timing
+
+Each attack must have an explicit timeline:
+
+**Windup → Active frames → Recovery**
+
+Use provisional timings appropriate to the feel of each stance:
+
+| Stance | Light attack target | Heavy attack target | Intended feel |
+|---|---|---|---|
+| Smash | Roughly 450–550 ms | Roughly 850–1,000 ms | Brutal and weighty |
+| Pillar | Roughly 400–500 ms | Roughly 750–950 ms | Controlled and grounded |
+| Thrust | Roughly 350–450 ms | Roughly 700–850 ms | Quick and piercing |
+
+These are initial prototype values, not canonical Kaliyuga timings. Make them configurable.
+
+Damage must occur only during the intended contact window.
+
+The character should not deliver multiple unintended hits merely because a collision overlaps across several frames.
+
+### Acceptance gate
+
+Every light and heavy attack must demonstrate a recognizable anticipation, contact and recovery.
+
+---
+
+## P0.6 — Create three distinct stance animations
+
+### Smash
+
+**Light attack:** Broad, committed axe swing with a visible follow-through.
+
+**Heavy attack:** Strong anticipation, large sweeping or overhead movement, powerful contact and substantial recovery.
+
+The heavy weapon should feel as though it has mass.
+
+### Pillar
+
+**Light attack:** Compact, controlled attack emphasizing stability.
+
+**Heavy attack:** Deliberate, authoritative movement with a powerful grounded finish.
+
+The pose should communicate control rather than spinning recklessly.
+
+### Thrust
+
+**Light attack:** Fast directional strike.
+
+**Heavy attack:** Charged, linear piercing motion with a decisive endpoint.
+
+The silhouette must communicate a different attack intention from Smash.
+
+### Animation standard
+
+No attack should be only an effect playing while the character remains static.
+
+Animation and effects must be coordinated, even if the initial motion uses procedural posing or temporary animation clips.
+
+---
+
+## P0.7 — Build the enemy test target
+
+Create one functional enemy dummy.
+
+It needs:
+
+- Health.
+- Posture.
+- Visible hit reactions.
+- Directional knockback.
+- A simple stagger animation.
+- An optional guard state.
+- A reset control.
+- Clear distinction between a successful and missed hit.
+
+Add a second stress-test mode where several enemies can be present simultaneously.
+
+The dummy should not require advanced enemy AI. Its purpose is reliable combat validation.
+
+### Acceptance gate
+
+A hit affects the enemy only when an actual attack connects. Missing attacks should not produce contact damage or a full enemy-impact effect.
+
+---
+
+## P0.8 — Implement weapon contact synchronization
+
+This is the most important technical gate in Phase 0.
+
+Implement a **WeaponTracker** that samples the weapon's world-space position throughout the attack.
+
+### Required behavior
+
+At attack start, register the attack identity and animation timeline.
+
+During the attack, record the blade root and tip positions at each update.
+
+Use recent weapon positions to create directional trail geometry.
+
+At the active frame, detect the intended contact position.
+
+Trigger the impact effect at the contact point.
+
+During recovery, stop creating active trail segments and allow existing visuals to dissipate.
+
+### Failure cases to detect
+
+- Effects beginning before the weapon moves.
+- Trails appearing behind the character while the blade moves forward.
+- Impact effects appearing at a fixed screen coordinate.
+- The same impact triggering repeatedly.
+- Trails continuing after the attack has finished.
+- VFX jumping when the player changes direction.
+- Incorrect effect alignment after dashing.
+
+### Acceptance gate
+
+With all effects reduced to simple white diagnostic trails, the geometry must visibly follow the weapon.
+
+If this fails, do not proceed to complex elemental effects.
+
+---
+
+## P0.9 — Implement basic impact feedback
+
+Build a reusable feedback system containing:
+
+- A short contact flash.
+- Small directional sparks.
+- Configurable hit-stop.
+- Controlled camera shake.
+- A brief enemy reaction.
+- A lightweight contact sound.
+- Optional ground dust.
+
+The important part is timing and coordination, not visual extravagance.
+
+Use different feedback strength for light and heavy attacks.
+
+Heavy attacks should have a more noticeable impact but must not cause the screen to shake continuously.
+
+Provide a Reduced Motion option.
+
+### Acceptance gate
+
+The player should clearly distinguish a light hit, heavy hit, missed hit and blocked hit.
+
+---
+
+## P0.10 — Debug and measurement tools
+
+Create an optional developer panel showing:
+
+- Current stance.
+- Current element.
+- Current attack.
+- Attack timeline progress.
+- Active damage window.
+- Weapon-tip position.
+- Impact event count.
+- FPS and frame-time measurements.
+- Active particle count.
+- Active effect count.
+- Draw-call count when available.
+- Selected quality preset.
+
+Add diagnostic options:
+
+- Show blade-tip tracker.
+- Show contact point.
+- Show attack hitboxes.
+- Display active-frame timing.
+- Disable bloom.
+- Disable all VFX.
+- Disable camera shake.
+- Slow motion.
+- Pause.
+- Frame stepping where feasible.
+- Reset combat arena.
+
+A diagnostic mode must not alter the actual combat rules.
+
+---
+
+## PHASE 0 EXIT GATE
+
+Phase 0 can be considered complete **within the standalone prototype** only when:
+
+- Movement works.
+- All three stances work.
+- Light and heavy attacks work.
+- The weapon is visibly animated.
+- Weapon-tip tracking works.
+- Enemy damage occurs at contact.
+- Basic impacts work.
+- Animation recovery works.
+- Repeated attacks do not break input.
+- Debug tools provide trustworthy information.
+- The preview runs without blocking errors.
+
+**Do not declare Phase 0 complete because the arena looks attractive. Its purpose is to create reliable combat foundations for Phase 1.**
+
+---
+
+# PART C — PHASE 1: ELEMENTAL VISUAL DEVELOPMENT
+
+## P1.1 — Establish Kaliyuga's visual language
+
+Before developing individual elements, create a unified artistic system.
+
+### Core principles
+
+**1. Flow:** Every effect should travel along an intentional trajectory.
+
+**2. Power:** Heavy attacks require stronger composition and impact.
+
+**3. Readability:** Rudra, the enemy and the collision remain visible.
+
+**4. Material identity:** Fire, water, lightning and wind must behave differently.
+
+**5. Layering:** Effects should have foreground, core and residual components.
+
+**6. Restraint:** Visual effects should not overwhelm combat indefinitely.
+
+**7. Originality:** Indian mythological imagery should influence the shape language, without simply borrowing recognizable animation sequences from other media.
+
+### Color direction
+
+| Element | Primary palette | Visual identity |
+|---|---|---|
+| Agni | Sindoor red, fiery orange, bright gold | Calligraphic flames and violent heat |
+| Vayu | Emerald, jade, luminous mint | Bladed wind and flowing currents |
+| Vajra | Electric blue, violet, white-gold | Sharp branching energy and flashes |
+| Varuna | Deep blue, turquoise, silver-cyan | Flowing ribbons and water-serpent movement |
+| Guardian | Deep crimson, antique bronze, near-black | Spectral cleaves and wrathful energy |
+
+Use gradients and material variation rather than one flat color for an entire effect.
+
+---
+
+## P1.2 — Create reusable VFX primitives
+
+Do not hand-code an entirely separate effects engine for each element.
+
+Create reusable primitives with independent animation behavior:
+
+| Primitive | Purpose |
+|---|---|
+| BladeRibbon | Continuous weapon-following trails |
+| ArcMesh | Wide curved directional shapes |
+| ImpactBloom | Brief light burst at contact |
+| DirectionalBurst | Emission along the strike direction |
+| ParticleEmitter | Sparks, droplets, debris, motes |
+| Shockwave | Grounded or outward-moving wave |
+| DistortionLayer | Controlled localized refractive effects |
+| ResidualField | Short-lived atmospheric aftermath |
+| LightningBranch | Branching energy geometry |
+| FluidRibbon | Flowing segmented water shapes |
+| SpectralSlash | Guardian-specific large energy blade |
+| GroundContact | Dust, cracks or elemental reactions |
+
+Use pooled resources and share geometry/materials when possible.
+
+Avoid creating hundreds of independent React components for particles.
+
+VFX primitives should receive world-space coordinates, attack direction, timing and quality settings from the game controller.
+
+---
+
+## P1.3 — Standard elemental attack structure
+
+Every elemental attack should be composed of five moments.
+
+### Moment 1 — Anticipation
+
+A short hint of the element appears near the weapon or warrior.
+
+For example, flame gathers along the axe edge before a heavy Agni strike.
+
+This should create anticipation without firing the main attack too early.
+
+### Moment 2 — Weapon movement
+
+A flowing blade trail appears along the actual Parashu trajectory.
+
+The direction of the visual effect must reflect the direction of the weapon.
+
+### Moment 3 — Contact
+
+The strongest effect appears when the weapon hits its target or reaches the intended attack endpoint.
+
+This is where the major impact flash and contact feedback occur.
+
+### Moment 4 — Secondary release
+
+A larger elemental shape expands from the strike direction.
+
+Examples include a flame wave, emerald gale, electrical shock or water surge.
+
+### Moment 5 — Dissipation
+
+The effect breaks apart into element-specific particles or residual energy.
+
+It must not freeze, abruptly turn into a rectangle or disappear unnaturally.
+
+**Timing and choreography are more important than the total number of particles.**
+
+---
+
+# PART D — ELEMENT-SPECIFIC PRODUCTION
+
+## P1.4 — AGNI: FIRE SYSTEM
+
+### Visual personality
+
+Agni should feel ferocious, aggressive and ceremonial.
+
+The effect should resemble a powerful painted flame brought to life, not a circular particle emitter.
+
+### Agni light attack
+
+Build three visual layers:
+
+**Primary layer:** A bright, curved orange-gold blade trail following the weapon.
+
+**Secondary layer:** Red-orange flame tongues flowing outward from the swing.
+
+**Residual layer:** Fine sparks and embers fading behind the strike.
+
+The trail should be clearly visible at gameplay zoom.
+
+Avoid excessive smoke during normal light attacks.
+
+### Agni heavy attack
+
+Build a seven-part sequence:
+
+1. Warm red glow begins around the axe edge.
+2. Flames gather and stretch in the direction of anticipation.
+3. A massive calligraphic fire arc follows the heavy swing.
+4. At contact, a concentrated golden-white burst appears.
+5. A directional wall or crest of flame erupts from the impact.
+6. Sparks and fragments scatter along the attack's momentum.
+7. The burst collapses into embers, dark smoke wisps and fading glow.
+
+The heavy attack should feel substantially more powerful than its light counterpart.
+
+### Smash variant
+
+Broad flame fan and destructive ground contact.
+
+### Pillar variant
+
+Tightly controlled, forceful flame column or grounded eruption.
+
+### Thrust variant
+
+Narrow, piercing flame spear or concentrated forward stream.
+
+### Rejection criteria
+
+- Large flat orange circles.
+- Uniform spirals.
+- Flame spawning far from the axe.
+- Static textures pasted over the player.
+- Excessive bloom hiding the model.
+- Persistent bright effects covering enemy attacks.
+
+---
+
+## P1.5 — VAYU: EMERALD WIND SYSTEM
+
+### Visual personality
+
+Vayu should feel fast, precise and elegant.
+
+It should contrast strongly with Agni.
+
+### Vayu light attack
+
+A thin emerald edge accompanies the axe movement.
+
+A flowing wind ribbon follows, with small jade energy fragments and directional air streaks.
+
+The effect should feel sharp rather than explosive.
+
+### Vayu heavy attack
+
+1. The air around the blade begins to distort.
+2. Narrow wind streams wrap around the weapon.
+3. Rudra performs the heavy strike.
+4. A wide, beautiful emerald slash expands along the actual swing.
+5. Multiple layered currents travel forward.
+6. A forceful gust impacts the ground or enemy.
+7. Thin green ribbons and motes dissipate.
+
+The heavy attack should have visible depth and a striking silhouette.
+
+### Smash variant
+
+Large, fan-shaped gale cleave.
+
+### Pillar variant
+
+Compressed turbulent wind with a forceful release.
+
+### Thrust variant
+
+Thin high-velocity wind lance with trailing lines.
+
+### Rejection criteria
+
+- Green smoke clouds with no direction.
+- Repeated circular particle rings.
+- Trails detached from the weapon.
+- Effects too transparent to see at normal camera distance.
+- Excessively large green areas obscuring enemies.
+
+---
+
+## P1.6 — VAJRA: THUNDER SYSTEM
+
+### Visual personality
+
+Vajra should feel instantaneous, precise and devastating.
+
+Unlike fire and water, lightning should contain hard-edged branches and very brief, powerful luminosity changes.
+
+### Vajra light attack
+
+A tight electric glow runs along the axe.
+
+Short lightning branches follow the blade during movement.
+
+At contact, a white-blue flash and a small cluster of sparks appear.
+
+The effect rapidly dissipates.
+
+### Vajra heavy attack
+
+1. Blue-violet energy gathers along the weapon.
+2. Small electrical arcs flicker during anticipation.
+3. A luminous, directional strike follows the weapon motion.
+4. Lightning branches connect the blade with the intended contact area.
+5. A high-intensity contact flash occurs.
+6. Large electrical branches propagate briefly along the impact direction.
+7. Residual sparks flicker and decay.
+
+### Smash variant
+
+Wide thunder cleave and grounded electrical branches.
+
+### Pillar variant
+
+Concentrated shock pulse with controlled radial discharge.
+
+### Thrust variant
+
+Narrow, fast lightning penetration with a sharp endpoint flash.
+
+### Rejection criteria
+
+- Random lightning unrelated to the hit.
+- Long branches remaining on screen after the strike.
+- Whiteout obscuring all combat information.
+- Excessive bloom destroying the underlying color design.
+- Every lightning effect appearing identical regardless of attack type.
+
+---
+
+## P1.7 — VARUNA: WATER SYSTEM
+
+### Visual personality
+
+Varuna should feel fluid, graceful and overwhelming.
+
+Water must have visible direction, weight and flow.
+
+### Varuna light attack
+
+A flowing cyan-blue ribbon emerges along the axe trajectory.
+
+Thin water streaks follow the blade.
+
+At contact, a crisp splash breaks outward.
+
+Small droplets scatter and disappear naturally.
+
+### Varuna heavy attack
+
+1. Water-like energy gathers around the Parashu.
+2. Flowing bands stretch toward the expected strike path.
+3. The axe produces a large directional water ribbon.
+4. The flowing ribbon develops into a powerful wave or stylized serpent-like crest.
+5. Contact produces a dense splash and luminous blue impact.
+6. Secondary water streams spread outward.
+7. Droplets and residual mist dissolve.
+
+The serpent motif must convey forward motion through curves, head direction and tapering flow.
+
+It should not resemble a static blue donut.
+
+### Smash variant
+
+Large crashing wave.
+
+### Pillar variant
+
+Strong vertical water surge.
+
+### Thrust variant
+
+Fast, narrow water-serpent strike.
+
+### Rejection criteria
+
+- Static blue rings.
+- Solid blue geometry with no surface variation.
+- Water moving independently of the weapon.
+- Fluid effects looking identical to recolored fire.
+- Persistent mist hiding characters.
+
+---
+
+## P1.8 — KALA-BHAIRAVA: GUARDIAN RAGE
+
+### Visual personality
+
+Guardian rage must feel terrifying, supernatural and authoritative.
+
+This effect should be visually distinct from the four regular elements.
+
+Use deep crimson, antique bronze, black ink-like shadows and carefully placed white-hot accents.
+
+### Guardian light attack
+
+A sharp crimson spectral blade follows the weapon.
+
+Dark energy trails briefly separate from the edge and collapse after impact.
+
+The attack should feel unnaturally powerful without becoming visually chaotic.
+
+### Guardian heavy attack
+
+1. The guardian's spectral energy intensifies.
+2. A much larger weapon-shaped energy silhouette forms around the actual strike.
+3. Rudra executes the heavy animation.
+4. A massive crimson cleave follows the blade trajectory.
+5. The cleave strikes at the intended contact point.
+6. A dark-crimson energy burst and bronze fragments expand.
+7. The energy tears into smaller ink-like remnants.
+8. The visual field returns to normal, preserving combat readability.
+
+### Mandatory restrictions
+
+Do not replace Rudra with an unanimated glowing square.
+
+Do not introduce arbitrary guardian horns, armor changes or character redesigns.
+
+Do not create a separate combat control system.
+
+Do not spam the guardian name across the screen.
+
+Do not obscure Rudra and all enemy telegraphs for the entire effect duration.
+
+Guardian rage may have dramatic visual scale, but its performance cost must remain bounded.
+
+---
+
+# PART E — COMPLETE ATTACK COVERAGE
+
+## P1.9 — All stance and elemental combinations
+
+The system must support the following matrix:
+
+| Element | Smash light | Smash heavy | Pillar light | Pillar heavy | Thrust light | Thrust heavy |
+|---|---|---|---|---|---|---|
+| Agni | Required | Required | Required | Required | Required | Required |
+| Vayu | Required | Required | Required | Required | Required | Required |
+| Vajra | Required | Required | Required | Required | Required | Required |
+| Varuna | Required | Required | Required | Required | Required | Required |
+| Guardian | Required | Required | Required | Required | Required | Required |
+
+This represents **30 required attack presentations**.
+
+The 30 combinations do not need 30 completely separate shaders.
+
+They should reuse high-quality rendering primitives while maintaining clearly distinguishable stance direction, intensity and attack choreography.
+
+### Additional ability demonstrations
+
+Where feasible, also implement isolated demonstrations of:
+
+**Agneyastra (Q):** Major fire-based attack.
+
+**Vayavyastra (E):** Significant wind-based ability.
+
+**Vajrastra (R):** Powerful thunder-based ability.
+
+**Varuna special:** Flowing water-serpent attack.
+
+Support a temporary shared Astra meter and a second-press withdrawal demonstration.
+
+These should remain integration-ready demonstrations, not invented replacements for the original game's exact mechanics.
+
+---
+
+# PART F — INTEGRATION-READY DESIGN
+
+## P1.10 — Effect event interface
+
+The finished VFX library must not depend on the demo's placeholder character.
+
+The integration contract should expose the following event types:
+
+### Attack start
+
+Information supplied by the combat system:
+
+- Attack ID.
+- Player or character ID.
+- Stance.
+- Element.
+- Light or heavy classification.
+- Attack duration.
+- Starting transform.
+- Target direction.
+
+### Weapon pose update
+
+Information supplied every update:
+
+- Blade root world position.
+- Blade-tip world position.
+- Previous blade-tip position.
+- Weapon orientation.
+- Normalized attack progress.
+
+### Attack contact
+
+Information supplied when damage/contact is resolved:
+
+- Attack ID.
+- Contact world position.
+- Contact normal or direction.
+- Hit or miss.
+- Enemy identifier.
+- Impact intensity.
+
+### Attack finish
+
+Information supplied when the strike ends:
+
+- Attack ID.
+- Whether the animation completed or was interrupted.
+- Whether lingering effects should be shortened or stopped.
+
+### VFX update
+
+The system advances all active visual effects using elapsed time and the configured quality preset.
+
+### VFX cleanup
+
+The system releases effect resources when complete and safely handles scene unload or restart.
+
+**Architectural rule:** Neon builds a reusable visual layer. Existing Kaliyuga gameplay should remain the authority on damage, stamina, posture and combat rules when integration occurs.
+
+---
+
+# PART G — TECHNICAL VISUAL QUALITY
+
+## P1.11 — Trail rendering
+
+Weapon trails should use actual sampled positions.
+
+Use smooth interpolation or curve construction where necessary to avoid gaps.
+
+The trail must maintain continuity when the weapon moves quickly.
+
+Implement appropriate width variation:
+
+- Narrow at trail endpoints.
+- Thickest near the most important portion of the strike.
+- Tapered during dissipation.
+
+Use gradient coloring and transparency carefully.
+
+Avoid visible square edges, stretching artifacts and abrupt mesh cuts.
+
+Do not allow additive blending to create large opaque rectangular regions.
+
+## P1.12 — Shader quality
+
+Start from stable, correctly rendered materials.
+
+Add custom effects selectively for:
+
+- Gradient transitions.
+- Animated flow.
+- Edge glow.
+- Dissolve behavior.
+- Distortion.
+- Localized heat or energy movement.
+- Procedural noise where useful.
+
+A shader is only valuable if it improves the actual result.
+
+Avoid introducing complex full-screen shader pipelines simply because they sound impressive.
+
+## P1.13 — Effect layering
+
+Each heavy attack should have an identifiable composition:
+
+**Core shape:** The main elemental weapon-following form.
+
+**Secondary shape:** The larger power release.
+
+**Contact accent:** A precisely timed impact flash.
+
+**Residual movement:** Sparks, droplets or energy fragments.
+
+**Environmental accent:** A restrained ground reaction.
+
+Every layer must contribute visually. Remove redundant layers that make the result muddy.
+
+---
+
+# PART H — PERFORMANCE ENGINEERING
+
+## P1.14 — Quality profiles
+
+Provide at least three quality presets.
+
+| Feature | High | Medium | Low |
+|---|---|---|---|
+| Main blade trails | Full detail | Reduced segments | Simplified |
+| Secondary particles | Rich | Moderate | Minimal |
+| Distortion | Selective | Limited | Disabled |
+| Bloom | Controlled | Reduced | Minimal/off |
+| Residual effects | Full | Shorter | Very short |
+| Texture resolution | Appropriate | Reduced where feasible | Conservative |
+| Effect overlap | Bounded | More restricted | Strict |
+
+Choose actual numeric limits based on observed render performance.
+
+Do not claim a particular particle count guarantees 60 FPS.
+
+### Performance requirements
+
+- Reuse particle and mesh instances where possible.
+- Avoid unnecessary material creation during attacks.
+- Limit active simultaneous heavyweight effects.
+- Clean up finished geometry and GPU resources.
+- Clamp unreasonable frame-time deltas.
+- Avoid shader compilation during the most important impact frame when practical.
+- Test repeated attacks and scene resets.
+- Monitor actual frame time, not only average FPS.
+
+### Intended performance target
+
+The aspirational target is smooth 60 FPS gameplay at the intended resolution.
+
+The 60 FPS frame budget is approximately 16.7 milliseconds, but meeting that number must be measured, not assumed.
+
+Where 60 FPS is unattainable, the application should degrade effect complexity rather than break gameplay.
+
+MacBook M3 Air acceptance must occur after export and local execution. AI Studio preview performance is not sufficient evidence of target hardware performance.
+
+---
+
+# PART I — VISUAL REVIEW AND TESTING
+
+## P1.15 — Mandatory testing sequence
+
+Do not merely take one screenshot per element.
+
+### Test group A — Functionality
+
+Verify movement, attacks, stances, elements, rage switching, dashing, parrying and recovery.
+
+### Test group B — Synchronization
+
+Inspect each element with blade-tip tracking visible.
+
+Compare the intended blade trajectory with the rendered trail.
+
+Check the impact frame.
+
+### Test group C — Readability
+
+Test all attacks at normal gameplay zoom.
+
+Confirm the character, target, attack direction and enemy reactions remain understandable.
+
+### Test group D — Overlapping effects
+
+Trigger repeated attacks and several effects in a controlled stress-test scenario.
+
+Check for GPU stalls, particle buildup, visual clutter and cleanup failures.
+
+### Test group E — Appearance
+
+Review Agni, Vayu, Vajra, Varuna and Guardian separately.
+
+Determine whether the element is immediately recognizable without reading its name.
+
+### Test group F — Edge cases
+
+Test changing elements and stances during recovery.
+
+Test dashing before and after attacks.
+
+Test repeated heavy attacks.
+
+Test attacks that miss.
+
+Test clearing the arena while effects are active.
+
+Test switching quality presets.
+
+Test pausing and resuming.
+
+### Test group G — Long-running stability
+
+Run repeated combat sequences, then verify effects have returned to their expected inactive counts.
+
+There must be no steadily accumulating trails, particle objects or other obvious resource leaks.
+
+---
+
+## P1.16 — Actual visual acceptance standard
+
+For each elemental attack, assess six qualities.
+
+| Criterion | Question |
+|---|---|
+| Synchronization | Does the VFX genuinely follow the weapon? |
+| Beauty | Are its shapes, colors, movement and layering visually polished? |
+| Power | Does the heavy attack feel significantly stronger than the light attack? |
+| Readability | Can the player still understand the action? |
+| Identity | Is the element visually distinct? |
+| Performance | Does it render without unacceptable instability? |
+
+Do not mark an attack complete until all six have been reviewed.
+
+A green unit test proves certain behaviors.
+
+It does not prove artistic quality.
+
+An effect that contains bright orange pixels but looks like a cheap ring is not a finished Agni attack.
+
+---
+
+# PART J — PRODUCTION ORDER
+
+Neon must implement the system in the following sequence.
+
+| Build pass | Deliverable | Exit requirement |
+|---|---|---|
+| **1** | App, renderer, arena and camera | Stable playable scene |
+| **2** | Rudra, Parashu and enemy | Correct movement and target interaction |
+| **3** | Stances, light/heavy attacks and timing | Functional combat foundation |
+| **4** | Blade-tip tracking, impact events and diagnostics | Accurate synchronization |
+| **5** | Reusable trails, bursts, pooling and quality controls | Reusable VFX infrastructure |
+| **6** | Agni light and heavy variations | Fire fully playable and visually reviewed |
+| **7** | Vayu light and heavy variations | Wind fully playable and visually reviewed |
+| **8** | Vajra light and heavy variations | Thunder fully playable and visually reviewed |
+| **9** | Varuna light and heavy variations | Water fully playable and visually reviewed |
+| **10** | Guardian rage effects | Guardian fully playable and visually reviewed |
+| **11** | Astra demonstrations, combined combat, audio feedback | Abilities work without breaking combat |
+| **12** | Visual corrections, optimization, testing and export | Complete delivery package |
+
+Do not jump straight into Pass 10 or 11 while basic weapon tracking is still wrong.
+
+However, do not spend excessive effort polishing the temporary arena or placeholder character. The finished VFX system is the main product.
+
+---
+
+# PART K — WHAT NEON MUST NOT DO
+
+The following are explicitly prohibited as substitutes for meaningful progress.
+
+**Do not:**
+
+- Generate only a static game concept.
+- Create a decorative VFX showcase with no combat.
+- Use a fixed weapon glow while the character has no attack motion.
+- Recolor one generic ring five times and call it five elements.
+- Replace proper sword/axe trails with independent screen effects.
+- Create a giant empty project architecture and declare completion.
+- Invent benchmark results.
+- Report existing Kaliyuga repository bugs as fixed.
+- Claim GitHub integration without access.
+- Replace successful visual work unnecessarily.
+- Call everything AAA quality without inspecting actual gameplay.
+- Build an unrelated game engine.
+- Introduce cinematics, story systems or boss cutscenes outside this assignment.
+
+**Finish the core combat VFX prototype before adding unrelated features.**
+
+---
+
+# PART L — EXPORT PACKAGE
+
+At the end, provide a complete project export.
+
+The application must contain:
+
+### L1. Playable demo
+
+An application that can be launched independently and used to test the full elemental combat system.
+
+### L2. Reusable source code
+
+Separate, clearly named modules for all elemental renderers, attack timing, weapon tracking, VFX management and performance controls.
+
+### L3. Asset folder
+
+All required locally distributable textures and generated supporting assets that the project is authorized to include.
+
+Do not rely on fragile temporary external asset URLs.
+
+### L4. Integration documentation
+
+Explain how the existing Kaliyuga implementation can connect to the library.
+
+Specify:
+
+- Required dependencies.
+- Initialization.
+- Weapon attachment points.
+- Attack event interfaces.
+- Impact callbacks.
+- Animation synchronization expectations.
+- Element identifiers.
+- Stance identifiers.
+- Shader requirements.
+- Quality settings.
+- Cleanup responsibilities.
+
+### L5. Test report
+
+Provide a factual record of which tests were actually run.
+
+Separate verified behaviors from untested assumptions.
+
+### L6. Visual evidence
+
+Provide screenshots and, where the environment supports it, short captured gameplay clips showing:
+
+- Each element's light attack.
+- Each element's heavy attack.
+- All three stances.
+- Guardian rage.
+- Weapon-tip diagnostic overlays.
+- Combined combat stress testing.
+
+If video capture is not available, state that explicitly rather than claiming footage was recorded.
+
+---
+
+# PART M — FINAL ACCEPTANCE
+
+## Phase 0 completion
+
+Phase 0 is ready when the isolated combat foundation works, weapon tracking is reliable, contact events are correctly timed and the game preview remains stable.
+
+## Phase 1 completion
+
+Phase 1 is ready when all five elemental identities have functioning and visually reviewed light/heavy attacks across all three stances, with appropriate choreography, impact, readability and resource cleanup.
+
+## Integration readiness
+
+The project is integration-ready when the code export is complete, dependencies are documented, effects accept external weapon/attack events, and the required assets can be transferred.
+
+**Integration-ready does not mean integrated.**
+
+The original Kaliyuga game must still be updated and tested separately using the exported modules.
+
+---
+
+# FINAL COMMAND TO NEON
+
+Build the project in the specified order.
+
+At each build pass:
+
+1. Implement the real functionality.
+2. Run the preview.
+3. Test that pass's acceptance requirements.
+4. Fix reproducible defects.
+5. Preserve already working features.
+6. Continue into the next pass.
+
+Do not repeatedly replace working code with fresh implementations.
+
+Do not claim to have tested anything you have not actually executed.
+
+Do not substitute an explanation for implementation.
+
+**The final objective is a genuinely beautiful, responsive, playable, technically coherent elemental combat prototype that can be transferred into Kaliyuga—not another impressive-looking plan that never becomes working gameplay.**

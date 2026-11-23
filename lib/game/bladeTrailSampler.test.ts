@@ -1,0 +1,148 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  ArenaBladeSample,
+  BakedBladePose,
+  cancelActiveStrike,
+  claimEnemyHitForStrike,
+  createActiveStrikeState,
+  projectBakedBladePoseToArena,
+  stepActiveStrikeWindow,
+  writeSweptBladeRibbonBuffers,
+} from './bladeTrailSampler';
+
+test('projectBakedBladePoseToArena maps normalized Parashu sprite coordinates accurately into arena space', () => {
+  const pose: BakedBladePose = {
+    rootU: 0.5,
+    rootV: 0.5,
+    tipU: 0.85,
+    tipV: 0.25,
+    depthZ: -0.42,
+    valid: true,
+  };
+  const rect = { drawX: 100, drawY: 200, drawW: 140, drawH: 140 };
+  const sample = projectBakedBladePoseToArena(pose, rect, {
+    playerX: 170,
+    playerY: 310,
+    slashAngle: 0,
+    progress: 0.4,
+  });
+
+  assert.equal(sample.rootX, 170);
+  assert.equal(sample.rootY, 270);
+  assert.equal(sample.tipX, 219);
+  assert.equal(sample.tipY, 235);
+  assert.equal(sample.depthZ, -0.42);
+  assert.ok(sample.bladeLengthPx > 50);
+});
+
+test('projectBakedBladePoseToArena falls back cleanly without NaN when 3D pose is unavailable', () => {
+  const sample = projectBakedBladePoseToArena(
+    null,
+    { drawX: 0, drawY: 0, drawW: 0, drawH: 0 },
+    {
+      playerX: 400,
+      playerY: 300,
+      slashAngle: 0.4,
+      progress: 0.5,
+      direction: 1,
+      reachPx: 68,
+    }
+  );
+  assert.ok(Number.isFinite(sample.rootX));
+  assert.ok(Number.isFinite(sample.tipX));
+  assert.ok(sample.bladeLengthPx >= 20);
+});
+
+test('writeSweptBladeRibbonBuffers builds smooth Catmull-Rom curved geometry and splits Back/Front depth cleanly', () => {
+  const samples: ArenaBladeSample[] = [
+    { rootX: 100, rootY: 120, tipX: 70, tipY: 70, midX: 85, midY: 95, depthZ: -0.6, angleRad: -2.1, bladeLengthPx: 58, progress: 0.2, ageSec: 0.12 },
+    { rootX: 112, rootY: 112, tipX: 120, tipY: 50, midX: 116, midY: 81, depthZ: -0.25, angleRad: -1.4, bladeLengthPx: 62, progress: 0.38, ageSec: 0.08 },
+    { rootX: 125, rootY: 118, tipX: 175, tipY: 88, midX: 150, midY: 103, depthZ: 0.35, angleRad: -0.5, bladeLengthPx: 58, progress: 0.56, ageSec: 0.04 },
+    { rootX: 130, rootY: 132, tipX: 182, tipY: 148, midX: 156, midY: 140, depthZ: 0.72, angleRad: 0.3, bladeLengthPx: 54, progress: 0.72, ageSec: 0 },
+  ];
+
+  const maxSpine = 48;
+  const pos = new Float32Array(maxSpine * 2 * 3);
+  const uv = new Float32Array(maxSpine * 2 * 2);
+  const depths = new Float32Array(maxSpine * 2);
+  const idx = new Uint16Array(maxSpine * 6);
+
+  const full = writeSweptBladeRibbonBuffers(samples, pos, uv, depths, idx, {
+    subdivisions: 4,
+    widthBoostPx: 44,
+    depthFilter: 'all',
+    maxSpineSamples: maxSpine,
+  });
+  assert.equal(full.spineCount, 13);
+  assert.equal(full.vertexCount, 26);
+  assert.equal(full.indexCount, 12 * 6);
+  assert.equal(full.hasBackSegments, true);
+  assert.equal(full.hasFrontSegments, true);
+  for (let i = 0; i < full.vertexCount * 3; i++) {
+    assert.ok(Number.isFinite(pos[i]), `Position index ${i} must be finite`);
+  }
+
+  const backOnly = writeSweptBladeRibbonBuffers(samples, pos, uv, depths, idx, {
+    subdivisions: 4,
+    widthBoostPx: 44,
+    depthFilter: 'back',
+    maxSpineSamples: maxSpine,
+  });
+  const frontOnly = writeSweptBladeRibbonBuffers(samples, pos, uv, depths, idx, {
+    subdivisions: 4,
+    widthBoostPx: 44,
+    depthFilter: 'front',
+    maxSpineSamples: maxSpine,
+  });
+
+  assert.ok(backOnly.indexCount > 0, 'Back pass should contain behind-Rudra triangles');
+  assert.ok(frontOnly.indexCount > 0, 'Front pass should contain in-front-of-Rudra triangles');
+  assert.ok(backOnly.indexCount < full.indexCount);
+  assert.ok(frontOnly.indexCount < full.indexCount);
+});
+
+test('ActiveStrikeSyncState prevents Frame-0 damage, deduplicates hits per attackSerial, and aborts cleanly on cancel', () => {
+  const strike = createActiveStrikeState({
+    attackSerial: 42,
+    tier: 'heavy',
+    element: 'agni',
+    stance: 'smash',
+    comboStep: 1,
+    slashAngle: 0,
+  });
+
+  // Startup frames (0.0 -> 0.25): zero hits, zero primary VFX
+  const s0 = stepActiveStrikeWindow(strike, 0.0);
+  assert.equal(s0.phase, 'startup');
+  assert.equal(s0.shouldEvaluateHits, false);
+  assert.equal(s0.shouldStartPrimaryVfx, false);
+  assert.equal(s0.shouldSampleBladeTrail, false);
+
+  // Active contact frame (0.28): fires primary VFX once & enables hits
+  const s1 = stepActiveStrikeWindow(strike, 0.28);
+  assert.equal(s1.phase, 'active');
+  assert.equal(s1.shouldStartPrimaryVfx, true);
+  assert.equal(s1.shouldEvaluateHits, true);
+  assert.equal(s1.shouldSampleBladeTrail, true);
+
+  // Single-hit deduplication for enemy #7
+  assert.equal(claimEnemyHitForStrike(strike, 7), true);
+  assert.equal(claimEnemyHitForStrike(strike, 7), false);
+  assert.equal(claimEnemyHitForStrike(strike, 9), true);
+
+  // Second active frame (0.45): primary VFX does NOT re-trigger, trail keeps sampling
+  const s2 = stepActiveStrikeWindow(strike, 0.45);
+  assert.equal(s2.phase, 'active');
+  assert.equal(s2.shouldStartPrimaryVfx, false);
+  assert.equal(s2.shouldSampleBladeTrail, true);
+
+  // Mid-swing dodge interrupt cancels immediately
+  cancelActiveStrike(strike);
+  const s3 = stepActiveStrikeWindow(strike, 0.52);
+  assert.equal(s3.phase, 'cancelled');
+  assert.equal(s3.shouldEvaluateHits, false);
+  assert.equal(s3.shouldSampleBladeTrail, false);
+  assert.equal(s3.shouldFinalizeTrail, true);
+  assert.equal(claimEnemyHitForStrike(strike, 12), false);
+});

@@ -558,51 +558,6 @@ export function renderIsometricChamberPlatform(
   ctx.fillStyle = horizonGrad;
   ctx.fillRect(0, 0, worldW, worldH * 0.42);
 
-  // Subtle crisp isometric courtyard flagstone masonry & center arena combat seal
-  ctx.save();
-  ctx.beginPath();
-  geom.outerPolygon.forEach((pt, idx) => {
-    const px = pt.x * worldW;
-    const py = pt.y * worldH;
-    if (idx === 0) ctx.moveTo(px, py);
-    else ctx.lineTo(px, py);
-  });
-  ctx.closePath();
-  ctx.clip();
-
-  const cx = worldW * 0.5;
-  const cy = worldH * 0.54;
-  ctx.strokeStyle = biome.flagstoneStrokeRgba;
-  ctx.lineWidth = 1.2;
-  const tileStep = 76;
-  for (let i = -14; i <= 14; i++) {
-    ctx.beginPath();
-    ctx.moveTo(cx + i * tileStep - 640, cy - 360);
-    ctx.lineTo(cx + i * tileStep + 640, cy + 360);
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.moveTo(cx + i * tileStep + 640, cy - 360);
-    ctx.lineTo(cx + i * tileStep - 640, cy + 360);
-    ctx.stroke();
-  }
-
-  // Carved Center Courtyard Ring & Octagonal Seal
-  ctx.save();
-  ctx.translate(cx, cy);
-  ctx.scale(1, 0.56);
-  ctx.strokeStyle = chamberIndex >= 5 ? 'rgba(255, 160, 92, 0.18)' : 'rgba(186, 220, 255, 0.16)';
-  ctx.lineWidth = 2.0;
-  ctx.beginPath();
-  ctx.arc(0, 0, 220, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.strokeStyle = chamberIndex >= 5 ? 'rgba(255, 92, 56, 0.12)' : 'rgba(120, 178, 255, 0.11)';
-  ctx.lineWidth = 1.2;
-  ctx.beginPath();
-  ctx.arc(0, 0, 152, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.restore();
-  ctx.restore();
   ctx.restore();
 
   // 1.6. Always layer 2D Anime Demon Slayer atmospheric effects (sunbeams, wind streaks, brazier blooms, wisteria petals & Hinokami sparks)
