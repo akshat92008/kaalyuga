@@ -4,6 +4,39 @@ export const ELEMENTAL_CREST_GLSL = /* glsl */ `
     return 1.0 - smoothstep(width * 0.52, width, abs(v - line));
   }
 
+  // The mesh fixes the sweep path. Shading moves the leading edge and thins the
+  // wake without tearing the stroke's silhouette into separate shapes.
+  vec4 paintOpenStrike(float u, float v) {
+    float head = 0.36 + 0.75 * smoothstep(0.0, 0.33, uLife);
+    float localAge = max(0.0, uLife - u * 0.24);
+    float life = (1.0 - smoothstep(0.40, 0.84, localAge))
+      * (1.0 - smoothstep(head - 0.16, head, u));
+    float taper = smoothstep(0.0, 0.12, u) * (1.0 - smoothstep(0.91, 1.0, u));
+    float flow = u * 7.2 - uLife * 3.4;
+    float grain = noise2(vec2(flow, v * 4.4));
+    float fine = noise2(vec2(flow * 2.4, v * 7.5));
+    float isWater = step(0.5, uMode) * (1.0 - step(1.5, uMode));
+    float isThunder = step(1.5, uMode) * (1.0 - step(2.5, uMode));
+    float isWind = step(2.5, uMode);
+    float waterLace = isWater * (fine - 0.5) * 0.08;
+    float outer = 0.89 + (grain - 0.5) * 0.07 + waterLace;
+    float inner = 0.13 + (grain - 0.5) * 0.14 + 0.22 * smoothstep(0.18, 0.76, localAge)
+      + isWind * 0.15 + isThunder * 0.08;
+    float body = smoothstep(inner - 0.02, inner + 0.13, v)
+      * (1.0 - smoothstep(outer, outer + 0.07, v));
+    float lip = brushBand(v, outer - 0.08, 0.12 - 0.043 * isThunder);
+    float foam = isWater * brushBand(v, outer - 0.15 + waterLace, 0.08)
+      * smoothstep(0.26, 0.72, fine);
+    float fold = brushBand(v, 0.57 + 0.09 * sin(flow * 2.1 + grain), 0.11);
+    float hotEdge = lip * (0.42 + 0.58 * smoothstep(0.28, 0.83, u))
+      * (1.0 - smoothstep(0.24, 0.85, localAge));
+    vec3 ink = mix(uDeepColor, uEdgeColor, smoothstep(0.20, 0.64, v));
+    vec3 col = mix(ink, uMidColor, clamp(lip * 0.75 + fold * fine * 0.35, 0.0, 1.0));
+    col = mix(col, uCoreColor, clamp(hotEdge * 0.85 + foam * 0.50, 0.0, 1.0));
+    float alpha = life * taper * body * uOpacity * mix(1.0, 0.56 + 0.44 * lip, isWind);
+    return vec4(col * alpha, alpha);
+  }
+
   vec4 paintElementalCrest(float u, float v) {
     float head = smoothstep(-0.10, 0.33, uLife) * 1.20;
     float reveal = 1.0 - smoothstep(head - 0.10, head, u);
@@ -35,14 +68,18 @@ export const ELEMENTAL_CREST_GLSL = /* glsl */ `
       float eye = 1.0 - smoothstep(0.33, 1.0, length((vec2(u, v) - vec2(0.89, 0.59)) * vec2(48.0, 12.0)));
       col = mix(col, uInkColor, eye);
     } else if (uCrestStyle < 2.5) {
-      // One cutting lip contains the pressure lines. The inside breaks into dry-brush gaps.
-      outer = 0.91 + (broad - 0.5) * 0.12;
-      inner = 0.22 + 0.22 * curl + 0.15 * grain;
-      float edge = brushBand(v, outer - 0.09, 0.085);
-      float threads = brushBand(v, 0.45 + 0.12 * curl, 0.034) * smoothstep(0.30, 0.67, broad);
-      col = mix(col, uEdgeColor * 1.33, smoothstep(0.25, 0.72, v));
-      col = mix(col, uMidColor, threads * 0.68);
-      col = mix(col, mix(uMidColor, uCoreColor, 0.61), edge);
+      // Keep the outside continuous as veils of wind move through the sheet.
+      outer = 0.92 + (broad - 0.5) * 0.05;
+      inner = 0.12 + 0.08 * curl + 0.13 * broad + 0.10 * uLife;
+      float edge = brushBand(v, outer - 0.07, 0.13);
+      float fold = brushBand(v, 0.56 + 0.10 * curl, 0.18) * smoothstep(0.15, 0.78, broad);
+      col = mix(col, uEdgeColor * 1.38, smoothstep(0.19, 0.84, v));
+      col = mix(col, uMidColor, fold * 0.43 + edge * 0.43);
+      col = mix(col, uCoreColor, edge * (0.41 + 0.16 * broad));
+      float sheet = smoothstep(inner, inner + 0.21, v) * (1.0 - smoothstep(outer, outer + 0.07, v));
+      float breath = 1.0 - smoothstep(0.32, 0.94, uLife);
+      float alpha = sheet * reveal * tail * breath * uOpacity;
+      return vec4(col * alpha, alpha);
     } else {
       // A translucent spectral blade with a fractured inner edge.
       inner = 0.28 + 0.18 * broad;

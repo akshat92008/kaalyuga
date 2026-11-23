@@ -22,12 +22,12 @@ test('wind and guardian remain in front and taper toward both tips', () => {
   }
 });
 
-test('large crests keep one dominant body with tapered secondary wakes', () => {
-  const waterBody = sampleElementalStroke('water', 0.80, 256, 0);
-  const waterWake = sampleElementalStroke('water', 0.80, 256, 1);
-  assert.ok(waterBody.width > waterWake.width * 2.5);
-  const windBody = sampleElementalStroke('wind', 0.50, 220, 0);
-  const windWake = sampleElementalStroke('wind', 0.50, 220, 1);
-  assert.ok(windBody.width > windWake.width * 2);
-  assert.ok(windBody.x - windWake.x < windBody.width * 0.3);
+test('the Vayu sweep has one open, monotonic curve with no offset claw lanes', () => {
+  const reach = 220;
+  const points = Array.from({ length: 25 }, (_, index) => sampleElementalStroke('wind', index / 24, reach, 0));
+  const angles = points.map(({ x, y }) => Math.atan2(y / 0.83, x));
+  assert.ok(angles.every((angle, index) => index === 0 || angle > angles[index - 1]));
+  assert.ok(angles.at(-1)! - angles[0] < Math.PI);
+  assert.ok(points[12].width > 75);
+  assert.deepEqual(points[12], sampleElementalStroke('wind', 0.5, reach, 2));
 });

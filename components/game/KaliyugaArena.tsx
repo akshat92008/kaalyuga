@@ -3654,7 +3654,7 @@ export default function KaliyugaArena() {
       }
       if (astraId === 'vayavyastra') {
         // Sanemi Wind Breathing: ONE monumental emerald gale burst + bold Sumi-e ink shards (no duplicate cyclones/ribbons)
-        webglDemonSlayerVfxRef.current?.spawnWindGaleCrescents({
+        webglDemonSlayerVfxRef.current?.spawnWindGaleSweep({
           x: p.x,
           y: p.y - 20,
           angle: aimAngle,
@@ -5600,8 +5600,6 @@ export default function KaliyugaArena() {
         : 'hinokami';
 
     const isComboFinisher = Boolean(p.comboStep === 4 || activeFinisherSpec);
-    const arcRadius = isComboFinisher ? 132 : p.comboStep === 3 ? 110 : 98;
-    const arcWidth = isComboFinisher ? 48 : p.comboStep === 3 ? 38 : 34;
     const arcDir: 1 | -1 = p.comboStep % 2 === 0 ? -1 : 1;
     const capturedStep = p.comboStep;
     const capturedAngle = p.slashAngle;
@@ -5629,101 +5627,44 @@ export default function KaliyugaArena() {
       palette: lightSlashPalette,
       execute: () => {
         const curP = simRef.current.player;
-        const originX = curP.x + curP.facing * 14;
-        const originY = curP.y - 24;
-
-        const hasLiveBladeTrail = !isRiposteStrike && lightSlashPalette !== 'blood' &&
-          Boolean(rudra3dRef.current?.getLatestBladePose().valid &&
-            webglDemonSlayerVfxRef.current?.available);
-
-        if (!isComboFinisher) {
-          // Tier 1 Light Attack (Combo 1-3): ONE crisp, razor-clean breathing ribbon + sparse sparks ONLY!
-          if (!hasLiveBladeTrail) {
-            webglDemonSlayerVfxRef.current?.spawnSlashRibbon({
-              x: originX,
-              y: originY,
-              angle: capturedAngle,
-              radius: arcRadius,
-              width: arcWidth,
-              arcSpan: capturedStep === 3 ? 2.35 : 2.05,
-              direction: arcDir,
-              palette: lightSlashPalette,
-              duration: 0.24,
-              tiltX: capturedStep === 2 ? -0.45 : 0.58,
-              spectralGuardian: lightSlashPalette === 'blood',
-            });
-            webglDemonSlayerVfxRef.current?.spawnSparkBurst({
-              x: originX + Math.cos(capturedAngle) * 44,
-              y: originY + Math.sin(capturedAngle) * 28,
-              count: 6,
-              speed: 310,
-              palette: lightSlashPalette,
-            });
-          }
-        } else {
-          // Tier 2 Combo-4 Finisher: ONE focused signature breathing flourish (no stacked duplicates!)
-          if (lightSlashPalette === 'blood') {
-            webglDemonSlayerVfxRef.current?.spawnSlashRibbon({
-              x: originX, y: originY - 16, angle: capturedAngle, radius: 154,
-              palette: 'blood', spectralGuardian: true, duration: 0.40, spinRate: 0.55,
-            });
-          } else if (lightSlashPalette === 'water') {
-            webglDemonSlayerVfxRef.current?.spawnWaterDragon({
-              x: originX, y: originY, angle: capturedAngle, radius: 142, duration: 0.48,
-            });
-          } else if (capturedStance === 'pillar') {
-            webglDemonSlayerVfxRef.current?.spawnWindGaleCrescents({
-              x: originX,
-              y: originY + 4,
-              angle: capturedAngle,
-              radius: 152,
-              duration: 0.52,
-            });
-          } else if (capturedStance === 'thrust') {
-            webglDemonSlayerVfxRef.current?.spawnThunderZigzag({
-              x1: curP.x,
-              y1: originY,
-              x2: curP.x + Math.cos(capturedAngle) * 210,
-              y2: originY + Math.sin(capturedAngle) * 150,
-              palette: 'thunder',
-              duration: 0.52,
-              width: 11,
-              focused: true,
-              withFloorRing: true,
-            });
-          } else if (!hasLiveBladeTrail) {
-            webglDemonSlayerVfxRef.current?.spawnSolarFlameWheel({
-              x: originX,
-              y: originY + 2,
-              angle: capturedAngle,
-              radius: 148,
-              palette: 'hinokami',
-              duration: 0.48,
-            });
-          }
-          const finisherSakugaElem: SakugaElement =
-            lightSlashPalette === 'blood' ? 'guardian' : lightSlashPalette === 'water' ? 'varuna' :
-            capturedStance === 'pillar'
-              ? 'vayu'
-              : capturedStance === 'thrust'
-              ? 'vajra'
-              : varunaInfusionTimerRef.current > 0
-              ? 'varuna'
-              : 'agni';
+        const originX = curP.x + Math.cos(capturedAngle) * 4;
+        const originY = curP.y - 26;
+        const fx = webglDemonSlayerVfxRef.current;
+        fx?.spawnSlashRibbon({
+          x: originX,
+          y: originY,
+          angle: capturedAngle,
+          radius: isComboFinisher ? 120 : capturedStep === 3 ? 101 : 91,
+          width: isComboFinisher ? 49 : capturedStep === 3 ? 36 : 29,
+          arcSpan: isComboFinisher ? 2.68 : capturedStep === 3 ? 2.38 : capturedStep === 2 ? 2.16 : 1.96,
+          direction: arcDir,
+          palette: lightSlashPalette,
+          duration: isComboFinisher ? 0.34 : 0.26,
+          tiltX: capturedStep === 2 ? -0.51 : 0.36,
+          tiltY: 0,
+          spinRate: 0,
+          openStrike: true,
+        });
+        const leadingAngle = capturedAngle - arcDir * 0.70;
+        fx?.spawnElementalParticles({
+          x: originX + Math.cos(leadingAngle) * 69,
+          y: originY + Math.sin(leadingAngle) * 62,
+          angle: leadingAngle - arcDir * Math.PI * 0.5,
+          spread: 0.62,
+          count: isComboFinisher ? 12 : 5,
+          speed: isComboFinisher ? 350 : 235,
+          palette: lightSlashPalette,
+          kind: lightSlashPalette === 'water' ? 'water_droplet' : 'spark_needle',
+        });
+        if (isComboFinisher) {
+          const element: SakugaElement = lightSlashPalette === 'blood' ? 'guardian' : strike.element;
           triggerSakugaImpact(sakugaDirectorRef.current, {
             kind: 'heavy_hit',
-            element: finisherSakugaElem,
-            worldX: originX,
-            worldY: originY,
+            element,
+            worldX: originX + Math.cos(capturedAngle) * 56,
+            worldY: originY + Math.sin(capturedAngle) * 38,
             angle: capturedAngle,
-            intensity: 1.08,
-          });
-          webglDemonSlayerVfxRef.current?.spawnSparkBurst({
-            x: originX + Math.cos(capturedAngle) * 52,
-            y: originY + Math.sin(capturedAngle) * 34,
-            count: 16,
-            speed: 440,
-            palette: lightSlashPalette,
+            intensity: 0.82,
           });
         }
         if (p.comboStep === 3 || activeFinisherSpec?.variant === 'spin_360_cleave') {
@@ -11679,6 +11620,8 @@ export default function KaliyugaArena() {
             if (
               webglVfxLive &&
               liveStrike &&
+              liveStrike.sync.tier === 'heavy' &&
+              liveStrike.sync.element !== 'vayu' &&
               liveStrike.sync.vfxStarted &&
               coreLock.rudraIsAttacking &&
               p.hp > 0 && p.hitFlashTimer <= 0 &&
@@ -11692,8 +11635,8 @@ export default function KaliyugaArena() {
                 const livePalette = liveStrike.palette;
                 webglVfxLive.beginBladeTrail(liveTrailKey, {
                   palette: livePalette,
-                  widthBoostPx: livePalette === 'water' ? 13 : livePalette === 'wind' ? 16 : 7,
-                  fadeDuration: coreLock.rudraIsHeavyAttack ? 0.23 : 0.17,
+                  widthBoostPx: livePalette === 'water' ? 13 : 7,
+                  fadeDuration: 0.23,
                 });
                 liveBladeTrailActiveIdRef.current = liveTrailKey;
               }

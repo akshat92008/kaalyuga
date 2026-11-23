@@ -28,6 +28,18 @@ async function main() {
     await page.evaluate(() => window.__kaliyugaPhaseQAFixture.grantResources());
     await press(stance);
   }
+  async function captureLight(element) {
+    const previous = await page.evaluate(() => Math.max(0, ...window.__kaliyugaPhaseQA.recentEvents
+      .filter((event) => event.name === 'light-contact')
+      .map((event) => event.frameTime)));
+    await press('KeyJ');
+    await page.waitForFunction((last) => window.__kaliyugaPhaseQA.recentEvents.some(
+      (event) => event.name === 'light-contact' && event.frameTime > last
+    ), previous, { timeout: 15000 });
+    await capture(`${element}-light`);
+    await page.waitForTimeout(42);
+    await capture(`${element}-light-release`);
+  }
   try {
     await page.goto('http://127.0.0.1:3100/?debug=1&qaFixtures=1&chamber=1',
       { waitUntil: 'domcontentloaded', timeout: 90000 });
@@ -70,9 +82,7 @@ async function main() {
         await capture('varuna-cast');
         await page.waitForTimeout(930);
       }
-      await press('KeyJ');
-      await page.waitForTimeout(55);
-      await capture(`${element}-light`);
+      await captureLight(element);
       await page.waitForFunction(() => window.__kaliyugaPhaseQA.action === 'idle', undefined, { timeout: 15000 });
       const previousHeavy = await page.evaluate(() => Math.max(0, ...window.__kaliyugaPhaseQA.recentEvents
         .filter((event) => event.name === 'heavy-contact')
@@ -110,7 +120,9 @@ async function main() {
     await capture('guardian-heavy');
     await page.waitForTimeout(90);
     await capture('guardian-heavy-release');
-    await page.waitForTimeout(500);
+    await page.waitForFunction(() => window.__kaliyugaPhaseQA.action === 'idle', undefined, { timeout: 15000 });
+    await captureLight('guardian');
+    await page.waitForFunction(() => window.__kaliyugaPhaseQA.action === 'idle', undefined, { timeout: 15000 });
     await page.evaluate(() => window.__kaliyugaPhaseQAFixture.preparePerfectParry());
     await press('ShiftLeft');
     await capture('perfect-parry');

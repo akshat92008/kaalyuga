@@ -26,11 +26,12 @@ export function sampleElementalStroke(
       };
     }
     case 'wind': {
-      const sweep = t * 2 - 1;
+      const angle = -1.19 + 2.33 * t;
+      const radius = reach * (0.87 + 0.12 * t);
       return {
-        x: reach * (0.47 + 0.49 * (1 - sweep * sweep) - lane * 0.079) + t * reach * 0.13,
-        y: reach * (sweep * (0.49 - lane * 0.062) + lane * 0.047),
-        width: (lane === 0 ? Math.min(84, reach * 0.32) : 24 - lane * 3) * taper + 1.5,
+        x: Math.cos(angle) * radius,
+        y: Math.sin(angle) * radius * 0.83,
+        width: Math.min(88, reach * 0.39) * taper + 1.5,
       };
     }
     case 'guardian': {

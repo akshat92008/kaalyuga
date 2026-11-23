@@ -405,6 +405,7 @@ const RIBBON_FRAGMENT_SHADER = /* glsl */ `
   uniform float uScrollSpeed;
   uniform float uAgniPass;
   uniform float uCrestStyle;
+  uniform float uOpenStrike;
   uniform sampler2D uAtlasTex;
 
   varying vec2 vUv;
@@ -432,6 +433,10 @@ const RIBBON_FRAGMENT_SHADER = /* glsl */ `
   void main() {
     float u = vUv.x;
     float v = vUv.y;
+    if (uOpenStrike > 0.5) {
+      gl_FragColor = paintOpenStrike(u, v);
+      return;
+    }
     if (uAgniPass > 0.5) {
       gl_FragColor = paintAgni(u, v);
       return;
@@ -950,9 +955,8 @@ interface ActiveThunderZigzag {
 }
 
 interface ActiveWindGale {
-  frontGroup: THREE.Group;
-  ribbonMats: THREE.ShaderMaterial[];
-  geos: THREE.BufferGeometry[];
+  sweep: THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>;
+  angle: number;
   worldX: number;
   worldY: number;
   life: number;
@@ -1141,6 +1145,7 @@ function createRibbonMaterial(
       uScrollSpeed: { value: scrollSpeed },
       uAgniPass: { value: 0 },
       uCrestStyle: { value: 0 },
+      uOpenStrike: { value: 0 },
       uAtlasTex: { value: atlasTex },
     },
     vertexShader: RIBBON_VERTEX_SHADER,
@@ -1804,6 +1809,7 @@ export class WebglDemonSlayerVfxOverlay {
     withBackWrap?: boolean;
     painterlyAgni?: boolean;
     spectralGuardian?: boolean;
+    openStrike?: boolean;
   }): void {
     if (!this.renderer || this.disposed) return;
     if (this.ribbons.length >= 6) {
@@ -1817,12 +1823,13 @@ export class WebglDemonSlayerVfxOverlay {
     const atlasTex = pickAtlasTextureForPalette(this.atlas, palette);
     const radius = opts.radius ?? 162;
     const width = opts.width ?? 74;
-    const arcSpan = opts.arcSpan ?? 2.75;
+    const arcSpan = opts.openStrike ? Math.min(opts.arcSpan ?? 2.3, 2.75) : opts.arcSpan ?? 2.75;
     const direction = opts.direction ?? 1;
 
     const coreGeo = opts.spectralGuardian ? buildElementalStrokeGeometry('guardian', radius, 0)
       : buildCurvedRibbonGeometry(radius, width, arcSpan, direction, 30);
-    const glowGeo = opts.spectralGuardian ? buildElementalStrokeGeometry('guardian', radius, 1)
+    const glowGeo = opts.openStrike ? coreGeo : opts.spectralGuardian
+      ? buildElementalStrokeGeometry('guardian', radius, 1)
       : buildCurvedRibbonGeometry(radius, width * 1.38, arcSpan, direction, 30);
 
     const uvRepeat = mode === 2 ? 2.1 : mode === 3 ? 1.55 : 1.35;
@@ -1858,6 +1865,10 @@ export class WebglDemonSlayerVfxOverlay {
     const group = new THREE.Group();
     group.add(coreMesh, glowMesh);
     let agniSpine: ActiveWebglRibbon['agniSpine'];
+    if (opts.openStrike) {
+      coreMat.uniforms.uOpenStrike.value = 1;
+      glowMesh.visible = false;
+    }
     if (opts.spectralGuardian) {
       coreMat.uniforms.uCrestStyle.value = 3;
       glowMesh.visible = false;
@@ -2456,12 +2467,7 @@ export class WebglDemonSlayerVfxOverlay {
     });
   }
 
-  // ============================================================================
-  // ELEMENT 3: VAYU — SANEMI TRIPLE-LAYERED RAZOR EMERALD GALE CRESCENTS + INK SHARDS
-  // Dramatically enlarged, aggressive silhouette wrapping behind & in front of Rudra!
-  // ============================================================================
-
-  public spawnWindGaleCrescents(opts: {
+  public spawnWindGaleSweep(opts: {
     x: number;
     y: number;
     angle: number;
@@ -2474,42 +2480,26 @@ export class WebglDemonSlayerVfxOverlay {
       if (oldest) this.disposeWindGale(oldest);
     }
 
-    const pal = RIBBON_PALETTES.wind;
     const reach = THREE.MathUtils.clamp((opts.radius ?? 230) * 0.92, 116, 256);
-    const frontGroup = new THREE.Group();
-    const ribbonMats: THREE.ShaderMaterial[] = [];
-    const geos: THREE.BufferGeometry[] = [];
-
-    for (let lane = 0; lane < 3; lane++) {
-      const geo = buildElementalStrokeGeometry('wind', reach, lane);
-      const mat = createRibbonMaterial(pal, 3, lane === 0 ? 0.98 : 0.55 - lane * 0.10,
-        false, THREE.NormalBlending);
-      mat.uniforms.uCrestStyle.value = 2;
-      const mesh = new THREE.Mesh(geo, mat);
-      mesh.visible = lane === 0;
-      frontGroup.add(mesh);
-      geos.push(geo);
-      ribbonMats.push(mat);
-    }
-    frontGroup.rotation.z = -opts.angle;
-    this.scene.add(frontGroup);
+    const geometry = buildElementalStrokeGeometry('wind', reach, 0);
+    const material = createRibbonMaterial(RIBBON_PALETTES.wind, 3, 0.98, false, THREE.NormalBlending);
+    material.uniforms.uCrestStyle.value = 2;
+    const sweep = new THREE.Mesh(geometry, material);
+    sweep.rotation.z = -opts.angle;
+    this.scene.add(sweep);
     this.windGales.push({
-      frontGroup, ribbonMats, geos, worldX: opts.x, worldY: opts.y,
+      sweep, angle: opts.angle, worldX: opts.x, worldY: opts.y,
       life: 0, maxLife: opts.duration ?? 0.62,
     });
 
-    const x = opts.x + Math.cos(opts.angle) * reach * 0.60;
-    const y = opts.y + Math.sin(opts.angle) * reach * 0.60;
+    const x = opts.x + Math.cos(opts.angle) * reach * 0.66;
+    const y = opts.y + Math.sin(opts.angle) * reach * 0.66;
     this.spawnGroundLightBounce({
-      x, y: y + 20, radius: 96, palette: 'wind', duration: 0.51, intensity: 0.70,
+      x, y: y + 20, radius: 90, palette: 'wind', duration: 0.43, intensity: 0.46,
     });
     this.spawnElementalParticles({
-      x, y, angle: opts.angle + 0.36, spread: 1.85, count: 17,
-      speed: 320, palette: 'wind', kind: 'wind_shard',
-    });
-    this.spawnElementalParticles({
-      x, y, angle: opts.angle, spread: 1.38, count: 13,
-      speed: 400, palette: 'wind', kind: 'spark_needle',
+      x, y, angle: opts.angle, spread: 1.20, count: 12,
+      speed: 275, palette: 'wind', kind: 'spark_needle',
     });
   }
 
@@ -3549,7 +3539,7 @@ export class WebglDemonSlayerVfxOverlay {
       }
     }
 
-    // 5. Vayu Triple-Layered Razor Emerald Wind Gale Crescents
+    // Carry the whole Vayu stroke outward as one shape.
     for (let i = this.windGales.length - 1; i >= 0; i--) {
       const g = this.windGales[i];
       g.life += dt;
@@ -3559,19 +3549,16 @@ export class WebglDemonSlayerVfxOverlay {
         this.windGales.splice(i, 1);
         continue;
       }
-      const expand = zoom * (0.76 + norm * 0.44);
-      g.frontGroup.position.set(toScreenX(g.worldX), toScreenY(g.worldY), 20);
-      g.frontGroup.scale.set(expand, expand, expand);
-      g.ribbonMats.forEach((material, lane) => {
-        const delay = lane * 0.042;
-        const age = (norm - delay) / (1 - delay);
-        const blade = g.frontGroup.children[lane];
-        blade.visible = age >= 0;
-        blade.position.x = Math.max(0, age) * (70 - lane * 18);
-        blade.position.y = Math.max(0, age) * lane * 9;
-        material.uniforms.uTime.value = this.elapsed * 1.35;
-        material.uniforms.uLife.value = Math.max(0, age);
-      });
+      const travel = norm * (2 - norm);
+      const expand = zoom * (0.84 + travel * 0.22);
+      g.sweep.position.set(
+        toScreenX(g.worldX + Math.cos(g.angle) * travel * 45),
+        toScreenY(g.worldY + Math.sin(g.angle) * travel * 45),
+        20,
+      );
+      g.sweep.scale.set(expand, expand, expand);
+      g.sweep.material.uniforms.uTime.value = this.elapsed;
+      g.sweep.material.uniforms.uLife.value = norm;
     }
 
     // 6. Blood Thread Cages
@@ -3722,7 +3709,7 @@ export class WebglDemonSlayerVfxOverlay {
     r.coreMesh.geometry.dispose();
     r.coreMesh.material.dispose();
     r.agniSpine?.material.dispose();
-    r.glowMesh.geometry.dispose();
+    if (r.glowMesh.geometry !== r.coreMesh.geometry) r.glowMesh.geometry.dispose();
     r.glowMesh.material.dispose();
     if (r.backGroup && r.backMesh) {
       this.backScene.remove(r.backGroup);
@@ -3762,9 +3749,9 @@ export class WebglDemonSlayerVfxOverlay {
   }
 
   private disposeWindGale(g: ActiveWindGale): void {
-    this.scene.remove(g.frontGroup);
-    g.geos.forEach((geo) => geo.dispose());
-    g.ribbonMats.forEach((m) => m.dispose());
+    this.scene.remove(g.sweep);
+    g.sweep.geometry.dispose();
+    g.sweep.material.dispose();
   }
 
   private disposeMandala(m: ActiveCompassMandala): void {

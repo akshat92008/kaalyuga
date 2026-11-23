@@ -10,7 +10,7 @@ export type HeavyElement = 'agni' | 'varuna' | 'vayu' | 'vajra' | 'guardian';
 type HeavyEffectMethod =
   | 'spawnAgniCrescent'
   | 'spawnWaterDragon'
-  | 'spawnWindGaleCrescents'
+  | 'spawnWindGaleSweep'
   | 'spawnThunderZigzag'
   | 'spawnSlashRibbon'
   | 'spawnSparkBurst';
@@ -97,7 +97,7 @@ export function spawnHeavyElementalRelease(
       fx.spawnWaterDragon({ x, y: y - 19, angle, radius: radius * 0.82, duration: 0.68 });
       break;
     case 'vayu':
-      fx.spawnWindGaleCrescents({ x, y: y - 18, angle, radius: radius * 0.92, duration: 0.60 });
+      fx.spawnWindGaleSweep({ x, y: y - 18, angle, radius: radius * 0.92, duration: 0.60 });
       break;
     case 'vajra': {
       const boltReach = clamp(reach, 158, 315);
