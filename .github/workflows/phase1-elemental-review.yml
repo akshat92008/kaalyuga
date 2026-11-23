@@ -1,0 +1,44 @@
+name: Phase 1 elemental gameplay review
+
+on:
+  push:
+    branches:
+      - feature/phase1-elemental-visuals-20261123
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --legacy-peer-deps --no-audit --no-fund
+      - run: node --import tsx --test lib/game/bladeTrailSampler.test.ts lib/game/sakugaImpactDirector.test.ts lib/game/elementalStrokeGeometry.test.ts
+      - run: npm run build
+      - run: npm install --no-save --legacy-peer-deps --no-audit --no-fund playwright@1.58.2
+      - run: npx playwright install chromium
+      - name: Capture rendered effects from the game
+        run: |
+          mkdir -p phase1-captures
+          npm run dev -- --hostname 127.0.0.1 --port 3100 >phase1-captures/server.log 2>&1 &
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3100/ >/dev/null; then break; fi
+            sleep 2
+          done
+          node scripts/qa/capture_phase1_elementals.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phase1-gameplay-1440x900
+          path: phase1-captures
+          if-no-files-found: warn

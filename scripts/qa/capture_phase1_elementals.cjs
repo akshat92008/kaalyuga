@@ -1,0 +1,87 @@
+const fs = require('node:fs/promises');
+const { chromium } = require('playwright');
+
+async function main() {
+  const directory = 'phase1-captures';
+  const browser = await chromium.launch({
+    args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
+  });
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  const errors = [];
+  page.on('pageerror', (error) => errors.push(String(error)));
+  page.on('console', (message) => {
+    if (message.type() === 'error' && /webgl|shader/i.test(message.text())) errors.push(message.text());
+  });
+  const screenshots = [];
+  const press = (key) => page.keyboard.press(key);
+  async function capture(name) {
+    await page.screenshot({ path: `${directory}/${name}.png` });
+    screenshots.push(name);
+  }
+  async function ready(stance) {
+    await page.waitForTimeout(950);
+    await page.evaluate(() => window.__kaliyugaPhaseQAFixture.grantResources());
+    await press(stance);
+  }
+  try {
+    await page.goto('http://127.0.0.1:3100/?debug=1&qaFixtures=1&chamber=1');
+    await page.waitForFunction(() => window.__kaliyugaPhaseQA?.state === 'playing' &&
+      window.__kaliyugaPhaseQA?.rudra3dReady && window.__kaliyugaPhaseQAFixture,
+    undefined, { timeout: 90000 });
+    const canvas = page.getByTestId('kaliyuga-canvas');
+    await canvas.focus();
+    await page.mouse.move(900, 510);
+    await capture('arena-baseline');
+
+    for (const [element, stance, astra] of [
+      ['agni', 'Digit1', 'KeyQ'],
+      ['vayu', 'Digit2', 'KeyE'],
+      ['vajra', 'Digit3', 'KeyR'],
+      ['varuna', 'Digit1', 'Digit4'],
+    ]) {
+      await ready(stance);
+      if (element === 'varuna') {
+        await press(astra);
+        await capture('varuna-cast');
+        await page.waitForTimeout(930);
+      }
+      await press('KeyJ');
+      await page.waitForTimeout(55);
+      await capture(`${element}-light`);
+      await page.waitForTimeout(350);
+      await press('KeyK');
+      await page.waitForFunction((id) => window.__kaliyugaPhaseQA.recentEvents.some(
+        (event) => event.name === 'heavy-contact' && event.meta === id && performance.now() - event.frameTime < 350
+      ), element, { timeout: 7000 });
+      await capture(`${element}-heavy`);
+      if (element !== 'varuna') {
+        await ready(stance);
+        await press(astra);
+        await page.waitForTimeout(element === 'vajra' ? 115 : 55);
+        await capture(`${element}-astra`);
+      }
+    }
+    await ready('Digit1');
+    await press('KeyZ');
+    await page.waitForFunction(() => window.__kaliyugaPhaseQA?.transformRemaining > 0);
+    await press('KeyK');
+    await page.waitForTimeout(150);
+    await capture('guardian-heavy');
+    await page.waitForTimeout(500);
+    await page.evaluate(() => window.__kaliyugaPhaseQAFixture.preparePerfectParry());
+    await press('ShiftLeft');
+    await capture('perfect-parry');
+    if (errors.length) throw Error(errors.join('\n'));
+  } catch (error) {
+    await capture('failure-current-screen');
+    throw error;
+  } finally {
+    await fs.writeFile(`${directory}/report.json`, JSON.stringify({ screenshots, errors }, null, 2));
+    await browser.close();
+  }
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

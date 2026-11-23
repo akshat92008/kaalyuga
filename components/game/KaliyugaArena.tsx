@@ -1312,6 +1312,18 @@ export default function KaliyugaArena() {
       };
       const fixture = {
         grantResources: () => { prepareArena(); },
+        preparePerfectParry: () => {
+          prepareArena();
+          const sim = simRef.current;
+          const target = sim.enemies.find((enemy) => enemy.aiState !== 'ko');
+          if (!target) throw new Error('QA parry requires an active enemy');
+          sim.player.parryCd = 0;
+          target.x = sim.player.x + 62;
+          target.y = sim.player.y;
+          target.aiState = 'windup';
+          target.aiTimer = 0.24;
+          target.attackKind = 'cone';
+        },
         // QA-only story overlay fixture proves a boss camera does not expire
         // behind the actual ENGAGE / FACE dialogue shown in normal Act I.
         prepareBossDialogue: (kind: 'dundubhi' | 'vrikodara') => {
@@ -3625,9 +3637,9 @@ export default function KaliyugaArena() {
 
       const astraPalette: DemonSlayerVfxPalette =
         astraId === 'agneyastra' ? 'sun' : astraId === 'vayavyastra' ? 'wind' : 'thunder';
-      const painterlyAgni = astraId === 'agneyastra' && Boolean(webglDemonSlayerVfxRef.current?.available);
+      const useElementalOverlay = Boolean(webglDemonSlayerVfxRef.current?.available);
       soundEngine.playBreathingStyle(astraPalette);
-      if (!painterlyAgni) {
+      if (!useElementalOverlay) {
         spawnShockwave(p.x, p.y, spec.radius, meta.color, 0.42);
         spawnParticles(p.x, p.y - 26, 30, meta.color, 230, 4.8, 70);
         spawnSunHaloRing(bloodDemonArtsRef.current, {
@@ -3651,42 +3663,19 @@ export default function KaliyugaArena() {
           x: p.x,
           y: p.y - 22,
           angle: aimAngle,
-          radius: 165,
+          radius: 216,
           duration: 0.64,
           cast: true,
         });
         soundEngine.playHeavyIronSwing();
       } else {
-        // Vajrastra: Rebuilt Zenitsu GLSL Plasma Thunderclap — primary forked plasma bolt + Godspeed ricochet + launch starburst (zero muddying slash ribbons)
-        const reach = Math.max(290, spec.range * 0.96);
-        const endX = p.x + Math.cos(aimAngle) * reach;
-        const endY = p.y + Math.sin(aimAngle) * reach * 0.78;
+        const reach = Math.min(390, Math.max(240, spec.range * 0.92));
+        webglDemonSlayerVfxRef.current?.spawnVajraCharge(p.x, p.y - 19, aimAngle);
         webglDemonSlayerVfxRef.current?.spawnThunderZigzag({
-          x1: p.x,
-          y1: p.y - 24,
-          x2: endX,
-          y2: endY - 22,
-          palette: 'thunder',
-          duration: 0.68,
-          width: 30,
-          withFloorRing: true,
-        });
-        webglDemonSlayerVfxRef.current?.spawnThunderZigzag({
-          x1: p.x + Math.cos(aimAngle) * 34,
-          y1: p.y - 22 + Math.sin(aimAngle) * 20,
-          x2: p.x + Math.cos(aimAngle - 0.32) * (reach * 0.84),
-          y2: p.y - 20 + Math.sin(aimAngle - 0.32) * (reach * 0.66),
-          palette: 'thunder',
-          duration: 0.62,
-          width: 20,
-          withFloorRing: false,
-        });
-        webglDemonSlayerVfxRef.current?.spawnClashStarburst({
-          x: p.x + Math.cos(aimAngle) * 28,
-          y: p.y - 24 + Math.sin(aimAngle) * 18,
-          scale: 1.5,
-          palette: 'thunder',
-          duration: 0.38,
+          x1: p.x, y1: p.y - 24,
+          x2: p.x + Math.cos(aimAngle) * reach,
+          y2: p.y - 22 + Math.sin(aimAngle) * reach * 0.78,
+          palette: 'thunder', duration: 0.39, width: 16, focused: true, delay: 0.08, withFloorRing: true,
         });
       }
       const sakugaAstraElem: SakugaElement =
@@ -3699,7 +3688,7 @@ export default function KaliyugaArena() {
         angle: aimAngle,
         intensity: 1.28,
       });
-      if (!painterlyAgni) {
+      if (!useElementalOverlay) {
         webglDemonSlayerVfxRef.current?.spawnSparkBurst({
           x: p.x,
           y: p.y - 24,
@@ -4117,6 +4106,19 @@ export default function KaliyugaArena() {
     sim.player.styleDecayTimer = 5.5;
   }, []);
 
+  const showPerfectParry = useCallback((x: number, y: number, angle: number) => {
+    const fx = webglDemonSlayerVfxRef.current;
+    fx?.spawnClashStarburst({ x, y: y - 24, scale: 0.48, palette: 'sun', duration: 0.17 });
+    fx?.spawnElementalParticles({
+      x, y: y - 24, angle, spread: 2.8, count: 24, speed: 440,
+      palette: 'sun', kind: 'spark_needle',
+    });
+    if (!fx?.available) spawnTengenClashSparks(bloodDemonArtsRef.current, x, y - 24, 16, 310);
+    triggerSakugaImpact(sakugaDirectorRef.current, {
+      kind: 'parry_clash', element: 'parry', worldX: x, worldY: y, angle, intensity: 1.16,
+    });
+  }, []);
+
   const triggerRockSolidParry = useCallback(() => {
     const sim = simRef.current;
     const p = sim.player;
@@ -4150,44 +4152,26 @@ export default function KaliyugaArena() {
     p.invulnTimer = Math.max(p.invulnTimer, 0.32);
     recordQuestEvent('kalaripayattu_parries', 1);
     soundEngine.playSpell('parry');
-    webglDemonSlayerVfxRef.current?.spawnSlashRibbon({
-      x: p.x + p.facing * 12,
-      y: p.y - 24,
-      angle: p.facing > 0 ? 0 : Math.PI,
-      radius: 138,
-      width: 66,
-      arcSpan: 2.55,
-      direction: 1,
-      palette: 'thunder',
-      duration: 0.30,
-      tiltX: 0.52,
-      withBackWrap: true,
-    });
-    webglDemonSlayerVfxRef.current?.spawnClashStarburst({
-      x: p.x + p.facing * 20,
-      y: p.y - 26,
-      scale: 1.38,
-      palette: 'sun',
-      duration: 0.26,
-    });
-    webglDemonSlayerVfxRef.current?.spawnGroundLightBounce({
-      x: p.x + p.facing * 14,
-      y: p.y + 4,
-      radius: 138,
-      palette: 'sun',
-      duration: 0.36,
-      intensity: 0.96,
-    });
-    webglDemonSlayerVfxRef.current?.spawnElementalParticles({
-      x: p.x + p.facing * 20,
-      y: p.y - 26,
-      count: 24,
-      speed: 480,
-      palette: 'sun',
-      kind: 'spark_needle',
+    webglDemonSlayerVfxRef.current?.spawnBladeGlint({
+      x: p.x + p.facing * 21, y: p.y - 27, palette: 'sun', scale: 0.44,
     });
 
     // Proactive God-of-War / Sekiro Instant Golden Deflect if an enemy is winding up a parriable strike within 215px!
+    let closestClash = Infinity;
+    let clashX = p.x + p.facing * 21;
+    let clashY = p.y;
+    let clashAngle = p.facing >= 0 ? 0 : Math.PI;
+    const chooseClash = (x: number, y: number, midpoint: boolean) => {
+      const dx = x - p.x;
+      const dy = y - p.y;
+      const distance = Math.hypot(dx, dy);
+      if (distance >= closestClash) return;
+      closestClash = distance;
+      const fraction = midpoint ? Math.min(0.5, 44 / Math.max(distance, 1)) : 1;
+      clashX = p.x + dx * fraction;
+      clashY = p.y + dy * fraction;
+      clashAngle = Math.atan2(dy, dx);
+    };
     let instantDeflected = false;
     let parryCritWindowSec = 0;
     let parryPranaBurst = 0;
@@ -4219,15 +4203,7 @@ export default function KaliyugaArena() {
           recordQuestEvent('shatter_posture', 1);
           spawnFloatingText(e.x, e.y - 88, 'POSTURE SHATTERED! [F] EXECUTE', '#ff4d3b', 1.24);
         }
-        sim.lightningArcs.push({
-          x1: p.x,
-          y1: p.y - 30,
-          x2: e.x,
-          y2: e.y - 28,
-          life: 0.32,
-          maxLife: 0.32,
-          color: '#ffd86b',
-        });
+        chooseClash(e.x, e.y, true);
       }
     });
 
@@ -4235,6 +4211,7 @@ export default function KaliyugaArena() {
     sim.projectiles.forEach((proj) => {
       if (!proj.active || proj.deflected) return;
       if (Math.hypot(proj.x - p.x, proj.y - p.y) <= 145) {
+        chooseClash(proj.x, proj.y + 24, false);
         proj.deflected = true;
         proj.vx = -proj.vx * 2.2;
         proj.vy = -proj.vy * 2.2;
@@ -4282,58 +4259,8 @@ export default function KaliyugaArena() {
       }
       sim.hitstopTimer = Math.max(sim.hitstopTimer, 0.065);
       sim.cameraShakeTrauma = Math.min(1, sim.cameraShakeTrauma + 0.62);
-      sim.screenFlashAlpha = 0.24;
-      sim.screenFlashColor = '#ffd86b';
-      spawnTengenClashSparks(bloodDemonArtsRef.current, p.x + p.facing * 20, p.y - 24, 18, 390);
-      triggerImpactInversionFlash(bloodDemonArtsRef.current, p.x, p.y - 22, 0.055, '#fff3d1');
-      webglDemonSlayerVfxRef.current?.spawnClashStarburst({
-        x: p.x + p.facing * 20,
-        y: p.y - 24,
-        scale: 1.65,
-        palette: 'sun',
-        duration: 0.32,
-      });
-      triggerSakugaImpact(sakugaDirectorRef.current, {
-        kind: 'parry_clash',
-        element: 'parry',
-        worldX: p.x + p.facing * 20,
-        worldY: p.y,
-        angle: p.facing >= 0 ? 0.34 : Math.PI - 0.34,
-        intensity: 1.38,
-      });
-      webglDemonSlayerVfxRef.current?.spawnWaterDragon({
-        x: p.x,
-        y: p.y - 20,
-        angle: p.facing >= 0 ? 0 : Math.PI,
-        radius: 175,
-        duration: 0.68,
-      });
-      soundEngine.playSpatialMaterialFoley('golden_parry', p.x, p.y, p.x, p.y, sim.viewportW);
-      spawnShockwave(p.x, p.y, 175, '#ffd86b', 0.42);
-      spawnFlipbookVfx(
-        PHASE2_VFX_SHEETS.dundubhiShockwaveAndShatter4x2.url,
-        p.x,
-        p.y - 6,
-        168,
-        0.34,
-        0,
-        0.68,
-        'screen',
-        PHASE2_VFX_SHEETS.dundubhiShockwaveAndShatter4x2,
-        DUNDUBHI_FLIPBOOK_ROWS.SONIC_BRONZE_RINGS
-      );
-      spawnFlipbookVfx(
-        PHASE2_VFX_SHEETS.parryAndHitSparks4x2.url,
-        p.x,
-        p.y - 28,
-        156,
-        0.32,
-        0,
-        1,
-        'screen',
-        PHASE2_VFX_SHEETS.parryAndHitSparks4x2,
-        PARRY_SPARKS_FLIPBOOK_ROWS.VEDIC_PARRY_FLASH
-      );
+      showPerfectParry(clashX, clashY, clashAngle);
+      soundEngine.playSpatialMaterialFoley('golden_parry', clashX, clashY, p.x, p.y, sim.viewportW);
       spawnFloatingText(
         p.x,
         p.y - 86,
@@ -4352,7 +4279,7 @@ export default function KaliyugaArena() {
         1.05
       );
     }
-  }, [addStylePoints, gainAstraEnergy, recordQuestEvent, spawnFlipbookVfx, spawnFloatingText, spawnParticles, spawnShockwave]);
+  }, [showPerfectParry, addStylePoints, gainAstraEnergy, recordQuestEvent, spawnFlipbookVfx, spawnFloatingText, spawnParticles, spawnShockwave]);
 
   // Prince of Persia: Sands of Time Temporal Rewind (`[T]`)
   const triggerKalaRewind = useCallback(() => {
@@ -5023,44 +4950,36 @@ export default function KaliyugaArena() {
     const impactX = p.x + Math.cos(p.slashAngle) * (p.stance === 'thrust' ? 78 : 48);
     const impactY = p.y + Math.sin(p.slashAngle) * (p.stance === 'thrust' ? 48 : 30);
 
+    const heavyElement = p.transformTimer > 0
+      ? 'guardian'
+      : varunaInfusionTimerRef.current > 0
+      ? 'varuna'
+      : heavyElementFromStance(p.stance);
     const primaryHeavyPalette: DemonSlayerVfxPalette =
-      p.stance === 'pillar'
-        ? 'wind'
-        : p.stance === 'thrust'
-        ? 'thunder'
-        : 'hinokami';
-
-    // Startup Windup Anticipation: crisp Parashu blade-edge glint immediately on input,
-    // while the heavy cleave VFX fires at the exact physical axe impact frame (~28% swing)!
-    webglDemonSlayerVfxRef.current?.spawnBladeGlint({
-      x: p.x + Math.cos(p.slashAngle) * 20,
-      y: p.y - 40,
-      palette: primaryHeavyPalette,
-      scale: 0.92,
-    });
-
-    const heavyStyleId = heavySpec.styleId;
+      heavyElement === 'guardian' ? 'blood' : heavyElement === 'varuna' ? 'water' :
+      heavyElement === 'vayu' ? 'wind' : heavyElement === 'vajra' ? 'thunder' : 'hinokami';
+    const heavyStance = p.stance;
     const heavySlashAngle = p.slashAngle;
     const heavyCleaveRadius = heavySpec.cleaveRadiusPx;
+    if (heavyElement === 'vajra') {
+      webglDemonSlayerVfxRef.current?.spawnVajraCharge(p.x, p.y - 19, heavySlashAngle);
+    } else {
+      webglDemonSlayerVfxRef.current?.spawnBladeGlint({
+        x: p.x + Math.cos(heavySlashAngle) * 20,
+        y: p.y - 40,
+        palette: primaryHeavyPalette,
+        scale: 0.72,
+      });
+    }
 
     pendingStrikeVfxRef.current = {
       fired: false,
       triggerThreshold: 0.28,
       execute: () => {
         const curP = simRef.current.player;
-        const syncImpactX = curP.x + Math.cos(heavySlashAngle) * (curP.stance === 'thrust' ? 74 : 46);
-        const syncImpactY = curP.y + Math.sin(heavySlashAngle) * (curP.stance === 'thrust' ? 46 : 28);
-
-        // Tier 2 Heavy Unleash: Explosive AAA Stance Spectacle + Heavy Iron Swing SFX
+        const syncImpactX = curP.x + Math.cos(heavySlashAngle) * (heavyStance === 'thrust' ? 74 : 46);
+        const syncImpactY = curP.y + Math.sin(heavySlashAngle) * (heavyStance === 'thrust' ? 46 : 28);
         soundEngine.playHeavyIronSwing();
-        const heavyElement = curP.transformTimer > 0
-          ? 'guardian'
-          : heavyStyleId === 'sudarshana_vortex'
-          ? 'vayu'
-          : heavyElementFromStance(curP.stance);
-        // All five elements now share the physical active-contact point, but not generic geometry:
-        // Agni = flame wheel; Varuna = water serpent; Vayu = emerald gale;
-        // Vajra = branching bolt; Kala-Bhairava = crimson astral axe.
         const heavyRelease = spawnHeavyElementalRelease(webglDemonSlayerVfxRef.current, {
           x: syncImpactX,
           y: syncImpactY,
@@ -5090,7 +5009,7 @@ export default function KaliyugaArena() {
           heavyElement === 'vajra' ? '#fde047' :
           heavyElement === 'varuna' ? '#38e8ff' :
           heavyElement === 'guardian' ? '#ed334f' : '#ff5418';
-        if (heavyElement !== 'agni' || !webglDemonSlayerVfxRef.current?.available) {
+        if (!webglDemonSlayerVfxRef.current?.available) {
           spawnShockwave(syncImpactX, syncImpactY, heavyRelease.radius * 0.76, impactColor, 0.36);
         }
         spawnParticles(syncImpactX, syncImpactY - 18, 12 + orbsUsed * 2, impactColor, 280, 4.6, 95);
@@ -5688,6 +5607,8 @@ export default function KaliyugaArena() {
       p.stance
     );
     const lightSlashPalette: DemonSlayerVfxPalette =
+      p.transformTimer > 0 ? 'blood' :
+      varunaInfusionTimerRef.current > 0 ? 'water' :
       p.stance === 'pillar'
         ? 'wind'
         : p.stance === 'thrust'
@@ -5723,14 +5644,13 @@ export default function KaliyugaArena() {
         const originX = curP.x + curP.facing * 14;
         const originY = curP.y - 24;
 
-        const hasLiveAgniTrail = capturedStance === 'smash' && !isRiposteStrike &&
-          varunaInfusionTimerRef.current <= 0 && curP.transformTimer <= 0 &&
+        const hasLiveBladeTrail = !isRiposteStrike && lightSlashPalette !== 'blood' &&
           Boolean(rudra3dRef.current?.getLatestBladePose().valid &&
             webglDemonSlayerVfxRef.current?.available);
 
         if (!isComboFinisher) {
           // Tier 1 Light Attack (Combo 1-3): ONE crisp, razor-clean breathing ribbon + sparse sparks ONLY!
-          if (!hasLiveAgniTrail) {
+          if (!hasLiveBladeTrail) {
             webglDemonSlayerVfxRef.current?.spawnSlashRibbon({
               x: originX,
               y: originY,
@@ -5742,6 +5662,7 @@ export default function KaliyugaArena() {
               palette: lightSlashPalette,
               duration: 0.24,
               tiltX: capturedStep === 2 ? -0.45 : 0.58,
+              spectralGuardian: lightSlashPalette === 'blood',
             });
             webglDemonSlayerVfxRef.current?.spawnSparkBurst({
               x: originX + Math.cos(capturedAngle) * 44,
@@ -5753,7 +5674,16 @@ export default function KaliyugaArena() {
           }
         } else {
           // Tier 2 Combo-4 Finisher: ONE focused signature breathing flourish (no stacked duplicates!)
-          if (capturedStance === 'pillar') {
+          if (lightSlashPalette === 'blood') {
+            webglDemonSlayerVfxRef.current?.spawnSlashRibbon({
+              x: originX, y: originY - 16, angle: capturedAngle, radius: 154,
+              palette: 'blood', spectralGuardian: true, duration: 0.40, spinRate: 0.55,
+            });
+          } else if (lightSlashPalette === 'water') {
+            webglDemonSlayerVfxRef.current?.spawnWaterDragon({
+              x: originX, y: originY, angle: capturedAngle, radius: 142, duration: 0.48,
+            });
+          } else if (capturedStance === 'pillar') {
             webglDemonSlayerVfxRef.current?.spawnWindGaleCrescents({
               x: originX,
               y: originY + 4,
@@ -5769,10 +5699,11 @@ export default function KaliyugaArena() {
               y2: originY + Math.sin(capturedAngle) * 150,
               palette: 'thunder',
               duration: 0.52,
-              width: 24,
+              width: 11,
+              focused: true,
               withFloorRing: true,
             });
-          } else if (!hasLiveAgniTrail) {
+          } else if (!hasLiveBladeTrail) {
             webglDemonSlayerVfxRef.current?.spawnSolarFlameWheel({
               x: originX,
               y: originY + 2,
@@ -5783,6 +5714,7 @@ export default function KaliyugaArena() {
             });
           }
           const finisherSakugaElem: SakugaElement =
+            lightSlashPalette === 'blood' ? 'guardian' : lightSlashPalette === 'water' ? 'varuna' :
             capturedStance === 'pillar'
               ? 'vayu'
               : capturedStance === 'thrust'
@@ -6611,13 +6543,9 @@ export default function KaliyugaArena() {
           radius: 235,
           duration: 0.96,
         });
-        webglDemonSlayerVfxRef.current?.spawnShockwaveRing({
-          x: p.x,
-          y: p.y + 8,
-          radius: 245,
-          palette: 'water',
-          duration: 0.54,
-        });
+        if (!webglDemonSlayerVfxRef.current?.available) {
+          spawnShockwave(p.x, p.y, 172, '#4fe7ff', 0.37);
+        }
         triggerSakugaImpact(sakugaDirectorRef.current, {
           kind: 'astra_burst',
           element: 'varuna',
@@ -9442,30 +9370,8 @@ export default function KaliyugaArena() {
                     }
                     sim.hitstopTimer = parryRes.hitstopSec;
                     sim.cameraShakeTrauma = Math.min(MAX_CLAMPED_CAMERA_TRAUMA, sim.cameraShakeTrauma + 0.52);
-                    sim.screenFlashAlpha = 0.18;
-                    sim.screenFlashColor = '#ffd86b';
-                    triggerImpactInversionFlash(bloodDemonArtsRef.current, p.x, p.y - 24, 0.055, '#fff3d1');
-                    webglDemonSlayerVfxRef.current?.spawnClashStarburst({
-                      x: (p.x + e.x) * 0.5,
-                      y: (p.y + e.y) * 0.5 - 24,
-                      scale: 1.6,
-                      palette: 'sun',
-                      duration: 0.30,
-                    });
-                    spawnShockwave(p.x, p.y, 124, '#ffd86b', 0.32);
-                    spawnFlipbookVfx(
-                      PHASE2_VFX_SHEETS.parryAndHitSparks4x2.url,
-                      p.x,
-                      p.y - 24,
-                      144,
-                      0.28,
-                      0,
-                      1,
-                      'screen',
-                      PHASE2_VFX_SHEETS.parryAndHitSparks4x2,
-                      PARRY_SPARKS_FLIPBOOK_ROWS.VEDIC_PARRY_FLASH
-                    );
-                    spawnParticles(p.x, p.y - 24, 18, '#ffd86b', 210, 4.4, 80);
+                    showPerfectParry((p.x + e.x) * 0.5, (p.y + e.y) * 0.5,
+                      Math.atan2(e.y - p.y, e.x - p.x));
                     soundEngine.playVoiceBark('rudra_parry', { cooldownMs: 4500 });
                     spawnFloatingText(
                       p.x,
@@ -11799,8 +11705,8 @@ export default function KaliyugaArena() {
                     : 'hinokami';
                 webglVfxLive.beginBladeTrail(liveTrailKey, {
                   palette: livePalette,
-                  widthBoostPx: livePalette === 'hinokami' ? 5 : coreLock.rudraIsHeavyAttack ? 78 : 54,
-                  fadeDuration: livePalette === 'hinokami' ? 0.18 : 0.22,
+                  widthBoostPx: livePalette === 'water' ? 13 : livePalette === 'wind' ? 16 : 7,
+                  fadeDuration: coreLock.rudraIsHeavyAttack ? 0.23 : 0.17,
                 });
                 liveBladeTrailActiveIdRef.current = liveTrailKey;
               }
@@ -12634,6 +12540,7 @@ export default function KaliyugaArena() {
     gainAstraEnergy,
     loadChamber,
     recordQuestEvent,
+    showPerfectParry,
     spawnAfterimage,
     spawnFloatingText,
     spawnParticles,

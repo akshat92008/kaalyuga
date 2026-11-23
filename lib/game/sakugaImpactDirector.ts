@@ -265,12 +265,12 @@ export function triggerSakugaImpact(
     state.impactWorldY = trigger.worldY;
   }
 
-  if (trigger.element === 'agni' && !isMajor) {
+  if (!isMajor) {
     spawnSakugaFloorBlowout(state, {
       worldX: trigger.worldX,
       worldY: trigger.worldY + 14,
       radius: 110,
-      element: 'agni',
+      element: trigger.element,
       duration: 0.38,
       intensity: intensity * 0.65,
     });
@@ -292,33 +292,33 @@ export function triggerSakugaImpact(
   spawnSakugaFloorBlowout(state, {
     worldX: trigger.worldX,
     worldY: trigger.worldY + 14,
-    radius: (isMajor ? 330 : 275) * Math.min(1.25, intensity),
+    radius: (trigger.kind === 'parry_clash' ? 122 : 200) * Math.min(1.20, intensity),
     element: trigger.element,
-    duration: isMajor ? 0.58 : 0.44,
-    intensity: isMajor ? 1.18 : 0.95,
+    duration: 0.44,
+    intensity: 0.95,
   });
 
   // Spawn signature Tengen-vs-Gyutaro cross-cutting razor slash beams!
-  const beamLen = (isMajor ? 620 : 440) * Math.min(1.25, intensity);
+  const beamLen = (trigger.kind === 'parry_clash' ? 164 : 275) * Math.min(1.20, intensity);
   spawnSakugaCrossBeam(state, {
     worldX: trigger.worldX,
     worldY: trigger.worldY - 22,
     angle: trigger.angle,
     length: beamLen,
-    thickness: isMajor ? 22 : 15,
+    thickness: 10,
     element: trigger.element,
-    duration: isMajor ? 0.28 : 0.21,
+    duration: 0.18,
   });
-  if (isMajor || trigger.kind === 'astra_burst') {
+  if (trigger.kind === 'parry_clash' || trigger.kind === 'boss_clash') {
     // Secondary counter-diagonal cross beam (forms the iconic anime X-clash!)
     spawnSakugaCrossBeam(state, {
       worldX: trigger.worldX,
       worldY: trigger.worldY - 22,
-      angle: trigger.angle + (isMajor ? 1.24 : 0.88),
+      angle: trigger.angle + 1.24,
       length: beamLen * 0.78,
-      thickness: isMajor ? 14 : 10,
+      thickness: 6,
       element: trigger.kind === 'parry_clash' ? 'parry' : trigger.element,
-      duration: isMajor ? 0.24 : 0.18,
+      duration: 0.14,
     });
   }
 }

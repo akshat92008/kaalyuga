@@ -13,8 +13,6 @@ type HeavyEffectMethod =
   | 'spawnWindGaleCrescents'
   | 'spawnThunderZigzag'
   | 'spawnSlashRibbon'
-  | 'spawnClashStarburst'
-  | 'spawnShockwaveRing'
   | 'spawnSparkBurst';
 
 export type HeavyEffectSink = Pick<WebglDemonSlayerVfxOverlay, HeavyEffectMethod>;
@@ -90,48 +88,38 @@ export function spawnHeavyElementalRelease(
   const { radius, reach, palette, duration } = profile;
   switch (input.element) {
     case 'agni':
-      fx.spawnAgniCrescent({ x, y: y - 18, angle, radius: 135 + clamp(input.energyOrbs ?? 0, 0, 4) * 7,
-        duration: 0.48 });
-      return profile;
-    case 'varuna':
-      fx.spawnWaterDragon({ x, y: y - 20, angle, radius: radius * 1.22, duration: duration + 0.1 });
-      fx.spawnSlashRibbon({
-        x, y: y - 22, angle, radius: radius * 1.24, width: 108,
-        arcSpan: 2.95, direction: 1, duration: 0.48, palette, withBackWrap: true,
+      fx.spawnAgniCrescent({
+        x, y: y - 18, angle, radius: 148 + clamp(input.energyOrbs ?? 0, 0, 4) * 9,
+        duration: 0.50,
       });
+      break;
+    case 'varuna':
+      fx.spawnWaterDragon({ x, y: y - 19, angle, radius: radius * 0.82, duration: 0.68 });
       break;
     case 'vayu':
-      fx.spawnWindGaleCrescents({ x, y: y - 18, angle, radius: radius * 1.32, duration: duration + 0.08 });
-      fx.spawnSlashRibbon({
-        x, y: y - 20, angle, radius: radius * 1.22, width: 104,
-        arcSpan: 3.05, direction: -1, duration: 0.46, palette, withBackWrap: true,
-      });
+      fx.spawnWindGaleCrescents({ x, y: y - 18, angle, radius: radius * 0.92, duration: 0.60 });
       break;
-    case 'vajra':
+    case 'vajra': {
+      const boltReach = clamp(reach, 158, 315);
       fx.spawnThunderZigzag({
-        x1: x - Math.cos(angle) * 56,
-        y1: y - 22 - Math.sin(angle) * 24,
-        x2: x + Math.cos(angle) * reach * 1.22,
-        y2: y - 22 + Math.sin(angle) * reach * 0.78,
-        width: 44, duration, palette, withFloorRing: true,
+        x1: x - Math.cos(angle) * 25,
+        y1: y - 22 - Math.sin(angle) * 15,
+        x2: x + Math.cos(angle) * boltReach,
+        y2: y - 22 + Math.sin(angle) * boltReach * 0.78,
+        width: 13, duration: 0.37, palette, focused: true, withFloorRing: true,
       });
-      fx.spawnClashStarburst({ x, y: y - 24, scale: 1.55, duration: 0.34, palette });
       break;
+    }
     case 'guardian':
       fx.spawnSlashRibbon({
-        x, y: y - 34, angle, radius: radius * 1.26, width: 92,
-        arcSpan: 3.1, direction: 1, palette, duration, tiltX: 0.56,
+        x, y: y - 34, angle, radius: clamp(radius, 155, 215), spinRate: 0.65,
+        palette, duration, tiltX: 0.42, spectralGuardian: true,
       });
-      fx.spawnShockwaveRing({ x, y, radius: radius * 1.18, duration: 0.46, palette });
-      fx.spawnClashStarburst({ x, y: y - 24, scale: 1.72, duration: 0.32, palette });
+      fx.spawnSparkBurst({
+        x: x + Math.cos(angle) * 38, y: y - 30 + Math.sin(angle) * 22,
+        count: profile.sparks, speed: 340, palette,
+      });
       break;
   }
-  fx.spawnSparkBurst({
-    x: x + Math.cos(angle) * 26,
-    y: y - 24 + Math.sin(angle) * 14,
-    count: profile.sparks,
-    speed: 480,
-    palette,
-  });
   return profile;
 }
