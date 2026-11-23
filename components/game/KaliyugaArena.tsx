@@ -5144,6 +5144,7 @@ export default function KaliyugaArena() {
         }
 
         let hitAny = false;
+        let presentedImpact = false;
 
         const corridorEndX = originX + Math.cos(p.slashAngle) * heavySpec.corridorLengthPx;
         const corridorEndY = originY + Math.sin(p.slashAngle) * heavySpec.corridorLengthPx;
@@ -5283,7 +5284,8 @@ export default function KaliyugaArena() {
               p.guaranteedCritTimer = 0;
             }
             sim.runDamageDealt += heavyHitRes.hpLost;
-            if (heavyHitRes.hpLost > 0 && !hitAny) {
+            if ((heavyHitRes.hpLost > 0 || heavyHitRes.triggeredPostureBreak) && !presentedImpact) {
+              presentedImpact = true;
               triggerSakugaImpact(sakugaDirectorRef.current, {
                 kind: 'heavy_hit',
                 element: heavyElement,
