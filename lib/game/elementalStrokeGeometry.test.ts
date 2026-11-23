@@ -21,3 +21,13 @@ test('wind and guardian remain in front and taper toward both tips', () => {
     }
   }
 });
+
+test('large crests keep one dominant body with tapered secondary wakes', () => {
+  const waterBody = sampleElementalStroke('water', 0.80, 256, 0);
+  const waterWake = sampleElementalStroke('water', 0.80, 256, 1);
+  assert.ok(waterBody.width > waterWake.width * 2.5);
+  const windBody = sampleElementalStroke('wind', 0.50, 220, 0);
+  const windWake = sampleElementalStroke('wind', 0.50, 220, 1);
+  assert.ok(windBody.width > windWake.width * 2);
+  assert.ok(windBody.x - windWake.x < windBody.width * 0.3);
+});

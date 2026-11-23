@@ -6,7 +6,11 @@ async function main() {
   const browser = await chromium.launch({
     args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
   });
-  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  const page = await browser.newPage({
+    viewport: { width: 1440, height: 900 },
+    recordVideo: { dir: directory, size: { width: 1152, height: 720 } },
+  });
+  const video = page.video();
   const errors = [];
   page.on('pageerror', (error) => errors.push(String(error)));
   page.on('console', (message) => {
@@ -87,6 +91,8 @@ async function main() {
         console.log('Heavy capture did not observe the expected event: ' + JSON.stringify({ element, facts }));
       }
       await capture(`${element}-heavy`);
+      await page.waitForTimeout(85);
+      await capture(`${element}-heavy-release`);
       if (element !== 'varuna') {
         await ready(stance);
         await press(astra);
@@ -100,6 +106,8 @@ async function main() {
     await press('KeyK');
     await page.waitForTimeout(150);
     await capture('guardian-heavy');
+    await page.waitForTimeout(90);
+    await capture('guardian-heavy-release');
     await page.waitForTimeout(500);
     await page.evaluate(() => window.__kaliyugaPhaseQAFixture.preparePerfectParry());
     await press('ShiftLeft');
@@ -110,7 +118,13 @@ async function main() {
     throw error;
   } finally {
     await fs.writeFile(`${directory}/report.json`, JSON.stringify({ screenshots, errors, captureFailures }, null, 2));
-    await browser.close();
+    try {
+      await page.close();
+      await video?.saveAs(`${directory}/phase1-combat-effects.webm`);
+      await video?.delete();
+    } finally {
+      await browser.close();
+    }
   }
 }
 

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { ELEMENTAL_CREST_GLSL } from './elementalCrestShaders';
 import { AGNI_PAINTERLY_GLSL } from './agniPainterlyShaders';
 import { sampleElementalStroke, type ElementalStroke } from './elementalStrokeGeometry';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -403,6 +404,7 @@ const RIBBON_FRAGMENT_SHADER = /* glsl */ `
   uniform float uUvRepeat;
   uniform float uScrollSpeed;
   uniform float uAgniPass;
+  uniform float uCrestStyle;
   uniform sampler2D uAtlasTex;
 
   varying vec2 vUv;
@@ -425,12 +427,18 @@ const RIBBON_FRAGMENT_SHADER = /* glsl */ `
   }
 
   ${AGNI_PAINTERLY_GLSL}
+  ${ELEMENTAL_CREST_GLSL}
 
   void main() {
     float u = vUv.x;
     float v = vUv.y;
     if (uAgniPass > 0.5) {
       gl_FragColor = paintAgni(u, v);
+      return;
+    }
+
+    if (uCrestStyle > 0.5) {
+      gl_FragColor = paintElementalCrest(u, v);
       return;
     }
 
@@ -696,6 +704,7 @@ const THUNDER_BOLT_FRAGMENT_SHADER = /* glsl */ `
   uniform float uOpacity;
   uniform float uIsHalo;
   uniform float uIsBranch;
+  uniform float uBranchDelay;
   uniform vec3 uCoreColor;
   uniform vec3 uGoldColor;
   uniform vec3 uCyanColor;
@@ -717,9 +726,10 @@ const THUNDER_BOLT_FRAGMENT_SHADER = /* glsl */ `
   }
 
   void main() {
-    float headReveal = smoothstep(0.0, 0.10, uLife);
-    float tailDissolve = smoothstep(0.58, 1.0, uLife);
-    if (vUv.x > headReveal + 0.08) discard;
+    if (uLife < uBranchDelay) discard;
+    float headReveal = smoothstep(uBranchDelay, uBranchDelay + 0.18, uLife);
+    float tailDissolve = smoothstep(0.36, 0.96, uLife);
+    float reveal = 1.0 - smoothstep(headReveal - 0.07, headReveal + 0.04, vUv.x);
 
     // Quantized 18fps sakuga lightning flicker, pinned strictly to 0 at branch root (vUv.x=0)
     // so forked branches NEVER pull away from their parent elbow vertex!
@@ -737,7 +747,7 @@ const THUNDER_BOLT_FRAGMENT_SHADER = /* glsl */ `
     if (uIsHalo > 0.5) {
       float halo = exp(-dist * dist * 3.8) * (1.0 - tailDissolve) * surge;
       vec3 haloCol = mix(uCyanColor, uGoldColor, smoothstep(0.52, 0.14, dist));
-      float alpha = halo * uOpacity * 0.55;
+      float alpha = halo * uOpacity * 0.55 * reveal;
       if (alpha < 0.02) discard;
       gl_FragColor = vec4(haloCol * 1.35 * alpha, alpha);
       return;
@@ -764,7 +774,7 @@ const THUNDER_BOLT_FRAGMENT_SHADER = /* glsl */ `
     // Branches stay 100% solid at root (vUv.x=0) so they weld seamlessly into parent elbow!
     float rootFade = uIsBranch > 0.5 ? 1.0 : smoothstep(0.0, 0.03, vUv.x);
     float tipFade = 1.0 - smoothstep(0.94, 1.0, vUv.x);
-    float alpha = clamp(inkEdge * 0.99 * fadeOut * (0.45 + 0.55 * rootFade * tipFade) * uOpacity, 0.0, 1.0);
+    float alpha = clamp(reveal * inkEdge * 0.99 * fadeOut * (0.45 + 0.55 * rootFade * tipFade) * uOpacity, 0.0, 1.0);
     if (alpha < 0.03) discard;
 
     gl_FragColor = vec4(col * alpha, alpha);
@@ -1130,6 +1140,7 @@ function createRibbonMaterial(
       uUvRepeat: { value: uvRepeat },
       uScrollSpeed: { value: scrollSpeed },
       uAgniPass: { value: 0 },
+      uCrestStyle: { value: 0 },
       uAtlasTex: { value: atlasTex },
     },
     vertexShader: RIBBON_VERTEX_SHADER,
@@ -1847,6 +1858,10 @@ export class WebglDemonSlayerVfxOverlay {
     const group = new THREE.Group();
     group.add(coreMesh, glowMesh);
     let agniSpine: ActiveWebglRibbon['agniSpine'];
+    if (opts.spectralGuardian) {
+      coreMat.uniforms.uCrestStyle.value = 3;
+      glowMesh.visible = false;
+    }
     if (opts.painterlyAgni) {
       coreMat.uniforms.uAgniPass.value = 1;
       glowMat.uniforms.uAgniPass.value = 2;
@@ -1873,6 +1888,7 @@ export class WebglDemonSlayerVfxOverlay {
         uvRepeat,
         scrollSpeed
       );
+      if (opts.painterlyAgni) backMat.uniforms.uAgniPass.value = 1;
       backMesh = new THREE.Mesh(backGeo, backMat);
       backGroup = new THREE.Group();
       backGroup.add(backMesh);
@@ -1916,9 +1932,10 @@ export class WebglDemonSlayerVfxOverlay {
     const reach = THREE.MathUtils.clamp(opts.radius, 128, opts.cast ? 220 : 187);
     this.spawnSlashRibbon({
       ...opts,
-      radius: reach * 0.81,
-      width: opts.cast ? 69 : 55,
-      arcSpan: opts.cast ? 2.57 : 2.08,
+      radius: reach * 0.87,
+      width: opts.cast ? 118 : 96,
+      arcSpan: opts.cast ? 2.94 : 2.41,
+      withBackWrap: opts.cast,
       tiltX: 0.38,
       tiltY: -0.15,
       spinRate: 0.7,
@@ -1926,7 +1943,7 @@ export class WebglDemonSlayerVfxOverlay {
       painterlyAgni: true,
     });
     const tipX = opts.x + Math.cos(opts.angle) * reach * 0.62;
-    const tipY = opts.y + Math.sin(opts.angle) * reach * 0.52;
+    const tipY = opts.y + Math.sin(opts.angle) * reach * 0.62;
     this.spawnGroundLightBounce({
       x: tipX, y: tipY + 22, radius: reach * 0.76,
       duration: 1.2, intensity: opts.cast ? 1.05 : 0.75, palette,
@@ -2104,19 +2121,19 @@ export class WebglDemonSlayerVfxOverlay {
     }
 
     const pal = RIBBON_PALETTES.water;
-    const waveTex = pickAtlasTextureForPalette(this.atlas, 'water');
     const reach = THREE.MathUtils.clamp((opts.radius ?? 190) * 1.28, 138, 318);
     const frontGroup = new THREE.Group();
     const backGroup = new THREE.Group();
     const geos: THREE.BufferGeometry[] = [];
     const fadeMats: THREE.Material[] = [];
-    const bodyMat = createRibbonMaterial(pal, 1, 0.96, false, THREE.NormalBlending, 1.28, waveTex, 1.24, 1.6);
+    const bodyMat = createRibbonMaterial(pal, 1, 0.98, false, THREE.NormalBlending);
+    bodyMat.uniforms.uCrestStyle.value = 1;
 
     for (let lane = 0; lane < 3; lane++) {
       const geo = buildElementalStrokeGeometry('water', reach, lane);
       const mat = lane === 0 ? bodyMat :
-        createRibbonMaterial(pal, 1, 0.82 - lane * 0.13, false, THREE.NormalBlending,
-          1.22, waveTex, 1.3 + lane * 0.16, 1.7);
+        createRibbonMaterial(pal, 1, lane === 1 ? 0.66 : 0.48, false, THREE.NormalBlending);
+      mat.uniforms.uCrestStyle.value = 1;
       const mesh = new THREE.Mesh(geo, mat);
       mesh.renderOrder = lane === 0 ? 1 : 0;
       (lane === 2 ? backGroup : frontGroup).add(mesh);
@@ -2149,7 +2166,7 @@ export class WebglDemonSlayerVfxOverlay {
         intensity: position > 0.5 ? 0.62 : 0.40,
       });
       this.spawnElementalParticles({
-        x, y, angle: opts.angle, spread: 2.25, count: 30,
+        x, y, angle: opts.angle, spread: 2.25, count: 18,
         speed: position > 0.5 ? 270 : 190, palette: 'water', kind: 'water_droplet',
       });
     }
@@ -2221,7 +2238,8 @@ export class WebglDemonSlayerVfxOverlay {
       isHalo: boolean,
       isBranch: boolean,
       subSeed: number,
-      opacity: number
+      opacity: number,
+      branchDelay = 0
     ): THREE.ShaderMaterial =>
       new THREE.ShaderMaterial({
         vertexShader: RIBBON_VERTEX_SHADER,
@@ -2233,6 +2251,7 @@ export class WebglDemonSlayerVfxOverlay {
           uOpacity: { value: opacity },
           uIsHalo: { value: isHalo ? 1.0 : 0.0 },
           uIsBranch: { value: isBranch ? 1.0 : 0.0 },
+          uBranchDelay: { value: branchDelay },
           uCoreColor: { value: new THREE.Color('#ffffff') },
           uGoldColor: { value: pal.mid.clone() },
           uCyanColor: { value: pal.edge.clone() },
@@ -2259,8 +2278,10 @@ export class WebglDemonSlayerVfxOverlay {
       const bWidth = Math.max(opts.focused ? 4 : 13, boltW * (0.68 - idx * 0.04));
       const bHaloGeo = buildTaperedThunderRibbonGeometry(bPts, bWidth * 2.1, 5.0, 18);
       const bCoreGeo = buildTaperedThunderRibbonGeometry(bPts, bWidth, 3.2, 22);
-      const bHaloMat = createBoltShaderMat(true, true, seed + 11.4 * (idx + 1), 0.86);
-      const bCoreMat = createBoltShaderMat(false, true, seed + 11.4 * (idx + 1), 1.0);
+      const branchRoot = mainPts.findIndex((point) => point.x === bPts[0].x && point.y === bPts[0].y);
+      const branchDelay = 0.025 + 0.14 * Math.max(0, branchRoot) / (mainPts.length - 1);
+      const bHaloMat = createBoltShaderMat(true, true, seed + 11.4 * (idx + 1), 0.63, branchDelay);
+      const bCoreMat = createBoltShaderMat(false, true, seed + 11.4 * (idx + 1), 0.88, branchDelay);
       geos.push(bHaloGeo, bCoreGeo);
       shaderMats.push(bHaloMat, bCoreMat);
       group.add(new THREE.Mesh(bHaloGeo, bHaloMat), new THREE.Mesh(bCoreGeo, bCoreMat));
@@ -2454,7 +2475,6 @@ export class WebglDemonSlayerVfxOverlay {
     }
 
     const pal = RIBBON_PALETTES.wind;
-    const windTex = pickAtlasTextureForPalette(this.atlas, 'wind');
     const reach = THREE.MathUtils.clamp((opts.radius ?? 230) * 0.92, 116, 256);
     const frontGroup = new THREE.Group();
     const ribbonMats: THREE.ShaderMaterial[] = [];
@@ -2462,8 +2482,9 @@ export class WebglDemonSlayerVfxOverlay {
 
     for (let lane = 0; lane < 3; lane++) {
       const geo = buildElementalStrokeGeometry('wind', reach, lane);
-      const mat = createRibbonMaterial(pal, 3, 0.94 - lane * 0.12, false,
-        THREE.NormalBlending, 1.43, windTex, 1.18 + lane * 0.22, 2.48);
+      const mat = createRibbonMaterial(pal, 3, lane === 0 ? 0.98 : 0.55 - lane * 0.10,
+        false, THREE.NormalBlending);
+      mat.uniforms.uCrestStyle.value = 2;
       const mesh = new THREE.Mesh(geo, mat);
       mesh.visible = lane === 0;
       frontGroup.add(mesh);
@@ -2677,6 +2698,7 @@ export class WebglDemonSlayerVfxOverlay {
     scale?: number;
     palette?: DemonSlayerVfxPalette;
     duration?: number;
+    angle?: number;
   }): void {
     if (!this.renderer || this.disposed) return;
     if (this.starbursts.length >= 10) {
@@ -2688,7 +2710,7 @@ export class WebglDemonSlayerVfxOverlay {
     const group = new THREE.Group();
     const mats: THREE.MeshBasicMaterial[] = [];
     const geos: THREE.BufferGeometry[] = [];
-    const rot = ((this.elapsed * 2.7) % 0.5) - 0.25;
+    const rot = opts.angle === undefined ? -0.18 : -opts.angle + 0.18;
 
     // 1. Crisp pitch-black Sumi-e 4-point diamond ink core
     const inkGeo = buildStarburstPolygonGeometry(4, 52, 8);
@@ -3541,11 +3563,12 @@ export class WebglDemonSlayerVfxOverlay {
       g.frontGroup.position.set(toScreenX(g.worldX), toScreenY(g.worldY), 20);
       g.frontGroup.scale.set(expand, expand, expand);
       g.ribbonMats.forEach((material, lane) => {
-        const delay = lane * 0.072;
+        const delay = lane * 0.042;
         const age = (norm - delay) / (1 - delay);
         const blade = g.frontGroup.children[lane];
         blade.visible = age >= 0;
-        blade.position.x = Math.max(0, age) * (85 - lane * 10);
+        blade.position.x = Math.max(0, age) * (70 - lane * 18);
+        blade.position.y = Math.max(0, age) * lane * 9;
         material.uniforms.uTime.value = this.elapsed * 1.35;
         material.uniforms.uLife.value = Math.max(0, age);
       });

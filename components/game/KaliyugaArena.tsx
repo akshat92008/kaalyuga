@@ -4111,7 +4111,7 @@ export default function KaliyugaArena() {
 
   const showPerfectParry = useCallback((x: number, y: number, angle: number) => {
     const fx = webglDemonSlayerVfxRef.current;
-    fx?.spawnClashStarburst({ x, y: y - 24, scale: 0.48, palette: 'sun', duration: 0.17 });
+    fx?.spawnClashStarburst({ x, y: y - 24, angle, scale: 0.67, palette: 'sun', duration: 0.18 });
     fx?.spawnElementalParticles({
       x, y: y - 24, angle, spread: 2.8, count: 24, speed: 440,
       palette: 'sun', kind: 'spark_needle',
@@ -4991,20 +4991,12 @@ export default function KaliyugaArena() {
         const syncImpactY = curP.y + Math.sin(heavySlashAngle) * (heavyStance === 'thrust' ? 46 : 28);
         soundEngine.playHeavyIronSwing();
         const heavyRelease = spawnHeavyElementalRelease(webglDemonSlayerVfxRef.current, {
-          x: syncImpactX,
-          y: syncImpactY,
+          x: originX,
+          y: originY,
           angle: heavySlashAngle,
           radius: heavyCleaveRadius * 1.05,
           energyOrbs: orbsUsed,
           element: heavyElement,
-        });
-        triggerSakugaImpact(sakugaDirectorRef.current, {
-          kind: 'heavy_hit',
-          element: heavyElement,
-          worldX: syncImpactX,
-          worldY: syncImpactY,
-          angle: heavySlashAngle,
-          intensity: 1.12 + orbsUsed * 0.08,
         });
         if (isDebugMode) {
           qaRecentEventsRef.current.push({
@@ -5291,6 +5283,16 @@ export default function KaliyugaArena() {
               p.guaranteedCritTimer = 0;
             }
             sim.runDamageDealt += heavyHitRes.hpLost;
+            if (heavyHitRes.hpLost > 0 && !hitAny) {
+              triggerSakugaImpact(sakugaDirectorRef.current, {
+                kind: 'heavy_hit',
+                element: heavyElement,
+                worldX: e.x - Math.cos(kAngle) * 16,
+                worldY: e.y - Math.sin(kAngle) * 12,
+                angle: kAngle,
+                intensity: 1.12 + orbsUsed * 0.08,
+              });
+            }
             // Tactile 45ms+ heavy hit-stop + subtle 2-frame Sumi-e impact flash
             sim.hitstopTimer = Math.max(sim.hitstopTimer, Math.max(0.045, heavyHitRes.hitstopSec));
             sim.screenFlashAlpha = Math.max(sim.screenFlashAlpha, orbsUsed >= 1 || brokeGuard ? 0.16 : 0.09);
@@ -5482,8 +5484,8 @@ export default function KaliyugaArena() {
     p.scaleY = isRiposteStrike || isDashStrike ? 0.89 : p.comboStep === 4 ? 0.93 : 0.97;
     p.weaponSwingProgress = 0.0;
     p.attackSerial += 1;
-    if (p.transformTimer > 0) {
-      // Kala-Bhairava Susanoo colossal spectral Parashu shockwave on every swing
+    if (p.transformTimer > 0 && !webglDemonSlayerVfxRef.current?.available) {
+      // Keep a visible release for the guardian when the WebGL overlay is unavailable.
       spawnShockwave(
         p.x + Math.cos(p.slashAngle) * 58,
         p.y + Math.sin(p.slashAngle) * 34,

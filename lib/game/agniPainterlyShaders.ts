@@ -9,13 +9,14 @@ export const AGNI_PAINTERLY_GLSL = /* glsl */ `
     float wear = smoothstep(uLife * 0.85 - 0.22, uLife * 0.85 + 0.09,
       0.26 + u * 0.39 + broad * 0.37);
     float life = (1.0 - smoothstep(0.55, 1.0, uLife)) * wear * taper * uOpacity;
-    float edge = 0.88 + (broad - 0.5) * 0.05;
+    float edge = 0.78 + 0.095 * sin(u * 25.16 - uLife * 13.26 - v * 4.6 + broad * 1.65);
 
     if (uAgniPass > 2.5) {
       float distanceToEdge = abs(v - edge);
       float filament = 1.0 - smoothstep(0.016, 0.065, distanceToEdge);
       float shoulder = 1.0 - smoothstep(0.035, 0.115, distanceToEdge);
-      float alpha = (filament * 0.82 + shoulder * 0.18) * life;
+      float peak = 1.0 - smoothstep(0.30, 0.85, uLife);
+      float alpha = (filament * 0.76 + shoulder * 0.24) * life * (0.25 + 0.75 * peak);
       vec3 color = mix(uMidColor, uCoreColor * 1.35, filament);
       return vec4(color * alpha, alpha);
     }
@@ -31,16 +32,28 @@ export const AGNI_PAINTERLY_GLSL = /* glsl */ `
       clamp(1.06 - v + (broad - 0.5) * 0.17 + (grain - 0.5) * 0.09, 0.0, 1.0));
     vec4 brush = vec4(1.0, broad, 0.0, smoothstep(0.14, 0.43, v));
     if (uUseAtlas > 0.5) brush = texture2D(uAtlasTex, warped);
-    float belly = smoothstep(0.08, 0.23, v) * (1.0 - smoothstep(0.83, 0.98, v));
-    float tongue = smoothstep(0.15, 0.71, brush.a - (1.0 - brush.g) * grain * 0.27);
-    float alpha = tongue * belly * life;
-    float smoke = smoothstep(0.49, 0.74, broad + grain * 0.14)
-      * smoothstep(0.03, 0.18, v) * (1.0 - smoothstep(0.41, 0.69, v))
-      * (1.0 - tongue * 0.83) * taper * uOpacity
-      * smoothstep(0.03, 0.31, uLife) * (1.0 - smoothstep(0.62, 1.0, uLife));
-    vec3 flame = mix(uDeepColor, uEdgeColor, smoothstep(0.14, 0.49, brush.g));
-    flame = mix(flame, uMidColor * 1.22, smoothstep(0.40, 0.90, brush.g + v * 0.22));
-    return vec4(flame * alpha + vec3(0.10, 0.056, 0.045) * smoke * (1.0 - alpha),
-      alpha + smoke * (1.0 - alpha));
+    // Broad vermilion mass, overlapping hooked tongues, and a hot inner fold.
+    // The atlas adds grain while the connected silhouette is drawn here.
+    float stream = u * 7.4 - uLife * 3.9;
+    float curl = sin(stream * 3.4 - v * 6.2 + broad * 1.65);
+    float lower = 0.12 + broad * 0.08 + 0.036 * curl;
+    float upper = 0.74 + 0.18 * curl + (grain - 0.5) * 0.08;
+    float coat = smoothstep(lower - 0.04, lower + 0.09, v)
+      * (1.0 - smoothstep(upper - 0.02, upper + 0.055, v));
+    float tongue = smoothstep(0.24, 0.71, brush.a + curl * 0.15);
+    float drawnTongue = tongue * smoothstep(0.55, 0.79, v) * (1.0 - smoothstep(0.88, 1.0, v));
+    float alpha = max(coat * (0.84 + tongue * 0.16), drawnTongue * 0.70) * life;
+    float foldedLine = 0.48 + curl * 0.11 + (broad - 0.5) * 0.12;
+    float hotFold = 1.0 - smoothstep(0.016, 0.15, abs(v - foldedLine));
+    hotFold *= smoothstep(0.22, 0.71, brush.g * 0.55 + broad * 0.65);
+    float soot = smoothstep(0.54, 0.78, broad + grain * 0.12)
+      * smoothstep(0.02, 0.18, v) * (1.0 - smoothstep(0.35, 0.58, v))
+      * taper * uOpacity * smoothstep(0.22, 0.59, uLife)
+      * (1.0 - smoothstep(0.62, 1.0, uLife));
+    vec3 flame = mix(uDeepColor, uEdgeColor * 1.22, smoothstep(0.12, 0.48, v + brush.g * 0.17));
+    flame = mix(flame, uMidColor * 1.38, hotFold);
+    flame = mix(flame, uCoreColor, hotFold * hotFold * 0.72);
+    return vec4(flame * alpha + vec3(0.09, 0.045, 0.039) * soot * (1.0 - alpha),
+      alpha + soot * (1.0 - alpha));
   }
 `;
