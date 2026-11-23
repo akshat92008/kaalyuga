@@ -1,13 +1,4 @@
-// ============================================================================
-// UFOTABLE / DEMON SLAYER SAKUGA IMPACT & CHIAROSCURO LIGHTING DIRECTOR
-// Pure deterministic state machine + Canvas2D cinematic compositor helpers:
-// 1. Dynamic Chiaroscuro Arena Grading (darkens MP4 arena so HDR VFX pop!)
-// 2. Real-Time Isometric Floor Light Blowout Pools + Long Cast Shadows
-// 3. Authentic 2-3 Frame Sakuga Impact Frames (B&W / Inverted Sumi-e + Dual-Color Split)
-// 4. Radial Pitch-Black Sumi-e Speed-Lines & Anamorphic Cross-Cutting Clash Beams
-// 5. Dutch Camera Tilt Spring + Chromatic RGB Split Clash Pulse
-// 6. Crisp Ink-Rimmed Vedic Ward Shield (replaces blurry yellow dandelion blobs)
-// ============================================================================
+// Combat lighting, localized clash beams, and short impact flashes.
 
 export type SakugaElement = 'agni' | 'varuna' | 'vayu' | 'vajra' | 'blood' | 'parry' | 'guardian';
 
@@ -18,7 +9,6 @@ export interface SakugaImpactTrigger {
   worldY: number;
   angle: number;
   intensity?: number; // 0.5 .. 1.5
-  enemyElement?: SakugaElement;
 }
 
 export interface SakugaCrossBeam {
@@ -52,22 +42,14 @@ export interface SakugaDirectorState {
   // 2-3 frame Sakuga Impact Frame sequencer
   impactFrameTimer: number;
   impactFrameDuration: number;
-  impactKind: SakugaImpactTrigger['kind'];
   impactElement: SakugaElement;
-  impactEnemyElement: SakugaElement;
   impactWorldX: number;
   impactWorldY: number;
-  impactAngle: number;
-  impactIntensity: number;
 
   // Dynamic chiaroscuro arena darkness (0.34 baseline -> up to 0.72 during clashes/astras)
   chiaroscuroTarget: number;
   chiaroscuroCurrent: number;
 
-  // Radial speed-lines & chromatic clash split
-  speedLinesAlpha: number;
-  speedLinesSeed: number;
-  chromaticSplitPx: number;
 
   // Dynamic Dutch tilt micro-camera spring (radians)
   dutchTiltRad: number;
@@ -152,18 +134,11 @@ export function createSakugaDirectorState(): SakugaDirectorState {
   return {
     impactFrameTimer: 0,
     impactFrameDuration: 0.085,
-    impactKind: 'heavy_hit',
     impactElement: 'agni',
-    impactEnemyElement: 'blood',
     impactWorldX: 0,
     impactWorldY: 0,
-    impactAngle: 0,
-    impactIntensity: 0,
     chiaroscuroTarget: 0.36,
     chiaroscuroCurrent: 0.36,
-    speedLinesAlpha: 0,
-    speedLinesSeed: 1,
-    chromaticSplitPx: 0,
     dutchTiltRad: 0,
     dutchTiltVel: 0,
     activeLightColor: '#ff8a1c',
@@ -266,10 +241,8 @@ export function spawnSakugaFloorBlowout(
 
 /**
  * Fires a full Ufotable Sakuga Impact sequence:
- * - 2-3 frame B&W / Dual-Color Impact Frame
  * - Cross-cutting white-hot diagonal slash beams (Tengen vs Gyutaro signature)
  * - Blinding HDR floor light blowout pool
- * - Radial pitch-black sumi-e speed-lines + RGB chromatic clash split + Dutch tilt kick
  */
 export function triggerSakugaImpact(
   state: SakugaDirectorState,
@@ -282,26 +255,33 @@ export function triggerSakugaImpact(
     trigger.kind === 'execution' ||
     trigger.kind === 'boss_clash';
 
-  // Impact frame duration: ~55ms (3 frames @ 60fps) for major clashes, ~34ms (2 frames) for heavy/astra bursts
-  const dur = isMajor ? 0.068 : trigger.kind === 'astra_burst' ? 0.052 : 0.036;
-  state.impactFrameTimer = Math.max(state.impactFrameTimer, dur);
-  state.impactFrameDuration = dur;
-  state.impactKind = trigger.kind;
-  state.impactElement = trigger.element;
-  state.impactEnemyElement = trigger.enemyElement ?? (trigger.element === 'varuna' ? 'agni' : 'blood');
-  state.impactWorldX = trigger.worldX;
-  state.impactWorldY = trigger.worldY;
-  state.impactAngle = trigger.angle;
-  state.impactIntensity = intensity;
+  const usesInkFlash = trigger.kind === 'parry_clash' ||
+    trigger.kind === 'posture_break' || trigger.kind === 'execution';
+  if (usesInkFlash) {
+    state.impactFrameTimer = 0.05;
+    state.impactFrameDuration = 0.05;
+    state.impactElement = trigger.element;
+    state.impactWorldX = trigger.worldX;
+    state.impactWorldY = trigger.worldY;
+  }
+
+  if (trigger.element === 'agni' && !isMajor) {
+    spawnSakugaFloorBlowout(state, {
+      worldX: trigger.worldX,
+      worldY: trigger.worldY + 14,
+      radius: 110,
+      element: 'agni',
+      duration: 0.38,
+      intensity: intensity * 0.65,
+    });
+    return;
+  }
 
   // Plunge arena shadows deep so the clash blazes like 8K HDR!
   state.chiaroscuroTarget = Math.max(
     state.chiaroscuroTarget,
     isMajor ? 0.72 : trigger.kind === 'astra_burst' ? 0.64 : 0.54
   );
-  state.speedLinesAlpha = Math.max(state.speedLinesAlpha, isMajor ? 0.92 : 0.68);
-  state.speedLinesSeed = (state.speedLinesSeed * 1.618033 + 1.37) % 997;
-  state.chromaticSplitPx = Math.max(state.chromaticSplitPx, isMajor ? 9.5 * intensity : 5.5 * intensity);
 
   // Dutch camera tilt kick (alternating direction by angle sign so consecutive hits whip!)
   const tiltSign = Math.cos(trigger.angle) >= 0 ? 1 : -1;
@@ -376,9 +356,6 @@ export function stepSakugaDirector(
     (state.chiaroscuroTarget - state.chiaroscuroCurrent) *
     (1 - Math.exp(-darkRate * safeDt));
 
-  // Decay radial ink speed-lines & RGB chromatic split
-  state.speedLinesAlpha = Math.max(0, state.speedLinesAlpha - safeDt * 3.8);
-  state.chromaticSplitPx = Math.max(0, state.chromaticSplitPx - safeDt * 42);
   state.activeLightIntensity = Math.max(0, state.activeLightIntensity - safeDt * 2.4);
 
   // Second-order critically-damped spring for Dutch camera tilt (snaps & returns cleanly)
@@ -416,15 +393,15 @@ export function stepSakugaDirector(
 /**
  * Resolves the exact phase of an active 2-3 frame Sakuga Impact Frame:
  * - 'bw_ink' (first 45%): stark B&W / inverted sumi-e ink flash frame
- * - 'dual_split' (next 55%): Akaza-vs-Rengoku dual-color chromatic clash frame
+ * - 'contact_glow' (remaining time): local afterglow at the point of contact
  * - 'none': normal graded combat rendering
  */
 export function getActiveImpactFramePhase(
   state: SakugaDirectorState
-): 'none' | 'bw_ink' | 'dual_split' {
+): 'none' | 'bw_ink' | 'contact_glow' {
   if (state.impactFrameTimer <= 0 || state.impactFrameDuration <= 0) return 'none';
   const elapsedFrac = 1 - state.impactFrameTimer / state.impactFrameDuration;
-  return elapsedFrac < 0.46 ? 'bw_ink' : 'dual_split';
+  return elapsedFrac < 0.66 ? 'bw_ink' : 'contact_glow';
 }
 
 // ============================================================================
@@ -721,9 +698,7 @@ export function renderSakugaCrossBeams(
 
 /**
  * PASS C (Screen-Space, Final Post-Processing Layer):
- * 1. 2-3 Frame Sakuga Impact Frame (Stark B&W Ink Flash -> Dual-Color Akaza/Rengoku Split)
- * 2. Radial Pitch-Black Sumi-e Anime Speed-Lines tearing around the viewport perimeter
- * 3. Chromatic RGB Edge Split Flash during high-weight clashes
+ * A brief ink flash followed by a localized contact glow.
  */
 export function renderSakugaScreenPostPass(
   ctx: CanvasRenderingContext2D,
@@ -746,117 +721,28 @@ export function renderSakugaScreenPostPass(
     Math.min(ch * 0.85, (state.impactWorldY - 24 - camY - ch * 0.5) * zoom + ch * 0.5)
   );
 
-  // 1. Authentic 2-3 Frame Sakuga Impact Frame!
   const phase = getActiveImpactFramePhase(state);
+  if (phase === 'none') return;
+
+  ctx.save();
   if (phase === 'bw_ink') {
-    ctx.save();
-    // Stark high-contrast black-and-white impact inversion burst centered on the clash
+    ctx.globalCompositeOperation = 'saturation';
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, cw, ch);
     ctx.globalCompositeOperation = 'difference';
-    ctx.fillStyle = 'rgba(245, 245, 250, 0.78)';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.64)';
     ctx.fillRect(0, 0, cw, ch);
-
-    // Blinding white-hot center clash shock disc + jagged sumi-e ink spikes
-    ctx.globalCompositeOperation = 'source-over';
-    const flashGrad = ctx.createRadialGradient(focusX, focusY, 12, focusX, focusY, Math.max(cw, ch) * 0.55);
-    flashGrad.addColorStop(0, 'rgba(255, 255, 255, 0.96)');
-    flashGrad.addColorStop(0.24, 'rgba(255, 255, 255, 0.42)');
-    flashGrad.addColorStop(0.58, 'rgba(8, 8, 12, 0.72)');
-    flashGrad.addColorStop(1, 'rgba(4, 4, 8, 0.94)');
-    ctx.fillStyle = flashGrad;
-    ctx.fillRect(0, 0, cw, ch);
-
-    // Razor black-and-white manga ink slash rays bursting radially from the impact focal point
-    ctx.translate(focusX, focusY);
-    const rayCount = 26;
-    const maxR = Math.hypot(cw, ch);
-    for (let i = 0; i < rayCount; i++) {
-      const a = (i / rayCount) * Math.PI * 2 + state.impactAngle * 0.4;
-      const isWhite = i % 3 === 0;
-      const innerR = 48 + ((i * 37) % 72);
-      const halfSpread = isWhite ? 0.018 : 0.032;
-      ctx.fillStyle = isWhite ? '#ffffff' : '#050508';
-      ctx.beginPath();
-      ctx.moveTo(Math.cos(a) * innerR, Math.sin(a) * innerR);
-      ctx.lineTo(Math.cos(a - halfSpread) * maxR, Math.sin(a - halfSpread) * maxR);
-      ctx.lineTo(Math.cos(a + halfSpread) * maxR, Math.sin(a + halfSpread) * maxR);
-      ctx.closePath();
-      ctx.fill();
-    }
-    ctx.restore();
-  } else if (phase === 'dual_split') {
-    // Frame 2: Akaza vs Rengoku High-Contrast Peripheral Dual-Color Split (preserves deep velvet blacks in center!)
-    const heroCol = SAKUGA_ELEMENT_COLORS[state.impactElement];
-    const foeCol = SAKUGA_ELEMENT_COLORS[state.impactEnemyElement];
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    const leftEdge = ctx.createLinearGradient(0, 0, cw * 0.34, 0);
-    leftEdge.addColorStop(0, `rgba(${heroCol.rgb[0]}, ${heroCol.rgb[1]}, ${heroCol.rgb[2]}, 0.38)`);
-    leftEdge.addColorStop(0.55, `rgba(${heroCol.rgb[0]}, ${heroCol.rgb[1]}, ${heroCol.rgb[2]}, 0.12)`);
-    leftEdge.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    ctx.fillStyle = leftEdge;
-    ctx.fillRect(0, 0, cw * 0.34, ch);
-
-    const rightEdge = ctx.createLinearGradient(cw, 0, cw * 0.66, 0);
-    rightEdge.addColorStop(0, `rgba(${foeCol.rgb[0]}, ${foeCol.rgb[1]}, ${foeCol.rgb[2]}, 0.36)`);
-    rightEdge.addColorStop(0.55, `rgba(${foeCol.rgb[0]}, ${foeCol.rgb[1]}, ${foeCol.rgb[2]}, 0.11)`);
-    rightEdge.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    ctx.fillStyle = rightEdge;
-    ctx.fillRect(cw * 0.66, 0, cw * 0.34, ch);
-
-    // Focused white-hot pinpoint clash glow right at the focal point (never washes out shadows!)
-    const corePop = ctx.createRadialGradient(focusX, focusY, 4, focusX, focusY, 175);
-    corePop.addColorStop(0, 'rgba(255, 255, 255, 0.55)');
-    corePop.addColorStop(0.35, `rgba(${heroCol.rgb[0]}, ${heroCol.rgb[1]}, ${heroCol.rgb[2]}, 0.24)`);
-    corePop.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    ctx.fillStyle = corePop;
-    ctx.beginPath();
-    ctx.arc(focusX, focusY, 175, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
   }
-
-  // 2. Radial Pitch-Black Sumi-e Anime Speed-Lines (Perimeter Kinetic Framing around Duel)
-  if (state.speedLinesAlpha > 0.03) {
-    ctx.save();
-    ctx.translate(focusX, focusY);
-    const maxR = Math.hypot(cw, ch) * 0.95;
-    const lineCount = 32;
-    const baseA = state.speedLinesAlpha;
-    for (let i = 0; i < lineCount; i++) {
-      const h = Math.abs(Math.sin(i * 19.73 + state.speedLinesSeed * 7.13));
-      const ang = (i / lineCount) * Math.PI * 2 + (h - 0.5) * 0.08;
-      const innerR = Math.min(cw, ch) * (0.38 + h * 0.22);
-      const spread = 0.007 + h * 0.014;
-      const isHighlight = i % 7 === 0;
-      ctx.fillStyle = isHighlight
-        ? `rgba(255, 252, 240, ${(baseA * 0.32).toFixed(3)})`
-        : `rgba(5, 4, 9, ${(baseA * 0.82).toFixed(3)})`;
-      ctx.beginPath();
-      ctx.moveTo(Math.cos(ang) * innerR, Math.sin(ang) * innerR);
-      ctx.lineTo(Math.cos(ang - spread) * maxR, Math.sin(ang - spread) * maxR);
-      ctx.lineTo(Math.cos(ang + spread) * maxR, Math.sin(ang + spread) * maxR);
-      ctx.closePath();
-      ctx.fill();
-    }
-    ctx.restore();
-  }
-
-  // 3. Chromatic RGB Edge Split Flash (subtle blazing cyan/crimson peripheral punch)
-  if (state.chromaticSplitPx > 0.5) {
-    const cAlpha = Math.min(0.28, (state.chromaticSplitPx / 10) * 0.24);
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    const leftGrad = ctx.createLinearGradient(0, 0, cw * 0.16, 0);
-    leftGrad.addColorStop(0, `rgba(255, 36, 72, ${cAlpha.toFixed(3)})`);
-    leftGrad.addColorStop(1, 'rgba(255, 36, 72, 0)');
-    ctx.fillStyle = leftGrad;
-    ctx.fillRect(0, 0, cw * 0.16, ch);
-
-    const rightGrad = ctx.createLinearGradient(cw, 0, cw * 0.84, 0);
-    rightGrad.addColorStop(0, `rgba(38, 224, 255, ${cAlpha.toFixed(3)})`);
-    rightGrad.addColorStop(1, 'rgba(38, 224, 255, 0)');
-    ctx.fillStyle = rightGrad;
-    ctx.fillRect(cw * 0.84, 0, cw * 0.16, ch);
-    ctx.restore();
-  }
+  ctx.globalCompositeOperation = 'lighter';
+  const radius = Math.max(54, 110 * zoom);
+  const core = ctx.createRadialGradient(focusX, focusY, 2, focusX, focusY, radius);
+  const { rgb } = SAKUGA_ELEMENT_COLORS[state.impactElement];
+  core.addColorStop(0, 'rgba(255, 255, 255, 0.82)');
+  core.addColorStop(0.36, phase === 'bw_ink'
+    ? 'rgba(255, 255, 255, 0.22)'
+    : `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.24)`);
+  core.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = core;
+  ctx.fillRect(focusX - radius, focusY - radius, radius * 2, radius * 2);
+  ctx.restore();
 }

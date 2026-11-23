@@ -8,7 +8,7 @@ import type { WebglDemonSlayerVfxOverlay, DemonSlayerVfxPalette } from './webglD
 export type HeavyElement = 'agni' | 'varuna' | 'vayu' | 'vajra' | 'guardian';
 
 type HeavyEffectMethod =
-  | 'spawnSolarFlameWheel'
+  | 'spawnAgniCrescent'
   | 'spawnWaterDragon'
   | 'spawnWindGaleCrescents'
   | 'spawnThunderZigzag'
@@ -90,9 +90,9 @@ export function spawnHeavyElementalRelease(
   const { radius, reach, palette, duration } = profile;
   switch (input.element) {
     case 'agni':
-      fx.spawnSolarFlameWheel({ x, y: y - 18, angle, radius: radius * 1.26, duration, palette });
-      fx.spawnShockwaveRing({ x, y: y + 8, radius: radius * 1.18, duration: 0.45, palette });
-      break;
+      fx.spawnAgniCrescent({ x, y: y - 18, angle, radius: 135 + clamp(input.energyOrbs ?? 0, 0, 4) * 7,
+        duration: 0.48 });
+      return profile;
     case 'varuna':
       fx.spawnWaterDragon({ x, y: y - 20, angle, radius: radius * 1.22, duration: duration + 0.1 });
       fx.spawnSlashRibbon({

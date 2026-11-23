@@ -3623,19 +3623,20 @@ export default function KaliyugaArena() {
         }
       }
 
-      spawnShockwave(p.x, p.y, spec.radius, meta.color, 0.42);
-      spawnParticles(p.x, p.y - 26, 30, meta.color, 230, 4.8, 70);
-      soundEngine.playBreathingStyle(
-        astraId === 'agneyastra' ? 'sun' : astraId === 'vayavyastra' ? 'wind' : 'thunder'
-      );
       const astraPalette: DemonSlayerVfxPalette =
         astraId === 'agneyastra' ? 'sun' : astraId === 'vayavyastra' ? 'wind' : 'thunder';
-      spawnSunHaloRing(bloodDemonArtsRef.current, {
-        x: p.x,
-        y: p.y - 16,
-        radius: spec.radius * 1.08,
-        palette: astraPalette,
-      });
+      const painterlyAgni = astraId === 'agneyastra' && Boolean(webglDemonSlayerVfxRef.current?.available);
+      soundEngine.playBreathingStyle(astraPalette);
+      if (!painterlyAgni) {
+        spawnShockwave(p.x, p.y, spec.radius, meta.color, 0.42);
+        spawnParticles(p.x, p.y - 26, 30, meta.color, 230, 4.8, 70);
+        spawnSunHaloRing(bloodDemonArtsRef.current, {
+          x: p.x,
+          y: p.y - 16,
+          radius: spec.radius * 1.08,
+          palette: astraPalette,
+        });
+      }
       if (astraId === 'vayavyastra') {
         // Sanemi Wind Breathing: ONE monumental emerald gale burst + bold Sumi-e ink shards (no duplicate cyclones/ribbons)
         webglDemonSlayerVfxRef.current?.spawnWindGaleCrescents({
@@ -3646,31 +3647,14 @@ export default function KaliyugaArena() {
           duration: 0.76,
         });
       } else if (astraId === 'agneyastra') {
-        // Agni Solar Eruption: High-impact Hinokami Solar Flame Wheel + dual molten floor shockwaves + ember vortex
-        webglDemonSlayerVfxRef.current?.spawnSolarFlameWheel({
+        webglDemonSlayerVfxRef.current?.spawnAgniCrescent({
           x: p.x,
           y: p.y - 22,
           angle: aimAngle,
-          radius: spec.radius * 1.32,
-          palette: 'hinokami',
-          duration: 0.78,
+          radius: 165,
+          duration: 0.64,
+          cast: true,
         });
-        webglDemonSlayerVfxRef.current?.spawnShockwaveRing({
-          x: p.x,
-          y: p.y,
-          radius: spec.radius * 1.18,
-          palette: 'hinokami',
-          duration: 0.48,
-        });
-        webglDemonSlayerVfxRef.current?.spawnClashStarburst({
-          x: p.x + Math.cos(aimAngle) * 26,
-          y: p.y - 24,
-          scale: 1.45,
-          palette: 'hinokami',
-          duration: 0.42,
-        });
-        spawnShockwave(p.x, p.y, spec.radius * 1.15, '#ff5a1f', 0.42);
-        spawnParticles(p.x, p.y - 24, 28, '#ff7a22', 280, 5.2, 80);
         soundEngine.playHeavyIronSwing();
       } else {
         // Vajrastra: Rebuilt Zenitsu GLSL Plasma Thunderclap — primary forked plasma bolt + Godspeed ricochet + launch starburst (zero muddying slash ribbons)
@@ -3715,13 +3699,15 @@ export default function KaliyugaArena() {
         angle: aimAngle,
         intensity: 1.28,
       });
-      webglDemonSlayerVfxRef.current?.spawnSparkBurst({
-        x: p.x,
-        y: p.y - 24,
-        count: 22,
-        speed: 520,
-        palette: astraPalette,
-      });
+      if (!painterlyAgni) {
+        webglDemonSlayerVfxRef.current?.spawnSparkBurst({
+          x: p.x,
+          y: p.y - 24,
+          count: 22,
+          speed: 520,
+          palette: astraPalette,
+        });
+      }
 
       const corridorEndX = p.x + Math.cos(aimAngle) * spec.range;
       const corridorEndY = p.y + Math.sin(aimAngle) * spec.range;
@@ -4310,7 +4296,6 @@ export default function KaliyugaArena() {
       triggerSakugaImpact(sakugaDirectorRef.current, {
         kind: 'parry_clash',
         element: 'parry',
-        enemyElement: 'blood',
         worldX: p.x + p.facing * 20,
         worldY: p.y,
         angle: p.facing >= 0 ? 0.34 : Math.PI - 0.34,
@@ -5105,7 +5090,9 @@ export default function KaliyugaArena() {
           heavyElement === 'vajra' ? '#fde047' :
           heavyElement === 'varuna' ? '#38e8ff' :
           heavyElement === 'guardian' ? '#ed334f' : '#ff5418';
-        spawnShockwave(syncImpactX, syncImpactY, heavyRelease.radius * 0.76, impactColor, 0.36);
+        if (heavyElement !== 'agni' || !webglDemonSlayerVfxRef.current?.available) {
+          spawnShockwave(syncImpactX, syncImpactY, heavyRelease.radius * 0.76, impactColor, 0.36);
+        }
         spawnParticles(syncImpactX, syncImpactY - 18, 12 + orbsUsed * 2, impactColor, 280, 4.6, 95);
         simRef.current.hitstopTimer = Math.max(simRef.current.hitstopTimer, 0.062);
       },
@@ -5736,27 +5723,34 @@ export default function KaliyugaArena() {
         const originX = curP.x + curP.facing * 14;
         const originY = curP.y - 24;
 
+        const hasLiveAgniTrail = capturedStance === 'smash' && !isRiposteStrike &&
+          varunaInfusionTimerRef.current <= 0 && curP.transformTimer <= 0 &&
+          Boolean(rudra3dRef.current?.getLatestBladePose().valid &&
+            webglDemonSlayerVfxRef.current?.available);
+
         if (!isComboFinisher) {
           // Tier 1 Light Attack (Combo 1-3): ONE crisp, razor-clean breathing ribbon + sparse sparks ONLY!
-          webglDemonSlayerVfxRef.current?.spawnSlashRibbon({
-            x: originX,
-            y: originY,
-            angle: capturedAngle,
-            radius: arcRadius,
-            width: arcWidth,
-            arcSpan: capturedStep === 3 ? 2.35 : 2.05,
-            direction: arcDir,
-            palette: lightSlashPalette,
-            duration: 0.24,
-            tiltX: capturedStep === 2 ? -0.45 : 0.58,
-          });
-          webglDemonSlayerVfxRef.current?.spawnSparkBurst({
-            x: originX + Math.cos(capturedAngle) * 44,
-            y: originY + Math.sin(capturedAngle) * 28,
-            count: 6,
-            speed: 310,
-            palette: lightSlashPalette,
-          });
+          if (!hasLiveAgniTrail) {
+            webglDemonSlayerVfxRef.current?.spawnSlashRibbon({
+              x: originX,
+              y: originY,
+              angle: capturedAngle,
+              radius: arcRadius,
+              width: arcWidth,
+              arcSpan: capturedStep === 3 ? 2.35 : 2.05,
+              direction: arcDir,
+              palette: lightSlashPalette,
+              duration: 0.24,
+              tiltX: capturedStep === 2 ? -0.45 : 0.58,
+            });
+            webglDemonSlayerVfxRef.current?.spawnSparkBurst({
+              x: originX + Math.cos(capturedAngle) * 44,
+              y: originY + Math.sin(capturedAngle) * 28,
+              count: 6,
+              speed: 310,
+              palette: lightSlashPalette,
+            });
+          }
         } else {
           // Tier 2 Combo-4 Finisher: ONE focused signature breathing flourish (no stacked duplicates!)
           if (capturedStance === 'pillar') {
@@ -5778,7 +5772,7 @@ export default function KaliyugaArena() {
               width: 24,
               withFloorRing: true,
             });
-          } else {
+          } else if (!hasLiveAgniTrail) {
             webglDemonSlayerVfxRef.current?.spawnSolarFlameWheel({
               x: originX,
               y: originY + 2,
@@ -11805,8 +11799,8 @@ export default function KaliyugaArena() {
                     : 'hinokami';
                 webglVfxLive.beginBladeTrail(liveTrailKey, {
                   palette: livePalette,
-                  widthBoostPx: coreLock.rudraIsHeavyAttack ? 78 : 54,
-                  fadeDuration: 0.22,
+                  widthBoostPx: livePalette === 'hinokami' ? 5 : coreLock.rudraIsHeavyAttack ? 78 : 54,
+                  fadeDuration: livePalette === 'hinokami' ? 0.18 : 0.22,
                 });
                 liveBladeTrailActiveIdRef.current = liveTrailKey;
               }
@@ -12211,7 +12205,7 @@ export default function KaliyugaArena() {
         sim.gateWipeTimer > 0 ? 1 - sim.gateWipeTimer / 0.44 : 0
       );
 
-      // 9.75. Pillar 2 — Screen-Space 2-3 Frame Sakuga Impact Frames, Pitch-Black Speed-Lines & Chromatic Split!
+      // Screen-space impact flash for parries, posture breaks, and executions.
       renderSakugaScreenPostPass(ctx, sakugaDirectorRef.current, {
         cw,
         ch,

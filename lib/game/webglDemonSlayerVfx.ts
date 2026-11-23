@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { AGNI_PAINTERLY_GLSL } from './agniPainterlyShaders';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -400,6 +401,7 @@ const RIBBON_FRAGMENT_SHADER = /* glsl */ `
   uniform float uUseAtlas;
   uniform float uUvRepeat;
   uniform float uScrollSpeed;
+  uniform float uAgniPass;
   uniform sampler2D uAtlasTex;
 
   varying vec2 vUv;
@@ -421,9 +423,15 @@ const RIBBON_FRAGMENT_SHADER = /* glsl */ `
     return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
   }
 
+  ${AGNI_PAINTERLY_GLSL}
+
   void main() {
     float u = vUv.x;
     float v = vUv.y;
+    if (uAgniPass > 0.5) {
+      gl_FragColor = paintAgni(u, v);
+      return;
+    }
 
     // Calligraphic head & tail silhouette envelope along ribbon arc
     float headMask = smoothstep(0.0, 0.12, u) * smoothstep(1.0, 0.84, u);
@@ -804,6 +812,7 @@ interface ActiveWebglRibbon {
   group: THREE.Group;
   backGroup?: THREE.Group;
   coreMesh: THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>;
+  agniSpine?: ReturnType<typeof createAgniOpticalMesh>;
   glowMesh: THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>;
   backMesh?: THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>;
   worldX: number;
@@ -843,6 +852,7 @@ interface PooledBladeTrail {
   frontIdx: Uint16Array;
   frontMat: THREE.ShaderMaterial;
   frontMesh: THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>;
+  agniOptics: ReturnType<typeof createAgniOpticalMesh>[];
   // World-to-screen transform parent
   backGroup: THREE.Group;
   frontGroup: THREE.Group;
@@ -1084,6 +1094,7 @@ function createRibbonMaterial(
       uUseAtlas: { value: atlasTex ? 1.0 : 0.0 },
       uUvRepeat: { value: uvRepeat },
       uScrollSpeed: { value: scrollSpeed },
+      uAgniPass: { value: 0 },
       uAtlasTex: { value: atlasTex },
     },
     vertexShader: RIBBON_VERTEX_SHADER,
@@ -1094,6 +1105,27 @@ function createRibbonMaterial(
     side: THREE.DoubleSide,
     blending,
   });
+}
+
+function createAgniOpticalMesh(
+  geometry: THREE.BufferGeometry,
+  body: THREE.ShaderMaterial,
+  pass: 2 | 3
+): THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial> {
+  const material = new THREE.ShaderMaterial({
+    uniforms: { ...body.uniforms, uAgniPass: { value: pass } },
+    vertexShader: body.vertexShader,
+    fragmentShader: body.fragmentShader,
+    blending: THREE.AdditiveBlending,
+    transparent: true,
+    premultipliedAlpha: true,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.renderOrder = pass === 2 ? -1 : 1;
+  mesh.frustumCulled = false;
+  return mesh;
 }
 
 function particleCellOffset(kind: ElementalParticleKind): [number, number] {
@@ -1124,6 +1156,10 @@ export class WebglDemonSlayerVfxOverlay {
   public readonly floorCanvas: HTMLCanvasElement;
   public readonly bloomCanvas: HTMLCanvasElement;
   public hasBloomFrame = false;
+
+  public get available(): boolean {
+    return this.renderer !== null && !this.disposed;
+  }
 
   private renderer: THREE.WebGLRenderer | null = null;
   private bloomComposer: EffectComposer | null = null;
@@ -1309,7 +1345,13 @@ export class WebglDemonSlayerVfxOverlay {
       frontGroup.add(frontMesh);
       this.scene.add(frontGroup);
 
+      const backOptics = [createAgniOpticalMesh(backGeo, backMat, 2), createAgniOpticalMesh(backGeo, backMat, 3)];
+      const frontOptics = [createAgniOpticalMesh(frontGeo, frontMat, 2), createAgniOpticalMesh(frontGeo, frontMat, 3)];
+      backGroup.add(...backOptics);
+      frontGroup.add(...frontOptics);
+
       this.bladeTrailPool.push({
+        agniOptics: [...backOptics, ...frontOptics],
         id: null,
         active: false,
         ending: false,
@@ -1524,6 +1566,11 @@ export class WebglDemonSlayerVfxOverlay {
       mat.uniforms.uLife.value = 0;
     };
 
+    const isAgni = opts.palette === 'hinokami' || opts.palette === 'sun';
+    slot.backMat.uniforms.uAgniPass.value = isAgni ? 1 : 0;
+    slot.frontMat.uniforms.uAgniPass.value = isAgni ? 1 : 0;
+    for (const mesh of slot.agniOptics) mesh.visible = isAgni;
+
     const baseOp = opts.opacity ?? 0.98;
     configureMat(slot.backMat, baseOp * 0.94, 1.24);
     configureMat(slot.frontMat, baseOp, 1.38);
@@ -1551,12 +1598,26 @@ export class WebglDemonSlayerVfxOverlay {
     const prev = slot.samples[slot.samples.length - 1];
     if (prev) {
       const dist = Math.hypot(sample.tipX - prev.tipX, sample.tipY - prev.tipY);
-      if (dist < 2.2 && slot.samples.length >= 2) return;
+      if (dist < 2.2) return;
     }
 
     slot.samples.push({ ...sample });
     if (slot.samples.length > 22) {
       slot.samples.shift();
+    }
+    if (prev && slot.samples.length === 2 && slot.frontMat.uniforms.uAgniPass.value === 1) {
+      const deltaX = sample.tipX - prev.tipX;
+      const deltaY = sample.tipY - prev.tipY;
+      this.spawnElementalParticles({
+        x: sample.tipX,
+        y: sample.tipY,
+        angle: Math.atan2(deltaY, deltaX),
+        spread: 1.1,
+        count: 7,
+        speed: 180,
+        palette: slot.palette,
+        kind: 'spark_needle',
+      });
     }
     this.rebuildBladeTrailSlotGeometry(slot);
   }
@@ -1693,6 +1754,7 @@ export class WebglDemonSlayerVfxOverlay {
     tiltY?: number;
     spinRate?: number;
     withBackWrap?: boolean;
+    painterlyAgni?: boolean;
   }): void {
     if (!this.renderer || this.disposed) return;
     if (this.ribbons.length >= 6) {
@@ -1710,7 +1772,7 @@ export class WebglDemonSlayerVfxOverlay {
     const direction = opts.direction ?? 1;
 
     const coreGeo = buildCurvedRibbonGeometry(radius, width, arcSpan, direction, 30);
-    const glowGeo = buildCurvedRibbonGeometry(radius, width * 1.38, arcSpan, direction, 24);
+    const glowGeo = buildCurvedRibbonGeometry(radius, width * 1.38, arcSpan, direction, 30);
 
     const uvRepeat = mode === 2 ? 2.1 : mode === 3 ? 1.55 : 1.35;
     const scrollSpeed = mode === 2 ? 3.5 : 1.75;
@@ -1744,6 +1806,16 @@ export class WebglDemonSlayerVfxOverlay {
 
     const group = new THREE.Group();
     group.add(coreMesh, glowMesh);
+    let agniSpine: ActiveWebglRibbon['agniSpine'];
+    if (opts.painterlyAgni) {
+      coreMat.uniforms.uAgniPass.value = 1;
+      glowMat.uniforms.uAgniPass.value = 2;
+      glowMat.uniforms.uOpacity.value = 0.88;
+      glowMesh.renderOrder = -1;
+      glowMesh.position.z = 0;
+      agniSpine = createAgniOpticalMesh(coreGeo, coreMat, 3);
+      group.add(agniSpine);
+    }
     this.scene.add(group);
 
     let backGroup: THREE.Group | undefined;
@@ -1771,6 +1843,7 @@ export class WebglDemonSlayerVfxOverlay {
       group,
       backGroup,
       coreMesh,
+      agniSpine,
       glowMesh,
       backMesh,
       worldX: opts.x,
@@ -1790,6 +1863,43 @@ export class WebglDemonSlayerVfxOverlay {
   // Completely replaces the old 13 floating chili-pepper blobs with wide, curling
   // painterly flame ribbons wrapping BEHIND & IN FRONT of Rudra + ground bounce!
   // ============================================================================
+
+  public spawnAgniCrescent(opts: {
+    x: number;
+    y: number;
+    angle: number;
+    radius: number;
+    duration: number;
+    cast?: boolean;
+  }): void {
+    const palette = 'hinokami';
+    const reach = Math.min(165, Math.max(112, opts.radius));
+    this.spawnSlashRibbon({
+      ...opts,
+      radius: reach * 0.81,
+      width: opts.cast ? 58 : 45,
+      arcSpan: opts.cast ? 2.48 : 1.84,
+      tiltX: 0.38,
+      tiltY: -0.15,
+      spinRate: 0.7,
+      palette,
+      painterlyAgni: true,
+    });
+    const tipX = opts.x + Math.cos(opts.angle) * reach * 0.62;
+    const tipY = opts.y + Math.sin(opts.angle) * reach * 0.52;
+    this.spawnGroundLightBounce({
+      x: tipX, y: tipY + 22, radius: reach * 0.76,
+      duration: 1.2, intensity: opts.cast ? 1.05 : 0.75, palette,
+    });
+    this.spawnElementalParticles({
+      x: tipX, y: tipY, angle: opts.angle, spread: 1.75,
+      count: 28, speed: opts.cast ? 340 : 260, kind: 'spark_needle', palette,
+    });
+    this.spawnElementalParticles({
+      x: tipX, y: tipY, angle: opts.angle - 0.44, spread: 2.15,
+      count: 12, speed: 124, kind: 'soot_flake', palette,
+    });
+  }
 
   public spawnSolarFlameWheel(opts: {
     x: number;
@@ -3687,6 +3797,7 @@ export class WebglDemonSlayerVfxOverlay {
     this.scene.remove(r.group);
     r.coreMesh.geometry.dispose();
     r.coreMesh.material.dispose();
+    r.agniSpine?.material.dispose();
     r.glowMesh.geometry.dispose();
     r.glowMesh.material.dispose();
     if (r.backGroup && r.backMesh) {
@@ -3841,6 +3952,7 @@ export class WebglDemonSlayerVfxOverlay {
       slot.backMat.dispose();
       slot.frontGeo.dispose();
       slot.frontMat.dispose();
+      for (const mesh of slot.agniOptics) mesh.material.dispose();
     }
     this.bladeTrailPool = [];
     if (this.particleInstancedMesh) {

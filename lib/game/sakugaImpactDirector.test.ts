@@ -7,7 +7,7 @@ import {
   triggerSakugaImpact,
 } from './sakugaImpactDirector';
 
-test('triggerSakugaImpact transitions from bw_ink -> dual_split -> none cleanly', () => {
+test('triggerSakugaImpact transitions from bw_ink -> contact_glow -> none cleanly', () => {
   const state = createSakugaDirectorState();
   assert.equal(getActiveImpactFramePhase(state), 'none');
 
@@ -23,12 +23,11 @@ test('triggerSakugaImpact transitions from bw_ink -> dual_split -> none cleanly'
   assert.equal(getActiveImpactFramePhase(state), 'bw_ink');
   assert.ok(state.crossBeams.some((b) => b.active), 'spawns cross-cutting clash beams');
   assert.ok(state.floorBlowouts.some((f) => f.active), 'spawns HDR floor light blowout');
-  assert.ok(state.speedLinesAlpha > 0.7, 'activates radial ink speed lines');
   assert.ok(state.chiaroscuroTarget >= 0.7, 'deepens arena shadows during clash');
 
-  // Advance ~36ms into second half of impact frame -> dual_split
+  // Advance ~36ms into second half of impact frame -> contact_glow
   stepSakugaDirector(state, 0.036, { isBossChamber: false });
-  assert.equal(getActiveImpactFramePhase(state), 'dual_split');
+  assert.equal(getActiveImpactFramePhase(state), 'contact_glow');
 
   // Advance another 40ms -> impact frame finishes
   stepSakugaDirector(state, 0.04, { isBossChamber: false });
@@ -51,8 +50,6 @@ test('Dutch camera tilt spring stays clamped and settles cleanly to zero', () =>
     assert.ok(Math.abs(state.dutchTiltRad) <= 0.0721, 'dutch tilt never exceeds safe arena margin');
   }
   assert.equal(state.dutchTiltRad, 0, 'dutch tilt settles completely to 0');
-  assert.equal(state.speedLinesAlpha, 0, 'speed lines fade out cleanly');
-  assert.equal(state.chromaticSplitPx, 0, 'chromatic split decays to 0');
 });
 
 test('Zero-GC beam and floor blowout pools recycle cleanly under heavy spam', () => {
@@ -68,4 +65,19 @@ test('Zero-GC beam and floor blowout pools recycle cleanly under heavy spam', ()
   }
   assert.equal(state.crossBeams.length, 14, 'cross beam pool stays fixed length');
   assert.equal(state.floorBlowouts.length, 10, 'floor blowout pool stays fixed length');
+});
+
+
+test('Agni release adds local light without overwriting a parry flash or spawning arena-wide beams', () => {
+  const state = createSakugaDirectorState();
+  const position = { worldX: 510, worldY: 375, angle: 0 };
+  triggerSakugaImpact(state, { ...position, kind: 'astra_burst', element: 'agni' });
+  assert.equal(getActiveImpactFramePhase(state), 'none');
+  assert.ok(state.floorBlowouts.some((light) => light.active && light.radius === 110));
+  assert.ok(state.crossBeams.every((beam) => !beam.active));
+
+  triggerSakugaImpact(state, { ...position, kind: 'parry_clash', element: 'parry' });
+  triggerSakugaImpact(state, { ...position, worldX: 420, kind: 'heavy_hit', element: 'agni' });
+  assert.equal(getActiveImpactFramePhase(state), 'bw_ink');
+  assert.equal(state.impactWorldX, 510);
 });
