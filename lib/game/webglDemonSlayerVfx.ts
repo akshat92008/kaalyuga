@@ -2146,7 +2146,7 @@ export class WebglDemonSlayerVfxOverlay {
       const y = opts.y + Math.sin(opts.angle) * reach * position;
       this.spawnGroundLightBounce({
         x, y: y + 23, radius: 76, palette: 'water', duration: 0.62,
-        intensity: position > 0.5 ? 0.90 : 0.58,
+        intensity: position > 0.5 ? 0.62 : 0.40,
       });
       this.spawnElementalParticles({
         x, y, angle: opts.angle, spread: 2.25, count: 30,
@@ -2463,7 +2463,7 @@ export class WebglDemonSlayerVfxOverlay {
     for (let lane = 0; lane < 3; lane++) {
       const geo = buildElementalStrokeGeometry('wind', reach, lane);
       const mat = createRibbonMaterial(pal, 3, 0.94 - lane * 0.12, false,
-        THREE.NormalBlending, 1.27, windTex, 1.18 + lane * 0.22, 2.48);
+        THREE.NormalBlending, 1.43, windTex, 1.18 + lane * 0.22, 2.48);
       const mesh = new THREE.Mesh(geo, mat);
       mesh.visible = lane === 0;
       frontGroup.add(mesh);
@@ -3541,7 +3541,8 @@ export class WebglDemonSlayerVfxOverlay {
       g.frontGroup.position.set(toScreenX(g.worldX), toScreenY(g.worldY), 20);
       g.frontGroup.scale.set(expand, expand, expand);
       g.ribbonMats.forEach((material, lane) => {
-        const age = (norm - lane * 0.095) / (1 - lane * 0.095);
+        const delay = lane * 0.072;
+        const age = (norm - delay) / (1 - delay);
         const blade = g.frontGroup.children[lane];
         blade.visible = age >= 0;
         blade.position.x = Math.max(0, age) * (85 - lane * 10);

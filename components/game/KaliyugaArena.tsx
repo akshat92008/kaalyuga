@@ -899,6 +899,7 @@ export default function KaliyugaArena() {
       color: string;
       life: number;
       maxLife: number;
+      vfxStarted?: boolean;
     }>,
     hitstopTimer: 0,
     slowMoTimer: 0,
@@ -3800,7 +3801,7 @@ export default function KaliyugaArena() {
           spawnFloatingText(e.x, e.y - 84, 'POSTURE SHATTERED! [F] EXECUTE', '#ff4d3b', 1.2);
         }
 
-        if (astraId === 'vajrastra' || astraId === 'agneyastra') {
+        if (astraId === 'vajrastra') {
           sim.lightningArcs.push({
             x1: e.x + (Math.random() - 0.5) * 70,
             y1: e.y - 480,
@@ -12007,7 +12008,8 @@ export default function KaliyugaArena() {
       if (sim.lightningArcs.length > 0) {
         for (let i = 0; i < sim.lightningArcs.length; i++) {
           const arc = sim.lightningArcs[i];
-          if (arc.life >= arc.maxLife - dt * 1.6) {
+          if (!arc.vfxStarted && webglDemonSlayerVfxRef.current?.available) {
+            arc.vfxStarted = true;
             webglDemonSlayerVfxRef.current?.spawnThunderZigzag({
               x1: arc.x1,
               y1: arc.y1,
@@ -12015,7 +12017,9 @@ export default function KaliyugaArena() {
               y2: arc.y2,
               palette: 'thunder',
               duration: Math.max(0.24, arc.maxLife),
-              width: 16,
+              width: 10,
+              focused: true,
+              withFloorRing: false,
             });
           }
         }

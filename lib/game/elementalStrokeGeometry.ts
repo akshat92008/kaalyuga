@@ -21,7 +21,7 @@ export function sampleElementalStroke(
       return {
         x: reach * (t - lane * 0.05),
         y: wave + braid - lane * 5 + (t * t * reach) * 0.04,
-        width: (lane === 0 ? 37 : 26) * taper + 2,
+        width: (lane === 0 ? 51 : 28) * taper + 2,
       };
     }
     case 'wind': {
@@ -29,7 +29,7 @@ export function sampleElementalStroke(
       return {
         x: reach * (0.58 + 0.38 * (1 - sweep * sweep) - lane * 0.17) + t * reach * 0.08,
         y: reach * (sweep * (0.39 - lane * 0.045) + lane * 0.064),
-        width: (24 - lane * 4) * taper + 1.5,
+        width: (36 - lane * 7) * taper + 1.5,
       };
     }
     case 'guardian': {
