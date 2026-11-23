@@ -13,6 +13,7 @@ async function main() {
     if (message.type() === 'error' && /webgl|shader/i.test(message.text())) errors.push(message.text());
   });
   const screenshots = [];
+  const captureFailures = [];
   const press = (key) => page.keyboard.press(key);
   async function capture(name) {
     await page.screenshot({ path: `${directory}/${name}.png` });
@@ -68,11 +69,23 @@ async function main() {
       await press('KeyJ');
       await page.waitForTimeout(55);
       await capture(`${element}-light`);
-      await page.waitForTimeout(350);
+      await page.waitForFunction(() => window.__kaliyugaPhaseQA.action === 'idle', undefined, { timeout: 15000 });
+      const previousHeavy = await page.evaluate(() => Math.max(0, ...window.__kaliyugaPhaseQA.recentEvents
+        .filter((event) => event.name === 'heavy-contact')
+        .map((event) => event.frameTime)));
       await press('KeyK');
-      await page.waitForFunction((id) => window.__kaliyugaPhaseQA.recentEvents.some(
-        (event) => event.name === 'heavy-contact' && event.meta === id && performance.now() - event.frameTime < 350
-      ), element, { timeout: 7000 });
+      try {
+        await page.waitForFunction(({ id, previous }) => window.__kaliyugaPhaseQA.recentEvents.some(
+          (event) => event.name === 'heavy-contact' && event.meta === id && event.frameTime > previous
+        ), { id: element, previous: previousHeavy }, { timeout: 15000 });
+      } catch {
+        const facts = await page.evaluate(() => ({
+          action: window.__kaliyugaPhaseQA.action,
+          recentEvents: window.__kaliyugaPhaseQA.recentEvents.slice(-5),
+        }));
+        captureFailures.push({ element, facts });
+        console.log('Heavy capture did not observe the expected event: ' + JSON.stringify({ element, facts }));
+      }
       await capture(`${element}-heavy`);
       if (element !== 'varuna') {
         await ready(stance);
@@ -91,12 +104,12 @@ async function main() {
     await page.evaluate(() => window.__kaliyugaPhaseQAFixture.preparePerfectParry());
     await press('ShiftLeft');
     await capture('perfect-parry');
-    if (errors.length) throw Error(errors.join('\n'));
+    if (errors.length || captureFailures.length) throw Error(JSON.stringify({ errors, captureFailures }));
   } catch (error) {
     await capture('failure-current-screen');
     throw error;
   } finally {
-    await fs.writeFile(`${directory}/report.json`, JSON.stringify({ screenshots, errors }, null, 2));
+    await fs.writeFile(`${directory}/report.json`, JSON.stringify({ screenshots, errors, captureFailures }, null, 2));
     await browser.close();
   }
 }
