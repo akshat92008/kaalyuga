@@ -237,6 +237,9 @@ import {
   ArenaBladeSample,
   SpriteDrawRect,
   cancelActiveStrike,
+  claimEnemyHitForStrike,
+  createActiveStrikeState,
+  stepActiveStrikeWindow,
   projectBakedBladePoseToArena,
 } from '@/lib/game/bladeTrailSampler';
 import {
@@ -254,7 +257,6 @@ import {
 } from '@/lib/game/sakugaImpactDirector';
 import {
   classifyEnemyVfxTier,
-  evaluateStrikeActiveFrameGate,
   getEnemySlashVfxBudget,
 } from '@/lib/game/combatVfxClarity';
 import {
@@ -564,20 +566,10 @@ export default function KaliyugaArena() {
   const webglDemonSlayerVfxRef = useRef<WebglDemonSlayerVfxOverlay | null>(null);
   const sakugaDirectorRef = useRef<SakugaDirectorState>(createSakugaDirectorState());
   const liveBladeTrailActiveIdRef = useRef<string | null>(null);
-  const pendingStrikeVfxRef = useRef<{
-    fired: boolean;
-    triggerThreshold: number;
-    execute: () => void;
-  } | null>(null);
   const activeStrikeRef = useRef<{
     sync: ActiveStrikeSyncState;
-    trailId: string;
     palette: DemonSlayerVfxPalette;
-    widthBoostPx: number;
-    direction: 1 | -1;
-    reachPx: number;
-    startVfx: () => void;
-    evaluateHits: () => void;
+    execute: () => void;
   } | null>(null);
   const varunaInfusionTimerRef = useRef<number>(0);
   const rudraSpriteRectRef = useRef<SpriteDrawRect>({
@@ -600,14 +592,12 @@ export default function KaliyugaArena() {
     const active = activeStrikeRef.current;
     if (active) {
       cancelActiveStrike(active.sync);
-      webglDemonSlayerVfxRef.current?.endBladeTrail(active.trailId, true);
-      activeStrikeRef.current = null;
     }
     if (liveBladeTrailActiveIdRef.current) {
       webglDemonSlayerVfxRef.current?.endBladeTrail(liveBladeTrailActiveIdRef.current, true);
       liveBladeTrailActiveIdRef.current = null;
     }
-    pendingStrikeVfxRef.current = null;
+    activeStrikeRef.current = null;
   }, []);
 
   const pendingExecutionRef = useRef<{
@@ -1202,6 +1192,7 @@ export default function KaliyugaArena() {
           focusOrbs: sim.player.focusOrbs,
           astraEnergy: sim.player.astraEnergy,
           health: sim.player.hp,
+          damageDealt: sim.runDamageDealt,
           maximumHealth: sim.player.maxHp,
           transformRemaining: sim.player.transformTimer,
           fps: sim.fps,
@@ -1275,6 +1266,9 @@ export default function KaliyugaArena() {
         const p = sim.player;
         p.hp = p.maxHp;
         p.displayHp = p.maxHp;
+        p.hitFlashTimer = 0;
+        p.dashCharges = p.maxDashCharges;
+        p.stamina = p.maxStamina;
         p.invulnTimer = Math.max(45, p.invulnTimer);
         p.astraEnergy = p.maxAstraEnergy;
         p.focusOrbs = 4;
@@ -1312,6 +1306,14 @@ export default function KaliyugaArena() {
       };
       const fixture = {
         grantResources: () => { prepareArena(); },
+        prepareStrikeTarget: () => {
+          prepareArena();
+          const sim = simRef.current;
+          const target = sim.enemies.find((enemy) => enemy.aiState !== 'ko');
+          if (!target) throw new Error('QA strike requires an active enemy');
+          target.x = sim.player.x + 46;
+          target.y = sim.player.y;
+        },
         preparePerfectParry: () => {
           prepareArena();
           const sim = simRef.current;
@@ -2413,7 +2415,7 @@ export default function KaliyugaArena() {
       sim.chamberClearTimer = 0;
       sim.bossPhaseBanner = null;
       sim.cameraZoom = BASE_CAMERA_ZOOM;
-      pendingStrikeVfxRef.current = null;
+      activeStrikeRef.current = null;
       pendingExecutionRef.current = null;
       liveCameraRef.current?.track.interrupt();
       liveCameraRef.current = null;
@@ -4652,7 +4654,7 @@ export default function KaliyugaArena() {
     brokenEnemy.aiTimer = Math.max(brokenEnemy.aiTimer, finisherSpec.durationSec);
     brokenEnemy.vx = 0;
     brokenEnemy.vy = 0;
-    pendingStrikeVfxRef.current = null;
+    activeStrikeRef.current = null;
     liveCameraRef.current = {
       kind: 'execution',
       elapsedSec: 0,
@@ -4940,15 +4942,10 @@ export default function KaliyugaArena() {
     p.slashArcAlpha = 1.0;
 
     // Grounded horizontal lunge clamped to prevent skyward drift
-    const originX = p.x;
-    const originY = p.y;
     const dist = Math.hypot(dx, dy) || 1;
     const lungeScale = Math.min(88, heavySpec.forwardLungePx) * 2.8;
     p.vx = (dx / dist) * lungeScale;
     p.vy = (dy / dist) * lungeScale * 0.65;
-
-    const impactX = p.x + Math.cos(p.slashAngle) * (p.stance === 'thrust' ? 78 : 48);
-    const impactY = p.y + Math.sin(p.slashAngle) * (p.stance === 'thrust' ? 48 : 30);
 
     const heavyElement = p.transformTimer > 0
       ? 'guardian'
@@ -4972,10 +4969,22 @@ export default function KaliyugaArena() {
       });
     }
 
-    pendingStrikeVfxRef.current = {
-      fired: false,
-      triggerThreshold: 0.28,
+    const heavyWeapon = p.weapon;
+    const strike = createActiveStrikeState({
+      attackSerial: p.attackSerial, tier: 'heavy', stance: heavyStance,
+      element: heavyElement === 'guardian' ? 'agni' : heavyElement,
+      comboStep: p.comboStep, slashAngle: heavySlashAngle, activeStart: 0.28,
+    });
+    soundEngine.playSwing('heavy', heavyStance);
+    soundEngine.playBreathingStyle(primaryHeavyPalette);
+    activeStrikeRef.current = {
+      sync: strike,
+      palette: primaryHeavyPalette,
       execute: () => {
+        const originX = p.x;
+        const originY = p.y;
+        const impactX = p.x + Math.cos(heavySlashAngle) * (heavyStance === 'thrust' ? 78 : 48);
+        const impactY = p.y + Math.sin(heavySlashAngle) * (heavyStance === 'thrust' ? 48 : 30);
         const curP = simRef.current.player;
         const syncImpactX = curP.x + Math.cos(heavySlashAngle) * (heavyStance === 'thrust' ? 74 : 46);
         const syncImpactY = curP.y + Math.sin(heavySlashAngle) * (heavyStance === 'thrust' ? 46 : 28);
@@ -5013,442 +5022,426 @@ export default function KaliyugaArena() {
           spawnShockwave(syncImpactX, syncImpactY, heavyRelease.radius * 0.76, impactColor, 0.36);
         }
         spawnParticles(syncImpactX, syncImpactY - 18, 12 + orbsUsed * 2, impactColor, 280, 4.6, 95);
-        simRef.current.hitstopTimer = Math.max(simRef.current.hitstopTimer, 0.062);
-      },
-    };
-
-    if (heavySpec.styleId === 'sudarshana_vortex') {
-      sim.enemies.forEach((e) => {
-        if (e.aiState === 'ko') return;
-        const vDist = Math.hypot(e.x - p.x, e.y - p.y);
-        if (vDist <= heavySpec.cleaveRadiusPx + 65 && vDist > 32) {
-          const pullStrength = e.isBoss ? 0.28 : 0.56;
-          e.x += (p.x - e.x) * pullStrength;
-          e.y += (p.y - e.y) * pullStrength;
-        }
-      });
-    }
-    sim.battleScars = spawnBattleScar(sim.battleScars, {
-      id: ++sim.nextScarId,
-      kind: 'scorch_crater',
-      x: impactX,
-      y: impactY + 4,
-      angle: p.slashAngle,
-      scale: 0.95 + orbsUsed * 0.18,
-    });
-
-    // Fire Piercing Agni Blood-Wave Projectile when Thrust Heavy or 2+ Tapas Smash Heavy is unleashed!
-    if (heavySpec.spawnsPiercingWave) {
-      const waveProj = sim.projectiles.find((pr) => !pr.active);
-      if (waveProj) {
-        const stats = computeDerivedPlayerStats(sim.ranks);
-        waveProj.active = true;
-        waveProj.x = impactX;
-        waveProj.y = impactY - 18;
-        waveProj.vx = Math.cos(p.slashAngle) * 680;
-        waveProj.vy = Math.sin(p.slashAngle) * 680;
-        waveProj.radius = 20;
-        waveProj.damage = Math.round((84 + orbsUsed * 28) * stats.damageMultiplier * boonMods.damageMultiplier);
-        waveProj.color = '#ff4d3b';
-        waveProj.life = 1.4;
-        waveProj.deflected = true;
-        waveProj.isPlayerCast = true;
-      }
-    }
-
-    sim.cameraZoom = BASE_CAMERA_ZOOM + 0.06 + orbsUsed * 0.012;
-    sim.cameraShakeTrauma = Math.min(1, sim.cameraShakeTrauma + heavySpec.cameraTrauma);
-    sim.screenFlashAlpha = Math.max(sim.screenFlashAlpha, 0.14 + orbsUsed * 0.03);
-    sim.screenFlashColor =
-      p.stance === 'pillar' ? '#ffb833' : orbsUsed >= 2 ? '#ff4d24' : '#b81d2a';
-
-    spawnFloatingText(
-      p.x,
-      p.y - 84,
-      seeThroughRes.calloutTitle || heavySpec.calloutTitle,
-      seeThroughRes.triggeredRiposteBurst
-        ? '#ffd86b'
-        : seeThroughRes.triggeredSeeThrough
-        ? '#f5ebd6'
-        : p.stance === 'pillar'
-        ? '#ffb833'
-        : '#ffd86b',
-      1.2,
-      heavySpec.calloutSubtitle
-    );
-
-    const stanceCfg = STANCE_CONFIGS[p.stance];
-    const isResolute =
-      seeThroughRes.triggeredSeeThrough ||
-      seeThroughRes.triggeredRiposteBurst ||
-      sim.enemies.some(
-        (e) =>
-          e.aiState === 'windup' &&
-          Math.hypot(e.x - p.x, e.y - p.y) <= heavySpec.cleaveRadiusPx + 45
-      );
-
-    const baseDmg = calculateStanceHeavyDamage({
-      stance: p.stance,
-      focusOrbsConsumed: orbsUsed,
-      weapon: p.weapon,
-      ranks: sim.ranks,
-      isResoluteCounter: isResolute,
-    });
-    const styleMult = computeCombatStyleStatus(p.stylePoints).damageBonusMultiplier;
-    const aspectBonuses = computeWeaponAspectBonuses(p.weapon, sim.weaponAspectRanks);
-    const relicSetRes = computeRelicSetResonance(sim.equippedGear);
-    const dmg = {
-      ...baseDmg,
-      hpDamage: Math.round(
-        baseDmg.hpDamage *
-          seeThroughRes.damageMultiplier *
-          styleMult *
-          aspectBonuses.damageMultiplier *
-          relicSetRes.setDamageBonusMultiplier +
-          aspectBonuses.procDamage
-      ),
-      postureDamage: Math.round(
-        (baseDmg.postureDamage + seeThroughRes.postureDamageBonus) *
-          styleMult *
-          aspectBonuses.postureMultiplier
-      ),
-    };
-
-    if (orbsUsed > 0 && dmg.healAmount > 0) {
-      p.hp = Math.min(p.maxHp, p.hp + dmg.healAmount);
-    }
-
-    // Ao Guang Boon: Dragon King's Vortex pulls enemies within 260px inward!
-    if (boonMods.heavyVortexPull) {
-      const vortexCenterX = p.x + Math.cos(p.slashAngle) * 52;
-      const vortexCenterY = p.y + Math.sin(p.slashAngle) * 32;
-      spawnShockwave(vortexCenterX, vortexCenterY, 220, '#ffd86b', 0.42);
-      sim.enemies.forEach((e) => {
-        if (e.aiState === 'ko') return;
-        const vDist = Math.hypot(e.x - vortexCenterX, e.y - vortexCenterY);
-        if (vDist <= 265 && vDist > 24) {
-          const pullFactor = e.isBoss ? 0.35 : 0.65;
-          e.x += (vortexCenterX - e.x) * pullFactor;
-          e.y += (vortexCenterY - e.y) * pullFactor;
-        }
-      });
-    }
-
-    // Shatter destructible courtyard props in heavy stance range (preserve Kurukshetra Pillars for Dundubhi bait!)
-    damagePropsNearPoint(p.x + p.facing * 36, p.y, heavySpec.cleaveRadiusPx, 120, {
-      ignoreKurukshetraPillars: true,
-    });
-
-    if (boonMods.heavyFaultLineDamage > 0) {
-      sim.delayedFaultLines.push({
-        x: impactX,
-        y: impactY,
-        angle: p.slashAngle,
-        damage: boonMods.heavyFaultLineDamage,
-        timer: 0.45,
-      });
-    }
-
-    soundEngine.playSwing('heavy', p.stance);
-    soundEngine.playBreathingStyle(primaryHeavyPalette);
-    let hitAny = false;
-
-    const corridorEndX = originX + Math.cos(p.slashAngle) * heavySpec.corridorLengthPx;
-    const corridorEndY = originY + Math.sin(p.slashAngle) * heavySpec.corridorLengthPx;
-
-    sim.enemies.forEach((e) => {
-      if (e.aiState === 'ko') return;
-      const d = Math.hypot(e.x - p.x, e.y - p.y);
-      const inRadialCleave = d <= heavySpec.cleaveRadiusPx + (e.isBoss ? 48 : 28);
-      const inThrustCorridor =
-        heavySpec.corridorLengthPx > 0 &&
-        isPointInDashCorridor({
-          px: e.x,
-          py: e.y,
-          startX: originX,
-          startY: originY,
-          endX: corridorEndX,
-          endY: corridorEndY,
-          halfWidth: e.isBoss ? 68 : 54,
-        });
-
-      if (inRadialCleave || inThrustCorridor) {
-        hitAny = true;
-        const backstab = isShadowStrikeBackstab({
-          playerX: p.x,
-          enemyX: e.x,
-          enemyFacing: e.facing,
-        });
-        const backstabMult = backstab ? boonMods.backstabMultiplier : 1.0;
-        if (e.type === 'dundubhi' && p.stance === 'smash' && orbsUsed >= 2) {
-          e.armorCracked = true;
-        }
-        const bossVuln =
-          e.isBoss && (e.type === 'dundubhi' || e.type === 'vrikodara')
-            ? computeBossVulnerabilityMultiplier({
-                bossType: e.type,
-                phase: e.phase,
-                armorCracked: Boolean(e.armorCracked),
-                tuskLodgedTimer: e.tuskLodgedTimer || 0,
-                aiState: e.aiState,
-              })
-            : { damageMultiplier: 1.0, postureMultiplier: 1.0, vulnerabilityCallout: null };
-        const semiBossGuardRes =
-          e.type === 'semi_boss_bloodforge'
-            ? evaluateSemiBossGuardBreak({
-                isGuarding: e.parryStanceTimer > 0 && e.postureBrokenTimer <= 0,
-                isFromBehind: backstab,
-                attackKind: 'heavy',
-              })
-            : null;
-        if (semiBossGuardRes?.guardBroken) {
-          e.parryStanceTimer = 0;
-          e.ironGuardCd = 5.5;
-          e.postureBrokenTimer = Math.max(e.postureBrokenTimer, SEMI_BOSS_GUARD_BREAK_PUNISH_SEC);
-          e.aiState = 'recover';
-          e.aiTimer = Math.max(e.aiTimer, SEMI_BOSS_GUARD_BREAK_PUNISH_SEC);
-          spawnFloatingText(e.x, e.y - 84, semiBossGuardRes.calloutText, '#ff6a2b', 1.15);
-        }
-        if (e.type === 'vrikodara' && e.aiState === 'windup' && e.activeBossMoveId === 'agni_furnace_inhale') {
-          const interruptRes = resolveVrikodaraInhaleImpact({
-            connectedOnPlayer: false,
-            interruptedDuringWindup: true,
-            currentHp: e.hp,
-            maxHp: e.maxHp,
-            attackIndex: e.attackPattern,
-            currentConsumed: p.consumedAbility,
+        if (heavySpec.styleId === 'sudarshana_vortex') {
+          sim.enemies.forEach((e) => {
+            if (e.aiState === 'ko') return;
+            const vDist = Math.hypot(e.x - p.x, e.y - p.y);
+            if (vDist <= heavySpec.cleaveRadiusPx + 65 && vDist > 32) {
+              const pullStrength = e.isBoss ? 0.28 : 0.56;
+              e.x += (p.x - e.x) * pullStrength;
+              e.y += (p.y - e.y) * pullStrength;
+            }
           });
-          if (interruptRes.cancelledWindup) {
-            e.aiState = 'recover';
-            e.aiTimer = interruptRes.staggerSec;
-            e.postureBrokenTimer = Math.max(e.postureBrokenTimer, interruptRes.staggerSec);
-            e.vacuumActiveTimer = 0;
-            e.activeBossMoveId = undefined;
-            spawnShockwave(e.x, e.y, 155, '#ffd86b', 0.38);
-            spawnFloatingText(e.x, e.y - 96, interruptRes.calloutText, '#ffd86b', 1.18);
+        }
+        sim.battleScars = spawnBattleScar(sim.battleScars, {
+          id: ++sim.nextScarId,
+          kind: 'scorch_crater',
+          x: impactX,
+          y: impactY + 4,
+          angle: p.slashAngle,
+          scale: 0.95 + orbsUsed * 0.18,
+        });
+
+        // Fire Piercing Agni Blood-Wave Projectile when Thrust Heavy or 2+ Tapas Smash Heavy is unleashed!
+        if (heavySpec.spawnsPiercingWave) {
+          const waveProj = sim.projectiles.find((pr) => !pr.active);
+          if (waveProj) {
+            const stats = computeDerivedPlayerStats(sim.ranks);
+            waveProj.active = true;
+            waveProj.x = impactX;
+            waveProj.y = impactY - 18;
+            waveProj.vx = Math.cos(p.slashAngle) * 680;
+            waveProj.vy = Math.sin(p.slashAngle) * 680;
+            waveProj.radius = 20;
+            waveProj.damage = Math.round((84 + orbsUsed * 28) * stats.damageMultiplier * boonMods.damageMultiplier);
+            waveProj.color = '#ff4d3b';
+            waveProj.life = 1.4;
+            waveProj.deflected = true;
+            waveProj.isPlayerCast = true;
           }
         }
-        if (e.type === 'vrikodara' && p.consumedAbility) {
-          const furnaceRes = resolveConsumeFurnacePunish({
-            consumedAbility: p.consumedAbility,
-            attackKind: 'heavy',
-            furnaceExposed:
-              e.phase >= 2 && (e.aiState === 'recover' || e.postureBrokenTimer > 0 || (e.vacuumActiveTimer || 0) > 0),
-          });
-          if (furnaceRes.freedAbility) {
-            p.consumedAbility = null;
-            p.consumedAbilityTimer = 0;
-            e.furnaceEmpoweredTimer = 0;
-            gainAstraEnergy(furnaceRes.pranaBurst);
-            spawnShockwave(e.x, e.y, 165, '#ffd86b', 0.4);
-            spawnFloatingText(e.x, e.y - 98, furnaceRes.calloutText, '#ffd86b', 1.18);
-          }
-        }
-        const lodgedCastMult = 1 + (e.lodgedCasts || 0) * boonMods.castLodgedDamageBonus;
-        const mult =
-          (p.transformTimer > 0 ? KALA_BHAIRAVA_DAMAGE_MULT : 1.0) *
-          boonMods.heavyBonusMultiplier *
-          backstabMult *
-          bossVuln.damageMultiplier *
-          (semiBossGuardRes ? semiBossGuardRes.damageMultiplier : 1.0) *
-          lodgedCastMult;
-        const critGuaranteed = isResolute || p.guaranteedCritTimer > 0;
-        const hpLoss = Math.round(
-          dmg.hpDamage * mult * (critGuaranteed && !isResolute ? boonMods.critMultiplier : 1.0) * (1 + boonMods.echoStrikeRatio)
-        );
-        const posLoss = Math.round(
-          (dmg.postureDamage + (semiBossGuardRes?.postureDamageBonus || 0)) *
-            mult *
-            bossVuln.postureMultiplier *
-            boonMods.postureDamageMultiplier
-        );
 
-        // Heavy Unleash shatters active Enemy Guard / Vajra Shields through unified receiveHit() pipeline!
-        const brokeGuard = e.parryStanceTimer > 0 || e.trait === 'vajra_shield' || Boolean(semiBossGuardRes?.guardBroken);
-        const kAngle = Math.atan2(e.y - p.y, e.x - p.x);
-        const kb =
-          p.stance === 'pillar'
-            ? e.isBoss
-              ? 35
-              : 75
-            : e.isBoss
-            ? 95
-            : 215;
+        sim.cameraZoom = BASE_CAMERA_ZOOM + 0.06 + orbsUsed * 0.012;
+        sim.cameraShakeTrauma = Math.min(1, sim.cameraShakeTrauma + heavySpec.cameraTrauma);
 
-        const heavyHitRes = receiveHit(e, {
-          rawDamage: hpLoss,
-          postureDamage: brokeGuard ? Math.round(posLoss * 1.45) : posLoss,
-          knockbackForcePx: kb,
-          knockbackAngleRad: kAngle,
-          hitKind: 'heavy',
-          isCrit: critGuaranteed,
-          isFinisher: orbsUsed >= 2 || e.postureBrokenTimer > 0,
-          shattersGuard: true,
-          cracksBossArmor: e.type === 'dundubhi' && p.stance === 'smash' && orbsUsed >= 2,
-          currentCameraTrauma: sim.cameraShakeTrauma,
-        });
-        if (p.guaranteedCritTimer > 0 && !isResolute) {
-          p.guaranteedCritTimer = 0;
-        }
-        sim.runDamageDealt += heavyHitRes.hpLost;
-        // Tactile 45ms+ heavy hit-stop + subtle 2-frame Sumi-e impact flash
-        sim.hitstopTimer = Math.max(sim.hitstopTimer, Math.max(0.045, heavyHitRes.hitstopSec));
-        sim.screenFlashAlpha = Math.max(sim.screenFlashAlpha, orbsUsed >= 1 || brokeGuard ? 0.16 : 0.09);
-        sim.screenFlashColor = brokeGuard ? '#ffd46b' : '#fff0d6';
-        sim.cameraShakeTrauma = heavyHitRes.clampedCameraTrauma;
-        sim.cameraKickX += heavyHitRes.cameraKickX;
-        sim.cameraKickY += heavyHitRes.cameraKickY;
-        e.scaleX = 1.14;
-        e.scaleY = 0.86;
-
-        if (boonMods.scorchDps > 0) {
-          e.scorchTimer = 3.0;
-        }
-
-        if (heavyHitRes.triggeredPostureBreak || brokeGuard) {
-          sim.devanagariStamps.push(createDevanagariStamp('break', e.x, e.y - 102));
-        } else if (orbsUsed >= 1) {
-          sim.devanagariStamps.push(createDevanagariStamp('heavy', e.x, e.y - 94));
-        }
-
-        if (heavyHitRes.triggeredPostureBreak) {
-          sim.runPostureBreaks += 1;
-          recordQuestEvent('shatter_posture', 1);
-          spawnShockwave(e.x, e.y, 145, '#ff4d3b', 0.42);
-          spawnFloatingText(
-            e.x,
-            e.y - 88,
-            'POSTURE BROKEN! [F] EXECUTE',
-            '#ff4d3b',
-            1.22
-          );
-        }
-
-        spawnTengenClashSparks(bloodDemonArtsRef.current, e.x, e.y - 24, 14, 340);
-        if (orbsUsed >= 2) {
-          spawnExplodingBloodSeed(bloodDemonArtsRef.current, {
-            x: e.x,
-            y: e.y - 8,
-            radius: 64,
-            damage: 28,
-            ownerSide: 'player',
-            delaySec: 0.55,
-            palette: 'hinokami',
-          });
-        }
-        spawnFlipbookVfx(
-          PHASE2_VFX_SHEETS.parryAndHitSparks4x2.url,
-          e.x,
-          e.y - 24,
-          128,
-          0.26,
-          heavyHitRes.spray.sprayAngleRad,
-          1,
-          'screen',
-          PHASE2_VFX_SHEETS.parryAndHitSparks4x2,
-          PARRY_SPARKS_FLIPBOOK_ROWS.DIRECTIONAL_HIT_SPLATTER
-        );
-        spawnParticles(
-          e.x + Math.cos(heavyHitRes.spray.sprayAngleRad) * 12,
-          e.y - 26,
-          heavyHitRes.spray.bloodCount,
-          heavyHitRes.spray.bloodColor,
-          heavyHitRes.spray.speed,
-          5.0,
-          160
-        );
-        spawnParticles(
-          e.x + Math.cos(heavyHitRes.spray.sprayAngleRad) * 8,
-          e.y - 22,
-          heavyHitRes.spray.sparkCount,
-          '#ffb833',
-          heavyHitRes.spray.speed * 0.85,
-          4.2,
-          120
-        );
-        spawnParticles(
-          e.x + Math.cos(heavyHitRes.spray.sprayAngleRad) * 6,
-          e.y - 18,
-          6,
-          '#3b2a26',
-          heavyHitRes.spray.speed * 0.65,
-          3.4,
-          140
-        );
-        spawnFloatingText(
-          e.x,
-          e.y - 58,
-          isResolute
-            ? `COUNTER ${heavyHitRes.hpLost}!`
-            : brokeGuard
-            ? `GUARD CRUSH ${heavyHitRes.hpLost}!`
-            : `${heavyHitRes.hpLost}!`,
-          '#ff4d3b',
-          1.22,
-          e.type === 'dundubhi' && !e.armorCracked ? 'BRONZE ARMOR! BAIT INTO PILLAR' : undefined
-        );
-      }
-    });
-
-    if (sim.narayanastraTrial.active) {
-      sim.narayanastraTrial.escalationStacks += 1;
-      sim.narayanastraTrial.calmTimerSec = 0;
-      const penDmg = 18 * sim.narayanastraTrial.escalationStacks;
-      const susanooPen = computeSusanooDeflectOutcome(p.transformTimer, penDmg);
-      if (susanooPen.deflected) {
-        soundEngine.playSusanooDeflect();
-        spawnShockwave(p.x, p.y, 145, '#ffd46b', 0.34);
-        spawnFloatingText(p.x, p.y - 96, 'CHAKRA ARMOR DEFLECT · 0 DMG', '#ffd46b', 1.12);
-      } else {
-        p.hp = Math.max(1, p.hp - penDmg);
-        sim.cameraShakeTrauma = Math.min(MAX_CLAMPED_CAMERA_TRAUMA, sim.cameraShakeTrauma + 0.45);
-        spawnShockwave(p.x, p.y, 135, '#ff3b30', 0.34);
         spawnFloatingText(
           p.x,
-          p.y - 96,
-          `NARAYANASTRA ESCALATES (-${penDmg} HP)!`,
-          '#ff4d3b',
-          1.15,
-          'CEASE ATTACKING FOR 1.75s TO BOW & PASS THE TRIAL!'
+          p.y - 84,
+          seeThroughRes.calloutTitle || heavySpec.calloutTitle,
+          seeThroughRes.triggeredRiposteBurst
+            ? '#ffd86b'
+            : seeThroughRes.triggeredSeeThrough
+            ? '#f5ebd6'
+            : heavyStance === 'pillar'
+            ? '#ffb833'
+            : '#ffd86b',
+          1.2,
+          heavySpec.calloutSubtitle
         );
-      }
-    }
 
-    if (hitAny) {
-      gainAstraEnergy(ASTRA_ENERGY_GAINS.HEAVY_HIT);
-      soundEngine.playHit('heavy');
-      soundEngine.playSpatialMaterialFoley(
-        'flesh_cleave',
-        p.x + p.facing * 52,
-        p.y,
-        p.x,
-        p.y,
-        sim.viewportW
-      );
-      sim.comboCount += 2;
-      sim.comboResetTimer = 4.2;
-      sim.score += 180 * Math.max(1, orbsUsed);
-    } else {
-      spawnParticles(
-        p.x + p.facing * 48,
-        p.y,
-        18,
-        '#e63926',
-        165,
-        4.2,
-        130
-      );
-      spawnParticles(
-        p.x + p.facing * 42,
-        p.y - 8,
-        10,
-        '#ffb833',
-        135,
-        3.6,
-        110
-      );
-    }
-  }, [addStylePoints, damagePropsNearPoint, gainAstraEnergy, recordQuestEvent, spawnAfterimage, spawnFlipbookVfx, spawnFloatingText, spawnParticles, spawnShockwave]);
+        const isResolute =
+          seeThroughRes.triggeredSeeThrough ||
+          seeThroughRes.triggeredRiposteBurst ||
+          sim.enemies.some(
+            (e) =>
+              e.aiState === 'windup' &&
+              Math.hypot(e.x - p.x, e.y - p.y) <= heavySpec.cleaveRadiusPx + 45
+          );
+
+        const baseDmg = calculateStanceHeavyDamage({
+          stance: heavyStance,
+          focusOrbsConsumed: orbsUsed,
+          weapon: heavyWeapon,
+          ranks: sim.ranks,
+          isResoluteCounter: isResolute,
+        });
+        const styleMult = computeCombatStyleStatus(p.stylePoints).damageBonusMultiplier;
+        const aspectBonuses = computeWeaponAspectBonuses(p.weapon, sim.weaponAspectRanks);
+        const relicSetRes = computeRelicSetResonance(sim.equippedGear);
+        const dmg = {
+          ...baseDmg,
+          hpDamage: Math.round(
+            baseDmg.hpDamage *
+              seeThroughRes.damageMultiplier *
+              styleMult *
+              aspectBonuses.damageMultiplier *
+              relicSetRes.setDamageBonusMultiplier +
+              aspectBonuses.procDamage
+          ),
+          postureDamage: Math.round(
+            (baseDmg.postureDamage + seeThroughRes.postureDamageBonus) *
+              styleMult *
+              aspectBonuses.postureMultiplier
+          ),
+        };
+
+        if (orbsUsed > 0 && dmg.healAmount > 0) {
+          p.hp = Math.min(p.maxHp, p.hp + dmg.healAmount);
+        }
+
+        // Ao Guang Boon: Dragon King's Vortex pulls enemies within 260px inward!
+        if (boonMods.heavyVortexPull) {
+          const vortexCenterX = p.x + Math.cos(p.slashAngle) * 52;
+          const vortexCenterY = p.y + Math.sin(p.slashAngle) * 32;
+          spawnShockwave(vortexCenterX, vortexCenterY, 220, '#ffd86b', 0.42);
+          sim.enemies.forEach((e) => {
+            if (e.aiState === 'ko') return;
+            const vDist = Math.hypot(e.x - vortexCenterX, e.y - vortexCenterY);
+            if (vDist <= 265 && vDist > 24) {
+              const pullFactor = e.isBoss ? 0.35 : 0.65;
+              e.x += (vortexCenterX - e.x) * pullFactor;
+              e.y += (vortexCenterY - e.y) * pullFactor;
+            }
+          });
+        }
+
+        // Shatter destructible courtyard props in heavy stance range (preserve Kurukshetra Pillars for Dundubhi bait!)
+        damagePropsNearPoint(p.x + p.facing * 36, p.y, heavySpec.cleaveRadiusPx, 120, {
+          ignoreKurukshetraPillars: true,
+        });
+
+        if (boonMods.heavyFaultLineDamage > 0) {
+          sim.delayedFaultLines.push({
+            x: impactX,
+            y: impactY,
+            angle: p.slashAngle,
+            damage: boonMods.heavyFaultLineDamage,
+            timer: 0.45,
+          });
+        }
+
+        let hitAny = false;
+
+        const corridorEndX = originX + Math.cos(p.slashAngle) * heavySpec.corridorLengthPx;
+        const corridorEndY = originY + Math.sin(p.slashAngle) * heavySpec.corridorLengthPx;
+
+        sim.enemies.forEach((e) => {
+          if (e.aiState === 'ko') return;
+          const d = Math.hypot(e.x - p.x, e.y - p.y);
+          const inRadialCleave = d <= heavySpec.cleaveRadiusPx + (e.isBoss ? 48 : 28);
+          const inThrustCorridor =
+            heavySpec.corridorLengthPx > 0 &&
+            isPointInDashCorridor({
+              px: e.x,
+              py: e.y,
+              startX: originX,
+              startY: originY,
+              endX: corridorEndX,
+              endY: corridorEndY,
+              halfWidth: e.isBoss ? 68 : 54,
+            });
+
+          if ((inRadialCleave || inThrustCorridor) && claimEnemyHitForStrike(strike, e.id)) {
+            hitAny = true;
+            const backstab = isShadowStrikeBackstab({
+              playerX: p.x,
+              enemyX: e.x,
+              enemyFacing: e.facing,
+            });
+            const backstabMult = backstab ? boonMods.backstabMultiplier : 1.0;
+            if (e.type === 'dundubhi' && heavyStance === 'smash' && orbsUsed >= 2) {
+              e.armorCracked = true;
+            }
+            const bossVuln =
+              e.isBoss && (e.type === 'dundubhi' || e.type === 'vrikodara')
+                ? computeBossVulnerabilityMultiplier({
+                    bossType: e.type,
+                    phase: e.phase,
+                    armorCracked: Boolean(e.armorCracked),
+                    tuskLodgedTimer: e.tuskLodgedTimer || 0,
+                    aiState: e.aiState,
+                  })
+                : { damageMultiplier: 1.0, postureMultiplier: 1.0, vulnerabilityCallout: null };
+            const semiBossGuardRes =
+              e.type === 'semi_boss_bloodforge'
+                ? evaluateSemiBossGuardBreak({
+                    isGuarding: e.parryStanceTimer > 0 && e.postureBrokenTimer <= 0,
+                    isFromBehind: backstab,
+                    attackKind: 'heavy',
+                  })
+                : null;
+            if (semiBossGuardRes?.guardBroken) {
+              e.parryStanceTimer = 0;
+              e.ironGuardCd = 5.5;
+              e.postureBrokenTimer = Math.max(e.postureBrokenTimer, SEMI_BOSS_GUARD_BREAK_PUNISH_SEC);
+              e.aiState = 'recover';
+              e.aiTimer = Math.max(e.aiTimer, SEMI_BOSS_GUARD_BREAK_PUNISH_SEC);
+              spawnFloatingText(e.x, e.y - 84, semiBossGuardRes.calloutText, '#ff6a2b', 1.15);
+            }
+            if (e.type === 'vrikodara' && e.aiState === 'windup' && e.activeBossMoveId === 'agni_furnace_inhale') {
+              const interruptRes = resolveVrikodaraInhaleImpact({
+                connectedOnPlayer: false,
+                interruptedDuringWindup: true,
+                currentHp: e.hp,
+                maxHp: e.maxHp,
+                attackIndex: e.attackPattern,
+                currentConsumed: p.consumedAbility,
+              });
+              if (interruptRes.cancelledWindup) {
+                e.aiState = 'recover';
+                e.aiTimer = interruptRes.staggerSec;
+                e.postureBrokenTimer = Math.max(e.postureBrokenTimer, interruptRes.staggerSec);
+                e.vacuumActiveTimer = 0;
+                e.activeBossMoveId = undefined;
+                spawnShockwave(e.x, e.y, 155, '#ffd86b', 0.38);
+                spawnFloatingText(e.x, e.y - 96, interruptRes.calloutText, '#ffd86b', 1.18);
+              }
+            }
+            if (e.type === 'vrikodara' && p.consumedAbility) {
+              const furnaceRes = resolveConsumeFurnacePunish({
+                consumedAbility: p.consumedAbility,
+                attackKind: 'heavy',
+                furnaceExposed:
+                  e.phase >= 2 && (e.aiState === 'recover' || e.postureBrokenTimer > 0 || (e.vacuumActiveTimer || 0) > 0),
+              });
+              if (furnaceRes.freedAbility) {
+                p.consumedAbility = null;
+                p.consumedAbilityTimer = 0;
+                e.furnaceEmpoweredTimer = 0;
+                gainAstraEnergy(furnaceRes.pranaBurst);
+                spawnShockwave(e.x, e.y, 165, '#ffd86b', 0.4);
+                spawnFloatingText(e.x, e.y - 98, furnaceRes.calloutText, '#ffd86b', 1.18);
+              }
+            }
+            const lodgedCastMult = 1 + (e.lodgedCasts || 0) * boonMods.castLodgedDamageBonus;
+            const mult =
+              (p.transformTimer > 0 ? KALA_BHAIRAVA_DAMAGE_MULT : 1.0) *
+              boonMods.heavyBonusMultiplier *
+              backstabMult *
+              bossVuln.damageMultiplier *
+              (semiBossGuardRes ? semiBossGuardRes.damageMultiplier : 1.0) *
+              lodgedCastMult;
+            const critGuaranteed = isResolute || p.guaranteedCritTimer > 0;
+            const hpLoss = Math.round(
+              dmg.hpDamage * mult * (critGuaranteed && !isResolute ? boonMods.critMultiplier : 1.0) * (1 + boonMods.echoStrikeRatio)
+            );
+            const posLoss = Math.round(
+              (dmg.postureDamage + (semiBossGuardRes?.postureDamageBonus || 0)) *
+                mult *
+                bossVuln.postureMultiplier *
+                boonMods.postureDamageMultiplier
+            );
+
+            // Heavy Unleash shatters active Enemy Guard / Vajra Shields through unified receiveHit() pipeline!
+            const brokeGuard = e.parryStanceTimer > 0 || e.trait === 'vajra_shield' || Boolean(semiBossGuardRes?.guardBroken);
+            const kAngle = Math.atan2(e.y - p.y, e.x - p.x);
+            const kb =
+              heavyStance === 'pillar'
+                ? e.isBoss
+                  ? 35
+                  : 75
+                : e.isBoss
+                ? 95
+                : 215;
+
+            const heavyHitRes = receiveHit(e, {
+              rawDamage: hpLoss,
+              postureDamage: brokeGuard ? Math.round(posLoss * 1.45) : posLoss,
+              knockbackForcePx: kb,
+              knockbackAngleRad: kAngle,
+              hitKind: 'heavy',
+              isCrit: critGuaranteed,
+              isFinisher: orbsUsed >= 2 || e.postureBrokenTimer > 0,
+              shattersGuard: true,
+              cracksBossArmor: e.type === 'dundubhi' && heavyStance === 'smash' && orbsUsed >= 2,
+              currentCameraTrauma: sim.cameraShakeTrauma,
+            });
+            if (p.guaranteedCritTimer > 0 && !isResolute) {
+              p.guaranteedCritTimer = 0;
+            }
+            sim.runDamageDealt += heavyHitRes.hpLost;
+            // Tactile 45ms+ heavy hit-stop + subtle 2-frame Sumi-e impact flash
+            sim.hitstopTimer = Math.max(sim.hitstopTimer, Math.max(0.045, heavyHitRes.hitstopSec));
+            sim.screenFlashAlpha = Math.max(sim.screenFlashAlpha, orbsUsed >= 1 || brokeGuard ? 0.16 : 0.09);
+            sim.screenFlashColor = brokeGuard ? '#ffd46b' : '#fff0d6';
+            sim.cameraShakeTrauma = heavyHitRes.clampedCameraTrauma;
+            sim.cameraKickX += heavyHitRes.cameraKickX;
+            sim.cameraKickY += heavyHitRes.cameraKickY;
+            e.scaleX = 1.14;
+            e.scaleY = 0.86;
+
+            if (boonMods.scorchDps > 0) {
+              e.scorchTimer = 3.0;
+            }
+
+            if (heavyHitRes.triggeredPostureBreak || brokeGuard) {
+              sim.devanagariStamps.push(createDevanagariStamp('break', e.x, e.y - 102));
+            } else if (orbsUsed >= 1) {
+              sim.devanagariStamps.push(createDevanagariStamp('heavy', e.x, e.y - 94));
+            }
+
+            if (heavyHitRes.triggeredPostureBreak) {
+              sim.runPostureBreaks += 1;
+              recordQuestEvent('shatter_posture', 1);
+              spawnShockwave(e.x, e.y, 145, '#ff4d3b', 0.42);
+              spawnFloatingText(
+                e.x,
+                e.y - 88,
+                'POSTURE BROKEN! [F] EXECUTE',
+                '#ff4d3b',
+                1.22
+              );
+            }
+
+            spawnTengenClashSparks(bloodDemonArtsRef.current, e.x, e.y - 24, 14, 340);
+            if (orbsUsed >= 2) {
+              spawnExplodingBloodSeed(bloodDemonArtsRef.current, {
+                x: e.x,
+                y: e.y - 8,
+                radius: 64,
+                damage: 28,
+                ownerSide: 'player',
+                delaySec: 0.55,
+                palette: 'hinokami',
+              });
+            }
+            webglDemonSlayerVfxRef.current?.spawnSparkBurst({
+              x: e.x, y: e.y - 25, count: 14, speed: 340, palette: primaryHeavyPalette,
+            });
+            spawnParticles(
+              e.x + Math.cos(heavyHitRes.spray.sprayAngleRad) * 12,
+              e.y - 26,
+              heavyHitRes.spray.bloodCount,
+              heavyHitRes.spray.bloodColor,
+              heavyHitRes.spray.speed,
+              5.0,
+              160
+            );
+            spawnParticles(
+              e.x + Math.cos(heavyHitRes.spray.sprayAngleRad) * 8,
+              e.y - 22,
+              heavyHitRes.spray.sparkCount,
+              '#ffb833',
+              heavyHitRes.spray.speed * 0.85,
+              4.2,
+              120
+            );
+            spawnParticles(
+              e.x + Math.cos(heavyHitRes.spray.sprayAngleRad) * 6,
+              e.y - 18,
+              6,
+              '#3b2a26',
+              heavyHitRes.spray.speed * 0.65,
+              3.4,
+              140
+            );
+            spawnFloatingText(
+              e.x,
+              e.y - 58,
+              isResolute
+                ? `COUNTER ${heavyHitRes.hpLost}!`
+                : brokeGuard
+                ? `GUARD CRUSH ${heavyHitRes.hpLost}!`
+                : `${heavyHitRes.hpLost}!`,
+              '#ff4d3b',
+              1.22,
+              e.type === 'dundubhi' && !e.armorCracked ? 'BRONZE ARMOR! BAIT INTO PILLAR' : undefined
+            );
+          }
+        });
+
+        if (sim.narayanastraTrial.active) {
+          sim.narayanastraTrial.escalationStacks += 1;
+          sim.narayanastraTrial.calmTimerSec = 0;
+          const penDmg = 18 * sim.narayanastraTrial.escalationStacks;
+          const susanooPen = computeSusanooDeflectOutcome(p.transformTimer, penDmg);
+          if (susanooPen.deflected) {
+            soundEngine.playSusanooDeflect();
+            spawnShockwave(p.x, p.y, 145, '#ffd46b', 0.34);
+            spawnFloatingText(p.x, p.y - 96, 'CHAKRA ARMOR DEFLECT · 0 DMG', '#ffd46b', 1.12);
+          } else {
+            p.hp = Math.max(1, p.hp - penDmg);
+            sim.cameraShakeTrauma = Math.min(MAX_CLAMPED_CAMERA_TRAUMA, sim.cameraShakeTrauma + 0.45);
+            spawnShockwave(p.x, p.y, 135, '#ff3b30', 0.34);
+            spawnFloatingText(
+              p.x,
+              p.y - 96,
+              `NARAYANASTRA ESCALATES (-${penDmg} HP)!`,
+              '#ff4d3b',
+              1.15,
+              'CEASE ATTACKING FOR 1.75s TO BOW & PASS THE TRIAL!'
+            );
+          }
+        }
+
+        if (hitAny) {
+          sim.hitstopTimer = Math.max(sim.hitstopTimer, 0.062);
+          gainAstraEnergy(ASTRA_ENERGY_GAINS.HEAVY_HIT);
+          soundEngine.playHit('heavy');
+          soundEngine.playSpatialMaterialFoley(
+            'flesh_cleave',
+            p.x + p.facing * 52,
+            p.y,
+            p.x,
+            p.y,
+            sim.viewportW
+          );
+          sim.comboCount += 2;
+          sim.comboResetTimer = 4.2;
+          sim.score += 180 * Math.max(1, orbsUsed);
+        } else {
+          spawnParticles(
+            p.x + p.facing * 48,
+            p.y,
+            18,
+            '#e63926',
+            165,
+            4.2,
+            130
+          );
+          spawnParticles(
+            p.x + p.facing * 42,
+            p.y - 8,
+            10,
+            '#ffb833',
+            135,
+            3.6,
+            110
+          );
+        }
+      },
+    };
+  }, [addStylePoints, damagePropsNearPoint, gainAstraEnergy, recordQuestEvent, spawnAfterimage, spawnFloatingText, spawnParticles, spawnShockwave]);
 
   const triggerLightAttack = useCallback(() => {
     const sim = simRef.current;
@@ -5572,18 +5565,7 @@ export default function KaliyugaArena() {
     p.vx += (dx / dist) * lungeImpulse;
     p.vy += (dy / dist) * lungeImpulse * 0.65;
 
-    if (p.comboStep === 3 || activeFinisherSpec?.variant === 'spin_360_cleave') {
-      sim.enemies.forEach((e) => {
-        if (e.aiState === 'ko') return;
-        const cd = Math.hypot(e.x - p.x, e.y - p.y);
-        if (cd <= 165 && cd > 28) {
-          e.x += (p.x - e.x) * (e.isBoss ? 0.14 : 0.28);
-          e.y += (p.y - e.y) * (e.isBoss ? 0.14 : 0.28);
-        }
-      });
-    }
-
-    // Damage destructible courtyard props in reach
+    // Capture the reach at startup so a weapon switch cannot change a pending swing.
     const effectiveReach =
       Math.round(weaponCfg.reachPx * 0.66) +
       (activeFinisherSpec
@@ -5595,13 +5577,6 @@ export default function KaliyugaArena() {
         : p.comboStep === 3 || p.comboStep === 4
         ? 16
         : 0);
-    damagePropsNearPoint(
-      p.x + p.facing * 18,
-      p.y,
-      effectiveReach + 12,
-      activeFinisherSpec || p.comboStep === 4 || isDashStrike || isRiposteStrike ? 55 : 32
-    );
-
     soundEngine.playSwing(
       activeFinisherSpec || p.comboStep === 4 || isDashStrike || isRiposteStrike ? 'heavy' : 'light',
       p.stance
@@ -5636,9 +5611,17 @@ export default function KaliyugaArena() {
       scale: isComboFinisher ? 0.78 : 0.56,
     });
 
-    pendingStrikeVfxRef.current = {
-      fired: false,
-      triggerThreshold: isComboFinisher ? 0.28 : 0.25,
+    const strikeWeapon = p.weapon;
+    const strike = createActiveStrikeState({
+      attackSerial: p.attackSerial, tier: isComboFinisher ? 'combo4_finisher' : 'light',
+      stance: capturedStance, comboStep: capturedStep, slashAngle: capturedAngle,
+      element: lightSlashPalette === 'water' ? 'varuna' : lightSlashPalette === 'wind' ? 'vayu' :
+        lightSlashPalette === 'thunder' ? 'vajra' : 'agni',
+      activeStart: isComboFinisher ? 0.28 : 0.25,
+    });
+    activeStrikeRef.current = {
+      sync: strike,
+      palette: lightSlashPalette,
       execute: () => {
         const curP = simRef.current.player;
         const originX = curP.x + curP.facing * 14;
@@ -5738,392 +5721,398 @@ export default function KaliyugaArena() {
             palette: lightSlashPalette,
           });
         }
-      },
-    };
-
-    let hitAny = false;
-    sim.enemies.forEach((e) => {
-      if (e.aiState === 'ko') return;
-      const d = Math.hypot(e.x - p.x, e.y - p.y);
-      if (d <= effectiveReach + (e.isBoss ? 44 : 24)) {
-        hitAny = true;
-        const dmg = calculateLightHitDamage({
-          comboStep: p.comboStep,
-          weapon: p.weapon,
-          ranks: sim.ranks,
-          isImmobilizedTarget: e.immobilizedTimer > 0,
-        });
-
-        // Step 22: Evaluate Ironmaw Gladiator front shield block (opens during windup/recovery) & Dash-behind backstab!
-        const isGladiatorOrBrute =
-          e.type === 'ironmaw_gladiator' ||
-          e.type === 'bloodmaw_brute' ||
-          e.type === 'semi_boss_bloodforge';
-        const gladiatorDef = evaluateIronmawGladiatorDefense({
-          enemyType: e.type,
-          aiState:
-            e.aiState === 'idle'
-              ? 'chase'
-              : e.aiState,
-          ironGuardTimer: e.parryStanceTimer,
-          postureBrokenTimer: e.postureBrokenTimer,
-          enemyFacingAngle: e.aimAngle ?? (e.facing === 1 ? 0 : Math.PI),
-          enemyX: e.x,
-          enemyY: e.y,
-          attackerX: p.x,
-          attackerY: p.y,
-        });
-        const backstab =
-          gladiatorDef.isBackstabAngle ||
-          isShadowStrikeBackstab({
-            playerX: p.x,
-            enemyX: e.x,
-            enemyFacing: e.facing,
-          });
-
-        // Smart Enemy & Boss Frontal Parry / Shield Deflection Mechanic!
-        // Ironmaw Gladiators block frontal light attacks during chase, but OPEN UP during windup & recovery!
-        const canEnemyParry =
-          !backstab &&
-          !isDashStrike &&
-          !isRiposteStrike &&
-          !activeFinisherSpec &&
-          p.comboStep < 4 &&
-          e.postureBrokenTimer <= 0 &&
-          e.immobilizedTimer <= 0 &&
-          (e.parryStanceTimer > 0 ||
-            (!e.isBoss && gladiatorDef.isFrontShieldBlocking) ||
-            (e.trait === 'vajra_shield' && e.aiState === 'chase'));
-
-        if (canEnemyParry) {
-          soundEngine.playIronBlock();
-          soundEngine.playSpell('parry');
-          e.parryStanceTimer = 0.55;
-          e.hitFlashTimer = 0.048;
-          const recoilAngle = Math.atan2(p.y - e.y, p.x - e.x);
-          p.vx += Math.cos(recoilAngle) * 190;
-          p.vy += Math.sin(recoilAngle) * 150;
-          sim.hitstopTimer = Math.max(sim.hitstopTimer, 0.042);
-          sim.cameraShakeTrauma = Math.min(MAX_CLAMPED_CAMERA_TRAUMA, sim.cameraShakeTrauma + 0.25);
-          spawnTengenClashSparks(bloodDemonArtsRef.current, (p.x + e.x) * 0.5, (p.y + e.y) * 0.5 - 22, 16, 360);
-          spawnShockwave((p.x + e.x) * 0.5, (p.y + e.y) * 0.5, 86, '#ffd86b', 0.28);
-          spawnFlipbookVfx(
-            PHASE2_VFX_SHEETS.parryAndHitSparks4x2.url,
-            (p.x + e.x) * 0.5,
-            (p.y + e.y) * 0.5 - 22,
-            124,
-            0.26,
-            recoilAngle,
-            1,
-            'screen',
-            PHASE2_VFX_SHEETS.parryAndHitSparks4x2,
-            PARRY_SPARKS_FLIPBOOK_ROWS.VEDIC_PARRY_FLASH
-          );
-          spawnParticles((p.x + e.x) * 0.5, (p.y + e.y) * 0.5 - 24, 16, '#ffd86b', 210, 4.2, 90);
-          spawnFloatingText(
-            e.x,
-            e.y - 72,
-            isGladiatorOrBrute
-              ? 'IRONMAW SHIELD BLOCK! · DASH BEHIND [SPACE] FOR BACKSTAB!'
-              : e.isBoss
-              ? 'BOSS PARRIED! · PRESS [SHIFT] TO DEFLECT!'
-              : 'GUARD PARRIED! · PARRY [SHIFT] OR HEAVY [RMB / K]',
-            '#ffd86b',
-            1.08
-          );
-          if (e.aiState === 'chase' || e.aiState === 'idle') {
-            e.aiState = 'windup';
-            e.windupDuration = e.isBoss ? 0.42 : 0.55;
-            e.aiTimer = e.windupDuration;
-            e.telegraphX = e.x;
-            e.telegraphY = e.y;
-            e.aimAngle = Math.atan2(p.y - e.y, p.x - e.x);
-            e.facing = p.x >= e.x ? 1 : -1;
-            e.attackKind = 'cone';
-            e.telegraphRadius = e.isBoss ? 175 : 132;
-          }
-          return;
-        }
-
-        const aspectBonuses = computeWeaponAspectBonuses(p.weapon, sim.weaponAspectRanks);
-        const relicSetRes = computeRelicSetResonance(sim.equippedGear);
-        const totalCritChance =
-          boonMods.critChance + aspectBonuses.bonusCritChance + relicSetRes.setCritBonus;
-        const isCrit =
-          isRiposteStrike ||
-          Boolean(activeFinisherSpec) ||
-          p.comboStep === 4 ||
-          isDashStrike ||
-          (totalCritChance > 0 && Math.random() < totalCritChance);
-        const bossVuln =
-          e.isBoss && (e.type === 'dundubhi' || e.type === 'vrikodara')
-            ? computeBossVulnerabilityMultiplier({
-                bossType: e.type,
-                phase: e.phase,
-                armorCracked: Boolean(e.armorCracked),
-                tuskLodgedTimer: e.tuskLodgedTimer || 0,
-                aiState: e.aiState,
-              })
-            : { damageMultiplier: 1.0, postureMultiplier: 1.0, vulnerabilityCallout: null };
-        const lodgedCastMult = 1 + (e.lodgedCasts || 0) * boonMods.castLodgedDamageBonus;
-        const styleMult = computeCombatStyleStatus(p.stylePoints).damageBonusMultiplier;
-        const finisherDmgMult = activeFinisherSpec ? activeFinisherSpec.damageMultiplier : 1.0;
-        const gladiatorBackstabMult =
-          !e.isBoss && isGladiatorOrBrute && backstab
-            ? gladiatorDef.damageMultiplier
-            : backstab
-            ? boonMods.backstabMultiplier
-            : 1.0;
-        const mult =
-          (isRiposteStrike ? 2.65 : 1.0) *
-          finisherDmgMult *
-          styleMult *
-          aspectBonuses.damageMultiplier *
-          relicSetRes.setDamageBonusMultiplier *
-          (p.transformTimer > 0 ? KALA_BHAIRAVA_DAMAGE_MULT : 1.0) *
-          (isDashStrike ? boonMods.dashStrikeMultiplier : 1.0) *
-          gladiatorBackstabMult *
-          (isCrit && p.comboStep !== 4 && !isRiposteStrike ? boonMods.critMultiplier : 1.0) *
-          (1 + boonMods.echoStrikeRatio) *
-          bossVuln.damageMultiplier *
-          lodgedCastMult;
-        const aspectProcBonus = p.comboStep === 4 ? aspectBonuses.procDamage : 0;
-        const hpLoss = Math.round(dmg.hpDamage * mult + aspectProcBonus);
-        const posLoss = Math.round(
-          (dmg.postureDamage + (isRiposteStrike ? 48 : 0)) *
-            mult *
-            (activeFinisherSpec ? activeFinisherSpec.postureMultiplier : 1.0) *
-            aspectBonuses.postureMultiplier *
-            bossVuln.postureMultiplier *
-            boonMods.postureDamageMultiplier
-        );
-
-        const kAngle = Math.atan2(e.y - p.y, e.x - p.x);
-        const kb =
-          activeFinisherSpec
-            ? activeFinisherSpec.knockbackForcePx
-            : p.comboStep === 4 || isDashStrike || isRiposteStrike
-            ? 84
-            : 32;
-
-        // Step 20: Route all damage through unified receiveHit() pipeline!
-        const hitRes = receiveHit(e, {
-          rawDamage: hpLoss,
-          postureDamage: posLoss,
-          knockbackForcePx: kb,
-          knockbackAngleRad: kAngle,
-          hitKind: activeFinisherSpec
-            ? 'finisher'
-            : isRiposteStrike
-            ? 'riposte'
-            : isDashStrike
-            ? 'dash_strike'
-            : 'light',
-          isCrit,
-          isBackstab: backstab,
-          isFinisher: Boolean(activeFinisherSpec),
-          currentCameraTrauma: sim.cameraShakeTrauma,
-        });
-
-        sim.runDamageDealt += hitRes.hpLost;
-        sim.hitstopTimer = Math.max(sim.hitstopTimer, hitRes.hitstopSec);
-        sim.cameraShakeTrauma = hitRes.clampedCameraTrauma;
-        e.scaleX = activeFinisherSpec ? 1.12 : 1.04;
-        e.scaleY = activeFinisherSpec ? 0.88 : 0.96;
-
-        // Nezha Boon: Samadhi Scorch DoT
-        if (boonMods.scorchDps > 0) {
-          e.scorchTimer = 3.0;
-        }
-
-        // Sky-Splitting Vajra Lightning ONLY when Erlang / Indra Boon is active (prevents visual noise on basic melee hits)
-        const chainDmg = boonMods.chainLightningDamage;
-        if (chainDmg > 0) {
-          let prevX = e.x;
-          let prevY = e.y - 24;
-          let bounceCount = 0;
-          sim.enemies.forEach((other) => {
-            if (other.id === e.id || other.aiState === 'ko' || bounceCount >= 3) return;
-            if (Math.hypot(other.x - e.x, other.y - e.y) <= 300) {
-              bounceCount++;
-              other.hp = Math.max(0, other.hp - chainDmg);
-              sim.runDamageDealt += chainDmg;
-              other.hitFlashTimer = 0.048;
-              sim.lightningArcs.push({
-                x1: prevX,
-                y1: prevY,
-                x2: other.x,
-                y2: other.y - 24,
-                life: 0.22,
-                maxLife: 0.22,
-                color: '#ffd86b',
-              });
-              spawnParticles(other.x, other.y - 22, 6, '#ffd86b', 165, 3.2, 80);
-              prevX = other.x;
-              prevY = other.y - 24;
+        if (p.comboStep === 3 || activeFinisherSpec?.variant === 'spin_360_cleave') {
+          sim.enemies.forEach((e) => {
+            if (e.aiState === 'ko') return;
+            const cd = Math.hypot(e.x - p.x, e.y - p.y);
+            if (cd <= 165 && cd > 28) {
+              e.x += (p.x - e.x) * (e.isBoss ? 0.14 : 0.28);
+              e.y += (p.y - e.y) * (e.isBoss ? 0.14 : 0.28);
             }
           });
         }
 
-        if (hitRes.triggeredPostureBreak) {
-          sim.runPostureBreaks += 1;
-          recordQuestEvent('shatter_posture', 1);
-          spawnShockwave(e.x, e.y, 88, '#ffd86b', 0.28);
-          spawnFloatingText(
-            e.x,
-            e.y - 68,
-            'POSTURE BROKEN! [F] EXECUTE',
-            '#ffd86b',
-            1.1
+        damagePropsNearPoint(
+          p.x + p.facing * 18,
+          p.y,
+          effectiveReach + 12,
+          activeFinisherSpec || p.comboStep === 4 || isDashStrike || isRiposteStrike ? 55 : 32
+        );
+
+        let hitAny = false;
+        sim.enemies.forEach((e) => {
+          if (e.aiState === 'ko') return;
+          const d = Math.hypot(e.x - p.x, e.y - p.y);
+          if (d <= effectiveReach + (e.isBoss ? 44 : 24) && claimEnemyHitForStrike(strike, e.id)) {
+            hitAny = true;
+            const dmg = calculateLightHitDamage({
+              comboStep: p.comboStep,
+              weapon: strikeWeapon,
+              ranks: sim.ranks,
+              isImmobilizedTarget: e.immobilizedTimer > 0,
+            });
+
+            // Step 22: Evaluate Ironmaw Gladiator front shield block (opens during windup/recovery) & Dash-behind backstab!
+            const isGladiatorOrBrute =
+              e.type === 'ironmaw_gladiator' ||
+              e.type === 'bloodmaw_brute' ||
+              e.type === 'semi_boss_bloodforge';
+            const gladiatorDef = evaluateIronmawGladiatorDefense({
+              enemyType: e.type,
+              aiState:
+                e.aiState === 'idle'
+                  ? 'chase'
+                  : e.aiState,
+              ironGuardTimer: e.parryStanceTimer,
+              postureBrokenTimer: e.postureBrokenTimer,
+              enemyFacingAngle: e.aimAngle ?? (e.facing === 1 ? 0 : Math.PI),
+              enemyX: e.x,
+              enemyY: e.y,
+              attackerX: p.x,
+              attackerY: p.y,
+            });
+            const backstab =
+              gladiatorDef.isBackstabAngle ||
+              isShadowStrikeBackstab({
+                playerX: p.x,
+                enemyX: e.x,
+                enemyFacing: e.facing,
+              });
+
+            // Smart Enemy & Boss Frontal Parry / Shield Deflection Mechanic!
+            // Ironmaw Gladiators block frontal light attacks during chase, but OPEN UP during windup & recovery!
+            const canEnemyParry =
+              !backstab &&
+              !isDashStrike &&
+              !isRiposteStrike &&
+              !activeFinisherSpec &&
+              p.comboStep < 4 &&
+              e.postureBrokenTimer <= 0 &&
+              e.immobilizedTimer <= 0 &&
+              (e.parryStanceTimer > 0 ||
+                (!e.isBoss && gladiatorDef.isFrontShieldBlocking) ||
+                (e.trait === 'vajra_shield' && e.aiState === 'chase'));
+
+            if (canEnemyParry) {
+              soundEngine.playIronBlock();
+              soundEngine.playSpell('parry');
+              e.parryStanceTimer = 0.55;
+              e.hitFlashTimer = 0.048;
+              const recoilAngle = Math.atan2(p.y - e.y, p.x - e.x);
+              p.vx += Math.cos(recoilAngle) * 190;
+              p.vy += Math.sin(recoilAngle) * 150;
+              sim.hitstopTimer = Math.max(sim.hitstopTimer, 0.042);
+              sim.cameraShakeTrauma = Math.min(MAX_CLAMPED_CAMERA_TRAUMA, sim.cameraShakeTrauma + 0.25);
+              spawnTengenClashSparks(bloodDemonArtsRef.current, (p.x + e.x) * 0.5, (p.y + e.y) * 0.5 - 22, 16, 360);
+              spawnShockwave((p.x + e.x) * 0.5, (p.y + e.y) * 0.5, 86, '#ffd86b', 0.28);
+              spawnFlipbookVfx(
+                PHASE2_VFX_SHEETS.parryAndHitSparks4x2.url,
+                (p.x + e.x) * 0.5,
+                (p.y + e.y) * 0.5 - 22,
+                124,
+                0.26,
+                recoilAngle,
+                1,
+                'screen',
+                PHASE2_VFX_SHEETS.parryAndHitSparks4x2,
+                PARRY_SPARKS_FLIPBOOK_ROWS.VEDIC_PARRY_FLASH
+              );
+              spawnParticles((p.x + e.x) * 0.5, (p.y + e.y) * 0.5 - 24, 16, '#ffd86b', 210, 4.2, 90);
+              spawnFloatingText(
+                e.x,
+                e.y - 72,
+                isGladiatorOrBrute
+                  ? 'IRONMAW SHIELD BLOCK! · DASH BEHIND [SPACE] FOR BACKSTAB!'
+                  : e.isBoss
+                  ? 'BOSS PARRIED! · PRESS [SHIFT] TO DEFLECT!'
+                  : 'GUARD PARRIED! · PARRY [SHIFT] OR HEAVY [RMB / K]',
+                '#ffd86b',
+                1.08
+              );
+              if (e.aiState === 'chase' || e.aiState === 'idle') {
+                e.aiState = 'windup';
+                e.windupDuration = e.isBoss ? 0.42 : 0.55;
+                e.aiTimer = e.windupDuration;
+                e.telegraphX = e.x;
+                e.telegraphY = e.y;
+                e.aimAngle = Math.atan2(p.y - e.y, p.x - e.x);
+                e.facing = p.x >= e.x ? 1 : -1;
+                e.attackKind = 'cone';
+                e.telegraphRadius = e.isBoss ? 175 : 132;
+              }
+              return;
+            }
+
+            const aspectBonuses = computeWeaponAspectBonuses(p.weapon, sim.weaponAspectRanks);
+            const relicSetRes = computeRelicSetResonance(sim.equippedGear);
+            const totalCritChance =
+              boonMods.critChance + aspectBonuses.bonusCritChance + relicSetRes.setCritBonus;
+            const isCrit =
+              isRiposteStrike ||
+              Boolean(activeFinisherSpec) ||
+              p.comboStep === 4 ||
+              isDashStrike ||
+              (totalCritChance > 0 && Math.random() < totalCritChance);
+            const bossVuln =
+              e.isBoss && (e.type === 'dundubhi' || e.type === 'vrikodara')
+                ? computeBossVulnerabilityMultiplier({
+                    bossType: e.type,
+                    phase: e.phase,
+                    armorCracked: Boolean(e.armorCracked),
+                    tuskLodgedTimer: e.tuskLodgedTimer || 0,
+                    aiState: e.aiState,
+                  })
+                : { damageMultiplier: 1.0, postureMultiplier: 1.0, vulnerabilityCallout: null };
+            const lodgedCastMult = 1 + (e.lodgedCasts || 0) * boonMods.castLodgedDamageBonus;
+            const styleMult = computeCombatStyleStatus(p.stylePoints).damageBonusMultiplier;
+            const finisherDmgMult = activeFinisherSpec ? activeFinisherSpec.damageMultiplier : 1.0;
+            const gladiatorBackstabMult =
+              !e.isBoss && isGladiatorOrBrute && backstab
+                ? gladiatorDef.damageMultiplier
+                : backstab
+                ? boonMods.backstabMultiplier
+                : 1.0;
+            const mult =
+              (isRiposteStrike ? 2.65 : 1.0) *
+              finisherDmgMult *
+              styleMult *
+              aspectBonuses.damageMultiplier *
+              relicSetRes.setDamageBonusMultiplier *
+              (p.transformTimer > 0 ? KALA_BHAIRAVA_DAMAGE_MULT : 1.0) *
+              (isDashStrike ? boonMods.dashStrikeMultiplier : 1.0) *
+              gladiatorBackstabMult *
+              (isCrit && p.comboStep !== 4 && !isRiposteStrike ? boonMods.critMultiplier : 1.0) *
+              (1 + boonMods.echoStrikeRatio) *
+              bossVuln.damageMultiplier *
+              lodgedCastMult;
+            const aspectProcBonus = p.comboStep === 4 ? aspectBonuses.procDamage : 0;
+            const hpLoss = Math.round(dmg.hpDamage * mult + aspectProcBonus);
+            const posLoss = Math.round(
+              (dmg.postureDamage + (isRiposteStrike ? 48 : 0)) *
+                mult *
+                (activeFinisherSpec ? activeFinisherSpec.postureMultiplier : 1.0) *
+                aspectBonuses.postureMultiplier *
+                bossVuln.postureMultiplier *
+                boonMods.postureDamageMultiplier
+            );
+
+            const kAngle = Math.atan2(e.y - p.y, e.x - p.x);
+            const kb =
+              activeFinisherSpec
+                ? activeFinisherSpec.knockbackForcePx
+                : p.comboStep === 4 || isDashStrike || isRiposteStrike
+                ? 84
+                : 32;
+
+            // Step 20: Route all damage through unified receiveHit() pipeline!
+            const hitRes = receiveHit(e, {
+              rawDamage: hpLoss,
+              postureDamage: posLoss,
+              knockbackForcePx: kb,
+              knockbackAngleRad: kAngle,
+              hitKind: activeFinisherSpec
+                ? 'finisher'
+                : isRiposteStrike
+                ? 'riposte'
+                : isDashStrike
+                ? 'dash_strike'
+                : 'light',
+              isCrit,
+              isBackstab: backstab,
+              isFinisher: Boolean(activeFinisherSpec),
+              currentCameraTrauma: sim.cameraShakeTrauma,
+            });
+
+            sim.runDamageDealt += hitRes.hpLost;
+            sim.hitstopTimer = Math.max(sim.hitstopTimer, hitRes.hitstopSec);
+            sim.cameraShakeTrauma = hitRes.clampedCameraTrauma;
+            e.scaleX = activeFinisherSpec ? 1.12 : 1.04;
+            e.scaleY = activeFinisherSpec ? 0.88 : 0.96;
+
+            // Nezha Boon: Samadhi Scorch DoT
+            if (boonMods.scorchDps > 0) {
+              e.scorchTimer = 3.0;
+            }
+
+            // Sky-Splitting Vajra Lightning ONLY when Erlang / Indra Boon is active (prevents visual noise on basic melee hits)
+            const chainDmg = boonMods.chainLightningDamage;
+            if (chainDmg > 0) {
+              let prevX = e.x;
+              let prevY = e.y - 24;
+              let bounceCount = 0;
+              sim.enemies.forEach((other) => {
+                if (other.id === e.id || other.aiState === 'ko' || bounceCount >= 3) return;
+                if (Math.hypot(other.x - e.x, other.y - e.y) <= 300) {
+                  bounceCount++;
+                  other.hp = Math.max(0, other.hp - chainDmg);
+                  sim.runDamageDealt += chainDmg;
+                  other.hitFlashTimer = 0.048;
+                  sim.lightningArcs.push({
+                    x1: prevX,
+                    y1: prevY,
+                    x2: other.x,
+                    y2: other.y - 24,
+                    life: 0.22,
+                    maxLife: 0.22,
+                    color: '#ffd86b',
+                  });
+                  spawnParticles(other.x, other.y - 22, 6, '#ffd86b', 165, 3.2, 80);
+                  prevX = other.x;
+                  prevY = other.y - 24;
+                }
+              });
+            }
+
+            if (hitRes.triggeredPostureBreak) {
+              sim.runPostureBreaks += 1;
+              recordQuestEvent('shatter_posture', 1);
+              spawnShockwave(e.x, e.y, 88, '#ffd86b', 0.28);
+              spawnFloatingText(
+                e.x,
+                e.y - 68,
+                'POSTURE BROKEN! [F] EXECUTE',
+                '#ffd86b',
+                1.1
+              );
+            }
+
+            // Accumulate Focus
+            p.focusProgress += dmg.focusDelta * (isDashStrike || isRiposteStrike ? 1.4 : 1.0);
+            while (p.focusProgress >= 1.0 && p.focusOrbs < 4) {
+              p.focusProgress -= 1.0;
+              p.focusOrbs += 1;
+            }
+            if (p.focusOrbs >= 4) p.focusProgress = 1.0;
+
+            // Directional crimson/Prana hit-splatter flipbook (cvl1pe Row 1) oriented along impact vector
+            spawnTengenClashSparks(bloodDemonArtsRef.current, e.x, e.y - 20, p.comboStep === 4 || isCrit ? 12 : 7, 300);
+            webglDemonSlayerVfxRef.current?.spawnSparkBurst({
+              x: e.x, y: e.y - 25, count: isComboFinisher ? 13 : 7, speed: 230, palette: lightSlashPalette,
+            });
+            spawnParticles(
+              e.x + Math.cos(hitRes.spray.sprayAngleRad) * 10,
+              e.y - 20,
+              hitRes.spray.sparkCount,
+              activeFinisherSpec
+                ? activeFinisherSpec.accentColor
+                : isRiposteStrike || isDashStrike
+                ? '#ffb833'
+                : '#ff9d2e',
+              hitRes.spray.speed,
+              3.6,
+              140
+            );
+            spawnParticles(
+              e.x + Math.cos(hitRes.spray.sprayAngleRad) * 12,
+              e.y - 18,
+              hitRes.spray.bloodCount,
+              '#c81928',
+              hitRes.spray.speed * 0.85,
+              3.2,
+              190
+            );
+            if (activeFinisherSpec) {
+              spawnShockwave(e.x, e.y, 118, activeFinisherSpec.accentColor, 0.32);
+              const finRow =
+                activeFinisherSpec.variant === 'spin_360_cleave'
+                  ? PARASHU_FLIPBOOK_ROWS.SPIN_360_WHIRLWIND_RING
+                  : PARASHU_FLIPBOOK_ROWS.DOWNWARD_CRUSH_FISSURE;
+              spawnFlipbookVfx(
+                PHASE2_VFX_SHEETS.parashuSlashes3x3.url,
+                e.x,
+                e.y - 18,
+                148,
+                0.28,
+                activeFinisherSpec.variant === 'impaling_lunge' ? p.slashAngle : 0,
+                activeFinisherSpec.variant === 'spin_360_cleave' ? 0.72 : 1,
+                'screen',
+                PHASE2_VFX_SHEETS.parashuSlashes3x3,
+                finRow
+              );
+            }
+            spawnFloatingText(
+              e.x,
+              e.y - 52,
+              activeFinisherSpec
+                ? `${activeFinisherSpec.title} ${hitRes.hpLost}!`
+                : isRiposteStrike
+                ? `RIPOSTE ${hitRes.hpLost}!`
+                : backstab && isGladiatorOrBrute
+                ? `BACKSTAB ${hitRes.hpLost}!`
+                : isCrit || isDashStrike
+                ? `${hitRes.hpLost}!`
+                : `${hitRes.hpLost}`,
+              activeFinisherSpec
+                ? activeFinisherSpec.accentColor
+                : isRiposteStrike
+                ? '#ffd86b'
+                : isDashStrike
+                ? '#ffb833'
+                : backstab
+                ? '#ffd86b'
+                : isCrit
+                ? '#ffd86b'
+                : '#f5ebd6',
+              activeFinisherSpec || isRiposteStrike || isDashStrike || backstab || isCrit ? 1.18 : 0.92,
+              activeFinisherSpec ? activeFinisherSpec.subtitle : undefined
+            );
+          }
+        });
+
+        if (sim.narayanastraTrial.active) {
+          sim.narayanastraTrial.escalationStacks += 1;
+          sim.narayanastraTrial.calmTimerSec = 0;
+          const penDmg = 14 * sim.narayanastraTrial.escalationStacks;
+          const susanooPen = computeSusanooDeflectOutcome(p.transformTimer, penDmg);
+          if (susanooPen.deflected) {
+            soundEngine.playSusanooDeflect();
+            spawnShockwave(p.x, p.y, 130, '#ffd46b', 0.30);
+            spawnFloatingText(p.x, p.y - 92, 'CHAKRA ARMOR DEFLECT · 0 DMG', '#ffd46b', 1.08);
+          } else {
+            p.hp = Math.max(1, p.hp - penDmg);
+            sim.cameraShakeTrauma = Math.min(MAX_CLAMPED_CAMERA_TRAUMA, sim.cameraShakeTrauma + 0.35);
+            spawnShockwave(p.x, p.y, 115, '#ff3b30', 0.28);
+            spawnFloatingText(
+              p.x,
+              p.y - 92,
+              `NARAYANASTRA ESCALATES (-${penDmg} HP)!`,
+              '#ff4d3b',
+              1.1,
+              'CEASE ATTACKING FOR 1.75s TO BOW & PASS THE TRIAL!'
+            );
+          }
+        }
+
+        if (hitAny) {
+          if (activeFinisherSpec && boonMods.finisherRageDurationSec > 0) {
+            p.finisherRageTimer = Math.max(p.finisherRageTimer, boonMods.finisherRageDurationSec);
+          }
+          gainAstraEnergy(ASTRA_ENERGY_GAINS.LIGHT_HIT);
+          soundEngine.playHit(
+            activeFinisherSpec || p.comboStep === 4 || isDashStrike || isRiposteStrike ? 'crit' : 'light'
           );
-        }
-
-        // Accumulate Focus
-        p.focusProgress += dmg.focusDelta * (isDashStrike || isRiposteStrike ? 1.4 : 1.0);
-        while (p.focusProgress >= 1.0 && p.focusOrbs < 4) {
-          p.focusProgress -= 1.0;
-          p.focusOrbs += 1;
-        }
-        if (p.focusOrbs >= 4) p.focusProgress = 1.0;
-
-        // Directional crimson/Prana hit-splatter flipbook (cvl1pe Row 1) oriented along impact vector
-        spawnTengenClashSparks(bloodDemonArtsRef.current, e.x, e.y - 20, p.comboStep === 4 || isCrit ? 12 : 7, 300);
-        spawnFlipbookVfx(
-          PHASE2_VFX_SHEETS.parryAndHitSparks4x2.url,
-          e.x,
-          e.y - 20,
-          activeFinisherSpec || isRiposteStrike ? 132 : 98,
-          0.24,
-          hitRes.spray.sprayAngleRad,
-          1,
-          'screen',
-          PHASE2_VFX_SHEETS.parryAndHitSparks4x2,
-          isRiposteStrike
-            ? PARRY_SPARKS_FLIPBOOK_ROWS.VEDIC_PARRY_FLASH
-            : PARRY_SPARKS_FLIPBOOK_ROWS.DIRECTIONAL_HIT_SPLATTER
-        );
-        spawnParticles(
-          e.x + Math.cos(hitRes.spray.sprayAngleRad) * 10,
-          e.y - 20,
-          hitRes.spray.sparkCount,
-          activeFinisherSpec
-            ? activeFinisherSpec.accentColor
-            : isRiposteStrike || isDashStrike
-            ? '#ffb833'
-            : '#ff9d2e',
-          hitRes.spray.speed,
-          3.6,
-          140
-        );
-        spawnParticles(
-          e.x + Math.cos(hitRes.spray.sprayAngleRad) * 12,
-          e.y - 18,
-          hitRes.spray.bloodCount,
-          '#c81928',
-          hitRes.spray.speed * 0.85,
-          3.2,
-          190
-        );
-        if (activeFinisherSpec) {
-          spawnShockwave(e.x, e.y, 118, activeFinisherSpec.accentColor, 0.32);
-          const finRow =
-            activeFinisherSpec.variant === 'spin_360_cleave'
-              ? PARASHU_FLIPBOOK_ROWS.SPIN_360_WHIRLWIND_RING
-              : PARASHU_FLIPBOOK_ROWS.DOWNWARD_CRUSH_FISSURE;
-          spawnFlipbookVfx(
-            PHASE2_VFX_SHEETS.parashuSlashes3x3.url,
-            e.x,
-            e.y - 18,
-            148,
-            0.28,
-            activeFinisherSpec.variant === 'impaling_lunge' ? p.slashAngle : 0,
-            activeFinisherSpec.variant === 'spin_360_cleave' ? 0.72 : 1,
-            'screen',
-            PHASE2_VFX_SHEETS.parashuSlashes3x3,
-            finRow
+          soundEngine.playSpatialMaterialFoley(
+            isRiposteStrike ? 'golden_parry' : 'flesh_cleave',
+            p.x + p.facing * 42,
+            p.y,
+            p.x,
+            p.y,
+            sim.viewportW
           );
+          if (activeFinisherSpec || p.comboStep === 4 || isDashStrike || isRiposteStrike) {
+            sim.cameraZoom = BASE_CAMERA_ZOOM + 0.028;
+          }
+          sim.comboCount += 1;
+          sim.comboResetTimer = 3.8;
+          sim.score += activeFinisherSpec || p.comboStep === 4 || isDashStrike || isRiposteStrike ? 80 : 35;
+          addStylePoints(
+            activeFinisherSpec ? 85 : isRiposteStrike ? 135 : isDashStrike ? 65 : p.comboStep === 4 ? 55 : 28
+          );
+        } else {
+          addStylePoints(10);
         }
-        spawnFloatingText(
-          e.x,
-          e.y - 52,
-          activeFinisherSpec
-            ? `${activeFinisherSpec.title} ${hitRes.hpLost}!`
-            : isRiposteStrike
-            ? `RIPOSTE ${hitRes.hpLost}!`
-            : backstab && isGladiatorOrBrute
-            ? `BACKSTAB ${hitRes.hpLost}!`
-            : isCrit || isDashStrike
-            ? `${hitRes.hpLost}!`
-            : `${hitRes.hpLost}`,
-          activeFinisherSpec
-            ? activeFinisherSpec.accentColor
-            : isRiposteStrike
-            ? '#ffd86b'
-            : isDashStrike
-            ? '#ffb833'
-            : backstab
-            ? '#ffd86b'
-            : isCrit
-            ? '#ffd86b'
-            : '#f5ebd6',
-          activeFinisherSpec || isRiposteStrike || isDashStrike || backstab || isCrit ? 1.18 : 0.92,
-          activeFinisherSpec ? activeFinisherSpec.subtitle : undefined
-        );
-      }
-    });
-
-    if (sim.narayanastraTrial.active) {
-      sim.narayanastraTrial.escalationStacks += 1;
-      sim.narayanastraTrial.calmTimerSec = 0;
-      const penDmg = 14 * sim.narayanastraTrial.escalationStacks;
-      const susanooPen = computeSusanooDeflectOutcome(p.transformTimer, penDmg);
-      if (susanooPen.deflected) {
-        soundEngine.playSusanooDeflect();
-        spawnShockwave(p.x, p.y, 130, '#ffd46b', 0.30);
-        spawnFloatingText(p.x, p.y - 92, 'CHAKRA ARMOR DEFLECT · 0 DMG', '#ffd46b', 1.08);
-      } else {
-        p.hp = Math.max(1, p.hp - penDmg);
-        sim.cameraShakeTrauma = Math.min(MAX_CLAMPED_CAMERA_TRAUMA, sim.cameraShakeTrauma + 0.35);
-        spawnShockwave(p.x, p.y, 115, '#ff3b30', 0.28);
-        spawnFloatingText(
-          p.x,
-          p.y - 92,
-          `NARAYANASTRA ESCALATES (-${penDmg} HP)!`,
-          '#ff4d3b',
-          1.1,
-          'CEASE ATTACKING FOR 1.75s TO BOW & PASS THE TRIAL!'
-        );
-      }
-    }
-
-    if (hitAny) {
-      if (activeFinisherSpec && boonMods.finisherRageDurationSec > 0) {
-        p.finisherRageTimer = Math.max(p.finisherRageTimer, boonMods.finisherRageDurationSec);
-      }
-      gainAstraEnergy(ASTRA_ENERGY_GAINS.LIGHT_HIT);
-      soundEngine.playHit(
-        activeFinisherSpec || p.comboStep === 4 || isDashStrike || isRiposteStrike ? 'crit' : 'light'
-      );
-      soundEngine.playSpatialMaterialFoley(
-        isRiposteStrike ? 'golden_parry' : 'flesh_cleave',
-        p.x + p.facing * 42,
-        p.y,
-        p.x,
-        p.y,
-        sim.viewportW
-      );
-      if (activeFinisherSpec || p.comboStep === 4 || isDashStrike || isRiposteStrike) {
-        sim.cameraZoom = BASE_CAMERA_ZOOM + 0.028;
-      }
-      sim.comboCount += 1;
-      sim.comboResetTimer = 3.8;
-      sim.score += activeFinisherSpec || p.comboStep === 4 || isDashStrike || isRiposteStrike ? 80 : 35;
-      addStylePoints(
-        activeFinisherSpec ? 85 : isRiposteStrike ? 135 : isDashStrike ? 65 : p.comboStep === 4 ? 55 : 28
-      );
-    } else {
-      addStylePoints(10);
-    }
+      },
+    };
   }, [addStylePoints, damagePropsNearPoint, gainAstraEnergy, recordQuestEvent, spawnAfterimage, spawnFlipbookVfx, spawnFloatingText, spawnParticles, spawnShockwave]);
 
   const triggerCloudStepDodge = useCallback(() => {
@@ -7508,29 +7497,24 @@ export default function KaliyugaArena() {
             }
           }
 
-          // Synchronize melee slash VFX with Rudra's physical Parashu axe cleave active frame!
-          const pendingStrike = pendingStrikeVfxRef.current;
-          if (pendingStrike && !pendingStrike.fired) {
-            const curProgress =
-              1 - Math.max(0, p.actionTimer) / Math.max(0.05, p.actionDuration || 0.34);
-            const gate = evaluateStrikeActiveFrameGate({
-              attackProgress: curProgress,
-              triggerThreshold: pendingStrike.triggerThreshold,
-              alreadyFired: pendingStrike.fired,
-            });
-            if (gate.shouldFireNow || p.actionTimer <= 0) {
-              pendingStrike.fired = true;
-              pendingStrike.execute();
-              if (isDebugMode && p.action === 'light_attack') {
-                qaRecentEventsRef.current.push({
-                  name: 'light-contact',
-                  frameTime: performance.now(),
-                  meta: p.stance,
-                  progress: curProgress,
-                });
-                if (qaRecentEventsRef.current.length > 50) qaRecentEventsRef.current.shift();
+          const strike = activeStrikeRef.current;
+          if (strike) {
+            const isMeleeAction = p.action === 'light_attack' || p.action === 'heavy_unleash';
+            if (!isMeleeAction || p.attackSerial !== strike.sync.attackSerial || p.hp <= 0 || p.hitFlashTimer > 0) {
+              abortActiveStrike();
+            } else {
+              const strikeFrame = stepActiveStrikeWindow(strike.sync, p.weaponSwingProgress);
+              if (strikeFrame.shouldStartPrimaryVfx) {
+                strike.execute();
+                if (isDebugMode && strike.sync.tier !== 'heavy') {
+                  qaRecentEventsRef.current.push({
+                    name: 'light-contact', frameTime: performance.now(),
+                    meta: strike.sync.stance, progress: p.weaponSwingProgress,
+                  });
+                  if (qaRecentEventsRef.current.length > 50) qaRecentEventsRef.current.shift();
+                }
               }
-              pendingStrikeVfxRef.current = null;
+              if (strikeFrame.shouldFinalizeTrail) activeStrikeRef.current = null;
             }
           }
 
@@ -11616,7 +11600,9 @@ export default function KaliyugaArena() {
               isHealing: coreLock.isSusanooActive ? false : p.action === 'gourd',
               isHurt: coreLock.isSusanooActive ? false : p.hitFlashTimer > 0,
               isDefeated: p.hp <= 0,
-              stance: p.stance,
+              stance: activeStrikeRef.current?.palette === 'water' || varunaInfusionTimerRef.current > 0
+                ? 'varuna'
+                : activeStrikeRef.current?.sync.stance ?? p.stance,
               focusOrbs: p.focusOrbs,
               elevationY: 0,
               stateProgress: coreLock.isSusanooActive ? undefined : rudraStateProgress,
@@ -11684,25 +11670,21 @@ export default function KaliyugaArena() {
 
             // Live 3D Parashu Blade-Trail Sampling synced directly to Rudra's actual 3D axe root & tip!
             const webglVfxLive = webglDemonSlayerVfxRef.current;
+            const liveStrike = activeStrikeRef.current;
             if (
               webglVfxLive &&
+              liveStrike &&
+              liveStrike.sync.vfxStarted &&
               coreLock.rudraIsAttacking &&
-              p.weaponSwingProgress >= 0.14 &&
-              p.weaponSwingProgress <= 0.90
+              p.hp > 0 && p.hitFlashTimer <= 0 &&
+              p.weaponSwingProgress <= liveStrike.sync.activeEnd
             ) {
-              const liveTrailKey = `rudra-live-${p.attackSerial}`;
+              const liveTrailKey = `rudra-live-${liveStrike.sync.attackSerial}`;
               if (liveBladeTrailActiveIdRef.current !== liveTrailKey) {
                 if (liveBladeTrailActiveIdRef.current) {
                   webglVfxLive.endBladeTrail(liveBladeTrailActiveIdRef.current, false);
                 }
-                const livePalette: DemonSlayerVfxPalette =
-                  varunaInfusionTimerRef.current > 0
-                    ? 'water'
-                    : p.stance === 'pillar'
-                    ? 'wind'
-                    : p.stance === 'thrust'
-                    ? 'thunder'
-                    : 'hinokami';
+                const livePalette = liveStrike.palette;
                 webglVfxLive.beginBladeTrail(liveTrailKey, {
                   palette: livePalette,
                   widthBoostPx: livePalette === 'water' ? 13 : livePalette === 'wind' ? 16 : 7,
@@ -12540,6 +12522,7 @@ export default function KaliyugaArena() {
     gainAstraEnergy,
     loadChamber,
     recordQuestEvent,
+    abortActiveStrike,
     showPerfectParry,
     spawnAfterimage,
     spawnFloatingText,

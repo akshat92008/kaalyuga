@@ -33,6 +33,25 @@ async function main() {
     await page.mouse.move(900, 510);
     await capture('arena-baseline');
 
+    const cancelled = await page.evaluate(() => {
+      window.__kaliyugaPhaseQAFixture.prepareStrikeTarget();
+      const before = window.__kaliyugaPhaseQA.damageDealt;
+      const key = (code) => {
+        window.dispatchEvent(new KeyboardEvent('keydown', { code, bubbles: true }));
+        window.dispatchEvent(new KeyboardEvent('keyup', { code, bubbles: true }));
+      };
+      key('KeyJ');
+      const afterInput = window.__kaliyugaPhaseQA.damageDealt;
+      key('Space');
+      return { before, afterInput, action: window.__kaliyugaPhaseQA.action };
+    });
+    await page.waitForTimeout(140);
+    const afterDodge = await page.evaluate(() => window.__kaliyugaPhaseQA.damageDealt);
+    if (cancelled.before !== cancelled.afterInput || cancelled.before !== afterDodge || cancelled.action !== 'dodge') {
+      throw Error('Cancelling light startup committed damage or failed to dodge: ' + JSON.stringify(cancelled));
+    }
+    await capture('light-startup-dodge-cancel');
+
     for (const [element, stance, astra] of [
       ['agni', 'Digit1', 'KeyQ'],
       ['vayu', 'Digit2', 'KeyE'],
