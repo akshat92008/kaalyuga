@@ -24,7 +24,8 @@ async function main() {
     await press(stance);
   }
   try {
-    await page.goto('http://127.0.0.1:3100/?debug=1&qaFixtures=1&chamber=1');
+    await page.goto('http://127.0.0.1:3100/?debug=1&qaFixtures=1&chamber=1',
+      { waitUntil: 'domcontentloaded', timeout: 90000 });
     await page.waitForFunction(() => window.__kaliyugaPhaseQA?.state === 'playing' &&
       window.__kaliyugaPhaseQA?.rudra3dReady && window.__kaliyugaPhaseQAFixture,
     undefined, { timeout: 90000 });

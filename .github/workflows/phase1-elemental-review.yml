@@ -30,12 +30,19 @@ jobs:
       - name: Capture rendered effects from the game
         run: |
           mkdir -p phase1-captures
-          npm run dev -- --hostname 127.0.0.1 --port 3100 >phase1-captures/server.log 2>&1 &
+          ln -s "$PWD/public" .next/standalone/public
+          ln -s "$PWD/.next/static" .next/standalone/.next/static
+          HOSTNAME=127.0.0.1 PORT=3100 node .next/standalone/server.js >phase1-captures/server.log 2>&1 &
           for attempt in $(seq 1 60); do
             if curl -fsS http://127.0.0.1:3100/ >/dev/null; then break; fi
             sleep 2
           done
           node scripts/qa/capture_phase1_elementals.cjs
+      - name: Record a compact frame index for visual review
+        if: always()
+        run: |
+          python3 -m pip install --quiet Pillow
+          python3 scripts/qa/index_phase1_frames.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
