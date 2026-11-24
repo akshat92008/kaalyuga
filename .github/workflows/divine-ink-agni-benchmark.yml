@@ -1,0 +1,42 @@
+name: Divine Ink Agni gameplay benchmark
+on:
+  push:
+    branches: [feature/divine-ink-agni-benchmark-20261124]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  capture:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --legacy-peer-deps --no-audit --no-fund
+      - run: node --import tsx --test lib/game/bladeTrailSampler.test.ts lib/game/webglDemonSlayerVfx.test.ts
+      - run: npm run build
+      - run: npm install --no-save --legacy-peer-deps --no-audit --no-fund playwright@1.58.2
+      - run: npx playwright install chromium
+      - name: Capture actual baseline and Divine Ink attacks
+        run: |
+          mkdir -p divine-ink-captures
+          ln -s "$PWD/public" .next/standalone/public
+          ln -s "$PWD/.next/static" .next/standalone/.next/static
+          HOSTNAME=127.0.0.1 PORT=3100 node .next/standalone/server.js >divine-ink-captures/server.log 2>&1 &
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3100/ >/dev/null; then break; fi
+            sleep 2
+          done
+          node scripts/qa/capture_divine_ink_agni.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: divine-ink-agni-gameplay
+          path: divine-ink-captures
+          if-no-files-found: warn
