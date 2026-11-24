@@ -25,6 +25,7 @@ import {
 } from './kalaBhairavaSusanoo';
 import { resolveWeaponSwingClipProgress, type BakedBladePose } from './bladeTrailSampler';
 import type { WeaponId } from './rules';
+import { mountRudraAlternateWeapons, type RudraWeaponSocket } from './rudraWeaponModels';
 
 export type RudraAnimState =
   | 'idle'
@@ -61,6 +62,7 @@ export interface RudraRenderInput {
   stateProgress?: number;
   finisherVariant?: 'downward_crush' | 'spin_360_cleave' | 'impaling_lunge' | null;
   attackSerial?: number;
+  weapon?: WeaponId;
   weaponSwing?: {
     weapon: WeaponId;
     activeStart: number;
@@ -311,6 +313,9 @@ export class Rudra3DRenderer {
     valid: false,
   };
   private trailSeeds: { serial: number; samples: { progress: number; pose: BakedBladePose }[] } | null = null;
+  private weaponSockets: Partial<Record<WeaponId, RudraWeaponSocket>> = {};
+  private activeWeapon: WeaponId | null = null;
+  private alternateWeaponMaterials: THREE.Material[] = [];
   private bladeRootAnchor: THREE.Object3D | null = null;
   private bladeTipAnchor: THREE.Object3D | null = null;
   private torsoDepthAnchor: THREE.Object3D | null = null;
@@ -324,6 +329,30 @@ export class Rudra3DRenderer {
   private prewarmQueue: Array<() => void> = [];
   private prewarmTimer: number | null = null;
   public readonly footAnchorRatio: number;
+
+  public getActiveWeaponModel(): WeaponId | null {
+    return this.activeWeapon;
+  }
+
+  private showWeapon(weapon: WeaponId): void {
+    const next = this.weaponSockets[weapon] ?? this.weaponSockets.parashu;
+    const id = this.weaponSockets[weapon] ? weapon : next ? 'parashu' : null;
+    if (id === this.activeWeapon) return;
+    if (this.activeWeapon) {
+      const previous = this.weaponSockets[this.activeWeapon];
+      if (previous) {
+        previous.group.visible = false;
+        if (previous.offHand) previous.offHand.visible = false;
+      }
+    }
+    this.activeWeapon = id;
+    this.bladeRootAnchor = next?.root ?? null;
+    this.bladeTipAnchor = next?.tip ?? null;
+    if (next) {
+      next.group.visible = true;
+      if (next.offHand) next.offHand.visible = true;
+    }
+  }
 
   public getLatestBladePose(): BakedBladePose {
     return this.latestBladePose;
@@ -510,8 +539,8 @@ export class Rudra3DRenderer {
           const bladeTip = new THREE.Object3D();
           bladeTip.position.set(0.76 * wepLocalLen, 0, 0);
           weaponSocket.add(bladeRoot, bladeTip);
-          this.bladeRootAnchor = bladeRoot;
-          this.bladeTipAnchor = bladeTip;
+          this.weaponSockets.parashu = { group: weaponSocket, root: bladeRoot, tip: bladeTip };
+          weaponSocket.visible = false;
 
           // Subtle golden-amber blade edge accent around the Parashu axe head
           const flameSheath = createParashuFlameSheathGroup(wepLocalLen);
@@ -530,6 +559,15 @@ export class Rudra3DRenderer {
           emissiveStrength: 0.24,
           outlineRatio: 0.0048,
         });
+
+        if (rightHand) {
+          const leftHand = baseGroup.getObjectByName('mixamorigLeftHand') ?? baseGroup.getObjectByName('LeftHand');
+          const { khanda, trishula, materials } = mountRudraAlternateWeapons(rightHand, leftHand);
+          this.weaponSockets.khanda_dual = khanda;
+          this.weaponSockets.trishula_great = trishula;
+          this.alternateWeaponMaterials = materials;
+          this.celMaterials.push(...materials);
+        }
 
         const torsoAnchor = new THREE.Object3D();
         torsoAnchor.position.set(0, 0.84, 0);
@@ -730,6 +768,8 @@ export class Rudra3DRenderer {
         : Math.atan2(input.facingY || 0, input.facingX || 1);
 
     const window = input.weaponSwing;
+    const weapon = window?.weapon ?? input.weapon ?? 'parashu';
+    this.showWeapon(weapon);
     const serial = input.attackSerial;
     if (window && serial !== undefined && this.trailSeeds?.serial !== serial &&
         input.attackProgress >= window.activeStart && input.attackProgress <= window.activeEnd) {
@@ -751,7 +791,8 @@ export class Rudra3DRenderer {
       facingAngle,
       input.isHurt,
       input.stance,
-      Boolean(input.susanooActive)
+      Boolean(input.susanooActive),
+      weapon,
     );
     if (baked) {
       if (this.blendDurationSec > 0 && this.blendFromCanvas && this.blendOutCanvas) {
@@ -785,10 +826,12 @@ export class Rudra3DRenderer {
     facingAngleRad: number,
     hitFlash = false,
     stance = 'smash',
-    susanooActive = false
+    susanooActive = false,
+    weapon: WeaponId = 'parashu',
   ): HTMLCanvasElement | null {
     if (!this.isReady || !this.model || !this.mixer) return null;
 
+    this.showWeapon(weapon);
     const isSoft = isSoftwareWebGLRenderer();
     const { index: yawIndex, angle: quantizedYaw } = quantizeRudraYaw(facingAngleRad, isSoft);
 
@@ -819,7 +862,7 @@ export class Rudra3DRenderer {
         ? stance
         : 'base';
     const flashTag = hitFlash ? 'flash' : 'norm';
-    const cacheKey = `rudra:${state}:${stanceTag}:y${yawIndex}:f${stepIndex}:${flashTag}`;
+    const cacheKey = `rudra:${state}:${stanceTag}:y${yawIndex}:f${stepIndex}:${flashTag}:${this.activeWeapon ?? 'unarmed'}`;
 
     const cached = this.frameCache.get(cacheKey);
     if (cached) {
@@ -1007,6 +1050,15 @@ export class Rudra3DRenderer {
       window.clearTimeout(this.prewarmTimer);
       this.prewarmTimer = null;
     }
+    for (const weapon of [this.weaponSockets.khanda_dual, this.weaponSockets.trishula_great]) {
+      for (const group of [weapon?.group, weapon?.offHand]) {
+        group?.traverse((node) => {
+          if (node instanceof THREE.Mesh) node.geometry.dispose();
+        });
+      }
+    }
+    for (const material of this.alternateWeaponMaterials) material.dispose();
+    this.alternateWeaponMaterials = [];
     this.frameCache.clear();
     this.bladePoseCache.clear();
   }

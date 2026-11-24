@@ -79,12 +79,15 @@ async function main() {
                 Number.isFinite(event.contactX) && Number.isFinite(event.contactY)
               );
           }, { weapon, attack, previous }, { polling: 50, timeout: 45000 });
-          const impact = await page.evaluate(() => window.__kaliyugaPhaseQA.combatImpact);
-          combatPresentation.push({ viewport: page.viewportSize(), weapon, attack, impact });
+          const { combatImpact: impact, weaponModel } = await page.evaluate(() => {
+            const { combatImpact, weaponModel } = window.__kaliyugaPhaseQA;
+            return { combatImpact, weaponModel };
+          });
+          combatPresentation.push({ viewport: page.viewportSize(), weapon, weaponModel, attack, impact });
           const expected = attack === 'light' ? 'light_hit' : 'heavy_hit';
-          if (impact.reactCount < 1 ||
+          if (weaponModel !== weapon || impact.reactCount < 1 ||
               ![expected, 'heavy_hit', 'posture_break'].includes(impact.kind)) {
-            captureFailures.push({ weapon, attack, impact });
+            captureFailures.push({ weapon, weaponModel, attack, impact });
           }
           await capture(`${prefix}-${weapon}-${attack}`);
         } finally {

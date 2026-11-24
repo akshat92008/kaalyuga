@@ -1264,6 +1264,7 @@ export default function KaliyugaArena() {
           webglVfxReady: Boolean(webglDemonSlayerVfxRef.current),
           vfxTelemetry: webglDemonSlayerVfxRef.current?.getTelemetry() ?? null,
           bladePose: rudra3dRef.current?.getLatestBladePose() ?? null,
+          weaponModel: rudra3dRef.current?.getActiveWeaponModel() ?? null,
           varunaInfusionRemaining: varunaInfusionTimerRef.current,
           activeStrike: activeStrikeRef.current
             ? {
@@ -11677,6 +11678,7 @@ export default function KaliyugaArena() {
               stateProgress: coreLock.isSusanooActive ? undefined : rudraStateProgress,
               finisherVariant: p.finisherVariant,
               attackSerial: coreLock.isSusanooActive ? 0 : p.attackSerial,
+              weapon: p.weapon,
               weaponSwing: liveStrike && liveStrike.sync.attackSerial === p.attackSerial &&
                 rudraIsSwinging ? {
                   weapon: liveStrike.weapon,

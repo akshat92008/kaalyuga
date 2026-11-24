@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import * as THREE from 'three';
+import { mountRudraAlternateWeapons } from './rudraWeaponModels';
 import { resolveRudraDesiredState } from './rudra3dRenderer';
 import {
   ArenaBladeSample,
@@ -218,4 +220,21 @@ test('weapon anticipation and follow-through preserve the foot pivot and transfo
   assert.ok(Math.abs(transformed.tipX - 50) < 1e-10);
   assert.equal(transformed.tipY, 120);
   assert.equal(transformed.bladeLengthPx, 60);
+});
+
+test('Khanda and Trishula mount distinct cutting edges in Rudra’s normalized rig', () => {
+  const right = new THREE.Group();
+  const left = new THREE.Group();
+  right.scale.setScalar(0.012);
+  left.scale.setScalar(0.012);
+  const { khanda, trishula } = mountRudraAlternateWeapons(right, left);
+  assert.equal(khanda.group.parent, right);
+  assert.equal(khanda.offHand?.parent, left);
+  assert.equal(trishula.group.parent, right);
+  const world = new THREE.Vector3();
+  assert.ok(Math.abs(khanda.tip.getWorldPosition(world).x - 0.88) < 1e-6);
+  assert.ok(Math.abs(trishula.tip.getWorldPosition(world).x - 1.34) < 1e-6);
+  assert.ok(trishula.root.getWorldPosition(world).x > khanda.root.getWorldPosition(new THREE.Vector3()).x);
+  assert.ok(trishula.group.children.filter(node => node instanceof THREE.Mesh).length >
+    khanda.group.children.filter(node => node instanceof THREE.Mesh).length);
 });
