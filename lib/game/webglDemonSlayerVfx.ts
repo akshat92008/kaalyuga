@@ -460,8 +460,9 @@ const RIBBON_FRAGMENT_SHADER = /* glsl */ `
     float u = vUv.x;
     float v = vUv.y;
     // Experimental source artwork on the existing swept weapon mesh. Never create a separate ring.
-    if (uDivineInkEnabled > 0.5 && uLiveBladeTrail > 0.5 && uMode < 0.5) {
-      float frame = clamp(floor(max(0.0, uTime - uDivineInkStart) * 30.0), 0.0, 11.0);
+    if (uDivineInkEnabled > 0.5 && uMode < 0.5) {
+      float live = step(0.5, uLiveBladeTrail);
+      float frame = clamp(floor(mix(uLife * 12.0, max(0.0, uTime - uDivineInkStart) * 30.0, live)), 0.0, 11.0);
       float col = mod(frame, 4.0);
       float row = floor(frame / 4.0);
       // Atlas: 4 x 3 cells, 508 x 128 content, two transparent pixels of padding.
@@ -469,7 +470,10 @@ const RIBBON_FRAGMENT_SHADER = /* glsl */ `
         row * 132.0 + 2.5 + (1.0 - clamp(v, 0.0, 1.0)) * 127.0);
       vec4 art = texture2D(uDivineInkAtlas, vec2(px.x / 2048.0, 1.0 - px.y / 396.0));
       float taper = smoothstep(0.0, 0.16, u) * (1.0 - smoothstep(0.97, 1.0, u));
-      float alpha = art.a * taper * (1.0 - smoothstep(0.0, 1.0, uLife)) * uOpacity;
+      // A release reveals along the mesh before dissolving; a live trail is already motion-revealed.
+      float reveal = mix(1.0 - smoothstep(0.0, 0.14, u - mix(0.30, 1.12, smoothstep(0.0, 0.22, uLife))), 1.0, live);
+      float fade = 1.0 - smoothstep(mix(0.30, 0.0, live), 1.0, uLife);
+      float alpha = art.a * taper * reveal * fade * uOpacity;
       gl_FragColor = vec4(art.rgb * alpha, alpha);
       return;
     }
@@ -1948,7 +1952,14 @@ export class WebglDemonSlayerVfxOverlay {
       coreMat.uniforms.uCrestStyle.value = 3;
       glowMesh.visible = false;
     }
-    if (opts.painterlyAgni) {
+    const useDivineInk = Boolean(this.divineInkAtlas && opts.painterlyAgni && mode === 0);
+    if (useDivineInk) {
+      coreMat.uniforms.uDivineInkAtlas.value = this.divineInkAtlas;
+      coreMat.uniforms.uDivineInkEnabled.value = 1;
+      coreMat.uniforms.uDivineInkStart.value = this.elapsed;
+      // Do not stack the legacy optical flame silhouette on top of the authored artwork.
+      glowMesh.visible = false;
+    } else if (opts.painterlyAgni) {
       coreMat.uniforms.uAgniPass.value = 1;
       glowMat.uniforms.uAgniPass.value = 2;
       glowMat.uniforms.uOpacity.value = 0.88;
@@ -1974,7 +1985,11 @@ export class WebglDemonSlayerVfxOverlay {
         uvRepeat,
         scrollSpeed
       );
-      if (opts.painterlyAgni) backMat.uniforms.uAgniPass.value = 1;
+      if (useDivineInk) {
+        backMat.uniforms.uDivineInkAtlas.value = this.divineInkAtlas;
+        backMat.uniforms.uDivineInkEnabled.value = 1;
+        backMat.uniforms.uDivineInkStart.value = this.elapsed;
+      } else if (opts.painterlyAgni) backMat.uniforms.uAgniPass.value = 1;
       backMesh = new THREE.Mesh(backGeo, backMat);
       backGroup = new THREE.Group();
       backGroup.add(backMesh);
@@ -3447,6 +3462,10 @@ export class WebglDemonSlayerVfxOverlay {
       r.backGroup.position.set(toScreenX(r.worldX), toScreenY(r.worldY), -8);
       r.backGroup.scale.set(s, s, s);
       r.backGroup.rotation.set(r.tiltX, r.tiltY, r.baseRotZ - r.spinRate * r.life);
+      if (r.backMesh) {
+        r.backMesh.material.uniforms.uTime.value = this.elapsed;
+        r.backMesh.material.uniforms.uLife.value = norm;
+      }
     }
 
     for (let i = 0; i < this.solarWheels.length; i++) {
