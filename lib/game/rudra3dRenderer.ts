@@ -272,6 +272,14 @@ const RUDRA_ANIM_URLS: Record<RudraAnimState, string> = {
   hurt: '/animations/pro_melee_axe/standing react large from left.fbx',
 };
 
+function quantizeRudraYaw(yaw: number, software: boolean): { index: number; angle: number } {
+  const buckets = software ? 6 : 12;
+  const fullTurn = Math.PI * 2;
+  const normalized = ((yaw % fullTurn) + fullTurn) % fullTurn;
+  const index = Math.round((normalized / fullTurn) * buckets) % buckets;
+  return { index, angle: index * fullTurn / buckets };
+}
+
 export class Rudra3DRenderer {
   private readonly size: number;
   private scene: THREE.Scene;
@@ -302,6 +310,7 @@ export class Rudra3DRenderer {
     depthZ: 0.12,
     valid: false,
   };
+  private trailSeed: { serial: number; progress: number; pose: BakedBladePose } | null = null;
   private bladeRootAnchor: THREE.Object3D | null = null;
   private bladeTipAnchor: THREE.Object3D | null = null;
   private torsoDepthAnchor: THREE.Object3D | null = null;
@@ -318,6 +327,10 @@ export class Rudra3DRenderer {
 
   public getLatestBladePose(): BakedBladePose {
     return this.latestBladePose;
+  }
+
+  public getBladeTrailSeed(serial: number): { progress: number; pose: BakedBladePose } | null {
+    return this.trailSeed?.serial === serial ? this.trailSeed : null;
   }
 
   constructor(size = 256) {
@@ -716,6 +729,17 @@ export class Rudra3DRenderer {
         ? input.slashAngle
         : Math.atan2(input.facingY || 0, input.facingX || 1);
 
+    const window = input.weaponSwing;
+    const serial = input.attackSerial;
+    if (window && serial !== undefined && this.trailSeed?.serial !== serial &&
+        input.attackProgress >= window.activeStart && input.attackProgress <= window.activeEnd) {
+      const seedProgress = Math.max(window.activeStart - 0.14, input.attackProgress - 0.16);
+      const seed = resolveRudraAnimStateAndClock({ ...input, attackProgress: seedProgress },
+        this.stateElapsedSec, this.elapsedSec, this.actions);
+      const pose = this.sampleSwingPose(seed.state, seed.animClock, facingAngle);
+      if (pose?.valid) this.trailSeed = { serial, progress: seedProgress, pose };
+    }
+
     const baked = this.renderFrame(
       state,
       animClock,
@@ -761,10 +785,7 @@ export class Rudra3DRenderer {
     if (!this.isReady || !this.model || !this.mixer) return null;
 
     const isSoft = isSoftwareWebGLRenderer();
-    const yawBuckets = isSoft ? 6 : 12;
-    const normalizedYaw = ((facingAngleRad % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
-    const yawIndex = Math.round((normalizedYaw / (Math.PI * 2)) * yawBuckets) % yawBuckets;
-    const quantizedYaw = (yawIndex / yawBuckets) * Math.PI * 2;
+    const { index: yawIndex, angle: quantizedYaw } = quantizeRudraYaw(facingAngleRad, isSoft);
 
     const isAttack =
       state === 'attack1' ||
@@ -881,41 +902,7 @@ export class Rudra3DRenderer {
     this.wrapper.rotation.y = Math.PI * 0.5 - quantizedYaw;
     this.wrapper.rotation.x = 0;
 
-    // Project real 3D Parashu root/tip + camera-space depthZ before rendering baked frame
-    this.scene.updateMatrixWorld(true);
-    this.camera.updateMatrixWorld(true);
-    let bakedPose: BakedBladePose = {
-      rootU: 0.5,
-      rootV: 0.48,
-      tipU: 0.72,
-      tipV: 0.42,
-      depthZ: 0.12,
-      valid: false,
-    };
-    if (this.bladeRootAnchor && this.bladeTipAnchor && this.torsoDepthAnchor) {
-      this.bladeRootAnchor.getWorldPosition(this._vRoot);
-      this.bladeTipAnchor.getWorldPosition(this._vTip);
-      this.torsoDepthAnchor.getWorldPosition(this._vTorso);
-
-      // Compute camera-space Z relative to Rudra's torso (+Z = closer to camera = IN FRONT of Rudra)
-      const invCam = this.camera.matrixWorldInverse;
-      const rootCamZ = this._vRoot.clone().applyMatrix4(invCam).z;
-      const tipCamZ = this._vTip.clone().applyMatrix4(invCam).z;
-      const torsoCamZ = this._vTorso.clone().applyMatrix4(invCam).z;
-      const depthZ = (rootCamZ + tipCamZ) * 0.5 - torsoCamZ;
-
-      this._vRoot.project(this.camera);
-      this._vTip.project(this.camera);
-
-      bakedPose = {
-        rootU: Math.max(-0.25, Math.min(1.25, this._vRoot.x * 0.5 + 0.5)),
-        rootV: Math.max(-0.25, Math.min(1.25, 0.5 - this._vRoot.y * 0.5)),
-        tipU: Math.max(-0.25, Math.min(1.25, this._vTip.x * 0.5 + 0.5)),
-        tipV: Math.max(-0.25, Math.min(1.25, 0.5 - this._vTip.y * 0.5)),
-        depthZ,
-        valid: true,
-      };
-    }
+    const bakedPose = this.projectBladePose();
 
     renderer.render(this.scene, this.camera);
 
@@ -952,6 +939,60 @@ export class Rudra3DRenderer {
     this.latestBladePose = bakedPose;
 
     return baked;
+  }
+
+  private sampleSwingPose(state: RudraAnimState, clock: number, angle: number): BakedBladePose | null {
+    const action = this.actions[state];
+    if (!action || !this.mixer || !this.bladeTipAnchor) return null;
+    const software = isSoftwareWebGLRenderer();
+    const { timeSec } = computeRudraBakedFrameTime(clock, Math.max(0.32, action.getClip().duration),
+      software ? 12 : 24, true, true);
+    this.mixer.stopAllAction();
+    action.reset().play();
+    this.mixer.setTime(timeSec);
+    this.wrapper.rotation.y = Math.PI * 0.5 - quantizeRudraYaw(angle, software).angle;
+    this.wrapper.rotation.x = 0;
+    return this.projectBladePose();
+  }
+
+  private projectBladePose(): BakedBladePose {
+    // Project real 3D Parashu root/tip + camera-space depthZ before rendering baked frame
+    this.scene.updateMatrixWorld(true);
+    this.camera.updateMatrixWorld(true);
+    let bakedPose: BakedBladePose = {
+      rootU: 0.5,
+      rootV: 0.48,
+      tipU: 0.72,
+      tipV: 0.42,
+      depthZ: 0.12,
+      valid: false,
+    };
+    if (this.bladeRootAnchor && this.bladeTipAnchor && this.torsoDepthAnchor) {
+      this.bladeRootAnchor.getWorldPosition(this._vRoot);
+      this.bladeTipAnchor.getWorldPosition(this._vTip);
+      this.torsoDepthAnchor.getWorldPosition(this._vTorso);
+
+      // Compute camera-space Z relative to Rudra's torso (+Z = closer to camera = IN FRONT of Rudra)
+      const invCam = this.camera.matrixWorldInverse;
+      const rootCamZ = this._vRoot.clone().applyMatrix4(invCam).z;
+      const tipCamZ = this._vTip.clone().applyMatrix4(invCam).z;
+      const torsoCamZ = this._vTorso.clone().applyMatrix4(invCam).z;
+      const depthZ = (rootCamZ + tipCamZ) * 0.5 - torsoCamZ;
+
+      this._vRoot.project(this.camera);
+      this._vTip.project(this.camera);
+
+      bakedPose = {
+        rootU: Math.max(-0.25, Math.min(1.25, this._vRoot.x * 0.5 + 0.5)),
+        rootV: Math.max(-0.25, Math.min(1.25, 0.5 - this._vRoot.y * 0.5)),
+        tipU: Math.max(-0.25, Math.min(1.25, this._vTip.x * 0.5 + 0.5)),
+        tipV: Math.max(-0.25, Math.min(1.25, 0.5 - this._vTip.y * 0.5)),
+        depthZ,
+        valid: true,
+      };
+    }
+
+    return bakedPose;
   }
 
   public dispose(): void {

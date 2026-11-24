@@ -77,10 +77,11 @@ async function main() {
             event.name === 'weapon-blade-sample' && event.meta === weapon && event.frameTime > previous
           ).map(({ progress, contactX, contactY }) => ({ progress, contactX, contactY })), { weapon, previous });
         weaponMotion.push({ weapon, attack, samples });
-        if (attack === 'heavy' && weapon !== 'khanda_dual' &&
+        const usesBladeTrail = attack === 'light' || weapon !== 'khanda_dual';
+        if (usesBladeTrail &&
             (samples.length < 2 || !samples.some((pose) =>
               Math.hypot(pose.contactX - samples[0].contactX, pose.contactY - samples[0].contactY) > 4))) {
-          throw Error(`No blade follow-through sampled for ${weapon}: ${JSON.stringify(samples)}`);
+          throw Error(`No blade follow-through sampled for ${weapon} ${attack}: ${JSON.stringify(samples)}`);
         }
       }
     }

@@ -239,6 +239,7 @@ import {
   WEAPON_SWING_MOTION,
   cancelActiveStrike,
   claimEnemyHitForStrike,
+  classifyBladeTrailStep,
   createActiveStrikeState,
   stepActiveStrikeWindow,
   projectBakedBladePoseToArena,
@@ -11752,6 +11753,16 @@ export default function KaliyugaArena() {
             const sample = traceBlade ? currentBladeSample() : null;
             if (sample && webglVfxLive && liveStrike && sync?.vfxStarted) {
               const liveTrailKey = `rudra-live-${sync.attackSerial}`;
+              const submitBladeSample = (pose: ArenaBladeSample) => {
+                if (!webglVfxLive.pushBladeTrailSample(liveTrailKey, pose) || !isDebugMode) return;
+                debugBladeSamplesRef.current.push(pose);
+                if (debugBladeSamplesRef.current.length > 24) debugBladeSamplesRef.current.shift();
+                qaRecentEventsRef.current.push({
+                  name: 'weapon-blade-sample', meta: liveStrike.weapon, frameTime: performance.now(),
+                  progress: pose.progress, contactX: pose.tipX, contactY: pose.tipY,
+                });
+                if (qaRecentEventsRef.current.length > 50) qaRecentEventsRef.current.shift();
+              };
               if (liveBladeTrailActiveIdRef.current !== liveTrailKey) {
                 if (liveBladeTrailActiveIdRef.current) {
                   webglVfxLive.endBladeTrail(liveBladeTrailActiveIdRef.current, false);
@@ -11764,19 +11775,18 @@ export default function KaliyugaArena() {
                   opacity: sync.tier === 'heavy' ? 0.78 : 0.98,
                 });
                 liveBladeTrailActiveIdRef.current = liveTrailKey;
-                if (previous?.serial === sync.attackSerial && previous.sample.progress < sample.progress) {
-                  webglVfxLive.pushBladeTrailSample(liveTrailKey, previous.sample);
+                const previousSample = previous?.serial === sync.attackSerial ? previous.sample : null;
+                const bakedSeed = rudra3d.getBladeTrailSeed(sync.attackSerial);
+                const seed = previousSample && previousSample.progress < sample.progress &&
+                  classifyBladeTrailStep(previousSample, sample) === 'sweep' ? previousSample
+                  : bakedSeed && projectBakedBladePoseToArena(bakedSeed.pose, rudraSpriteRectRef.current, {
+                      playerX: p.x, playerY: p.y, slashAngle: p.slashAngle, progress: bakedSeed.progress,
+                    });
+                if (seed && seed.progress < sample.progress && classifyBladeTrailStep(seed, sample) === 'sweep') {
+                  submitBladeSample(seed);
                 }
               }
-              if (webglVfxLive.pushBladeTrailSample(liveTrailKey, sample) && isDebugMode) {
-                debugBladeSamplesRef.current.push(sample);
-                if (debugBladeSamplesRef.current.length > 24) debugBladeSamplesRef.current.shift();
-                qaRecentEventsRef.current.push({
-                  name: 'weapon-blade-sample', meta: liveStrike.weapon, frameTime: performance.now(),
-                  progress: sample.progress, contactX: sample.tipX, contactY: sample.tipY,
-                });
-                if (qaRecentEventsRef.current.length > 50) qaRecentEventsRef.current.shift();
-              }
+              submitBladeSample(sample);
             } else if (liveBladeTrailActiveIdRef.current && webglVfxLive) {
               webglVfxLive.endBladeTrail(liveBladeTrailActiveIdRef.current, false);
               liveBladeTrailActiveIdRef.current = null;
