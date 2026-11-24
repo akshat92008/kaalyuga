@@ -6,7 +6,10 @@
  * No gameplay damage, scoring, i-frames or cutscene state is owned here.
  */
 import type { ParashuFinisherVariant } from './combatPipeline';
-import type { HeavyEffectSink } from './elementalImpactDirector';
+import type { WebglDemonSlayerVfxOverlay } from './webglDemonSlayerVfx';
+
+export type ExecutionEffectSink = Pick<WebglDemonSlayerVfxOverlay,
+  'spawnSlashRibbon' | 'spawnWindGaleSweep' | 'spawnThunderZigzag' | 'spawnClashStarburst' | 'spawnSparkBurst'>;
 
 export interface ExecutionImpactSignature {
   palette: 'hinokami' | 'wind' | 'thunder';
@@ -29,7 +32,7 @@ export function executionImpactSignature(
 }
 
 export function spawnExecutionImpactFx(
-  fx: HeavyEffectSink | null | undefined,
+  fx: ExecutionEffectSink | null | undefined,
   variant: ParashuFinisherVariant,
   x: number,
   y: number,
@@ -44,27 +47,16 @@ export function spawnExecutionImpactFx(
 
   switch (variant) {
     case 'downward_crush':
-      // Compressed overhead guillotine: a narrow blade-plane slash followed
-      // by a hot ground ring, not the former wall of overlapping ribbons.
       fx.spawnSlashRibbon({
         x: cx, y: cy - 24, angle: direction, radius: strikeRadius,
-        width: 42, arcSpan: 1.58, direction: 1,
-        palette, duration: 0.38, tiltX: 0.52,
-      });
-      fx.spawnShockwaveRing({
-        x: cx, y: cy, radius: 123, palette, duration: 0.36,
+        width: 49, arcSpan: 1.68, direction: 1,
+        palette, duration: 0.38, tiltX: 0.46, openStrike: true,
       });
       break;
     case 'spin_360_cleave':
-      // Circular emerald gale distinguishes the crowd-control execution.
-      fx.spawnWindGaleCrescents({
+      fx.spawnWindGaleSweep({
         x: cx, y: cy - 19, angle: direction,
-        radius: strikeRadius, duration,
-      });
-      fx.spawnSlashRibbon({
-        x: cx, y: cy - 22, angle: direction, radius: 158,
-        width: 32, arcSpan: 3.7, direction: -1,
-        palette: 'sun', duration: 0.43, tiltX: 0.57,
+        radius: strikeRadius, duration, fromBlade: true,
       });
       break;
     case 'impaling_lunge':
@@ -75,10 +67,10 @@ export function spawnExecutionImpactFx(
         y1: cy - 23 - Math.sin(direction) * 34,
         x2: cx + Math.cos(direction) * strikeRadius,
         y2: cy - 23 + Math.sin(direction) * strikeRadius * 0.55,
-        width: 22, duration, palette, withFloorRing: false,
+        width: 18, duration, palette, focused: true, withFloorRing: false,
       });
       fx.spawnClashStarburst({
-        x: cx, y: cy - 24, scale: 1.14,
+        x: cx, y: cy - 24, scale: 0.84,
         duration: 0.26, palette,
       });
       break;

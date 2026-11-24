@@ -223,7 +223,6 @@ import {
   renderBloodDemonArtWorldPass,
   spawnCycloneVortex,
   spawnExplodingBloodSeed,
-  spawnHinokamiSlashArc,
   spawnSunHaloRing,
   spawnTengenClashSparks,
   stepBloodDemonArtPool,
@@ -270,7 +269,6 @@ import {
   DUNDUBHI_FLIPBOOK_ROWS,
   FlipbookSheetSpec,
   ISOMETRIC_TELEGRAPH_CELLS,
-  PARASHU_FLIPBOOK_ROWS,
   PARRY_SPARKS_FLIPBOOK_ROWS,
   PHASE2_VFX_SHEETS,
   VRIKODARA_FLIPBOOK_ROWS,
@@ -3831,6 +3829,13 @@ export default function KaliyugaArena() {
             kind: 'astra_contact', element: sakugaAstraElem, worldX: e.x, worldY: e.y,
             angle: kAngle, intensity: 0.97,
           });
+          if (isDebugMode) {
+            qaRecentEventsRef.current.push({
+              name: 'astra-hit-confirmed', meta: sakugaAstraElem, frameTime: performance.now(),
+              contactX: e.x, contactY: e.y,
+            });
+            if (qaRecentEventsRef.current.length > 50) qaRecentEventsRef.current.shift();
+          }
         }
         if (astraId === 'vayavyastra' && p.stance === 'smash') {
           const galePush = e.isBoss ? 140 : 320;
@@ -3887,7 +3892,7 @@ export default function KaliyugaArena() {
           : spec.sanskritSubtitle
       );
     },
-    [recordQuestEvent, spawnFloatingText, spawnParticles, spawnShockwave]
+    [isDebugMode, recordQuestEvent, spawnFloatingText, spawnParticles, spawnShockwave]
   );
 
   const triggerPartyLinkStrike = useCallback(() => {
@@ -4840,37 +4845,6 @@ export default function KaliyugaArena() {
       element: executionVfx.palette === 'wind' ? 'vayu' : executionVfx.palette === 'thunder' ? 'vajra' : 'agni',
       worldX: brokenEnemy.x, worldY: brokenEnemy.y, angle: p.slashAngle, intensity: 1.2,
     });
-    if (finisherSpec.variant === 'downward_crush') {
-      // Tight flame guillotine follows the blade down; the enemy remains visible.
-      spawnHinokamiSlashArc(bloodDemonArtsRef.current, {
-        x: brokenEnemy.x, y: brokenEnemy.y - 25,
-        angle: p.slashAngle, arcSpan: 1.52, radius: 145,
-        thickness: 28, palette: 'sun', direction: 1,
-      });
-    } else if (finisherSpec.variant === 'spin_360_cleave') {
-      // Readable counterclockwise whirlwind: not another fullscreen fire halo.
-      spawnHinokamiSlashArc(bloodDemonArtsRef.current, {
-        x: brokenEnemy.x, y: brokenEnemy.y - 22,
-        angle: p.slashAngle + 0.35, arcSpan: 3.3, radius: 162,
-        thickness: 27, palette: 'water', direction: -1,
-      });
-    }
-    const execSlashRow =
-      finisherSpec.variant === 'spin_360_cleave'
-        ? PARASHU_FLIPBOOK_ROWS.SPIN_360_WHIRLWIND_RING
-        : PARASHU_FLIPBOOK_ROWS.DOWNWARD_CRUSH_FISSURE;
-    spawnFlipbookVfx(
-      PHASE2_VFX_SHEETS.parashuSlashes3x3.url,
-      brokenEnemy.x,
-      brokenEnemy.y - 22,
-      248,
-      0.34,
-      finisherSpec.variant === 'impaling_lunge' ? p.slashAngle : 0,
-      finisherSpec.variant === 'spin_360_cleave' ? 0.72 : 1,
-      'screen',
-      PHASE2_VFX_SHEETS.parashuSlashes3x3,
-      execSlashRow
-    );
     spawnFlipbookVfx(
       PHASE2_VFX_SHEETS.parryAndHitSparks4x2.url,
       brokenEnemy.x,
@@ -6608,10 +6582,19 @@ export default function KaliyugaArena() {
           if (!fluxRes.inRange) return;
           const pullAngle = Math.atan2(p.y - en.y, p.x - en.x);
           startCombatHitReaction(en, pullAngle, 'heavy');
-          if (!hitAnyFlux) triggerSakugaImpact(sakugaDirectorRef.current, {
-            kind: 'astra_contact', element: 'varuna', worldX: en.x, worldY: en.y,
-            angle: pullAngle, intensity: 0.97,
-          });
+          if (!hitAnyFlux) {
+            triggerSakugaImpact(sakugaDirectorRef.current, {
+              kind: 'astra_contact', element: 'varuna', worldX: en.x, worldY: en.y,
+              angle: pullAngle, intensity: 0.97,
+            });
+            if (isDebugMode) {
+              qaRecentEventsRef.current.push({
+                name: 'astra-hit-confirmed', meta: 'varuna', frameTime: performance.now(),
+                contactX: en.x, contactY: en.y,
+              });
+              if (qaRecentEventsRef.current.length > 50) qaRecentEventsRef.current.shift();
+            }
+          }
           hitAnyFlux = true;
           en.hp = fluxRes.nextHp;
           sim.runDamageDealt += fluxRes.damage;

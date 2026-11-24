@@ -23,7 +23,7 @@ jobs:
         with:
           node-version: '22'
       - run: npm install --legacy-peer-deps --no-audit --no-fund
-      - run: node --import tsx --test lib/game/bladeTrailSampler.test.ts lib/game/sakugaImpactDirector.test.ts lib/game/elementalStrokeGeometry.test.ts
+      - run: node --import tsx --test lib/game/bladeTrailSampler.test.ts lib/game/sakugaImpactDirector.test.ts lib/game/executionImpactDirector.test.ts lib/game/elementalStrokeGeometry.test.ts
       - run: npm run build
       - run: npm install --no-save --legacy-peer-deps --no-audit --no-fund playwright@1.58.2
       - run: npx playwright install chromium

@@ -42,6 +42,18 @@ async function main() {
     await page.waitForTimeout(42);
     await capture(`${element}-light-release`);
   }
+  async function captureAstra(element, key) {
+    const previous = await page.evaluate(() => {
+      window.__kaliyugaPhaseQAFixture.prepareStrikeTarget();
+      return performance.now();
+    });
+    await press(key);
+    await page.waitForFunction(({ element, previous }) =>
+      window.__kaliyugaPhaseQA.recentEvents.some(event =>
+        event.name === 'astra-hit-confirmed' && event.meta === element && event.frameTime > previous),
+    { element, previous }, { polling: 50, timeout: 45000 });
+    await capture(element === 'varuna' ? 'varuna-cast' : `${element}-astra`);
+  }
   async function captureRegularWeapons() {
     const weapons = [
       ['khanda_dual', 'Alt+Digit1', 'Digit2'],
@@ -187,8 +199,7 @@ async function main() {
     ]) {
       await ready(stance);
       if (element === 'varuna') {
-        await press(astra);
-        await capture('varuna-cast');
+        await captureAstra(element, astra);
         await page.waitForTimeout(930);
       }
       await captureLight(element);
@@ -222,9 +233,7 @@ async function main() {
       await capture(`${element}-heavy-release`);
       if (element !== 'varuna') {
         await ready(stance);
-        await press(astra);
-        await page.waitForTimeout(element === 'vajra' ? 115 : 55);
-        await capture(`${element}-astra`);
+        await captureAstra(element, astra);
       }
     }
     await ready('Digit1');
@@ -247,6 +256,8 @@ async function main() {
     await capture('perfect-parry');
 
     for (const variant of ['downward_crush', 'spin_360_cleave', 'impaling_lunge']) {
+      await page.waitForFunction(() => window.__kaliyugaPhaseQA.action === 'idle',
+        undefined, { polling: 50, timeout: 45000 });
       const previous = await page.evaluate((variant) => {
         window.__kaliyugaPhaseQAFixture.prepareExecution(variant);
         return performance.now();

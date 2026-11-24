@@ -4,25 +4,26 @@ import {
   executionImpactSignature,
   spawnExecutionImpactFx,
 } from './executionImpactDirector';
-import type { HeavyEffectSink } from './elementalImpactDirector';
+import type { ExecutionEffectSink } from './executionImpactDirector';
+import { WebglDemonSlayerVfxOverlay } from './webglDemonSlayerVfx';
 
 test('all three executions have different silhouettes and strictly bounded particle budgets', () => {
   const specs = [
     ['downward_crush', 'spawnSlashRibbon'],
-    ['spin_360_cleave', 'spawnWindGaleCrescents'],
+    ['spin_360_cleave', 'spawnWindGaleSweep'],
     ['impaling_lunge', 'spawnThunderZigzag'],
   ] as const;
   const palettes = new Set<string>();
   for (const [variant, primary] of specs) {
     const calls: { name: string; input: Record<string, unknown> }[] = [];
     const methods = [
-      'spawnSolarFlameWheel', 'spawnWaterDragon', 'spawnWindGaleCrescents',
-      'spawnThunderZigzag', 'spawnSlashRibbon', 'spawnClashStarburst',
-      'spawnShockwaveRing', 'spawnSparkBurst',
-    ];
+      'spawnWindGaleSweep', 'spawnThunderZigzag', 'spawnSlashRibbon',
+      'spawnClashStarburst', 'spawnSparkBurst',
+    ] as const;
+    for (const name of methods) assert.equal(typeof WebglDemonSlayerVfxOverlay.prototype[name], 'function');
     const fx = Object.fromEntries(methods.map(name => [name,
       (input: Record<string, unknown>) => { calls.push({ name, input }); },
-    ])) as unknown as HeavyEffectSink;
+    ])) as unknown as ExecutionEffectSink;
     const signature = spawnExecutionImpactFx(fx, variant, 500, 300, 0);
     assert.equal(calls[0].name, primary);
     assert.equal(calls[calls.length - 1].name, 'spawnSparkBurst');
@@ -42,8 +43,8 @@ test('execution impact director never emits non-finite weapon impact coordinates
   const noop = () => {};
   const fx = {
     spawnSlashRibbon: (props: Record<string, unknown>) => { recorded = props; },
-    spawnShockwaveRing: noop, spawnSparkBurst: noop,
-  } as unknown as HeavyEffectSink;
+    spawnSparkBurst: noop,
+  } as unknown as ExecutionEffectSink;
   spawnExecutionImpactFx(fx, 'downward_crush', NaN, Infinity, NaN);
   assert.equal(recorded?.x, 0);
   assert.equal(recorded?.y, -24);
