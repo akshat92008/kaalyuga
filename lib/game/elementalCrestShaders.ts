@@ -18,22 +18,28 @@ export const ELEMENTAL_CREST_GLSL = /* glsl */ `
     float isWater = step(0.5, uMode) * (1.0 - step(1.5, uMode));
     float isThunder = step(1.5, uMode) * (1.0 - step(2.5, uMode));
     float isWind = step(2.5, uMode);
+    float isFire = 1.0 - step(0.5, uMode);
     float waterLace = isWater * (fine - 0.5) * 0.08;
-    float outer = 0.89 + (grain - 0.5) * 0.07 + waterLace;
+    float scallop = sin(flow * 5.1 - v * 5.6 + grain * 3.0);
+    float flameTongues = isFire * (0.12 * scallop + 0.07 * (fine - 0.5));
+    float lightningSteps = isThunder * (abs(fract(u * 11.0 + floor(uLife * 5.0) * 0.37) - 0.5) - 0.25) * 0.22;
+    float outer = 0.87 + (grain - 0.5) * 0.09 + waterLace + flameTongues + lightningSteps;
     float inner = 0.13 + (grain - 0.5) * 0.14 + 0.22 * smoothstep(0.18, 0.76, localAge)
       + isWind * 0.15 + isThunder * 0.08;
     float body = smoothstep(inner - 0.02, inner + 0.13, v)
       * (1.0 - smoothstep(outer, outer + 0.07, v));
-    float lip = brushBand(v, outer - 0.08, 0.12 - 0.043 * isThunder);
+    float lip = brushBand(v, outer - 0.09, 0.13 - 0.054 * isThunder);
     float foam = isWater * brushBand(v, outer - 0.15 + waterLace, 0.08)
       * smoothstep(0.26, 0.72, fine);
     float fold = brushBand(v, 0.57 + 0.09 * sin(flow * 2.1 + grain), 0.11);
     float hotEdge = lip * (0.42 + 0.58 * smoothstep(0.28, 0.83, u))
       * (1.0 - smoothstep(0.24, 0.85, localAge));
     vec3 ink = mix(uDeepColor, uEdgeColor, smoothstep(0.20, 0.64, v));
-    vec3 col = mix(ink, uMidColor, clamp(lip * 0.75 + fold * fine * 0.35, 0.0, 1.0));
-    col = mix(col, uCoreColor, clamp(hotEdge * 0.85 + foam * 0.50, 0.0, 1.0));
-    float alpha = life * taper * body * uOpacity * mix(1.0, 0.56 + 0.44 * lip, isWind);
+    float veins = brushBand(v, 0.51 + 0.16 * scallop + lightningSteps, 0.055)
+      * smoothstep(0.32, 0.72, fine) * (0.74 * isFire + 0.70 * isThunder);
+    vec3 col = mix(ink, uMidColor, clamp(lip * 0.71 + fold * fine * 0.40 + veins, 0.0, 1.0));
+    col = mix(col, uCoreColor, clamp(hotEdge * 0.78 + foam * 0.66 + veins * 0.42, 0.0, 1.0));
+    float alpha = life * taper * body * uOpacity * mix(1.0, 0.48 + 0.46 * lip + 0.06 * fine, isWind);
     return vec4(col * alpha, alpha);
   }
 

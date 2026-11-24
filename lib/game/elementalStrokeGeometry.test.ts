@@ -31,3 +31,23 @@ test('the Vayu sweep has one open, monotonic curve with no offset claw lanes', (
   assert.ok(points[12].width > 75);
   assert.deepEqual(points[12], sampleElementalStroke('wind', 0.5, reach, 2));
 });
+
+test('blade-launched water and wind join near the weapon and preserve the outer crest', () => {
+  const reach = 200;
+  for (const lane of [0, 1, 2]) {
+    const root = sampleElementalStroke('water', 0, reach, lane, true);
+    assert.equal(root.x, 0);
+    assert.ok(Math.abs(root.y) < 0.001);
+    assert.deepEqual(
+      sampleElementalStroke('water', 0.65, reach, lane, true),
+      sampleElementalStroke('water', 0.65, reach, lane)
+    );
+  }
+  const wind = Array.from({ length: 41 }, (_, index) =>
+    sampleElementalStroke('wind', index / 40, reach, 0, true)
+  );
+  assert.ok(Math.hypot(wind[0].x, wind[0].y / 0.83) < reach * 0.35);
+  assert.ok(wind.every(({ x, y }, index) => index === 0 ||
+    Math.atan2(y / 0.83, x) > Math.atan2(wind[index - 1].y / 0.83, wind[index - 1].x)));
+  assert.deepEqual(wind[28], sampleElementalStroke('wind', 0.7, reach, 0));
+});

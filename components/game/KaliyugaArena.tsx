@@ -38,7 +38,7 @@ import {
   computeGodOfWarHeavyStyleSpec,
 } from '@/lib/game/rules';
 import { soundEngine } from '@/lib/game/audio';
-import { heavyElementFromStance, spawnHeavyElementalRelease } from '@/lib/game/elementalImpactDirector';
+import { heavyElementFromStance, resolveHeavyReleaseProfile, spawnHeavyElementalRelease } from '@/lib/game/elementalImpactDirector';
 import { spawnExecutionImpactFx } from '@/lib/game/executionImpactDirector';
 import { CinematicCameraTrack } from '@/lib/game/cinematicCamera';
 import {
@@ -571,6 +571,12 @@ export default function KaliyugaArena() {
     palette: DemonSlayerVfxPalette;
     execute: () => void;
   } | null>(null);
+  const pendingBladeReleaseRef = useRef<{
+    serial: number;
+    weapon: WeaponId;
+    kind: 'light' | 'heavy';
+    emit: (blade: ArenaBladeSample) => void;
+  } | null>(null);
   const varunaInfusionTimerRef = useRef<number>(0);
   const rudraSpriteRectRef = useRef<SpriteDrawRect>({
     drawX: 0,
@@ -598,6 +604,7 @@ export default function KaliyugaArena() {
       liveBladeTrailActiveIdRef.current = null;
     }
     activeStrikeRef.current = null;
+    pendingBladeReleaseRef.current = null;
   }, []);
 
   const pendingExecutionRef = useRef<{
@@ -5000,14 +5007,24 @@ export default function KaliyugaArena() {
         const syncImpactX = curP.x + Math.cos(heavySlashAngle) * (heavyStance === 'thrust' ? 74 : 46);
         const syncImpactY = curP.y + Math.sin(heavySlashAngle) * (heavyStance === 'thrust' ? 46 : 28);
         soundEngine.playHeavyIronSwing();
-        const heavyRelease = spawnHeavyElementalRelease(webglDemonSlayerVfxRef.current, {
+        const release = {
           x: originX,
           y: originY,
           angle: heavySlashAngle,
-          radius: heavyCleaveRadius * 1.05,
+          radius: heavyCleaveRadius * 1.05 * (WEAPON_CONFIGS[heavyWeapon].reachPx / WEAPON_CONFIGS.parashu.reachPx),
           energyOrbs: orbsUsed,
           element: heavyElement,
-        });
+        };
+        const heavyRelease = resolveHeavyReleaseProfile(release);
+        pendingBladeReleaseRef.current = {
+          serial: strike.attackSerial,
+          weapon: heavyWeapon,
+          kind: 'heavy',
+          emit: (blade) => spawnHeavyElementalRelease(webglDemonSlayerVfxRef.current, {
+            ...release,
+            blade: heavyElement === 'guardian' ? undefined : blade,
+          }),
+        };
         if (isDebugMode) {
           qaRecentEventsRef.current.push({
             name: 'heavy-contact', frameTime: performance.now(), meta: heavyElement,
@@ -5640,32 +5657,47 @@ export default function KaliyugaArena() {
         const originX = curP.x + Math.cos(capturedAngle) * 4;
         const originY = curP.y - 26;
         const fx = webglDemonSlayerVfxRef.current;
-        fx?.spawnSlashRibbon({
-          x: originX,
-          y: originY,
-          angle: capturedAngle,
-          radius: isComboFinisher ? 120 : capturedStep === 3 ? 101 : 91,
-          width: isComboFinisher ? 49 : capturedStep === 3 ? 36 : 29,
-          arcSpan: isComboFinisher ? 2.68 : capturedStep === 3 ? 2.38 : capturedStep === 2 ? 2.16 : 1.96,
-          direction: arcDir,
-          palette: lightSlashPalette,
-          duration: isComboFinisher ? 0.34 : 0.26,
-          tiltX: capturedStep === 2 ? -0.51 : 0.36,
-          tiltY: 0,
-          spinRate: 0,
-          openStrike: true,
-        });
-        const leadingAngle = capturedAngle - arcDir * 0.70;
-        fx?.spawnElementalParticles({
-          x: originX + Math.cos(leadingAngle) * 69,
-          y: originY + Math.sin(leadingAngle) * 62,
-          angle: leadingAngle - arcDir * Math.PI * 0.5,
-          spread: 0.62,
-          count: isComboFinisher ? 12 : 5,
-          speed: isComboFinisher ? 350 : 235,
-          palette: lightSlashPalette,
-          kind: lightSlashPalette === 'water' ? 'water_droplet' : 'spark_needle',
-        });
+        const reachScale = weaponCfg.reachPx / WEAPON_CONFIGS.parashu.reachPx;
+        const radius = (isComboFinisher ? 120 : capturedStep === 3 ? 101 : 91) * reachScale;
+        const arcSpan = (isComboFinisher ? 2.68 : capturedStep === 3 ? 2.38 : capturedStep === 2 ? 2.16 : 1.96)
+          * (capturedStance === 'thrust' ? 0.78 : 1);
+        pendingBladeReleaseRef.current = {
+          serial: strike.attackSerial,
+          weapon: strikeWeapon,
+          kind: 'light',
+          emit: (blade) => {
+            // Align the first visible section of the arc with the current blade tip.
+            // Limit the offset so foreshortened poses can't place a sweep behind Rudra.
+            const entryAngle = capturedAngle + arcDir * arcSpan * 0.25;
+            const x = originX + Math.max(-50, Math.min(50, blade.tipX - originX - Math.cos(entryAngle) * radius * 0.90));
+            const y = originY + Math.max(-42, Math.min(42, blade.tipY - originY - Math.sin(entryAngle) * radius * 0.78));
+            fx?.spawnSlashRibbon({
+              x,
+              y,
+              angle: capturedAngle,
+              radius,
+              width: (isComboFinisher ? 49 : capturedStep === 3 ? 36 : 29) * reachScale,
+              arcSpan,
+              direction: arcDir,
+              palette: lightSlashPalette,
+              duration: (isComboFinisher ? 0.34 : 0.26) / Math.sqrt(weaponCfg.attackSpeedMultiplier),
+              tiltX: capturedStep === 2 ? -0.51 : 0.36,
+              tiltY: 0,
+              spinRate: 0,
+              openStrike: true,
+            });
+            fx?.spawnElementalParticles({
+              x: blade.tipX,
+              y: blade.tipY,
+              angle: blade.angleRad + arcDir * Math.PI * 0.5,
+              spread: 0.62,
+              count: isComboFinisher ? 10 : 5,
+              speed: isComboFinisher ? 315 : 205,
+              palette: lightSlashPalette,
+              kind: lightSlashPalette === 'water' ? 'water_droplet' : 'spark_needle',
+            });
+          },
+        };
         if (isComboFinisher) {
           const element: SakugaElement = lightSlashPalette === 'blood' ? 'guardian' : strike.element;
           triggerSakugaImpact(sakugaDirectorRef.current, {
@@ -11626,19 +11658,43 @@ export default function KaliyugaArena() {
             }
           }
 
-          if (rendered3D && rudra3d) {
-            // Heroic Rudra Scale Authority + Exact Camera-Projected Ground Foot Anchor
-            const drawSize = HEROIC_DRAW_SIZES.rudra;
-            const anchorX = -drawSize * 0.5;
-            const anchorY = -drawSize * rudra3d.footAnchorRatio;
-            rudraSpriteRectRef.current = {
-              drawX: p.x + anchorX,
-              drawY: p.y + anchorY,
-              drawW: drawSize,
-              drawH: drawSize,
-            };
+          const drawSize = HEROIC_DRAW_SIZES.rudra;
+          const anchorX = -drawSize * 0.5;
+          const anchorY = -drawSize * (rudra3d?.footAnchorRatio ?? 0.86);
+          rudraSpriteRectRef.current = {
+            drawX: p.x + anchorX,
+            drawY: p.y + anchorY,
+            drawW: drawSize,
+            drawH: drawSize,
+          };
+          const currentBladeSample = () => projectBakedBladePoseToArena(
+            rendered3D && coreLock.rudraIsAttacking ? rudra3d?.getLatestBladePose() : null,
+            rudraSpriteRectRef.current,
+            {
+              playerX: p.x, playerY: p.y, slashAngle: p.slashAngle,
+              progress: p.weaponSwingProgress,
+              direction: p.comboStep % 2 === 0 ? 1 : -1,
+              reachPx: WEAPON_CONFIGS[p.weapon].reachPx * 0.48,
+            },
+          );
+          const release = pendingBladeReleaseRef.current;
+          if (release) {
+            pendingBladeReleaseRef.current = null;
+            if (release.serial === p.attackSerial) {
+              const blade = currentBladeSample();
+              release.emit(blade);
+              if (isDebugMode && webglDemonSlayerVfxRef.current?.available) {
+                qaRecentEventsRef.current.push({
+                  name: `weapon-${release.kind}-release`,
+                  meta: release.weapon, frameTime: performance.now(), progress: p.weaponSwingProgress,
+                  contactX: blade.tipX, contactY: blade.tipY, playerX: p.x, playerY: p.y,
+                });
+                if (qaRecentEventsRef.current.length > 50) qaRecentEventsRef.current.shift();
+              }
+            }
+          }
 
-            // Live 3D Parashu Blade-Trail Sampling synced directly to Rudra's actual 3D axe root & tip!
+          if (rendered3D && rudra3d) {
             const webglVfxLive = webglDemonSlayerVfxRef.current;
             const liveStrike = activeStrikeRef.current;
             if (
@@ -11664,20 +11720,11 @@ export default function KaliyugaArena() {
                 });
                 liveBladeTrailActiveIdRef.current = liveTrailKey;
               }
-              const latestPose = rudra3d.getLatestBladePose();
-              if (latestPose) {
-                const sample = projectBakedBladePoseToArena(
-                  latestPose,
-                  rudraSpriteRectRef.current,
-                  now * 0.001
-                );
-                if (sample) {
-                  webglVfxLive.pushBladeTrailSample(liveTrailKey, sample);
-                  if (isDebugMode) {
-                    debugBladeSamplesRef.current.push(sample);
-                    if (debugBladeSamplesRef.current.length > 24) debugBladeSamplesRef.current.shift();
-                  }
-                }
+              const sample = currentBladeSample();
+              webglVfxLive.pushBladeTrailSample(liveTrailKey, sample);
+              if (isDebugMode) {
+                debugBladeSamplesRef.current.push(sample);
+                if (debugBladeSamplesRef.current.length > 24) debugBladeSamplesRef.current.shift();
               }
             } else if (liveBladeTrailActiveIdRef.current && webglVfxLive) {
               webglVfxLive.endBladeTrail(liveBladeTrailActiveIdRef.current, false);

@@ -5,6 +5,8 @@
  */
 import type { WebglDemonSlayerVfxOverlay, DemonSlayerVfxPalette } from './webglDemonSlayerVfx';
 
+import type { ArenaBladeSample } from './bladeTrailSampler';
+
 export type HeavyElement = 'agni' | 'varuna' | 'vayu' | 'vajra' | 'guardian';
 
 type HeavyEffectMethod =
@@ -24,6 +26,7 @@ export interface HeavyReleaseInput {
   radius: number;
   energyOrbs?: number;
   element: HeavyElement;
+  blade?: Pick<ArenaBladeSample, 'rootX' | 'rootY' | 'tipX' | 'tipY'>;
 }
 
 export interface HeavyReleaseProfile {
@@ -86,24 +89,33 @@ export function spawnHeavyElementalRelease(
   const y = Number.isFinite(input.y) ? input.y : 0;
   const angle = Number.isFinite(input.angle) ? input.angle : 0;
   const { radius, reach, palette, duration } = profile;
+  const blade = input.blade;
+  const launchX = blade ? x + clamp(blade.tipX - x, -76, 76) : x;
+  const launchY = blade ? y + clamp(blade.tipY - y, -96, 38) : y - 19;
+  const pivotX = blade ? x + clamp(blade.rootX - x, -32, 32) * 0.62 : x;
+  const pivotY = blade ? y - 18 + clamp(blade.rootY - (y - 18), -38, 38) * 0.62 : y - 18;
   switch (input.element) {
     case 'agni':
       fx.spawnAgniCrescent({
-        x, y: y - 18, angle, radius: 148 + clamp(input.energyOrbs ?? 0, 0, 4) * 9,
+        x: pivotX, y: pivotY, angle, radius: clamp(radius * 0.69, 128, 187),
         duration: 0.50,
       });
       break;
     case 'varuna':
-      fx.spawnWaterDragon({ x, y: y - 19, angle, radius: radius * 0.82, duration: 0.68 });
+      fx.spawnWaterDragon({
+        x: launchX, y: launchY, angle, radius: radius * 0.77, duration: 0.64, fromBlade: Boolean(blade),
+      });
       break;
     case 'vayu':
-      fx.spawnWindGaleSweep({ x, y: y - 18, angle, radius: radius * 0.92, duration: 0.60 });
+      fx.spawnWindGaleSweep({
+        x: pivotX, y: pivotY, angle, radius: radius * 0.92, duration: 0.60, fromBlade: Boolean(blade),
+      });
       break;
     case 'vajra': {
       const boltReach = clamp(reach, 158, 315);
       fx.spawnThunderZigzag({
-        x1: x - Math.cos(angle) * 25,
-        y1: y - 22 - Math.sin(angle) * 15,
+        x1: blade ? launchX : x - Math.cos(angle) * 25,
+        y1: blade ? launchY : y - 22 - Math.sin(angle) * 15,
         x2: x + Math.cos(angle) * boltReach,
         y2: y - 22 + Math.sin(angle) * boltReach * 0.78,
         width: 13, duration: 0.37, palette, focused: true, withFloorRing: true,

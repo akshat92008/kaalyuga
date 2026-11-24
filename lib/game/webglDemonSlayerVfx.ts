@@ -959,6 +959,7 @@ interface ActiveWaterDragon {
   maxLife: number;
   reach: number;
   wakeStep: number;
+  fromBlade: boolean;
 }
 
 interface ActiveThunderZigzag {
@@ -983,6 +984,7 @@ interface ActiveWindGale {
   maxLife: number;
   reach: number;
   wakeStep: number;
+  fromBlade: boolean;
 }
 
 interface ActiveCompassMandala {
@@ -1089,7 +1091,8 @@ function buildCurvedRibbonGeometry(
 function buildElementalStrokeGeometry(
   element: ElementalStroke,
   reach: number,
-  lane: number
+  lane: number,
+  fromBlade = false,
 ): THREE.BufferGeometry {
   const positions: number[] = [];
   const uv: number[] = [];
@@ -1097,9 +1100,9 @@ function buildElementalStrokeGeometry(
   const steps = 36;
   for (let i = 0; i <= steps; i++) {
     const t = i / steps;
-    const center = sampleElementalStroke(element, t, reach, lane);
-    const before = sampleElementalStroke(element, Math.max(0, t - 0.01), reach, lane);
-    const after = sampleElementalStroke(element, Math.min(1, t + 0.01), reach, lane);
+    const center = sampleElementalStroke(element, t, reach, lane, fromBlade);
+    const before = sampleElementalStroke(element, Math.max(0, t - 0.01), reach, lane, fromBlade);
+    const after = sampleElementalStroke(element, Math.min(1, t + 0.01), reach, lane, fromBlade);
     const tangentX = after.x - before.x;
     const tangentY = after.y - before.y;
     const normalScale = center.width * 0.5 / Math.max(0.001, Math.hypot(tangentX, tangentY));
@@ -2147,6 +2150,7 @@ export class WebglDemonSlayerVfxOverlay {
     angle: number;
     radius?: number;
     duration?: number;
+    fromBlade?: boolean;
   }): void {
     if (!this.renderer || this.disposed) return;
     if (this.waterDragons.length >= 4) {
@@ -2164,7 +2168,7 @@ export class WebglDemonSlayerVfxOverlay {
     bodyMat.uniforms.uCrestStyle.value = 1;
 
     for (let lane = 0; lane < 3; lane++) {
-      const geo = buildElementalStrokeGeometry('water', reach, lane);
+      const geo = buildElementalStrokeGeometry('water', reach, lane, opts.fromBlade);
       const mat = lane === 0 ? bodyMat :
         createRibbonMaterial(pal, 1, lane === 1 ? 0.66 : 0.48, false, THREE.NormalBlending);
       mat.uniforms.uCrestStyle.value = 1;
@@ -2188,7 +2192,7 @@ export class WebglDemonSlayerVfxOverlay {
       worldY: opts.y,
       angle: opts.angle,
       speed: 135,
-      reach, wakeStep: 0,
+      reach, wakeStep: 0, fromBlade: opts.fromBlade ?? false,
       life: 0,
       maxLife: opts.duration ?? 0.74,
     });
@@ -2207,18 +2211,18 @@ export class WebglDemonSlayerVfxOverlay {
     while (effect.wakeStep < 5 && progress >= 0.07 + effect.wakeStep * 0.062) {
       const step = effect.wakeStep++;
       const along = 0.24 + step * 0.16;
-      const stroke = sampleElementalStroke(element, along, effect.reach, 0);
-      const next = sampleElementalStroke(element, along + 0.02, effect.reach, 0);
+      const stroke = sampleElementalStroke(element, along, effect.reach, 0, effect.fromBlade);
+      const next = sampleElementalStroke(element, along + 0.02, effect.reach, 0, effect.fromBlade);
       const cos = Math.cos(effect.angle);
       const sin = Math.sin(effect.angle);
       const x = effect.worldX + cos * travel + (stroke.x * cos + stroke.y * sin) * scale;
       const y = effect.worldY + sin * travel + (stroke.x * sin - stroke.y * cos) * scale;
       const tangent = effect.angle + Math.atan2(stroke.y - next.y, next.x - stroke.x);
       this.spawnElementalParticles({
-        x, y: y + (water ? 6 : 15),
+        x, y: y + (water ? 6 : 26),
         angle: tangent + (water ? -0.36 : 0.48),
         spread: water ? 1.28 : 0.88,
-        count: water ? 8 : 6,
+        count: water ? 8 : 9,
         speed: water ? 155 + step * 23 : 88 + step * 15,
         palette: element,
         kind: water ? 'water_droplet' : 'dust_mote',
@@ -2522,6 +2526,7 @@ export class WebglDemonSlayerVfxOverlay {
     angle: number;
     radius?: number;
     duration?: number;
+    fromBlade?: boolean;
   }): void {
     if (!this.renderer || this.disposed) return;
     if (this.windGales.length >= 2) {
@@ -2530,14 +2535,14 @@ export class WebglDemonSlayerVfxOverlay {
     }
 
     const reach = THREE.MathUtils.clamp((opts.radius ?? 230) * 0.92, 116, 256);
-    const geometry = buildElementalStrokeGeometry('wind', reach, 0);
+    const geometry = buildElementalStrokeGeometry('wind', reach, 0, opts.fromBlade);
     const material = createRibbonMaterial(RIBBON_PALETTES.wind, 3, 0.98, false, THREE.NormalBlending);
     material.uniforms.uCrestStyle.value = 2;
     const sweep = new THREE.Mesh(geometry, material);
     sweep.rotation.z = -opts.angle;
     this.scene.add(sweep);
     this.windGales.push({
-      sweep, angle: opts.angle, worldX: opts.x, worldY: opts.y, reach, wakeStep: 0,
+      sweep, angle: opts.angle, worldX: opts.x, worldY: opts.y, reach, wakeStep: 0, fromBlade: opts.fromBlade ?? false,
       life: 0, maxLife: opts.duration ?? 0.62,
     });
 
@@ -3138,17 +3143,18 @@ export class WebglDemonSlayerVfxOverlay {
         slot.g = 0.82;
         slot.b = 0.74;
       } else if (kind === 'dust_mote') {
-        const size = 7 + Math.random() * 9;
-        slot.scaleX = size * 1.5;
+        const wind = opts.palette === 'wind';
+        const size = (wind ? 11 : 7) + Math.random() * 9;
+        slot.scaleX = size * (wind ? 1.85 : 1.50);
         slot.scaleY = size * 0.58;
         slot.vz = 28 + Math.random() * 55;
         slot.gravity = 120;
         slot.drag = 3.8;
         slot.rotSpeed = (Math.random() - 0.5) * 5;
-        slot.maxLife = 0.31 + Math.random() * 0.24;
-        slot.r = 0.44;
-        slot.g = 0.53;
-        slot.b = 0.37;
+        slot.maxLife = (wind ? 0.46 : 0.31) + Math.random() * 0.24;
+        slot.r = wind ? 0.72 : 0.44;
+        slot.g = wind ? 0.76 : 0.53;
+        slot.b = wind ? 0.53 : 0.37;
       } else if (kind === 'wind_shard') {
         const s = 18 + Math.random() * 14;
         slot.scaleX = s * 1.45;
@@ -3541,8 +3547,10 @@ export class WebglDemonSlayerVfxOverlay {
         this.waterDragons.splice(i, 1);
         continue;
       }
-      d.worldX += Math.cos(d.angle) * d.speed * dt * (1 - norm * 0.45);
-      d.worldY += Math.sin(d.angle) * d.speed * dt * 0.72 * (1 - norm * 0.45);
+      const drift = d.fromBlade ? THREE.MathUtils.smoothstep(norm, 0.29, 0.83) : 1;
+      const distance = d.speed * dt * (1 - norm * 0.45) * drift;
+      d.worldX += Math.cos(d.angle) * distance;
+      d.worldY += Math.sin(d.angle) * distance * 0.72;
       const grow = zoom * (0.72 + Math.sin(Math.min(1, norm * 1.35) * Math.PI * 0.5) * 0.46);
       d.frontGroup.position.set(toScreenX(d.worldX), toScreenY(d.worldY), 24);
       d.frontGroup.scale.set(grow, grow, grow);
@@ -3609,13 +3617,14 @@ export class WebglDemonSlayerVfxOverlay {
       }
       const travel = norm * (2 - norm);
       const expand = zoom * (0.84 + travel * 0.22);
+      const distance = g.fromBlade ? THREE.MathUtils.smoothstep(norm, 0.28, 0.93) * 30 : travel * 45;
       g.sweep.position.set(
-        toScreenX(g.worldX + Math.cos(g.angle) * travel * 45),
-        toScreenY(g.worldY + Math.sin(g.angle) * travel * 45),
+        toScreenX(g.worldX + Math.cos(g.angle) * distance),
+        toScreenY(g.worldY + Math.sin(g.angle) * distance),
         20,
       );
       g.sweep.scale.set(expand, expand, expand);
-      this.emitElementalWake(g, 'wind', norm, expand / zoom, travel * 45);
+      this.emitElementalWake(g, 'wind', norm, expand / zoom, distance);
       g.sweep.material.uniforms.uTime.value = this.elapsed;
       g.sweep.material.uniforms.uLife.value = norm;
     }

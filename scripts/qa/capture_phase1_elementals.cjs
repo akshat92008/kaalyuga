@@ -40,6 +40,35 @@ async function main() {
     await page.waitForTimeout(42);
     await capture(`${element}-light-release`);
   }
+  async function captureRegularWeapons() {
+    const weapons = [
+      ['khanda_dual', 'Alt+Digit1', 'Digit2'],
+      ['parashu', 'Alt+Digit2', 'Digit1'],
+      ['trishula_great', 'Alt+Digit3', 'Digit3'],
+    ];
+    for (const [weapon, equipKey, stanceKey] of weapons) {
+      await press(equipKey);
+      await ready(stanceKey);
+      for (const [attack, key] of [['light', 'KeyJ'], ['heavy', 'KeyK']]) {
+        await page.waitForFunction(() => window.__kaliyugaPhaseQA.action === 'idle', undefined, { timeout: 45000 });
+        const previous = await page.evaluate(() => {
+          window.__kaliyugaPhaseQAFixture.prepareStrikeTarget();
+          return performance.now();
+        });
+        if (attack === 'heavy') await press(stanceKey);
+        await press(key);
+        await page.waitForFunction(({ weapon, attack, previous }) => {
+          const qa = window.__kaliyugaPhaseQA;
+          return qa.chamber === 1 && qa.recentEvents.some((event) =>
+            event.name === `weapon-${attack}-release` && event.meta === weapon && event.frameTime > previous &&
+            Number.isFinite(event.contactX) && Number.isFinite(event.contactY)
+          );
+        }, { weapon, attack, previous }, { polling: 50, timeout: 45000 });
+        await capture(`regular-${weapon}-${attack}`);
+      }
+    }
+    await press('Alt+Digit2');
+  }
   async function captureVrikodaraBenchmark() {
     await page.goto('http://127.0.0.1:3100/?debug=1&qaFixtures=1&chamber=8',
       { waitUntil: 'domcontentloaded', timeout: 90000 });
@@ -120,6 +149,7 @@ async function main() {
       throw Error('Cancelling light startup committed damage or failed to dodge: ' + JSON.stringify(cancelled));
     }
     await capture('light-startup-dodge-cancel');
+    await captureRegularWeapons();
 
     for (const [element, stance, astra] of [
       ['agni', 'Digit1', 'KeyQ'],
