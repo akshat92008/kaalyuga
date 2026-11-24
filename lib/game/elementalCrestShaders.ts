@@ -7,12 +7,13 @@ export const ELEMENTAL_CREST_GLSL = /* glsl */ `
   // The mesh fixes the sweep path. Shading moves the leading edge and thins the
   // wake without tearing the stroke's silhouette into separate shapes.
   vec4 paintOpenStrike(float u, float v) {
-    float head = 0.36 + 0.75 * smoothstep(0.0, 0.33, uLife);
+    float head = mix(0.36 + 0.75 * smoothstep(0.0, 0.33, uLife), 1.20, uLiveBladeTrail);
     float localAge = max(0.0, uLife - u * 0.24);
     float life = (1.0 - smoothstep(0.40, 0.84, localAge))
       * (1.0 - smoothstep(head - 0.16, head, u));
-    float taper = smoothstep(0.0, 0.12, u) * (1.0 - smoothstep(0.91, 1.0, u));
-    float flow = u * 7.2 - uLife * 3.4;
+    float tipTaper = mix(1.0 - smoothstep(0.91, 1.0, u), 1.0 - smoothstep(0.986, 1.0, u), uLiveBladeTrail);
+    float taper = smoothstep(0.0, mix(0.12, 0.27, uLiveBladeTrail), u) * tipTaper;
+    float flow = u * 7.2 - uLife * 3.4 - uTime * uLiveBladeTrail * 2.8;
     float grain = noise2(vec2(flow, v * 4.4));
     float fine = noise2(vec2(flow * 2.4, v * 7.5));
     float isWater = step(0.5, uMode) * (1.0 - step(1.5, uMode));
@@ -39,7 +40,10 @@ export const ELEMENTAL_CREST_GLSL = /* glsl */ `
       * smoothstep(0.32, 0.72, fine) * (0.74 * isFire + 0.70 * isThunder);
     vec3 col = mix(ink, uMidColor, clamp(lip * 0.71 + fold * fine * 0.40 + veins, 0.0, 1.0));
     col = mix(col, uCoreColor, clamp(hotEdge * 0.78 + foam * 0.66 + veins * 0.42, 0.0, 1.0));
-    float alpha = life * taper * body * uOpacity * mix(1.0, 0.48 + 0.46 * lip + 0.06 * fine, isWind);
+    float cuttingHead = brushBand(v, 0.91, 0.076) * smoothstep(0.72, 0.985, u) * uLiveBladeTrail;
+    col = mix(col, uCoreColor, cuttingHead * 0.86);
+    float alpha = life * taper * max(body, cuttingHead) * uOpacity
+      * mix(1.0, 0.48 + 0.46 * lip + 0.06 * fine, isWind);
     return vec4(col * alpha, alpha);
   }
 

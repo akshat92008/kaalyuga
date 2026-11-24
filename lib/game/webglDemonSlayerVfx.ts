@@ -12,6 +12,7 @@ import {
 } from './painterlyVfxAtlas';
 import {
   ArenaBladeSample,
+  classifyBladeTrailStep,
   writeSweptBladeRibbonBuffers,
 } from './bladeTrailSampler';
 
@@ -427,6 +428,7 @@ const RIBBON_FRAGMENT_SHADER = /* glsl */ `
   uniform float uAgniPass;
   uniform float uCrestStyle;
   uniform float uOpenStrike;
+  uniform float uLiveBladeTrail;
   uniform sampler2D uAtlasTex;
 
   varying vec2 vUv;
@@ -891,7 +893,7 @@ interface PooledBladeTrail {
   frontIdx: Uint16Array;
   frontMat: THREE.ShaderMaterial;
   frontMesh: THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>;
-  agniOptics: ReturnType<typeof createAgniOpticalMesh>[];
+  tipTravelSinceEmission: number;
   // World-to-screen transform parent
   backGroup: THREE.Group;
   frontGroup: THREE.Group;
@@ -1175,6 +1177,7 @@ function createRibbonMaterial(
       uAgniPass: { value: 0 },
       uCrestStyle: { value: 0 },
       uOpenStrike: { value: 0 },
+      uLiveBladeTrail: { value: 0 },
       uAtlasTex: { value: atlasTex },
     },
     vertexShader: RIBBON_VERTEX_SHADER,
@@ -1426,13 +1429,8 @@ export class WebglDemonSlayerVfxOverlay {
       frontGroup.add(frontMesh);
       this.scene.add(frontGroup);
 
-      const backOptics = [createAgniOpticalMesh(backGeo, backMat, 2), createAgniOpticalMesh(backGeo, backMat, 3)];
-      const frontOptics = [createAgniOpticalMesh(frontGeo, frontMat, 2), createAgniOpticalMesh(frontGeo, frontMat, 3)];
-      backGroup.add(...backOptics);
-      frontGroup.add(...frontOptics);
-
       this.bladeTrailPool.push({
-        agniOptics: [...backOptics, ...frontOptics],
+        tipTravelSinceEmission: 0,
         id: null,
         active: false,
         ending: false,
@@ -1648,10 +1646,10 @@ export class WebglDemonSlayerVfxOverlay {
       mat.uniforms.uLife.value = 0;
     };
 
-    const isAgni = opts.palette === 'hinokami' || opts.palette === 'sun';
-    slot.backMat.uniforms.uAgniPass.value = isAgni ? 1 : 0;
-    slot.frontMat.uniforms.uAgniPass.value = isAgni ? 1 : 0;
-    for (const mesh of slot.agniOptics) mesh.visible = isAgni;
+    for (const mat of [slot.backMat, slot.frontMat]) {
+      mat.uniforms.uOpenStrike.value = 1;
+      mat.uniforms.uLiveBladeTrail.value = 1;
+    }
 
     const baseOp = opts.opacity ?? 0.98;
     configureMat(slot.backMat, baseOp * 0.94, 1.24);
@@ -1663,6 +1661,7 @@ export class WebglDemonSlayerVfxOverlay {
     slot.palette = opts.palette;
     slot.widthBoostPx = opts.widthBoostPx ?? 58;
     slot.fadeElapsed = 0;
+    slot.tipTravelSinceEmission = 0;
     slot.fadeDuration = opts.fadeDuration ?? 0.24;
     slot.samples.length = 0;
     slot.backGeo.setDrawRange(0, 0);
@@ -1671,38 +1670,42 @@ export class WebglDemonSlayerVfxOverlay {
     slot.frontGroup.visible = true;
   }
 
-  public pushBladeTrailSample(id: string, sample: ArenaBladeSample): void {
-    if (!this.renderer || this.disposed) return;
-    const slot = this.bladeTrailPool.find((s) => s.active && s.id === id);
-    if (!slot || slot.ending) return;
+  public pushBladeTrailSample(id: string, sample: ArenaBladeSample): boolean {
+    if (!this.renderer || this.disposed) return false;
+    const slot = this.bladeTrailPool.find((entry) => entry.active && entry.id === id);
+    if (!slot || slot.ending) return false;
 
-    // Avoid duplicate coincident points so Catmull-Rom tangents stay crisp
-    const prev = slot.samples[slot.samples.length - 1];
-    if (prev) {
-      const dist = Math.hypot(sample.tipX - prev.tipX, sample.tipY - prev.tipY);
-      if (dist < 2.2) return;
+    const previous = slot.samples.at(-1);
+    const step = previous ? classifyBladeTrailStep(previous, sample) : 'break';
+    if (step === 'duplicate') return false;
+    if (step === 'break') {
+      slot.samples.length = 0;
+      slot.tipTravelSinceEmission = 0;
     }
 
     slot.samples.push({ ...sample });
-    if (slot.samples.length > 22) {
-      slot.samples.shift();
-    }
-    if (prev && slot.samples.length === 2) {
-      const deltaX = sample.tipX - prev.tipX;
-      const deltaY = sample.tipY - prev.tipY;
+    if (slot.samples.length > 22) slot.samples.shift();
+    this.rebuildBladeTrailSlotGeometry(slot);
+    if (!previous || step !== 'sweep') return true;
+
+    const dx = sample.tipX - previous.tipX;
+    const dy = sample.tipY - previous.tipY;
+    slot.tipTravelSinceEmission += Math.hypot(dx, dy);
+    if (slot.tipTravelSinceEmission >= 24) {
+      slot.tipTravelSinceEmission %= 24;
       this.spawnElementalParticles({
         x: sample.tipX,
         y: sample.tipY,
-        angle: Math.atan2(deltaY, deltaX),
-        spread: 1.1,
-        count: 7,
-        speed: 180,
+        angle: Math.atan2(dy, dx),
+        spread: 0.58,
+        count: 3,
+        speed: 168,
         palette: slot.palette,
         kind: slot.palette === 'water' ? 'water_droplet' :
           slot.palette === 'wind' ? 'wind_shard' : 'spark_needle',
       });
     }
-    this.rebuildBladeTrailSlotGeometry(slot);
+    return true;
   }
 
   public endBladeTrail(id: string, immediateCut = false): void {
@@ -1841,6 +1844,7 @@ export class WebglDemonSlayerVfxOverlay {
     launchPull?: number;
     spectralGuardian?: boolean;
     openStrike?: boolean;
+    opacity?: number;
   }): void {
     if (!this.renderer || this.disposed) return;
     if (this.ribbons.length >= 6) {
@@ -1869,7 +1873,7 @@ export class WebglDemonSlayerVfxOverlay {
     const coreMat = createRibbonMaterial(
       pal,
       mode,
-      0.99,
+      opts.opacity ?? 0.99,
       true,
       THREE.NormalBlending,
       1.36,
@@ -3937,7 +3941,6 @@ export class WebglDemonSlayerVfxOverlay {
       slot.backMat.dispose();
       slot.frontGeo.dispose();
       slot.frontMat.dispose();
-      for (const mesh of slot.agniOptics) mesh.material.dispose();
     }
     this.bladeTrailPool = [];
     if (this.particleInstancedMesh) {

@@ -236,6 +236,7 @@ import {
   ActiveStrikeSyncState,
   ArenaBladeSample,
   SpriteDrawRect,
+  WEAPON_SWING_MOTION,
   cancelActiveStrike,
   claimEnemyHitForStrike,
   createActiveStrikeState,
@@ -566,8 +567,10 @@ export default function KaliyugaArena() {
   const webglDemonSlayerVfxRef = useRef<WebglDemonSlayerVfxOverlay | null>(null);
   const sakugaDirectorRef = useRef<SakugaDirectorState>(createSakugaDirectorState());
   const liveBladeTrailActiveIdRef = useRef<string | null>(null);
+  const previousBladeSampleRef = useRef<{ serial: number; sample: ArenaBladeSample } | null>(null);
   const activeStrikeRef = useRef<{
     sync: ActiveStrikeSyncState;
+    weapon: WeaponId;
     palette: DemonSlayerVfxPalette;
     execute: () => void;
   } | null>(null);
@@ -575,7 +578,7 @@ export default function KaliyugaArena() {
     serial: number;
     weapon: WeaponId;
     kind: 'light' | 'heavy';
-    emit: (blade: ArenaBladeSample) => void;
+    emit: (blade: ArenaBladeSample, hasRigPose: boolean) => void;
   } | null>(null);
   const varunaInfusionTimerRef = useRef<number>(0);
   const rudraSpriteRectRef = useRef<SpriteDrawRect>({
@@ -606,6 +609,7 @@ export default function KaliyugaArena() {
     }
     activeStrikeRef.current = null;
     pendingBladeReleaseRef.current = null;
+    previousBladeSampleRef.current = null;
   }, []);
 
   const pendingExecutionRef = useRef<{
@@ -4931,6 +4935,7 @@ export default function KaliyugaArena() {
     p.focusOrbs = seeThroughRes.refundsFocusOrb ? Math.min(4, Math.max(1, p.focusOrbs)) : 0;
     p.focusProgress = 0;
     p.action = 'heavy_unleash';
+    p.finisherVariant = null;
     p.actionDuration = 0.44;
     p.actionTimer = 0.44;
     p.scaleX = p.stance === 'thrust' ? 1.18 : 0.92;
@@ -5011,6 +5016,7 @@ export default function KaliyugaArena() {
     soundEngine.playBreathingStyle(primaryHeavyPalette);
     activeStrikeRef.current = {
       sync: strike,
+      weapon: heavyWeapon,
       palette: primaryHeavyPalette,
       execute: () => {
         const originX = p.x;
@@ -5668,6 +5674,7 @@ export default function KaliyugaArena() {
     });
     activeStrikeRef.current = {
       sync: strike,
+      weapon: strikeWeapon,
       palette: lightSlashPalette,
       execute: () => {
         const curP = simRef.current.player;
@@ -5682,7 +5689,7 @@ export default function KaliyugaArena() {
           serial: strike.attackSerial,
           weapon: strikeWeapon,
           kind: 'light',
-          emit: (blade) => {
+          emit: (blade, hasRigPose) => {
             // Align the first visible section of the arc with the current blade tip.
             // Limit the offset so foreshortened poses can't place a sweep behind Rudra.
             const entryAngle = capturedAngle + arcDir * arcSpan * 0.25;
@@ -5702,6 +5709,7 @@ export default function KaliyugaArena() {
               tiltY: 0,
               spinRate: 0,
               openStrike: true,
+              opacity: hasRigPose ? 0.43 : 0.99,
             });
             fx?.spawnElementalParticles({
               x: blade.tipX,
@@ -7542,7 +7550,6 @@ export default function KaliyugaArena() {
                   if (qaRecentEventsRef.current.length > 50) qaRecentEventsRef.current.shift();
                 }
               }
-              if (strikeFrame.shouldFinalizeTrail) activeStrikeRef.current = null;
             }
           }
 
@@ -11609,6 +11616,7 @@ export default function KaliyugaArena() {
             vx: p.vx,
             vy: p.vy,
           });
+          const liveStrike = activeStrikeRef.current;
           const rendered3D =
             rudra3d &&
             rudra3d.updateAndRender({
@@ -11636,6 +11644,12 @@ export default function KaliyugaArena() {
               stateProgress: coreLock.isSusanooActive ? undefined : rudraStateProgress,
               finisherVariant: p.finisherVariant,
               attackSerial: coreLock.isSusanooActive ? 0 : p.attackSerial,
+              weaponSwing: liveStrike && liveStrike.sync.attackSerial === p.attackSerial &&
+                coreLock.rudraIsAttacking ? {
+                  weapon: liveStrike.weapon,
+                  activeStart: liveStrike.sync.activeStart,
+                  activeEnd: liveStrike.sync.activeEnd,
+                } : undefined,
               susanooActive: coreLock.isSusanooActive,
             });
 
@@ -11693,14 +11707,15 @@ export default function KaliyugaArena() {
             drawW: drawSize,
             drawH: drawSize,
           };
+          const bladePose = rendered3D && coreLock.rudraIsAttacking ? rudra3d?.getLatestBladePose() : null;
           const currentBladeSample = () => projectBakedBladePoseToArena(
-            rendered3D && coreLock.rudraIsAttacking ? rudra3d?.getLatestBladePose() : null,
+            bladePose,
             rudraSpriteRectRef.current,
             {
               playerX: p.x, playerY: p.y, slashAngle: p.slashAngle,
               progress: p.weaponSwingProgress,
               direction: p.comboStep % 2 === 0 ? 1 : -1,
-              reachPx: WEAPON_CONFIGS[p.weapon].reachPx * 0.48,
+              reachPx: WEAPON_CONFIGS[liveStrike?.weapon ?? p.weapon].reachPx * 0.48,
             },
           );
           const release = pendingBladeReleaseRef.current;
@@ -11708,7 +11723,7 @@ export default function KaliyugaArena() {
             pendingBladeReleaseRef.current = null;
             if (release.serial === p.attackSerial) {
               const blade = currentBladeSample();
-              release.emit(blade);
+              release.emit(blade, Boolean(bladePose?.valid));
               const weaponCapture = weaponCaptureRef.current;
               if (weaponCapture?.framesAfterRelease === null) weaponCapture.framesAfterRelease = 1;
               if (isDebugMode && webglDemonSlayerVfxRef.current?.available) {
@@ -11724,40 +11739,48 @@ export default function KaliyugaArena() {
 
           if (rendered3D && rudra3d) {
             const webglVfxLive = webglDemonSlayerVfxRef.current;
-            const liveStrike = activeStrikeRef.current;
-            if (
-              webglVfxLive &&
-              liveStrike &&
-              liveStrike.sync.tier === 'heavy' &&
-              liveStrike.sync.element !== 'vayu' &&
-              liveStrike.sync.vfxStarted &&
-              coreLock.rudraIsAttacking &&
-              p.hp > 0 && p.hitFlashTimer <= 0 &&
-              p.weaponSwingProgress <= liveStrike.sync.activeEnd
-            ) {
-              const liveTrailKey = `rudra-live-${liveStrike.sync.attackSerial}`;
+            const previous = previousBladeSampleRef.current;
+            const sync = liveStrike?.sync;
+            const traceBlade = Boolean(
+              sync && sync.attackSerial === p.attackSerial && !sync.cancelled &&
+              bladePose?.valid && coreLock.rudraIsAttacking && p.hp > 0 && p.hitFlashTimer <= 0 &&
+              p.weaponSwingProgress >= Math.max(0, sync.activeStart - 0.17) &&
+              p.weaponSwingProgress <= sync.activeEnd &&
+              !(sync.tier === 'heavy' && sync.element === 'vayu')
+            );
+            const sample = traceBlade ? currentBladeSample() : null;
+            if (sample && webglVfxLive && liveStrike && sync?.vfxStarted) {
+              const liveTrailKey = `rudra-live-${sync.attackSerial}`;
               if (liveBladeTrailActiveIdRef.current !== liveTrailKey) {
                 if (liveBladeTrailActiveIdRef.current) {
                   webglVfxLive.endBladeTrail(liveBladeTrailActiveIdRef.current, false);
                 }
-                const livePalette = liveStrike.palette;
+                const motion = WEAPON_SWING_MOTION[liveStrike.weapon];
                 webglVfxLive.beginBladeTrail(liveTrailKey, {
-                  palette: livePalette,
-                  widthBoostPx: livePalette === 'water' ? 13 : 7,
-                  fadeDuration: 0.23,
+                  palette: liveStrike.palette,
+                  widthBoostPx: sync.tier === 'heavy' ? motion.trailWidth * 0.68 : motion.trailWidth,
+                  fadeDuration: motion.trailFade,
+                  opacity: sync.tier === 'heavy' ? 0.78 : 0.98,
                 });
                 liveBladeTrailActiveIdRef.current = liveTrailKey;
+                if (previous?.serial === sync.attackSerial && previous.sample.progress < sample.progress) {
+                  webglVfxLive.pushBladeTrailSample(liveTrailKey, previous.sample);
+                }
               }
-              const sample = currentBladeSample();
-              webglVfxLive.pushBladeTrailSample(liveTrailKey, sample);
-              if (isDebugMode) {
+              if (webglVfxLive.pushBladeTrailSample(liveTrailKey, sample) && isDebugMode) {
                 debugBladeSamplesRef.current.push(sample);
                 if (debugBladeSamplesRef.current.length > 24) debugBladeSamplesRef.current.shift();
+                qaRecentEventsRef.current.push({
+                  name: 'weapon-blade-sample', meta: liveStrike.weapon, frameTime: performance.now(),
+                  progress: sample.progress, contactX: sample.tipX, contactY: sample.tipY,
+                });
+                if (qaRecentEventsRef.current.length > 50) qaRecentEventsRef.current.shift();
               }
             } else if (liveBladeTrailActiveIdRef.current && webglVfxLive) {
               webglVfxLive.endBladeTrail(liveBladeTrailActiveIdRef.current, false);
               liveBladeTrailActiveIdRef.current = null;
             }
+            previousBladeSampleRef.current = sample ? { serial: p.attackSerial, sample } : null;
 
             // Pillar 5 — WebGL Back-Depth Pass rendered IMMEDIATELY BEHIND Rudra so 3D flames,
             // Hokusai waves, wind crescents, and live Parashu blade trails wrap around his torso!
@@ -11785,6 +11808,11 @@ export default function KaliyugaArena() {
             ctx.drawImage(rudra3d.canvas, anchorX, anchorY, drawSize, drawSize);
             ctx.restore();
           } else {
+            if (liveBladeTrailActiveIdRef.current) {
+              webglDemonSlayerVfxRef.current?.endBladeTrail(liveBladeTrailActiveIdRef.current, true);
+              liveBladeTrailActiveIdRef.current = null;
+            }
+            previousBladeSampleRef.current = null;
             drawSpriteFrame(
               ctx,
               activeRudraSheet,

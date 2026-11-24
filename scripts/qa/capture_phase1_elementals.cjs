@@ -17,6 +17,7 @@ async function main() {
     if (message.type() === 'error' && /webgl|shader/i.test(message.text())) errors.push(message.text());
   });
   const screenshots = [];
+  const weaponMotion = [];
   const captureFailures = [];
   const press = (key) => page.keyboard.press(key);
   async function capture(name) {
@@ -69,6 +70,17 @@ async function main() {
           await capture(`regular-${weapon}-${attack}`);
         } finally {
           await page.evaluate(() => window.__kaliyugaPhaseQAFixture.resumeWeaponCapture());
+        }
+        await page.waitForFunction(() => window.__kaliyugaPhaseQA.action === 'idle', undefined, { timeout: 45000 });
+        const samples = await page.evaluate(({ weapon, previous }) =>
+          window.__kaliyugaPhaseQA.recentEvents.filter((event) =>
+            event.name === 'weapon-blade-sample' && event.meta === weapon && event.frameTime > previous
+          ).map(({ progress, contactX, contactY }) => ({ progress, contactX, contactY })), { weapon, previous });
+        weaponMotion.push({ weapon, attack, samples });
+        if (attack === 'heavy' && weapon !== 'khanda_dual' &&
+            (samples.length < 2 || !samples.some((pose) =>
+              Math.hypot(pose.contactX - samples[0].contactX, pose.contactY - samples[0].contactY) > 4))) {
+          throw Error(`No blade follow-through sampled for ${weapon}: ${JSON.stringify(samples)}`);
         }
       }
     }
@@ -226,7 +238,7 @@ async function main() {
     await capture('failure-current-screen');
     throw error;
   } finally {
-    await fs.writeFile(`${directory}/report.json`, JSON.stringify({ screenshots, errors, captureFailures }, null, 2));
+    await fs.writeFile(`${directory}/report.json`, JSON.stringify({ screenshots, errors, captureFailures, weaponMotion }, null, 2));
     try {
       await page.close();
       await video?.saveAs(`${directory}/phase1-combat-effects.webm`);

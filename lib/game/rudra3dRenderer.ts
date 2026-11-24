@@ -23,7 +23,8 @@ import { loadFbxCached, simplifyBufferGeometry } from './meshSimplifier';
 import {
   computeCameraFootAnchorRatio,
 } from './kalaBhairavaSusanoo';
-import type { BakedBladePose } from './bladeTrailSampler';
+import { resolveWeaponSwingClipProgress, type BakedBladePose } from './bladeTrailSampler';
+import type { WeaponId } from './rules';
 
 export type RudraAnimState =
   | 'idle'
@@ -60,6 +61,11 @@ export interface RudraRenderInput {
   stateProgress?: number;
   finisherVariant?: 'downward_crush' | 'spin_360_cleave' | 'impaling_lunge' | null;
   attackSerial?: number;
+  weaponSwing?: {
+    weapon: WeaponId;
+    activeStart: number;
+    activeEnd: number;
+  };
   susanooActive?: boolean;
 }
 
@@ -155,9 +161,13 @@ export function resolveRudraAnimStateAndClock(
     const prog = Number.isFinite(input.attackProgress)
       ? input.attackProgress
       : stateElapsedSec / 0.44;
+    const swing = input.weaponSwing;
+    const clipProgress = swing && !input.finisherVariant
+      ? resolveWeaponSwingClipProgress(prog, swing.weapon, input.isHeavyAttack, swing.activeStart, swing.activeEnd)
+      : prog;
     return {
       state,
-      animClock: Math.max(0, Math.min(0.99, prog)),
+      animClock: Math.max(0, Math.min(0.99, clipProgress)),
       usesNormalizedProgress: true,
     };
   }
@@ -664,9 +674,10 @@ export class Rudra3DRenderer {
     const serialChanged =
       typeof input.attackSerial === 'number' && input.attackSerial !== this.lastAttackSerial;
     if (nextState !== this.lastAnimState || serialChanged) {
+      const blend = getRudraTransitionBlendSeconds(this.lastAnimState, nextState);
       const duration = serialChanged && nextState === this.lastAnimState
         ? 0
-        : getRudraTransitionBlendSeconds(this.lastAnimState, nextState);
+        : input.weaponSwing ? Math.min(blend, 0.018) : blend;
       this.blendDurationSec = 0;
       if (duration > 0 && this.canvas?.width && this.blendFromCanvas) {
         const sourceCtx = this.blendFromCanvas.getContext('2d');
@@ -709,7 +720,8 @@ export class Rudra3DRenderer {
     if (baked) {
       if (this.blendDurationSec > 0 && this.blendFromCanvas && this.blendOutCanvas) {
         this.blendElapsedSec += stepDt;
-        const alpha = Math.min(1, this.blendElapsedSec / this.blendDurationSec);
+        const atWeaponContact = input.weaponSwing && input.attackProgress >= input.weaponSwing.activeStart;
+        const alpha = atWeaponContact ? 1 : Math.min(1, this.blendElapsedSec / this.blendDurationSec);
         const blendCtx = this.blendOutCanvas.getContext('2d');
         if (blendCtx && alpha < 1) {
           blendCtx.clearRect(0, 0, this.size, this.size);

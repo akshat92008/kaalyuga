@@ -1,3 +1,5 @@
+import type { WeaponId } from './rules';
+
 // ============================================================================
 // PHASE 1 — PARASHU BLADE-POSE PROJECTION, CATMULL-ROM SWEPT RIBBON BUILDER
 // & EXACT ACTIVE-FRAME COMBAT HIT SYNCHRONIZATION
@@ -5,6 +7,61 @@
 // ============================================================================
 
 export type BaseElementId = 'agni' | 'varuna' | 'vayu' | 'vajra';
+
+// Clip phases are relative to the trimmed animation. Combat still owns the
+// contact and recovery windows; these values shape how the rig reaches them.
+export const WEAPON_SWING_MOTION = {
+  khanda_dual: { lightContact: 0.47, heavyContact: 0.42, followThrough: 0.91, trailWidth: 11, trailFade: 0.16 },
+  parashu: { lightContact: 0.40, heavyContact: 0.37, followThrough: 0.81, trailWidth: 18, trailFade: 0.21 },
+  trishula_great: { lightContact: 0.37, heavyContact: 0.32, followThrough: 0.72, trailWidth: 24, trailFade: 0.25 },
+} satisfies Record<WeaponId, {
+  lightContact: number;
+  heavyContact: number;
+  followThrough: number;
+  trailWidth: number;
+  trailFade: number;
+}>;
+
+export function resolveWeaponSwingClipProgress(
+  progress: number,
+  weapon: WeaponId,
+  heavy: boolean,
+  activeStart: number,
+  activeEnd: number,
+): number {
+  const phase = Number.isFinite(progress) ? Math.max(0, Math.min(1, progress)) : 0;
+  if (!(activeStart > 0 && activeEnd > activeStart && activeEnd < 1)) return phase;
+  const motion = WEAPON_SWING_MOTION[weapon];
+  const contact = heavy ? motion.heavyContact : motion.lightContact;
+  const follow = motion.followThrough;
+  const windupRate = contact / activeStart;
+  const swingRate = (follow - contact) / (activeEnd - activeStart);
+  const settleRate = (1 - follow) / (1 - activeEnd);
+  const contactRate = 2 * windupRate * swingRate / (windupRate + swingRate);
+  const followRate = 2 * swingRate * settleRate / (swingRate + settleRate);
+  if (phase <= activeStart) return interpolateSwingPhase(phase / activeStart, activeStart, 0, contact, 0, contactRate);
+  if (phase <= activeEnd) {
+    const span = activeEnd - activeStart;
+    return interpolateSwingPhase((phase - activeStart) / span, span, contact, follow, contactRate, followRate);
+  }
+  const span = 1 - activeEnd;
+  return interpolateSwingPhase((phase - activeEnd) / span, span, follow, 1, followRate, 0);
+}
+
+/** Slope-matched interpolation lets the blade pass through contact without an artificial pause. */
+function interpolateSwingPhase(t: number, span: number, from: number, to: number, enter: number, exit: number): number {
+  const inverse = 1 - t;
+  return from + (to - from) * t * t * (3 - 2 * t)
+    + span * t * inverse * (inverse * enter - t * exit);
+}
+
+/** Reject a pose discontinuity so a trail never bridges a teleported blade. */
+export function classifyBladeTrailStep(previous: ArenaBladeSample, current: ArenaBladeSample): 'duplicate' | 'sweep' | 'break' {
+  const tipTravel = Math.hypot(current.tipX - previous.tipX, current.tipY - previous.tipY);
+  const rootTravel = Math.hypot(current.rootX - previous.rootX, current.rootY - previous.rootY);
+  if (tipTravel < 1.8 && rootTravel < 1.8) return 'duplicate';
+  return tipTravel > 90 || rootTravel > 62 ? 'break' : 'sweep';
+}
 
 /**
  * Normalized 2D projection of Rudra's animated 3D Parashu blade captured directly
@@ -254,8 +311,9 @@ export function writeSweptBladeRibbonBuffers(
     // Pull inner edge slightly inward, flare outer edge outward along the real blade vector!
     rx -= dirX * rootInset * widthEnv;
     ry -= dirY * rootInset * widthEnv;
-    tx += dirX * widthBoost * widthEnv;
-    ty += dirY * widthBoost * widthEnv;
+    const widthBehindBlade = widthEnv * Math.min(1, (1 - globalU) * 4);
+    tx += dirX * widthBoost * widthBehindBlade;
+    ty += dirY * widthBoost * widthBehindBlade;
 
     const vBase = i * 2;
     const pOff = vBase * 3;

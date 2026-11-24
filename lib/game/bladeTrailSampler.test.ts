@@ -3,10 +3,13 @@ import assert from 'node:assert/strict';
 import {
   ArenaBladeSample,
   BakedBladePose,
+  WEAPON_SWING_MOTION,
+  classifyBladeTrailStep,
   cancelActiveStrike,
   claimEnemyHitForStrike,
   createActiveStrikeState,
   projectBakedBladePoseToArena,
+  resolveWeaponSwingClipProgress,
   stepActiveStrikeWindow,
   writeSweptBladeRibbonBuffers,
 } from './bladeTrailSampler';
@@ -79,6 +82,9 @@ test('writeSweptBladeRibbonBuffers builds smooth Catmull-Rom curved geometry and
   assert.equal(full.indexCount, 12 * 6);
   assert.equal(full.hasBackSegments, true);
   assert.equal(full.hasFrontSegments, true);
+  const lastTip = (full.vertexCount - 1) * 3;
+  assert.equal(pos[lastTip], samples.at(-1)?.tipX);
+  assert.equal(pos[lastTip + 1], -(samples.at(-1)?.tipY ?? 0));
   for (let i = 0; i < full.vertexCount * 3; i++) {
     assert.ok(Number.isFinite(pos[i]), `Position index ${i} must be finite`);
   }
@@ -145,4 +151,34 @@ test('ActiveStrikeSyncState prevents Frame-0 damage, deduplicates hits per attac
   assert.equal(s3.shouldSampleBladeTrail, false);
   assert.equal(s3.shouldFinalizeTrail, true);
   assert.equal(claimEnemyHitForStrike(strike, 12), false);
+});
+
+test('each weapon reaches contact and follow-through with continuous forward motion', () => {
+  for (const weapon of ['khanda_dual', 'parashu', 'trishula_great'] as const) {
+    const motion = WEAPON_SWING_MOTION[weapon];
+    for (const heavy of [false, true]) {
+      const start = heavy ? 0.28 : 0.25;
+      const end = heavy ? 0.72 : 0.68;
+      const clip = (progress: number) => resolveWeaponSwingClipProgress(progress, weapon, heavy, start, end);
+      assert.equal(clip(start), heavy ? motion.heavyContact : motion.lightContact);
+      assert.equal(clip(end), motion.followThrough);
+      assert.equal(clip(0), 0);
+      assert.equal(clip(1), 1);
+      for (let sample = 1; sample <= 100; sample++) assert.ok(clip(sample / 100) > clip((sample - 1) / 100));
+      const epsilon = 0.0001;
+      for (const point of [start, end]) {
+        const speedIn = (clip(point) - clip(point - epsilon)) / epsilon;
+        const speedOut = (clip(point + epsilon) - clip(point)) / epsilon;
+        assert.ok(Math.abs(speedIn - speedOut) < 0.01);
+      }
+    }
+  }
+});
+
+test('blade trail accepts motion and breaks across a teleported weapon', () => {
+  const sample = projectBakedBladePoseToArena(null, { drawX: 0, drawY: 0, drawW: 0, drawH: 0 },
+    { playerX: 400, playerY: 300, slashAngle: 0, progress: 0.5 });
+  assert.equal(classifyBladeTrailStep(sample, sample), 'duplicate');
+  assert.equal(classifyBladeTrailStep(sample, { ...sample, tipX: sample.tipX + 12 }), 'sweep');
+  assert.equal(classifyBladeTrailStep(sample, { ...sample, rootY: sample.rootY - 70 }), 'break');
 });
