@@ -430,6 +430,9 @@ const RIBBON_FRAGMENT_SHADER = /* glsl */ `
   uniform float uOpenStrike;
   uniform float uLiveBladeTrail;
   uniform sampler2D uAtlasTex;
+  uniform sampler2D uDivineInkAtlas;
+  uniform float uDivineInkEnabled;
+  uniform float uDivineInkStart;
 
   varying vec2 vUv;
 
@@ -456,6 +459,20 @@ const RIBBON_FRAGMENT_SHADER = /* glsl */ `
   void main() {
     float u = vUv.x;
     float v = vUv.y;
+    // Experimental source artwork on the existing swept weapon mesh. Never create a separate ring.
+    if (uDivineInkEnabled > 0.5 && uLiveBladeTrail > 0.5 && uMode < 0.5) {
+      float frame = clamp(floor(max(0.0, uTime - uDivineInkStart) * 30.0), 0.0, 11.0);
+      float col = mod(frame, 4.0);
+      float row = floor(frame / 4.0);
+      // Atlas: 4 x 3 cells, 508 x 128 content, two transparent pixels of padding.
+      vec2 px = vec2(col * 512.0 + 2.5 + clamp(u, 0.0, 1.0) * 507.0,
+        row * 132.0 + 2.5 + (1.0 - clamp(v, 0.0, 1.0)) * 127.0);
+      vec4 art = texture2D(uDivineInkAtlas, vec2(px.x / 2048.0, 1.0 - px.y / 396.0));
+      float taper = smoothstep(0.0, 0.16, u) * (1.0 - smoothstep(0.97, 1.0, u));
+      float alpha = art.a * taper * (1.0 - smoothstep(0.0, 1.0, uLife)) * uOpacity;
+      gl_FragColor = vec4(art.rgb * alpha, alpha);
+      return;
+    }
     if (uOpenStrike > 0.5) {
       gl_FragColor = paintOpenStrike(u, v);
       return;
@@ -1178,6 +1195,9 @@ function createRibbonMaterial(
       uCrestStyle: { value: 0 },
       uOpenStrike: { value: 0 },
       uLiveBladeTrail: { value: 0 },
+      uDivineInkAtlas: { value: null },
+      uDivineInkEnabled: { value: 0 },
+      uDivineInkStart: { value: 0 },
       uAtlasTex: { value: atlasTex },
     },
     vertexShader: RIBBON_VERTEX_SHADER,
@@ -1289,6 +1309,7 @@ export class WebglDemonSlayerVfxOverlay {
 
   private qualityPreset: VfxQualityPreset = 'balanced';
   private elapsed = 0;
+  private divineInkAtlas: THREE.Texture | null = null;
   private width = 1440;
   private height = 900;
   private isSoftwareGl = false;
@@ -1322,6 +1343,21 @@ export class WebglDemonSlayerVfxOverlay {
       this.isSoftwareGl = isSoftwareWebGLRenderer();
       this.qualityPreset = this.isSoftwareGl ? 'performance' : 'balanced';
       this.atlas = getOrCreatePainterlyVfxAtlas();
+      // Explicit opt-in: unchanged default gameplay, no download unless requested.
+      if (new URLSearchParams(window.location.search).get('divineInk') === '1') {
+        new THREE.TextureLoader().load('/vfx/divine-ink/agni-ribbon-atlas.png', (tex) => {
+          if (this.disposed || tex.image.width !== 2048 || tex.image.height !== 396) {
+            tex.dispose();
+            return;
+          }
+          tex.colorSpace = THREE.NoColorSpace;
+          tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+          tex.minFilter = tex.magFilter = THREE.LinearFilter;
+          tex.generateMipmaps = false;
+          tex.needsUpdate = true;
+          this.divineInkAtlas = tex;
+        }, undefined, () => { /* Missing prototype texture: retain procedural VFX. */ });
+      }
 
       this.renderer = new THREE.WebGLRenderer({
         canvas: this.canvas,
@@ -1649,6 +1685,10 @@ export class WebglDemonSlayerVfxOverlay {
     for (const mat of [slot.backMat, slot.frontMat]) {
       mat.uniforms.uOpenStrike.value = 1;
       mat.uniforms.uLiveBladeTrail.value = 1;
+      mat.uniforms.uDivineInkAtlas.value = this.divineInkAtlas;
+      mat.uniforms.uDivineInkEnabled.value = this.divineInkAtlas &&
+        (opts.palette === 'hinokami' || opts.palette === 'sun') ? 1 : 0;
+      mat.uniforms.uDivineInkStart.value = this.elapsed;
     }
 
     const baseOp = opts.opacity ?? 0.98;
@@ -3933,6 +3973,8 @@ export class WebglDemonSlayerVfxOverlay {
   public dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.divineInkAtlas?.dispose();
+    this.divineInkAtlas = null;
     this.clearActiveEffects();
     for (const slot of this.bladeTrailPool) {
       this.backScene.remove(slot.backGroup);
