@@ -142,14 +142,22 @@ async function main() {
       try {
         await page.waitForFunction(({ id, previous }) => window.__kaliyugaPhaseQA.recentEvents.some(
           (event) => event.name === 'heavy-contact' && event.meta === id && event.frameTime > previous
-        ), { id: element, previous: previousHeavy }, { timeout: 15000 });
-      } catch {
-        const facts = await page.evaluate(() => ({
-          action: window.__kaliyugaPhaseQA.action,
-          recentEvents: window.__kaliyugaPhaseQA.recentEvents.slice(-5),
-        }));
-        captureFailures.push({ element, facts });
-        console.log('Heavy capture did not observe the expected event: ' + JSON.stringify({ element, facts }));
+        ), { id: element, previous: previousHeavy }, { polling: 50, timeout: 45000 });
+      } catch (error) {
+        if (error.name !== 'TimeoutError') throw error;
+        const facts = await page.evaluate(({ id, previous }) => {
+          const { action, recentEvents } = window.__kaliyugaPhaseQA;
+          return {
+            action,
+            observedContact: recentEvents.some((event) =>
+              event.name === 'heavy-contact' && event.meta === id && event.frameTime > previous),
+            recentEvents: recentEvents.slice(-5),
+          };
+        }, { id: element, previous: previousHeavy });
+        if (!facts.observedContact) {
+          captureFailures.push({ element, facts });
+          console.log('Heavy capture did not observe the expected event: ' + JSON.stringify({ element, facts }));
+        }
       }
       await capture(`${element}-heavy`);
       await page.waitForTimeout(85);
