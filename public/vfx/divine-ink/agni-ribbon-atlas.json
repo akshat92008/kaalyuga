@@ -1,0 +1,18 @@
+{
+  "status": "experimental; not cleared for commercial release",
+  "source": "Animated_anime_fire_crescent_asset_04c7c45b.mp4",
+  "source_sha256": "cac5fc1dc475b1e2bf789a9f6c1fb604429203b879631af96b8921ebc2134ebc",
+  "frames": 12,
+  "columns": 4,
+  "rows": 3,
+  "frameWidth": 508,
+  "frameHeight": 128,
+  "padding": 2,
+  "width": 2048,
+  "height": 396,
+  "sampleFps": 12,
+  "sourceStartSeconds": 0.85,
+  "sourceEndSeconds": 1.7666666666666666,
+  "encoding": "indexed RGBA palette",
+  "mapping": "elliptical lower arc; non-looping"
+}

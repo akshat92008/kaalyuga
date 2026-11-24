@@ -1,0 +1,5 @@
+# Divine Ink Agni prototype — experimental only
+
+Run the game from this branch, append `?divineInk=1`, wait for the PNG to load and perform a fire attack with an existing live blade trail. Compare with the same attack without the query parameter. This changes the primary pooled blade ribbon material only; hitboxes, damage, other elements, heavy release meshes and default appearance are unchanged. Texture missing or invalid: procedural fallback. The PNG is a 12-frame non-looping source-art atlas derived from the user-provided green-screen Flow clip, lower arc unwrapped into a straight strip. No anime frames used. It is a temporary benchmark, not commercial clearance. Keep the source clip and provider terms; original art direction and commercial review remain necessary.
+
+Verification: source atlas RGBA cells were checked locally for opaque and transparent regions. The committed indexed PNG is byte-verified. No full game build, browser playback, M3 performance or artistic approval yet. Next: verify four directions, interruptions, front/back layer depth, contact timing and legacy heavy effect overlap; then approve a real gameplay recording before expanding.
