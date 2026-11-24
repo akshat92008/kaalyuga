@@ -98,7 +98,7 @@ export function spawnHeavyElementalRelease(
     case 'agni':
       fx.spawnAgniCrescent({
         x: pivotX, y: pivotY, angle, radius: clamp(radius * 0.69, 128, 187),
-        duration: 0.50,
+        duration: 0.50, fromBlade: Boolean(blade),
       });
       break;
     case 'varuna':

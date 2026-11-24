@@ -53,18 +53,23 @@ async function main() {
         await page.waitForFunction(() => window.__kaliyugaPhaseQA.action === 'idle', undefined, { timeout: 45000 });
         const previous = await page.evaluate(() => {
           window.__kaliyugaPhaseQAFixture.prepareStrikeTarget();
+          window.__kaliyugaPhaseQAFixture.armWeaponCapture();
           return performance.now();
         });
-        if (attack === 'heavy') await press(stanceKey);
-        await press(key);
-        await page.waitForFunction(({ weapon, attack, previous }) => {
-          const qa = window.__kaliyugaPhaseQA;
-          return qa.chamber === 1 && qa.recentEvents.some((event) =>
-            event.name === `weapon-${attack}-release` && event.meta === weapon && event.frameTime > previous &&
-            Number.isFinite(event.contactX) && Number.isFinite(event.contactY)
-          );
-        }, { weapon, attack, previous }, { polling: 50, timeout: 45000 });
-        await capture(`regular-${weapon}-${attack}`);
+        try {
+          await press(key);
+          await page.waitForFunction(({ weapon, attack, previous }) => {
+            const qa = window.__kaliyugaPhaseQA;
+            return window.__kaliyugaPhaseQAFixture.isWeaponFrameHeld() &&
+              qa.chamber === 1 && qa.recentEvents.some((event) =>
+                event.name === `weapon-${attack}-release` && event.meta === weapon && event.frameTime > previous &&
+                Number.isFinite(event.contactX) && Number.isFinite(event.contactY)
+              );
+          }, { weapon, attack, previous }, { polling: 50, timeout: 45000 });
+          await capture(`regular-${weapon}-${attack}`);
+        } finally {
+          await page.evaluate(() => window.__kaliyugaPhaseQAFixture.resumeWeaponCapture());
+        }
       }
     }
     await press('Alt+Digit2');

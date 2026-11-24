@@ -585,6 +585,7 @@ export default function KaliyugaArena() {
     drawH: 154,
   });
   const debugBladeSamplesRef = useRef<ArenaBladeSample[]>([]);
+  const weaponCaptureRef = useRef<{ framesAfterRelease: number | null } | null>(null);
   const debugTimeScaleRef = useRef<number>(1);
   const debugPausedRef = useRef<boolean>(false);
   const debugStepFramesRef = useRef<number>(0);
@@ -1303,7 +1304,9 @@ export default function KaliyugaArena() {
         sakugaDirectorRef.current = createSakugaDirectorState();
         sim.chamberClearTimer = 0;
         for (const enemy of sim.enemies) {
-          enemy.hp = Math.max(9000, enemy.hp);
+          enemy.maxHp = Math.max(9000, enemy.maxHp);
+          enemy.hp = enemy.maxHp;
+          enemy.displayHp = enemy.hp;
           enemy.aiState = 'recover';
           enemy.aiTimer = 45;
           enemy.postureBrokenTimer = 0;
@@ -1314,6 +1317,9 @@ export default function KaliyugaArena() {
       };
       const fixture = {
         grantResources: () => { prepareArena(); },
+        armWeaponCapture: () => { weaponCaptureRef.current = { framesAfterRelease: null }; },
+        isWeaponFrameHeld: () => weaponCaptureRef.current?.framesAfterRelease === 0,
+        resumeWeaponCapture: () => { weaponCaptureRef.current = null; },
         prepareStrikeTarget: () => {
           prepareArena();
           const sim = simRef.current;
@@ -3298,14 +3304,18 @@ export default function KaliyugaArena() {
       const sim = simRef.current;
       const p = sim.player;
       const next = targetStance ?? getNextStaffStance(p.stance);
-      p.stance = next;
       varunaInfusionTimerRef.current = 0;
+      if (p.stance === next) return;
+      p.stance = next;
       const cfg = STANCE_CONFIGS[next];
-      spawnShockwave(p.x, p.y, 64, '#f2c45a', 0.28);
+      webglDemonSlayerVfxRef.current?.spawnBladeGlint({
+        x: p.x + p.facing * 12, y: p.y - 33, scale: 0.46,
+        palette: next === 'pillar' ? 'wind' : next === 'thrust' ? 'thunder' : 'hinokami',
+      });
       spawnParticles(p.x, p.y - 25, 10, '#f2c45a', 95, 3.5, 40);
       spawnFloatingText(p.x, p.y - 72, `${cfg.sanskritName} · ${cfg.englishName.toUpperCase()}`, '#f2c45a', 1.0);
     },
-    [spawnFloatingText, spawnParticles, spawnShockwave]
+    [spawnFloatingText, spawnParticles]
   );
 
   const triggerSwitchWeapon = useCallback(
@@ -3313,13 +3323,17 @@ export default function KaliyugaArena() {
       const sim = simRef.current;
       const p = sim.player;
       const weapon = normalizeWeaponId(rawWeapon);
+      if (p.weapon === weapon) return;
       p.weapon = weapon;
       const cfg = WEAPON_CONFIGS[weapon];
-      spawnShockwave(p.x, p.y, 68, cfg.accentColor, 0.28);
+      webglDemonSlayerVfxRef.current?.spawnBladeGlint({
+        x: p.x + p.facing * 12, y: p.y - 33, scale: 0.50,
+        palette: weapon === 'khanda_dual' ? 'wind' : weapon === 'trishula_great' ? 'hinokami' : 'sun',
+      });
       spawnParticles(p.x, p.y - 25, 10, cfg.accentColor, 95, 3.5, 40);
       spawnFloatingText(p.x, p.y - 72, `${cfg.sanskritName} · ${cfg.englishName}`, cfg.accentColor, 0.95);
     },
-    [spawnFloatingText, spawnParticles, spawnShockwave]
+    [spawnFloatingText, spawnParticles]
   );
 
   const triggerImmobilizeSpell = useCallback(() => {
@@ -5345,7 +5359,10 @@ export default function KaliyugaArena() {
             if (heavyHitRes.triggeredPostureBreak) {
               sim.runPostureBreaks += 1;
               recordQuestEvent('shatter_posture', 1);
-              spawnShockwave(e.x, e.y, 145, '#ff4d3b', 0.42);
+              webglDemonSlayerVfxRef.current?.spawnGroundLightBounce({
+                x: e.x, y: e.y, radius: 84, duration: 0.28,
+                palette: primaryHeavyPalette, intensity: 0.76,
+              });
               spawnFloatingText(
                 e.x,
                 e.y - 88,
@@ -6937,6 +6954,15 @@ export default function KaliyugaArena() {
     };
 
     const tick = (now: number) => {
+      const weaponCapture = weaponCaptureRef.current;
+      if (weaponCapture?.framesAfterRelease === 0) {
+        lastTime = now;
+        afterDraw(tick);
+        return;
+      }
+      if (weaponCapture && weaponCapture.framesAfterRelease !== null) {
+        weaponCapture.framesAfterRelease -= 1;
+      }
       const rawDt = (now - lastTime) / 1000;
       lastTime = now;
       const dt = Math.min(Math.max(rawDt, 0.001), 0.05);
@@ -11500,9 +11526,9 @@ export default function KaliyugaArena() {
             ctx.fillStyle = 'rgba(10, 6, 8, 0.85)';
             ctx.fillRect(bx - 1, by - 1, bw + 2, 6.0);
             ctx.fillStyle = 'rgba(255, 232, 168, 0.85)';
-            ctx.fillRect(bx, by, bw * Math.max(0, e.displayHp / e.maxHp), 3.0);
+            ctx.fillRect(bx, by, bw * Math.min(1, Math.max(0, e.displayHp / e.maxHp)), 3.0);
             ctx.fillStyle = '#e0313c';
-            ctx.fillRect(bx, by, bw * Math.max(0, e.hp / e.maxHp), 3.0);
+            ctx.fillRect(bx, by, bw * Math.min(1, Math.max(0, e.hp / e.maxHp)), 3.0);
             ctx.fillStyle = '#f2c45a';
             ctx.fillRect(bx, by + 3.4, bw * Math.max(0, e.posture / e.maxPosture), 1.6);
             ctx.restore();
@@ -11520,9 +11546,9 @@ export default function KaliyugaArena() {
             ctx.fillStyle = 'rgba(0,0,0,0.65)';
             ctx.fillRect(bx, by, bw, 3.2);
             ctx.fillStyle = 'rgba(255, 232, 168, 0.80)';
-            ctx.fillRect(bx, by, bw * Math.max(0, e.displayHp / e.maxHp), 1.8);
+            ctx.fillRect(bx, by, bw * Math.min(1, Math.max(0, e.displayHp / e.maxHp)), 1.8);
             ctx.fillStyle = '#e0313c';
-            ctx.fillRect(bx, by, bw * Math.max(0, e.hp / e.maxHp), 1.8);
+            ctx.fillRect(bx, by, bw * Math.min(1, Math.max(0, e.hp / e.maxHp)), 1.8);
             ctx.fillStyle = '#f2c45a';
             ctx.fillRect(bx, by + 2.0, bw * Math.max(0, e.posture / e.maxPosture), 1.2);
           }
@@ -11683,6 +11709,8 @@ export default function KaliyugaArena() {
             if (release.serial === p.attackSerial) {
               const blade = currentBladeSample();
               release.emit(blade);
+              const weaponCapture = weaponCaptureRef.current;
+              if (weaponCapture?.framesAfterRelease === null) weaponCapture.framesAfterRelease = 1;
               if (isDebugMode && webglDemonSlayerVfxRef.current?.available) {
                 qaRecentEventsRef.current.push({
                   name: `weapon-${release.kind}-release`,

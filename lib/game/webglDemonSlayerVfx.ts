@@ -189,7 +189,8 @@ export function computeThunderZigzagVertices(
  */
 export function computeThunderForkedBranches(
   mainPts: ZigzagPoint2D[],
-  seed = 1
+  seed = 1,
+  focused = false,
 ): ZigzagPoint2D[][] {
   if (mainPts.length < 3) return [];
   const branches: ZigzagPoint2D[][] = [];
@@ -204,12 +205,14 @@ export function computeThunderForkedBranches(
     const baseAngle = Math.atan2(next.y - prev.y, next.x - prev.x);
     const side = i % 2 === 0 ? 1 : -1;
     const h = Math.abs(Math.sin(i * 31.7 + seed * 17.3));
-    const branchAngle = baseAngle + side * (0.46 + h * 0.52);
-    const branchLen = totalLen * (0.26 + h * 0.22);
+    const branchAngle = baseAngle + side * (focused ? 0.27 + h * 0.38 : 0.46 + h * 0.52);
+    const branchLen = totalLen * (focused ? 0.15 + h * 0.14 : 0.26 + h * 0.22);
     const endX = origin.x + Math.cos(branchAngle) * branchLen;
     const endY = origin.y + Math.sin(branchAngle) * branchLen;
     branches.push(
-      computeThunderZigzagVertices(origin.x, origin.y, endX, endY, 3, 16 + h * 14, seed + i * 7)
+      computeThunderZigzagVertices(
+        origin.x, origin.y, endX, endY, 3, focused ? 5 + h * 8 : 16 + h * 14, seed + i * 7,
+      )
     );
   }
   return branches;
@@ -769,7 +772,7 @@ const THUNDER_BOLT_FRAGMENT_SHADER = /* glsl */ `
 
     if (uIsHalo > 0.5) {
       float halo = exp(-dist * dist * 3.8) * (1.0 - tailDissolve) * surge;
-      vec3 haloCol = mix(uCyanColor, uGoldColor, smoothstep(0.52, 0.14, dist));
+      vec3 haloCol = mix(uCyanColor, uGoldColor, (1.0 - smoothstep(0.14, 0.52, dist)));
       float alpha = halo * uOpacity * 0.55 * reveal;
       if (alpha < 0.02) discard;
       gl_FragColor = vec4(haloCol * 1.35 * alpha, alpha);
@@ -783,10 +786,10 @@ const THUNDER_BOLT_FRAGMENT_SHADER = /* glsl */ `
 
     // Crisp 4-Band Stepped Zenitsu Thunder Composition:
     // Pitch-black Sumi-e serrated contour -> Electric Cyan edge -> Zenitsu Gold -> White-hot plasma core
-    float inkEdge = smoothstep(outerBound, outerBound - 0.12, dist);
-    float cyanBand = smoothstep(outerBound - 0.14, outerBound - 0.26, dist);
-    float goldBand = smoothstep(0.62 * widthScale, 0.42 * widthScale, dist);
-    float coreBand = smoothstep(0.28 * widthScale, 0.11 * widthScale, dist);
+    float inkEdge = (1.0 - smoothstep(outerBound - 0.12, outerBound, dist));
+    float cyanBand = (1.0 - smoothstep(outerBound - 0.26, outerBound - 0.14, dist));
+    float goldBand = (1.0 - smoothstep(0.42 * widthScale, 0.62 * widthScale, dist));
+    float coreBand = (1.0 - smoothstep(0.11 * widthScale, 0.28 * widthScale, dist));
 
     vec3 col = uInkColor;
     col = mix(col, uCyanColor * 1.24, cyanBand);
@@ -1045,7 +1048,8 @@ function buildCurvedRibbonGeometry(
   width: number,
   arcSpan: number,
   direction: 1 | -1,
-  segments = 30
+  segments = 30,
+  launchPull = 0,
 ): THREE.BufferGeometry {
   const positions: number[] = [];
   const uvs: number[] = [];
@@ -1055,7 +1059,7 @@ function buildCurvedRibbonGeometry(
   for (let i = 0; i <= segments; i++) {
     const t = i / segments;
     const angle = startA + arcSpan * t * direction;
-    const rCenter = radius * (0.86 + Math.sin(t * Math.PI * 0.78) * 0.22);
+    const rCenter = radius * (0.86 + Math.sin(t * Math.PI * 0.78) * 0.22 - launchPull * Math.pow(1 - t, 2.9));
     const taper = Math.sin(Math.pow(t, 0.72) * Math.PI);
     const halfW = width * 0.5 * (0.18 + taper * 0.92);
 
@@ -1834,6 +1838,7 @@ export class WebglDemonSlayerVfxOverlay {
     spinRate?: number;
     withBackWrap?: boolean;
     painterlyAgni?: boolean;
+    launchPull?: number;
     spectralGuardian?: boolean;
     openStrike?: boolean;
   }): void {
@@ -1853,10 +1858,10 @@ export class WebglDemonSlayerVfxOverlay {
     const direction = opts.direction ?? 1;
 
     const coreGeo = opts.spectralGuardian ? buildElementalStrokeGeometry('guardian', radius, 0)
-      : buildCurvedRibbonGeometry(radius, width, arcSpan, direction, 30);
+      : buildCurvedRibbonGeometry(radius, width, arcSpan, direction, 30, opts.launchPull);
     const glowGeo = opts.openStrike ? coreGeo : opts.spectralGuardian
       ? buildElementalStrokeGeometry('guardian', radius, 1)
-      : buildCurvedRibbonGeometry(radius, width * 1.38, arcSpan, direction, 30);
+      : buildCurvedRibbonGeometry(radius, width * 1.38, arcSpan, direction, 30, opts.launchPull);
 
     const uvRepeat = mode === 2 ? 2.1 : mode === 3 ? 1.55 : 1.35;
     const scrollSpeed = mode === 2 ? 3.5 : 1.75;
@@ -1964,6 +1969,7 @@ export class WebglDemonSlayerVfxOverlay {
     radius: number;
     duration: number;
     cast?: boolean;
+    fromBlade?: boolean;
   }): void {
     const palette = 'hinokami';
     const reach = THREE.MathUtils.clamp(opts.radius, 128, opts.cast ? 220 : 187);
@@ -1975,7 +1981,8 @@ export class WebglDemonSlayerVfxOverlay {
       withBackWrap: opts.cast,
       tiltX: 0.38,
       tiltY: -0.15,
-      spinRate: 0.7,
+      spinRate: opts.fromBlade ? 0.42 : 0.7,
+      launchPull: opts.fromBlade ? 0.48 : undefined,
       palette,
       painterlyAgni: true,
     });
@@ -2288,8 +2295,8 @@ export class WebglDemonSlayerVfxOverlay {
       opts.focused ? Math.min(23, boltDist * 0.075) : Math.min(62, Math.max(30, boltDist * 0.19)),
       seed
     );
-    const forks = computeThunderForkedBranches(mainPts, seed);
-    const branches = opts.focused ? forks.slice(0, 5) : forks;
+    const forks = computeThunderForkedBranches(mainPts, seed, opts.focused);
+    const branches = opts.focused ? forks.filter((_, i) => i % 2 === 0) : forks;
 
     const group = new THREE.Group();
     const shaderMats: THREE.ShaderMaterial[] = [];
@@ -2339,9 +2346,9 @@ export class WebglDemonSlayerVfxOverlay {
 
     // Layer 2: Strictly CONNECTED forked crackling sub-arcs welded onto each interior elbow vertex!
     branches.forEach((bPts, idx) => {
-      const bWidth = Math.max(opts.focused ? 4 : 13, boltW * (0.68 - idx * 0.04));
-      const bHaloGeo = buildTaperedThunderRibbonGeometry(bPts, bWidth * 2.1, 5.0, 18);
-      const bCoreGeo = buildTaperedThunderRibbonGeometry(bPts, bWidth, 3.2, 22);
+      const bWidth = Math.max(opts.focused ? 3 : 13, boltW * ((opts.focused ? 0.45 : 0.68) - idx * 0.04));
+      const bHaloGeo = buildTaperedThunderRibbonGeometry(bPts, bWidth * 2.1, opts.focused ? 2.4 : 5.0, 18);
+      const bCoreGeo = buildTaperedThunderRibbonGeometry(bPts, bWidth, opts.focused ? 1.2 : 3.2, 22);
       const branchRoot = mainPts.findIndex((point) => point.x === bPts[0].x && point.y === bPts[0].y);
       const branchDelay = 0.025 + 0.14 * Math.max(0, branchRoot) / (mainPts.length - 1);
       const bHaloMat = createBoltShaderMat(true, true, seed + 11.4 * (idx + 1), 0.63, branchDelay);
