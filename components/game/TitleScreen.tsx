@@ -3,12 +3,20 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { GAME_ASSETS, WEAPON_CONFIGS, WeaponId } from '@/lib/game/assets';
 import { soundEngine } from '@/lib/game/audio';
+import {
+  DIFFICULTY_ORDER,
+  DIFFICULTY_PRESETS,
+  DifficultyTier,
+  getDifficultyConfig,
+} from '@/lib/game/difficulty';
 
 interface TitleScreenProps {
   ashenKarma: number;
   preloadProgress?: number;
   selectedWeapon?: WeaponId;
   onSelectWeapon?: (weapon: WeaponId) => void;
+  difficulty?: DifficultyTier;
+  onSelectDifficulty?: (tier: DifficultyTier) => void;
   onStartOdyssey: () => void;
   onOpenPrologue?: () => void;
   onOpenShrine: () => void;
@@ -36,6 +44,8 @@ export function TitleScreen({
   ashenKarma,
   selectedWeapon = 'parashu',
   onSelectWeapon,
+  difficulty = 'hard',
+  onSelectDifficulty,
   onStartOdyssey,
   onOpenPrologue,
   onOpenShrine,
@@ -43,6 +53,7 @@ export function TitleScreen({
   muted = false,
   onToggleMute,
 }: TitleScreenProps) {
+  const activeDiffCfg = getDifficultyConfig(difficulty);
   const [activeIndex, setActiveIndex] = useState<number>(0);
   const [subModal, setSubModal] = useState<'none' | 'options' | 'treasures'>('none');
   const [bgLoaded, setBgLoaded] = useState<boolean>(false);
@@ -244,6 +255,42 @@ export function TitleScreen({
           </div>
         </div>
 
+        {/* Chola-Brass Difficulty Selector (Easy · Hard · Difficult) */}
+        {onSelectDifficulty && (
+          <div className="mb-7 pl-2 md:pl-6 max-w-md">
+            <div className="text-[10px] font-mono-num tracking-[0.26em] text-[#d4a548] uppercase mb-2 drop-shadow-[0_2px_6px_rgba(0,0,0,0.95)]">
+              TRIAL DIFFICULTY · {activeDiffCfg.sanskritSubtitle}
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {DIFFICULTY_ORDER.map((tierId) => {
+                const cfg = DIFFICULTY_PRESETS[tierId];
+                const active = difficulty === tierId;
+                return (
+                  <button
+                    key={tierId}
+                    type="button"
+                    data-testid={`difficulty-btn-${tierId}`}
+                    onClick={() => {
+                      soundEngine.playUiClick();
+                      onSelectDifficulty(tierId);
+                    }}
+                    className={`px-3 py-2 border text-center font-display text-xs sm:text-sm font-bold tracking-[0.14em] uppercase transition-all cursor-pointer ${
+                      active
+                        ? 'bg-[#2a1510]/90 border-[#f5c451] text-[#fff3d1] shadow-[0_0_18px_rgba(245,196,81,0.32)]'
+                        : 'bg-[#0c080a]/75 border-[#c89d46]/35 text-[#a89b86] hover:border-[#d4a548]/70 hover:text-[#e8d8bc]'
+                    }`}
+                  >
+                    {cfg.label}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-1.5 text-[11px] text-[#c7b9a1] tracking-wide drop-shadow-[0_2px_6px_rgba(0,0,0,0.95)]">
+              {activeDiffCfg.tagline}
+            </p>
+          </div>
+        )}
+
         {/* Left-Aligned Vertical Menu List (NEW GAME / CHRONICLE / OPTIONS / TREASURES) */}
         <nav aria-label="Main Menu" className="flex flex-col items-start space-y-3 md:space-y-4 pl-2 md:pl-6">
           {menuItems.map((item, idx) => {
@@ -256,9 +303,12 @@ export function TitleScreen({
                 data-start={item.isPrimaryStart ? 'true' : undefined}
                 onMouseEnter={() => {
                   setActiveIndex(idx);
-                  soundEngine.playSwing('light');
+                  soundEngine.playUiClick();
                 }}
-                onClick={item.onSelect}
+                onClick={() => {
+                  soundEngine.playUiClick();
+                  item.onSelect();
+                }}
                 className={`group relative text-left font-display text-xl sm:text-2xl md:text-[28px] font-bold tracking-[0.12em] uppercase transition-all duration-150 cursor-pointer ${
                   isSelected
                     ? 'text-[#f2dfc0] translate-x-1.5'
@@ -373,12 +423,13 @@ export function TitleScreen({
                 <div className="grid grid-cols-2 gap-1.5">
                   {[
                     { id: 'auto', label: 'Dynamic Score (Auto)', url: null },
-                    { id: 'gate', label: 'Before the Iron Gate', url: GAME_ASSETS.soundtracks.beforeIronGate },
-                    { id: 'chariots', label: 'Iron Chariots of the Sun', url: GAME_ASSETS.soundtracks.ironChariotsOfTheSun },
-                    { id: 'weep', label: 'Where Bronze Gods Weep', url: GAME_ASSETS.soundtracks.whereBronzeGodsWeep },
-                    { id: 'judgment', label: 'Judgment at Ruined Gate', url: GAME_ASSETS.soundtracks.judgmentAtRuinedGate },
-                    { id: 'rising', label: 'Mahadeva Rising', url: GAME_ASSETS.soundtracks.mahadevaRising },
-                    { id: 'titan', label: "The Titan's Final Stride", url: GAME_ASSETS.soundtracks.titansFinalStride },
+                    { id: 'crown', label: 'The Bleeding Crown', url: GAME_ASSETS.soundtracks.theBleedingCrown },
+                    { id: 'sanctuary', label: 'Mythic Sanctuary', url: GAME_ASSETS.soundtracks.mythicSanctuary },
+                    { id: 'dundubhi', label: 'Dundubhi — War Drum', url: GAME_ASSETS.soundtracks.dundubhiBossTheme },
+                    { id: 'demon', label: 'Demon Boss Battle', url: GAME_ASSETS.soundtracks.demonBossBattle },
+                    { id: 'vrikodara', label: 'Vrikodara — Insatiable', url: GAME_ASSETS.soundtracks.vrikodaraBossTheme },
+                    { id: 'climax', label: 'Apocalyptic Climax', url: GAME_ASSETS.soundtracks.apocalypticClimax },
+                    { id: 'gow', label: 'God of War Epic Surge', url: GAME_ASSETS.soundtracks.godOfWarEpic },
                   ].map((trk) => {
                     const active = selectedTrackOverride === trk.id;
                     return (
@@ -386,6 +437,7 @@ export function TitleScreen({
                         key={trk.id}
                         type="button"
                         onClick={() => {
+                          soundEngine.playUiClick();
                           setSelectedTrackOverride(trk.id);
                           soundEngine.setCustomBgmUrl(trk.url);
                         }}

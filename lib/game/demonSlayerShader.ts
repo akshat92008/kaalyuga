@@ -22,7 +22,8 @@ export function getDemonSlayerToonGradient(): THREE.DataTexture {
  */
 export function getEnemyDemonToonGradient(): THREE.DataTexture {
   if (sharedEnemyDemonGradient) return sharedEnemyDemonGradient;
-  const ramp = new Uint8Array([84, 174, 255]);
+  // Unified bright 3-band anime cel ramp matching Rudra so enemies & bosses read crisply
+  const ramp = new Uint8Array([146, 208, 255]);
   const tex = new THREE.DataTexture(ramp, 3, 1, THREE.RedFormat);
   tex.minFilter = THREE.NearestFilter;
   tex.magFilter = THREE.NearestFilter;

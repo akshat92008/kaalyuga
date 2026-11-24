@@ -281,10 +281,10 @@ export const SILHOUETTE_ROLE_PRESETS: Record<SilhouetteRole, SilhouetteRoleSpec>
   },
   regular_enemy: {
     role: 'regular_enemy',
-    rimHex: '#cbd5e1',
-    rimRgba: 'rgba(203, 213, 225, 0.24)',
-    outlineColor: SHARED_STUDIO_OUTLINE_COLOR,
-    outlineThickness: 1.9,
+    rimHex: '#ffe6be',
+    rimRgba: 'rgba(255, 230, 190, 0.34)',
+    outlineColor: '#080509',
+    outlineThickness: 2.35,
     scaleAuthorityMin: 1.0,
     scaleAuthorityMax: 1.12,
     footContactRingHex: null,
@@ -292,19 +292,19 @@ export const SILHOUETTE_ROLE_PRESETS: Record<SilhouetteRole, SilhouetteRoleSpec>
   regular_enemy_crimson: {
     role: 'regular_enemy_crimson',
     rimHex: '#fde68a',
-    rimRgba: 'rgba(253, 230, 138, 0.28)',
-    outlineColor: SHARED_STUDIO_OUTLINE_COLOR,
-    outlineThickness: 2.0,
+    rimRgba: 'rgba(253, 230, 138, 0.38)',
+    outlineColor: '#080509',
+    outlineThickness: 2.55,
     scaleAuthorityMin: 1.0,
     scaleAuthorityMax: 1.12,
     footContactRingHex: null,
   },
   boss: {
     role: 'boss',
-    rimHex: '#ffd89e',
-    rimRgba: 'rgba(255, 216, 158, 0.32)',
-    outlineColor: SHARED_STUDIO_OUTLINE_COLOR,
-    outlineThickness: 2.3,
+    rimHex: '#ffe2ad',
+    rimRgba: 'rgba(255, 226, 173, 0.40)',
+    outlineColor: '#080509',
+    outlineThickness: 2.55,
     scaleAuthorityMin: 1.75,
     scaleAuthorityMax: 2.35,
     footContactRingHex: '#f59e0b',
@@ -606,6 +606,10 @@ const sharedFrameCache = new Map<string, HTMLCanvasElement>();
 let sharedSilhouetteCanvas: HTMLCanvasElement | null = null;
 let sharedSilhouetteCtx: CanvasRenderingContext2D | null = null;
 
+export function clearSharedSpriteFrameCache(): void {
+  sharedFrameCache.clear();
+}
+
 function getSharedSilhouetteCanvas(w: number, h: number): {
   canvas: HTMLCanvasElement;
   ctx: CanvasRenderingContext2D | null;
@@ -706,7 +710,7 @@ export function bake2DSpriteFrameFromCanvas(
   }
 
   if (options?.cacheFrame !== false) {
-    if (sharedFrameCache.size > 280) {
+    if (sharedFrameCache.size > 64) {
       const oldest = sharedFrameCache.keys().next().value;
       if (oldest) sharedFrameCache.delete(oldest);
     }

@@ -181,6 +181,98 @@ export function computeNormalizedAttackProgress(
   return Math.max(0, Math.min(0.99, raw));
 }
 
+/**
+ * Projects a 3D world ground point (0, footY, 0) through a Three.js Perspective or
+ * Orthographic camera matrix to compute the exact normalized [0..1] vertical pixel ratio
+ * from the top of the studio canvas where the character's feet touch the floor.
+ * Anchoring 2D canvas draws at `-drawSize * footAnchorRatio` eliminates floating sprites!
+ */
+export interface ProjectableCameraLike {
+  updateMatrixWorld?: (force?: boolean) => void;
+  updateProjectionMatrix?: () => void;
+  matrixWorldInverse: { elements: ArrayLike<number> };
+  projectionMatrix: { elements: ArrayLike<number> };
+}
+
+export function computeCameraFootAnchorRatio(
+  camera: ProjectableCameraLike,
+  footY = 0
+): number {
+  camera.updateMatrixWorld?.(true);
+  camera.updateProjectionMatrix?.();
+
+  const vm = camera.matrixWorldInverse.elements;
+  const pm = camera.projectionMatrix.elements;
+
+  // Transform world point (0, footY, 0, 1) into view space
+  const vx = vm[4] * footY + vm[12];
+  const vy = vm[5] * footY + vm[13];
+  const vz = vm[6] * footY + vm[14];
+  const vw = vm[7] * footY + vm[15];
+
+  // Transform view point into clip space
+  const cy = pm[1] * vx + pm[5] * vy + pm[9] * vz + pm[13] * vw;
+  const cw = pm[3] * vx + pm[7] * vy + pm[11] * vz + pm[15] * vw;
+  if (!Number.isFinite(cw) || Math.abs(cw) < 1e-6) {
+    return 0.72;
+  }
+  const ndcY = cy / cw;
+  // Convert NDC y (+1 top, -1 bottom) to canvas top-down ratio (0 top, 1 bottom)
+  const topDownRatio = (1 - ndcY) * 0.5;
+  return Math.max(0.48, Math.min(0.94, topDownRatio));
+}
+
+/**
+ * Maps a raw [0..1] attack progress into the active cleave window [startFrac..endFrac]
+ * of an FBX combat clip so Rudra immediately enters the Parashu cleave arc instead of
+ * stalling on idle windup frames.
+ */
+export function computeTrimmedCleaveClock(
+  normalizedProgress: number,
+  startFrac = 0.14,
+  endFrac = 0.88
+): number {
+  const clamped = Math.max(0, Math.min(0.999, normalizedProgress));
+  const lo = Math.max(0, Math.min(0.45, startFrac));
+  const hi = Math.max(lo + 0.1, Math.min(0.98, endFrac));
+  return lo + clamped * (hi - lo);
+}
+
+export interface SusanooDeflectOutcome {
+  deflected: boolean;
+  finalDamage: number;
+  applyHitstun: boolean;
+  knockbackImpulse: number;
+  counterDamage: number;
+}
+
+/**
+ * 100% True Chakra Armor Invincibility for Kala-Bhairava Susanoo:
+ * While `transformTimer > 0`, ALL incoming hits deal 0 HP damage, trigger 0 hitstun,
+ * and rebound with a golden chakra shockwave knocking attackers back.
+ */
+export function computeSusanooDeflectOutcome(
+  transformTimer: number,
+  incomingDamage: number
+): SusanooDeflectOutcome {
+  if (transformTimer > 0) {
+    return {
+      deflected: true,
+      finalDamage: 0,
+      applyHitstun: false,
+      knockbackImpulse: 440,
+      counterDamage: Math.max(12, Math.round(incomingDamage * 0.65)),
+    };
+  }
+  return {
+    deflected: false,
+    finalDamage: Math.max(0, incomingDamage),
+    applyHitstun: true,
+    knockbackImpulse: 0,
+    counterDamage: 0,
+  };
+}
+
 export interface ChamberBiomeProfile {
   id: number;
   biomeKey: string;

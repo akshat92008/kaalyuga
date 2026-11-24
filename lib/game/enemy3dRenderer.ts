@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { computeCameraFootAnchorRatio } from './kalaBhairavaSusanoo';
 import type { EnemyTrait, Warden3DRigKey } from './assets';
 import {
   SHARED_STUDIO_OUTLINE_COLOR,
@@ -10,9 +11,9 @@ import {
 } from './hadesSpriteBaker';
 import {
   createDemonSlayerCelMaterial,
-  gradeEnemyTextureToDemonAnime,
   liftTextureToAnimeVibrancy,
 } from './demonSlayerShader';
+import { resolveAtomicEnemyAnimState } from './enemyAiStability';
 import { loadFbxCached, simplifyBufferGeometry } from './meshSimplifier';
 
 export type RegularEnemy3DKind =
@@ -76,6 +77,7 @@ interface EnemyModelSlot {
   group: THREE.Group | null;
   mixer: THREE.AnimationMixer | null;
   actions: Partial<Record<Enemy3DAnimState, THREE.AnimationAction>>;
+  activeActionState?: Enemy3DAnimState | null;
   ready: boolean;
 }
 
@@ -832,15 +834,17 @@ export class Enemy3DRenderer {
   private sharedWeaponTemplates: Partial<
     Record<'minotaur_axe' | 'trident_axe' | 'crescent_reaver', Promise<THREE.Group | null>>
   > = {};
+  public readonly footAnchorRatio: number;
 
   constructor(size = 256) {
     this.size = size;
     this.scene = new THREE.Scene();
 
-    // Full-body Demon Slayer camera framing with generous headroom so raised weapons/heads never clip
-    this.camera = new THREE.PerspectiveCamera(35, 1, 0.1, 100);
-    this.camera.position.set(0, 2.12, 4.65);
-    this.camera.lookAt(0, 0.82, 0);
+    // Tightened Demon Slayer camera framing so enemy faces, horns, and weapons read sharply
+    this.camera = new THREE.PerspectiveCamera(34, 1, 0.1, 100);
+    this.camera.position.set(0, 1.98, 4.22);
+    this.camera.lookAt(0, 0.80, 0);
+    this.footAnchorRatio = computeCameraFootAnchorRatio(this.camera, 0);
 
     // Unified Hades Studio Lighting Rig (shared key/fill/warm-rim across Rudra, Enemies & Bosses)
     setupSharedStudioLightingRig(this.scene, 1.0);
@@ -1064,10 +1068,13 @@ export class Enemy3DRenderer {
     }
   }
 
-  private ensureSlotLoaded(slotKey: string): void {
-    if (this.loadingSlots.has(slotKey)) return;
+  private slotLoadPromises = new Map<string, Promise<void>>();
+
+  private ensureSlotLoaded(slotKey: string): Promise<void> {
+    const existing = this.slotLoadPromises.get(slotKey);
+    if (existing) return existing;
     const slot = this.slots.get(slotKey);
-    if (!slot || slot.ready) return;
+    if (!slot || slot.ready) return Promise.resolve();
 
     this.loadingSlots.add(slotKey);
     const texLoader = new THREE.TextureLoader();
@@ -1096,7 +1103,7 @@ export class Enemy3DRenderer {
     };
 
     // STAGE 1: Load character rig, 1:1 texture FBX, diffuse PNG, and idle & chase clips first
-    Promise.all([
+    const stage1Promise = Promise.all([
       loadRawFbx(slot.generateFbxUrl),
       slot.textureFbxUrl ? loadRawFbx(slot.textureFbxUrl) : Promise.resolve(null),
       loadTex(slot.diffuseUrl),
@@ -1108,28 +1115,26 @@ export class Enemy3DRenderer {
 
       slot.standingHipY = extractStandingHipY(baseGroup);
 
-      const gradedDiffuse = gradeEnemyTextureToDemonAnime(diffuseMap, 1.34);
-      if (gradedDiffuse) gradedDiffuse.userData.animeLifted = true;
+      // Unified Rudra-parity bright anime vibrancy lift so EVERY enemy reads crisply & vividly
+      const brightDiffuse = liftTextureToAnimeVibrancy(diffuseMap, 1.24, 1.18);
+      if (brightDiffuse) brightDiffuse.userData.animeLifted = true;
 
-      // Archetype-tuned ufotable Demon shadow & under-glow tint (replaces pale mud-grey flatness)
       const isArcaneDemon = slot.key === 'witch_oracle' || slot.key === 'eternal_wheel_warden';
       const isSteelDemon = slot.key === 'shield_gladiator' || slot.key === 'horned_warbringer';
-      const shadowTintHex = isArcaneDemon ? 0x1e0e38 : isSteelDemon ? 0x101c30 : 0x260d18;
-      const underGlowHex = isArcaneDemon ? 0x9333ea : isSteelDemon ? 0x38bdf8 : 0xe11d48;
+      const underGlowHex = isArcaneDemon ? 0xa855f7 : isSteelDemon ? 0x38bdf8 : 0xff6b35;
 
       const celMat = createDemonSlayerCelMaterial({
-        map: gradedDiffuse,
-        tintHex: gradedDiffuse ? 0xf2ece6 : slot.rimColor,
-        emissiveHex: shadowTintHex,
-        emissiveIntensity: 0.14,
+        map: brightDiffuse,
+        tintHex: brightDiffuse ? 0xffffff : slot.rimColor,
+        emissiveHex: 0x302826,
+        emissiveIntensity: 0.28,
         rimColorHex: slot.rimColor,
-        rimStrength: Math.max(0.48, slot.rimIntensity),
-        rimPower: 2.35,
+        rimStrength: Math.max(0.42, slot.rimIntensity),
+        rimPower: 2.6,
         underGlowColorHex: underGlowHex,
-        underGlowStrength: 0.24,
-        shadowTintHex,
-        shadowTintStrength: 0.55,
-        useDemonContrastRamp: true,
+        underGlowStrength: 0.14,
+        shadowTintStrength: 0.0,
+        useDemonContrastRamp: false,
       });
 
       if (riggedGroup) {
@@ -1150,16 +1155,16 @@ export class Enemy3DRenderer {
       const scale = targetHeight / rawHeight;
       baseGroup.scale.setScalar(scale);
       // Mixamo clips set mixamorigHips.position.y = standingHipY (~+100), which already grounds feet at Y=0.
-      // Do NOT add -rawBox.min.y * scale here or the mesh shifts up by +0.75m and gets sliced at the top of the canvas!
       baseGroup.position.set(0, -0.06, 0);
 
       this.attachWeaponToRig(baseGroup, slot);
       applyHadesCelShadingToHierarchy(baseGroup, {
         rimColor: slot.rimColor,
-        rimIntensity: Math.max(0.48, slot.rimIntensity),
-        emissiveTint: shadowTintHex,
-        emissiveStrength: 0.14,
-        outlineRatio: 0.0085,
+        rimIntensity: Math.max(0.42, slot.rimIntensity),
+        emissiveTint: 0x302826,
+        emissiveStrength: 0.28,
+        attachInkOutline: true,
+        outlineRatio: 0.0062,
       });
 
       const wrapper = new THREE.Group();
@@ -1227,7 +1232,10 @@ export class Enemy3DRenderer {
       } else {
         runStage2();
       }
-    });
+    }).catch(() => {});
+
+    this.slotLoadPromises.set(slotKey, stage1Promise);
+    return stage1Promise;
   }
 
   private prewarmTimers: number[] = [];
@@ -1289,6 +1297,36 @@ export class Enemy3DRenderer {
       this.ensureSlotLoaded(slotKey);
       this.prewarmSlotFrames(slotKey);
     });
+  }
+
+  /**
+   * Awaits Stage-1 3D readiness of all enemy rigs required by an upcoming chamber
+   * (bounded by `timeoutMs`) so enemies spawn immediately as crisp 3D models with zero snake fallbacks.
+   */
+  public async waitForChamberSlots(
+    enemies: Array<{
+      id: number;
+      kind: RegularEnemy3DKind;
+      wardenRigKey?: Warden3DRigKey;
+      trait?: EnemyTrait;
+    }>,
+    timeoutMs = 4500
+  ): Promise<void> {
+    const uniqueSlots = new Set<string>();
+    for (const e of enemies) {
+      uniqueSlots.add(selectSlotKeyFromInput(e.kind, e.id, e.wardenRigKey, e.trait));
+    }
+    const promises = Array.from(uniqueSlots).map((key) => this.ensureSlotLoaded(key));
+    if (promises.length === 0) return;
+    await Promise.race([
+      Promise.allSettled(promises),
+      new Promise<void>((resolve) => setTimeout(resolve, timeoutMs)),
+    ]);
+  }
+
+  public clearFrameCache(): void {
+    this.atlasFrameCache.clear();
+    this.slotLastCanvas.clear();
   }
 
   public isReady(archetype?: EnemyArchetype, idHash = 0): boolean {
@@ -1373,7 +1411,7 @@ export class Enemy3DRenderer {
           fCtx.fillStyle = 'rgba(255, 184, 71, 0.34)';
           fCtx.fillRect(0, 0, flashCanvas.width, flashCanvas.height);
           fCtx.globalCompositeOperation = 'source-over';
-          if (this.atlasFrameCache.size > 840) {
+          if (this.atlasFrameCache.size > 120) {
             const oldestKey = this.atlasFrameCache.keys().next().value;
             if (oldestKey) this.atlasFrameCache.delete(oldestKey);
           }
@@ -1409,9 +1447,12 @@ export class Enemy3DRenderer {
     this.activeSlotKey = activeKey;
 
     if (targetAction) {
-      slot.mixer.stopAllAction();
-      targetAction.reset();
-      targetAction.play();
+      if (slot.activeActionState !== state) {
+        slot.mixer.stopAllAction();
+        targetAction.reset();
+        targetAction.play();
+        slot.activeActionState = state;
+      }
       slot.mixer.setTime(quantizedTime);
     }
 
@@ -1426,13 +1467,13 @@ export class Enemy3DRenderer {
     this.renderer.clear();
     this.renderer.render(this.scene, this.camera);
 
-    const outlineHex = SHARED_STUDIO_OUTLINE_COLOR;
+    const outlineHex = '#080509';
     const silhouetteRole =
       isElite || slot.rimColor !== 0xfde68a ? 'regular_enemy_crimson' : 'regular_enemy';
     const rimR = (slot.rimColor >> 16) & 255;
     const rimG = (slot.rimColor >> 8) & 255;
     const rimB = slot.rimColor & 255;
-    const slotRimRgba = `rgba(${rimR}, ${rimG}, ${rimB}, 0.36)`;
+    const slotRimRgba = `rgba(${rimR}, ${rimG}, ${rimB}, 0.40)`;
 
     const bakedCanvas = bake2DSpriteFrameFromCanvas(this.renderer.domElement, cacheKey, {
       role: silhouetteRole,
@@ -1443,7 +1484,7 @@ export class Enemy3DRenderer {
       cacheFrame: false,
     });
 
-    if (this.atlasFrameCache.size > 840) {
+    if (this.atlasFrameCache.size > 120) {
       const oldestKey = this.atlasFrameCache.keys().next().value;
       if (oldestKey) this.atlasFrameCache.delete(oldestKey);
     }
@@ -1464,18 +1505,12 @@ export class Enemy3DRenderer {
       input.trait
     );
 
-    let animState: Enemy3DAnimState = 'idle';
-    if (input.aiState === 'ko') {
-      animState = 'death';
-    } else if (input.isHitFlash || input.isPostureBroken) {
-      animState = 'hurt';
-    } else if (input.aiState === 'attack') {
-      animState = 'attack';
-    } else if (input.aiState === 'windup') {
-      animState = 'windup';
-    } else if (input.aiState === 'chase' || Math.hypot(input.vx, input.vy) > 12) {
-      animState = 'chase';
-    }
+    const animState = resolveAtomicEnemyAnimState({
+      aiState: input.aiState,
+      isHitFlash: input.isHitFlash,
+      isPostureBroken: input.isPostureBroken,
+      speed: Math.hypot(input.vx, input.vy),
+    });
 
     const facingRad = Number.isFinite(input.aimAngle)
       ? input.aimAngle

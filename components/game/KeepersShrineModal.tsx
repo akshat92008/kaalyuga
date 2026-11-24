@@ -8,6 +8,7 @@ import {
   getUpgradeCost,
   canPurchaseUpgrade,
 } from '@/lib/game/rules';
+import { soundEngine } from '@/lib/game/audio';
 
 interface KeepersShrineModalProps {
   isOpen: boolean;
@@ -40,10 +41,10 @@ export default function KeepersShrineModal({
         <div className="flex flex-wrap items-center justify-between gap-4 px-7 py-5 border-b border-[#c89d46]/25 bg-[#121014]">
           <div>
             <div className="text-[11px] tracking-[0.26em] text-[#d4a548] uppercase mb-1">
-              HOMA FIRE SHRINE PROGRESSION · AGNI KUND SANCTUM
+              LOHAKARA · PARASHU WEAPONSMITH &amp; HOMA FIRE SHRINE
             </div>
             <h2 className="font-display text-2xl md:text-3xl font-bold tracking-[0.08em] text-[#f5ebd6]">
-              HOMA FIRE SHRINE SANCTUARY
+              LOHAKARA&apos;S FORGE &amp; SANCTUARY
             </h2>
           </div>
 
@@ -97,7 +98,11 @@ export default function KeepersShrineModal({
                   type="button"
                   data-testid={`upgrade-btn-${spec.id}`}
                   disabled={!affordable || isMaxed}
-                  onClick={() => onPurchase(spec.id)}
+                  onClick={() => {
+                    soundEngine.playForgeHammer();
+                    soundEngine.playVoiceBark('smith_temper', { cooldownMs: 4200 });
+                    onPurchase(spec.id);
+                  }}
                   className={`w-full py-2.5 px-4 text-xs font-bold tracking-[0.12em] uppercase transition-colors cursor-pointer whitespace-nowrap ${
                     isMaxed
                       ? 'bg-[#25232b] text-[#7a7366] border border-[#3a3642] cursor-not-allowed'
@@ -113,50 +118,68 @@ export default function KeepersShrineModal({
           })}
         </div>
 
-        {/* Footer Actions */}
+        {/* Footer Actions — Accurate 8-Chamber Act I Boss & Run Deployment */}
         <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-t border-[#c89d46]/25 bg-[#110f14]">
-          <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               data-testid="jump-boss1-btn"
               onClick={() => {
+                soundEngine.playFerryPortal();
                 onStartChamber(3);
                 onClose();
               }}
-              className="px-3.5 py-2.5 bg-[#261116] hover:bg-[#381820] text-[#ff6b78] border border-[#a83240]/60 text-xs font-bold tracking-[0.1em] uppercase transition-colors cursor-pointer whitespace-nowrap"
+              className="px-3 py-2.5 bg-[#261116] hover:bg-[#381820] text-[#ff6b78] border border-[#a83240]/60 text-[11px] font-bold tracking-[0.09em] uppercase transition-colors cursor-pointer whitespace-nowrap"
             >
-              [CHAMBER 4 BOSS] DUNDUBHI · 3D WAR-DRUM DEMON
+              [CH. 4 BOSS] DUNDUBHI
+            </button>
+            <button
+              type="button"
+              data-testid="jump-guardian-btn"
+              onClick={() => {
+                soundEngine.playFerryPortal();
+                onStartChamber(5);
+                onClose();
+              }}
+              className="px-3 py-2.5 bg-[#1d132b] hover:bg-[#2a1b3d] text-[#d8b4fe] border border-[#8b5cf6]/60 text-[11px] font-bold tracking-[0.09em] uppercase transition-colors cursor-pointer whitespace-nowrap"
+            >
+              [CH. 6] TEMPLE GUARDIAN
             </button>
             <button
               type="button"
               data-testid="jump-boss2-btn"
               onClick={() => {
-                onStartChamber(4);
+                soundEngine.playFerryPortal();
+                onStartChamber(7);
                 onClose();
               }}
-              className="px-3.5 py-2.5 bg-[#291910] hover:bg-[#3b2416] text-[#ffaa5c] border border-[#b86b28]/60 text-xs font-bold tracking-[0.1em] uppercase transition-colors cursor-pointer whitespace-nowrap"
+              className="px-3 py-2.5 bg-[#291910] hover:bg-[#3b2416] text-[#ffaa5c] border border-[#b86b28]/60 text-[11px] font-bold tracking-[0.09em] uppercase transition-colors cursor-pointer whitespace-nowrap"
             >
-              [CHAMBER 5 BOSS] VRIKODARA · 3D IRON RAKSHASA
+              [CH. 8 BOSS] VRIKODARA
             </button>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
             <button
               type="button"
               data-testid="start-full-odyssey-btn"
               onClick={() => {
+                soundEngine.playFerryPortal();
                 onStartChamber(0);
                 onClose();
               }}
-              className="px-5 py-2.5 bg-[#d4a548] hover:bg-[#e4b85c] text-[#090807] font-bold text-xs tracking-[0.12em] uppercase border border-[#f5dca0] transition-colors cursor-pointer whitespace-nowrap"
+              className="px-4 py-2.5 bg-[#d4a548] hover:bg-[#e4b85c] text-[#090807] font-bold text-xs tracking-[0.11em] uppercase border border-[#f5dca0] transition-colors cursor-pointer whitespace-nowrap"
             >
-              START FULL 5-CHAMBER KURUKSHETRA RUN
+              START FULL 8-CHAMBER ACT I RUN
             </button>
             <button
               type="button"
               data-testid="close-shrine-btn"
-              onClick={onClose}
-              className="px-5 py-2.5 bg-[#1d1b22] hover:bg-[#2a2731] text-[#e5dac5] font-semibold text-xs tracking-[0.12em] uppercase border border-[#3e3a48] transition-colors cursor-pointer whitespace-nowrap"
+              onClick={() => {
+                soundEngine.playUiClick();
+                onClose();
+              }}
+              className="px-4 py-2.5 bg-[#1d1b22] hover:bg-[#2a2731] text-[#e5dac5] font-semibold text-xs tracking-[0.11em] uppercase border border-[#3e3a48] transition-colors cursor-pointer whitespace-nowrap"
             >
               CLOSE
             </button>
