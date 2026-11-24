@@ -54,12 +54,11 @@ async function main() {
     { element, previous }, { polling: 50, timeout: 45000 });
     await capture(element === 'varuna' ? 'varuna-cast' : `${element}-astra`);
   }
-  async function captureRegularWeapons() {
-    const weapons = [
+  async function captureRegularWeapons(prefix, weapons = [
       ['khanda_dual', 'Alt+Digit1', 'Digit2'],
       ['parashu', 'Alt+Digit2', 'Digit1'],
       ['trishula_great', 'Alt+Digit3', 'Digit3'],
-    ];
+  ]) {
     for (const [weapon, equipKey, stanceKey] of weapons) {
       await press(equipKey);
       await ready(stanceKey);
@@ -81,13 +80,13 @@ async function main() {
               );
           }, { weapon, attack, previous }, { polling: 50, timeout: 45000 });
           const impact = await page.evaluate(() => window.__kaliyugaPhaseQA.combatImpact);
-          combatPresentation.push({ weapon, attack, impact });
+          combatPresentation.push({ viewport: page.viewportSize(), weapon, attack, impact });
           const expected = attack === 'light' ? 'light_hit' : 'heavy_hit';
           if (impact.reactCount < 1 ||
               ![expected, 'heavy_hit', 'posture_break'].includes(impact.kind)) {
             captureFailures.push({ weapon, attack, impact });
           }
-          await capture(`regular-${weapon}-${attack}`);
+          await capture(`${prefix}-${weapon}-${attack}`);
         } finally {
           await page.evaluate(() => window.__kaliyugaPhaseQAFixture.resumeWeaponCapture());
         }
@@ -189,7 +188,16 @@ async function main() {
       throw Error('Cancelling light startup committed damage or failed to dodge: ' + JSON.stringify(cancelled));
     }
     await capture('light-startup-dodge-cancel');
-    await captureRegularWeapons();
+    await captureRegularWeapons('regular');
+    const wide = page.viewportSize();
+    await page.setViewportSize({ width: 820, height: 540 });
+    try {
+      await page.mouse.move(540, 310);
+      await captureRegularWeapons('compact', [['parashu', 'Alt+Digit2', 'Digit1']]);
+    } finally {
+      await page.setViewportSize(wide);
+      await page.mouse.move(900, 510);
+    }
 
     for (const [element, stance, astra] of [
       ['agni', 'Digit1', 'KeyQ'],

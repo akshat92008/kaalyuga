@@ -48,7 +48,7 @@ export interface SakugaDirectorState {
   impactWorldY: number;
   impactKind: SakugaImpactTrigger['kind'] | null;
   focus: { x: number; y: number; age: number; duration: number; zoom: number; rank: number;
-    kind: SakugaImpactTrigger['kind'] } | null;
+    kind: SakugaImpactTrigger['kind']; angle: number; element: SakugaElement } | null;
 
   // Dynamic chiaroscuro arena darkness (0.34 baseline -> up to 0.72 during clashes/astras)
   chiaroscuroTarget: number;
@@ -252,25 +252,27 @@ const COMBAT_CONTACT_PROFILES: Record<SakugaImpactTrigger['kind'], {
   rank: number; zoom: number; hold: number; radius: number; light: number;
 }> = {
   light_hit: { rank: 1, zoom: 0.014, hold: 0.16, radius: 73, light: 0.38 },
-  heavy_hit: { rank: 2, zoom: 0.037, hold: 0.26, radius: 126, light: 0.76 },
+  heavy_hit: { rank: 2, zoom: 0.059, hold: 0.31, radius: 126, light: 0.76 },
   astra_burst: { rank: 2, zoom: 0.030, hold: 0.28, radius: 110, light: 0.67 },
   astra_contact: { rank: 3, zoom: 0.035, hold: 0.27, radius: 135, light: 0.78 },
-  parry_clash: { rank: 3, zoom: 0.042, hold: 0.23, radius: 122, light: 0.90 },
-  posture_break: { rank: 3, zoom: 0.048, hold: 0.31, radius: 152, light: 0.90 },
+  parry_clash: { rank: 3, zoom: 0.055, hold: 0.23, radius: 122, light: 0.90 },
+  posture_break: { rank: 3, zoom: 0.079, hold: 0.34, radius: 152, light: 0.90 },
   execution: { rank: 4, zoom: 0.05, hold: 0.33, radius: 166, light: 0.95 },
-  boss_clash: { rank: 3, zoom: 0.04, hold: 0.29, radius: 146, light: 0.84 },
+  boss_clash: { rank: 3, zoom: 0.065, hold: 0.32, radius: 146, light: 0.84 },
 };
 
 export function sampleCombatContactCamera(
   state: SakugaDirectorState,
   centerX: number,
   centerY: number,
+  viewportWidth = 1440,
 ): { zoom: number; offsetX: number; offsetY: number } {
   const contact = state.focus;
   if (!contact) return { zoom: 1, offsetX: 0, offsetY: 0 };
   const t = Math.min(1, contact.age / contact.duration);
   const envelope = (0.64 + 0.36 * Math.min(1, t * 7)) * Math.pow(1 - t, 2.1);
-  const zoom = contact.zoom * envelope;
+  const viewportScale = Math.max(0.55, Math.min(1, viewportWidth / 960));
+  const zoom = Math.min(0.085, contact.zoom * envelope * viewportScale);
   const dx = Math.max(-195, Math.min(195, contact.x - centerX));
   const dy = Math.max(-130, Math.min(130, contact.y - centerY));
   // Aim into the exchange while keeping both fighters within the normal arena view.
@@ -294,7 +296,7 @@ export function triggerSakugaImpact(
     state.focus = {
       x: trigger.worldX, y: trigger.worldY, age: 0,
       duration: profile.hold, zoom: profile.zoom * Math.min(1.25, intensity),
-      rank: profile.rank, kind: trigger.kind,
+      rank: profile.rank, kind: trigger.kind, angle: trigger.angle, element: trigger.element,
     };
   }
   const isMajor =
@@ -551,6 +553,40 @@ export function renderChiaroscuroAndFloorBlowouts(
     ctx.fill();
     ctx.restore();
   }
+}
+
+export function renderCombatContactAccent(
+  ctx: CanvasRenderingContext2D,
+  state: SakugaDirectorState,
+): void {
+  const contact = state.focus;
+  if (!contact || contact.kind === 'astra_burst') return;
+  const duration = contact.rank === 1 ? 0.075 : 0.115;
+  const t = contact.age / duration;
+  if (t >= 1) return;
+
+  const colors = SAKUGA_ELEMENT_COLORS[contact.element];
+  const radius = (contact.rank === 1 ? 11 : 18) * (0.82 + t * 0.6);
+  ctx.save();
+  ctx.translate(contact.x, contact.y - 17);
+  ctx.rotate(contact.angle);
+  ctx.globalAlpha = Math.pow(1 - t, 1.5);
+  ctx.strokeStyle = colors.ink;
+  ctx.lineWidth = 4;
+  ctx.fillStyle = colors.core;
+  ctx.beginPath();
+  ctx.moveTo(-radius, 1);
+  ctx.lineTo(-radius * 0.19, -2);
+  ctx.lineTo(radius * 0.34, -radius * 0.69);
+  ctx.lineTo(radius * 0.16, -1);
+  ctx.lineTo(radius * 1.26, -2);
+  ctx.lineTo(radius * 0.23, 3);
+  ctx.lineTo(-radius * 0.34, radius * 0.51);
+  ctx.lineTo(-radius * 0.18, 3);
+  ctx.closePath();
+  ctx.stroke();
+  ctx.fill();
+  ctx.restore();
 }
 
 export function renderCombatActorBounce(

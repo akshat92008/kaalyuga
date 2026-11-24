@@ -243,6 +243,8 @@ import {
   claimEnemyHitForStrike,
   classifyBladeTrailStep,
   createActiveStrikeState,
+  sampleCombatBodyPose,
+  transformArenaBladeSample,
   stepActiveStrikeWindow,
   projectBakedBladePoseToArena,
 } from '@/lib/game/bladeTrailSampler';
@@ -252,6 +254,7 @@ import {
   createSakugaDirectorState,
   renderChiaroscuroAndFloorBlowouts,
   renderCombatActorBounce,
+  renderCombatContactAccent,
   renderCrispVedicWardShield,
   renderDynamicElementalCastShadow,
   renderSakugaCrossBeams,
@@ -5937,11 +5940,11 @@ export default function KaliyugaArena() {
                   intensity: isComboFinisher ? 1.08 : 0.68 + capturedStep * 0.07,
                 });
               }
-              if (!hitRes.triggeredPostureBreak) {
+              if (isComboFinisher && !hitRes.triggeredPostureBreak) {
                 fx?.spawnClashStarburst({
                   x: contactX, y: contactY - (e.isBoss ? 36 : 22),
-                  angle: kAngle, scale: isComboFinisher ? 0.43 : 0.23,
-                  palette: lightSlashPalette, duration: isComboFinisher ? 0.15 : 0.10,
+                  angle: kAngle, scale: 0.30,
+                  palette: lightSlashPalette, duration: 0.13,
                 });
               }
               fx?.spawnElementalParticles({
@@ -10145,7 +10148,7 @@ export default function KaliyugaArena() {
           : COMBAT_CAMERA_REST;
       const activeShot = liveShot ?? combatShot;
       const contactShot = !liveShot && sim.state === 'playing' && !sim.modalPaused
-        ? sampleCombatContactCamera(sakugaDirectorRef.current, sim.camX + cw * 0.5, sim.camY + ch * 0.5)
+        ? sampleCombatContactCamera(sakugaDirectorRef.current, sim.camX + cw * 0.5, sim.camY + ch * 0.5, cw)
         : COMBAT_CAMERA_REST;
       const cameraShake = sampleSteadyImpactShake(now, sim.cameraShakeTrauma, cw, ch);
       const safeCamera = clampCinematicOffsetToWorld({
@@ -11588,7 +11591,7 @@ export default function KaliyugaArena() {
           }
         } else if (act.kind === 'player') {
           const p = sim.player;
-          const heroRecoil = stepCombatHitReaction(p, dt);
+          const pendingRecoil = stepCombatHitReaction(p, dt);
           const speedMag = Math.hypot(p.vx, p.vy);
           const isMoving = speedMag > 14;
           const stridePhase = p.walkDistance * 0.085;
@@ -11646,6 +11649,7 @@ export default function KaliyugaArena() {
           });
           const liveStrike = activeStrikeRef.current;
           const rudraIsSwinging = coreLock.rudraIsAttacking || coreLock.rudraIsHeavyAttack;
+          const heroRecoil = rudraIsSwinging ? null : pendingRecoil;
           const rendered3D =
             rudra3d &&
             rudra3d.updateAndRender({
@@ -11737,16 +11741,24 @@ export default function KaliyugaArena() {
             drawH: drawSize,
           };
           const bladePose = rendered3D && rudraIsSwinging ? rudra3d?.getLatestBladePose() : null;
-          const currentBladeSample = () => projectBakedBladePoseToArena(
-            bladePose,
-            rudraSpriteRectRef.current,
-            {
-              playerX: p.x, playerY: p.y, slashAngle: p.slashAngle,
-              progress: p.weaponSwingProgress,
-              direction: p.comboStep % 2 === 0 ? 1 : -1,
-              reachPx: WEAPON_CONFIGS[liveStrike?.weapon ?? p.weapon].reachPx * 0.48,
-            },
+          const bodyPoseAt = (progress: number) => sampleCombatBodyPose(
+            progress, liveStrike?.sync.activeStart ?? 0.28, p.slashAngle,
+            liveStrike?.weapon ?? p.weapon, coreLock.rudraIsHeavyAttack,
           );
+          const bodyPose = rudraIsSwinging ? bodyPoseAt(p.weaponSwingProgress) : null;
+          const currentBladeSample = () => {
+            const sample = projectBakedBladePoseToArena(
+              bladePose,
+              rudraSpriteRectRef.current,
+              {
+                playerX: p.x, playerY: p.y, slashAngle: p.slashAngle,
+                progress: p.weaponSwingProgress,
+                direction: p.comboStep % 2 === 0 ? 1 : -1,
+                reachPx: WEAPON_CONFIGS[liveStrike?.weapon ?? p.weapon].reachPx * 0.48,
+              },
+            );
+            return bodyPose ? transformArenaBladeSample(sample, p.x, p.y, bodyPose) : sample;
+          };
           const release = pendingBladeReleaseRef.current;
           if (release) {
             pendingBladeReleaseRef.current = null;
@@ -11813,9 +11825,11 @@ export default function KaliyugaArena() {
                   submitBladeSample(previousSample);
                 } else {
                   for (const bakedSeed of rudra3d.getBladeTrailSeeds(sync.attackSerial)) {
-                    const seed = projectBakedBladePoseToArena(bakedSeed.pose, rudraSpriteRectRef.current, {
-                      playerX: p.x, playerY: p.y, slashAngle: p.slashAngle, progress: bakedSeed.progress,
-                    });
+                    const seed = transformArenaBladeSample(
+                      projectBakedBladePoseToArena(bakedSeed.pose, rudraSpriteRectRef.current, {
+                        playerX: p.x, playerY: p.y, slashAngle: p.slashAngle, progress: bakedSeed.progress,
+                      }), p.x, p.y, bodyPoseAt(bakedSeed.progress),
+                    );
                     if (isContinuous(seed)) {
                       submitBladeSample(seed);
                       break;
@@ -11854,6 +11868,10 @@ export default function KaliyugaArena() {
             ctx.save();
             ctx.translate(p.x + (heroRecoil?.offsetX ?? 0), p.y + (heroRecoil?.offsetY ?? 0));
             if (heroRecoil) ctx.rotate(heroRecoil.lean);
+            else if (bodyPose) {
+              ctx.rotate(bodyPose.lean);
+              ctx.scale(bodyPose.scaleX, bodyPose.scaleY);
+            }
             ctx.drawImage(rudra3d.canvas, anchorX, anchorY, drawSize, drawSize);
             ctx.restore();
           } else {
@@ -11862,6 +11880,13 @@ export default function KaliyugaArena() {
               liveBladeTrailActiveIdRef.current = null;
             }
             previousBladeSampleRef.current = null;
+            ctx.save();
+            if (bodyPose) {
+              ctx.translate(p.x, p.y);
+              ctx.rotate(bodyPose.lean);
+              ctx.scale(bodyPose.scaleX, bodyPose.scaleY);
+              ctx.translate(-p.x, -p.y);
+            }
             drawSpriteFrame(
               ctx,
               activeRudraSheet,
@@ -11881,6 +11906,7 @@ export default function KaliyugaArena() {
               0,
               primaryLightX
             );
+            ctx.restore();
           }
 
           // Player combat slashes render exclusively through the from-scratch Ufotable WebGL Battle VFX Engine (legacy repo PNG flipbooks & bespokeSlashArc disabled)
@@ -12105,10 +12131,15 @@ export default function KaliyugaArena() {
       }
 
       // 9. Draw World-Space Floating Combat Text & Callout Banners (Non-overlapping radial pop-out + crisp #120806 dark ink outline)
+      const activeContact = sakugaDirectorRef.current.focus;
       sim.floatingTexts.forEach((ft) => {
         if (!ft.active) return;
+        const overlapsImpact = activeContact && activeContact.rank >= 2 &&
+          activeContact.age < activeContact.duration * 0.62 &&
+          Math.hypot(ft.x - activeContact.x, ft.y - activeContact.y + 35) < 108;
+        const isCombatPrompt = ft.text.includes('[F]') || ft.text.includes('PARRY');
         ctx.save();
-        ctx.globalAlpha = Math.min(1, ft.life * 1.75);
+        ctx.globalAlpha = Math.min(1, ft.life * 1.75) * (overlapsImpact && !isCombatPrompt ? 0.38 : 1);
         ctx.textAlign = 'center';
         ctx.lineJoin = 'round';
         ctx.font = `800 ${Math.round(14 * ft.scale)}px 'Plus Jakarta Sans', 'Noto Sans SC', sans-serif`;
@@ -12157,6 +12188,11 @@ export default function KaliyugaArena() {
         }
         ctx.restore();
       }
+
+      ctx.save();
+      ctx.translate(-sim.camX, -sim.camY);
+      renderCombatContactAccent(ctx, sakugaDirectorRef.current);
+      ctx.restore();
 
       // End Camera Zoom & Shake Pass so Screen-Space Overlays cover 100% of Viewport (0..cw, 0..ch)
       ctx.restore();

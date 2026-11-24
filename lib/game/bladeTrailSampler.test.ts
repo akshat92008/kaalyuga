@@ -11,6 +11,8 @@ import {
   createActiveStrikeState,
   projectBakedBladePoseToArena,
   resolveWeaponSwingClipProgress,
+  sampleCombatBodyPose,
+  transformArenaBladeSample,
   stepActiveStrikeWindow,
   writeSweptBladeRibbonBuffers,
 } from './bladeTrailSampler';
@@ -195,4 +197,25 @@ test('regular heavy swings choose a weapon-specific clip while execution keeps i
   assert.equal(resolveRudraDesiredState({ ...heavy, weaponSwing: { ...window, weapon: 'parashu' } }, clips), 'heavy');
   assert.equal(resolveRudraDesiredState({ ...heavy, weaponSwing: { ...window, weapon: 'trishula_great' } }, clips), 'attack3');
   assert.equal(resolveRudraDesiredState({ ...heavy, finisherVariant: 'spin_360_cleave' }, clips), 'cast');
+});
+
+test('weapon anticipation and follow-through preserve the foot pivot and transform blade anchors', () => {
+  const contact = 0.36;
+  const windup = sampleCombatBodyPose(0.18, contact, 0, 'parashu', true);
+  const finish = sampleCombatBodyPose(0.56, contact, 0, 'parashu', true);
+  const left = sampleCombatBodyPose(0.56, contact, Math.PI, 'parashu', true);
+  const thrust = sampleCombatBodyPose(0.56, contact, 0, 'trishula_great', true);
+  assert.ok(windup.lean < 0 && windup.scaleY < 1);
+  assert.ok(finish.lean > 0 && left.lean === -finish.lean);
+  assert.ok(finish.scaleX < 1 && thrust.scaleX > 1);
+  assert.ok(Math.abs(sampleCombatBodyPose(1, contact, 0, 'parashu', true).lean) < 1e-10);
+
+  const sample = { rootX: 50, rootY: 60, tipX: 80, tipY: 60, midX: 65, midY: 60,
+    angleRad: 0, bladeLengthPx: 30, depthZ: 0, progress: 0, ageSec: 0 };
+  const transformed = transformArenaBladeSample(sample, 50, 60, { lean: Math.PI / 2, scaleX: 2, scaleY: 1 });
+  assert.equal(transformed.rootX, 50);
+  assert.equal(transformed.rootY, 60);
+  assert.ok(Math.abs(transformed.tipX - 50) < 1e-10);
+  assert.equal(transformed.tipY, 120);
+  assert.equal(transformed.bladeLengthPx, 60);
 });

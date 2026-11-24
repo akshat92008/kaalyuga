@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { receiveHit, stepCombatHitReaction, type ReceiveHitTarget } from './combatPipeline';
+import { receiveHit, startCombatHitReaction, stepCombatHitReaction, type ReceiveHitTarget } from './combatPipeline';
 import {
   createSakugaDirectorState,
   getActiveImpactFramePhase,
@@ -113,4 +113,26 @@ test('confirmed hits give directional recoil, with weaker visible displacement f
   assert.equal(stepCombatHitReaction(normal, 0.016), null);
   receiveHit(normal, { rawDamage: 0, knockbackAngleRad: 0 });
   assert.equal(normal.hitReaction, undefined);
+});
+
+test('compact viewports keep the same contact target with less push-in', () => {
+  const state = createSakugaDirectorState();
+  triggerSakugaImpact(state, { kind: 'posture_break', element: 'vayu', worldX: 530, worldY: 310, angle: 0.7 });
+  const wide = sampleCombatContactCamera(state, 400, 260, 1440);
+  const compact = sampleCombatContactCamera(state, 400, 260, 820);
+  assert.ok(wide.zoom > compact.zoom && compact.zoom > 1);
+  assert.ok(wide.offsetX < compact.offsetX && compact.offsetX < 0);
+  assert.ok(wide.offsetY < compact.offsetY && compact.offsetY < 0);
+});
+
+test('a broken guard buckles after initial recoil', () => {
+  const normal: ReceiveHitTarget = { hp: 100, maxHp: 100, vx: 0, vy: 0, hitFlashTimer: 0 };
+  const broken = { ...normal };
+  startCombatHitReaction(normal, 0, 'heavy');
+  startCombatHitReaction(broken, 0, 'heavy', true);
+  for (let frame = 0; frame < 6; frame++) {
+    stepCombatHitReaction(normal, 0.02);
+    stepCombatHitReaction(broken, 0.02);
+  }
+  assert.ok(stepCombatHitReaction(broken, 0.02)!.squash > stepCombatHitReaction(normal, 0.02)!.squash * 2);
 });

@@ -55,6 +55,50 @@ function interpolateSwingPhase(t: number, span: number, from: number, to: number
     + span * t * inverse * (inverse * enter - t * exit);
 }
 
+export function sampleCombatBodyPose(
+  progress: number,
+  contact: number,
+  aim: number,
+  weapon: WeaponId,
+  heavy: boolean,
+): { lean: number; scaleX: number; scaleY: number } {
+  const p = Math.max(0, Math.min(1, progress));
+  const strikeAt = Math.max(0.05, Math.min(0.95, contact));
+  const windup = p < strikeAt ? Math.sin(Math.PI * p / strikeAt) : 0;
+  const followProgress = Math.max(0, (p - strikeAt) / (1 - strikeAt));
+  const follow = Math.sin(Math.PI * Math.pow(followProgress, 0.65));
+  const thrusting = weapon === 'trishula_great';
+  const weight = thrusting ? 1.1 : weapon === 'khanda_dual' ? 0.72 : 0.96;
+  const amplitude = weight * (heavy ? 1 : 0.62);
+  return {
+    lean: Math.cos(aim) * amplitude * (follow * 0.135 - windup * 0.065),
+    scaleX: 1 + amplitude * (0.055 * windup + (thrusting ? 0.052 : -0.028) * follow),
+    scaleY: 1 - amplitude * (0.049 * windup + (thrusting ? 0.044 : 0.022) * follow),
+  };
+}
+
+export function transformArenaBladeSample(
+  sample: ArenaBladeSample,
+  pivotX: number,
+  pivotY: number,
+  pose: ReturnType<typeof sampleCombatBodyPose>,
+): ArenaBladeSample {
+  const cos = Math.cos(pose.lean);
+  const sin = Math.sin(pose.lean);
+  const rootOffsetX = (sample.rootX - pivotX) * pose.scaleX;
+  const rootOffsetY = (sample.rootY - pivotY) * pose.scaleY;
+  const tipOffsetX = (sample.tipX - pivotX) * pose.scaleX;
+  const tipOffsetY = (sample.tipY - pivotY) * pose.scaleY;
+  const rootX = pivotX + rootOffsetX * cos - rootOffsetY * sin;
+  const rootY = pivotY + rootOffsetX * sin + rootOffsetY * cos;
+  const tipX = pivotX + tipOffsetX * cos - tipOffsetY * sin;
+  const tipY = pivotY + tipOffsetX * sin + tipOffsetY * cos;
+  return {
+    ...sample, rootX, rootY, tipX, tipY, midX: (rootX + tipX) * 0.5, midY: (rootY + tipY) * 0.5,
+    angleRad: Math.atan2(tipY - rootY, tipX - rootX), bladeLengthPx: Math.hypot(tipX - rootX, tipY - rootY),
+  };
+}
+
 /** Reject a pose discontinuity so a trail never bridges a teleported blade. */
 export function classifyBladeTrailStep(previous: ArenaBladeSample, current: ArenaBladeSample): 'duplicate' | 'sweep' | 'break' {
   const tipTravel = Math.hypot(current.tipX - previous.tipX, current.tipY - previous.tipY);

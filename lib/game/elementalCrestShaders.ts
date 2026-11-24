@@ -68,8 +68,10 @@ export const ELEMENTAL_CREST_GLSL = /* glsl */ `
       float rollPhase = u * 23.0 - uLife * 19.0;
       float spindrift = smoothstep(0.24, 0.77, sin(rollPhase + grain * 2.7) * 0.42 + broad * 0.8);
       float foamClaws = smoothstep(0.18, 0.78, grain * 0.62 + curl * 0.27 + 0.26);
+      float overturn = smoothstep(0.34, 0.78, uLife);
+      outer -= overturn * 0.11 * smoothstep(0.38, 0.75, grain + curl * 0.12);
       float foam = brushBand(v, outer - 0.06, 0.065 + 0.085 * foamClaws);
-      foam *= 0.26 + foamClaws * 0.74;
+      foam *= (0.26 + foamClaws * 0.74) * (1.0 - overturn * 0.65 * smoothstep(0.4, 0.8, grain));
       float fold = brushBand(v, 0.40 + 0.18 * curl, 0.035 + 0.055 * broad);
       float facet = smoothstep(0.23, 0.70, v + (broad - 0.5) * 0.23);
       col = mix(col, uEdgeColor * 1.18, facet);
@@ -83,7 +85,8 @@ export const ELEMENTAL_CREST_GLSL = /* glsl */ `
     } else if (uCrestStyle < 2.5) {
       // Keep the outside continuous as veils of wind move through the sheet.
       outer = 0.92 + (broad - 0.5) * 0.05;
-      inner = 0.12 + 0.08 * curl + 0.13 * broad + 0.10 * uLife;
+      float unravel = smoothstep(0.24, 0.87, uLife);
+      inner = 0.12 + 0.08 * curl + 0.13 * broad + unravel * (0.17 + grain * 0.10);
       float edge = brushBand(v, outer - 0.07, 0.13);
       float fold = brushBand(v, 0.56 + 0.10 * curl, 0.18) * smoothstep(0.15, 0.78, broad);
       col = mix(col, uEdgeColor * 1.38, smoothstep(0.19, 0.84, v));

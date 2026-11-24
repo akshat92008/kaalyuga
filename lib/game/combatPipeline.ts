@@ -47,6 +47,7 @@ export interface CombatHitReaction {
   duration: number;
   angle: number;
   strength: number;
+  buckle: boolean;
 }
 
 export function startCombatHitReaction(
@@ -62,6 +63,7 @@ export function startCombatHitReaction(
   if (previous && previous.age < previous.duration * 0.34 && previous.strength > strength) return;
   target.hitReaction = {
     age: 0, duration: 0.16 + size * 0.16, angle: Number.isFinite(angle) ? angle : 0, strength,
+    buckle: guardBroken,
   };
 }
 
@@ -73,15 +75,16 @@ export function stepCombatHitReaction(
   if (!reaction) return null;
   const t = reaction.age / reaction.duration;
   // A sharp recoil on contact, a short counter-motion, and a planted recovery.
-  const recoil = (Math.pow(1 - t, 2.8) - Math.sin(t * Math.PI * 2) * t * (1 - t) * 0.55) * reaction.strength;
+  const recoil = (Math.pow(1 - t, 2.35) - 0.16 * Math.sin(t * Math.PI) * t) * reaction.strength;
+  const buckle = reaction.buckle ? (1 - t) * Math.sin(t * Math.PI * 0.88) * reaction.strength : 0;
   const direction = Math.cos(reaction.angle);
   reaction.age += Math.max(0, Math.min(dt, 0.05));
   if (reaction.age >= reaction.duration) target.hitReaction = undefined;
   return {
-    offsetX: direction * recoil * 10,
-    offsetY: (Math.sin(reaction.angle) * 5 - 2) * recoil,
-    lean: direction * recoil * 0.21,
-    squash: recoil * 0.08,
+    offsetX: direction * recoil * 13,
+    offsetY: (Math.sin(reaction.angle) * 6 - 2) * recoil,
+    lean: direction * (recoil * 0.24 + buckle * 0.12),
+    squash: recoil * 0.075 + buckle * 0.17,
   };
 }
 
