@@ -40,6 +40,57 @@ async function main() {
     await page.waitForTimeout(42);
     await capture(`${element}-light-release`);
   }
+  async function captureVrikodaraBenchmark() {
+    await page.goto('http://127.0.0.1:3100/?debug=1&qaFixtures=1&chamber=8',
+      { waitUntil: 'domcontentloaded', timeout: 90000 });
+    await page.waitForFunction(() => {
+      const qa = window.__kaliyugaPhaseQA;
+      return qa?.state === 'playing' && qa.chamber === 8 && qa.rudra3dReady && qa.bossScreen &&
+        window.__kaliyugaPhaseQAFixture;
+    }, undefined, { timeout: 90000 });
+    const faceBoss = page.getByRole('button', { name: /FACE VRIKODARA/ });
+    if (await faceBoss.isVisible()) await faceBoss.click();
+    await page.waitForFunction(() => window.__kaliyugaPhaseQA.sliceStage === 'combat_arena',
+      undefined, { timeout: 20000 });
+    await page.getByTestId('kaliyuga-canvas').focus();
+    const prepare = () => page.evaluate(() => window.__kaliyugaPhaseQAFixture.prepareVrikodaraBenchmark());
+    const idle = () => page.waitForFunction(() => window.__kaliyugaPhaseQA.action === 'idle',
+      undefined, { timeout: 15000 });
+    const latest = (name) => page.evaluate((eventName) => Math.max(0, ...window.__kaliyugaPhaseQA.recentEvents
+      .filter((event) => event.name === eventName).map((event) => event.frameTime)), name);
+    const contact = (name, meta, last) => page.waitForFunction(({ name, meta, last }) =>
+      window.__kaliyugaPhaseQA.recentEvents.some((event) =>
+        event.name === name && event.meta === meta && event.frameTime > last), { name, meta, last }, { timeout: 15000 });
+
+    await prepare();
+    await press('Digit1');
+    await capture('vrikodara-benchmark-baseline');
+    for (let step = 1; step <= 4; step++) {
+      const lastHit = await latest('vrikodara-light-hit');
+      await idle();
+      await press('KeyJ');
+      await contact('vrikodara-light-hit', String(step), lastHit);
+      if (step === 4) await capture('vrikodara-light-combo-finish');
+    }
+
+    for (const [element, stance] of [['varuna', 'Digit1'], ['vayu', 'Digit2']]) {
+      await idle();
+      await prepare();
+      await press(stance);
+      if (element === 'varuna') {
+        await press('Digit4');
+        await page.waitForFunction(() => window.__kaliyugaPhaseQA.varunaInfusionRemaining > 0,
+          undefined, { timeout: 15000 });
+        await idle();
+      }
+      const lastHeavy = await latest('heavy-contact');
+      await press('KeyK');
+      await contact('heavy-contact', element, lastHeavy);
+      await capture(`vrikodara-${element}-heavy`);
+      await page.waitForTimeout(70);
+      await capture(`vrikodara-${element}-wake`);
+    }
+  }
   try {
     await page.goto('http://127.0.0.1:3100/?debug=1&qaFixtures=1&chamber=1',
       { waitUntil: 'domcontentloaded', timeout: 90000 });
@@ -126,6 +177,7 @@ async function main() {
     await page.evaluate(() => window.__kaliyugaPhaseQAFixture.preparePerfectParry());
     await press('ShiftLeft');
     await capture('perfect-parry');
+    await captureVrikodaraBenchmark();
     if (errors.length || captureFailures.length) throw Error(JSON.stringify({ errors, captureFailures }));
   } catch (error) {
     await capture('failure-current-screen');

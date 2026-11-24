@@ -1315,6 +1315,16 @@ export default function KaliyugaArena() {
           target.x = sim.player.x + 46;
           target.y = sim.player.y;
         },
+        prepareVrikodaraBenchmark: () => {
+          const sim = simRef.current;
+          const boss = sim.enemies.find((enemy) => enemy.type === 'vrikodara' && enemy.aiState !== 'ko');
+          if (sim.chamberIndex !== 7 || !boss) throw new Error('Benchmark requires live Vrikodara in Chamber 8');
+          prepareArena();
+          sim.player.comboStep = 1;
+          sim.player.comboWindowTimer = 0;
+          boss.x = sim.player.x + 58;
+          boss.y = sim.player.y + 8;
+        },
         preparePerfectParry: () => {
           prepareArena();
           const sim = simRef.current;
@@ -5873,6 +5883,29 @@ export default function KaliyugaArena() {
             });
 
             sim.runDamageDealt += hitRes.hpLost;
+            if (hitRes.hpLost > 0) {
+              const contactX = e.x - Math.cos(kAngle) * (e.isBoss ? 25 : 12);
+              const contactY = e.y - Math.sin(kAngle) * (e.isBoss ? 18 : 9);
+              if (!hitRes.triggeredPostureBreak) {
+                fx?.spawnClashStarburst({
+                  x: contactX, y: contactY - (e.isBoss ? 36 : 22),
+                  angle: kAngle, scale: isComboFinisher ? 0.43 : 0.23,
+                  palette: lightSlashPalette, duration: isComboFinisher ? 0.15 : 0.10,
+                });
+              }
+              fx?.spawnElementalParticles({
+                x: contactX, y: contactY + 3, angle: kAngle, spread: 1.10,
+                count: isComboFinisher ? 7 : 4, speed: 120,
+                palette: lightSlashPalette, kind: 'dust_mote',
+              });
+              if (isDebugMode && e.type === 'vrikodara') {
+                qaRecentEventsRef.current.push({
+                  name: 'vrikodara-light-hit', meta: String(capturedStep), frameTime: performance.now(),
+                  contactX, contactY, progress: curP.weaponSwingProgress,
+                });
+                if (qaRecentEventsRef.current.length > 50) qaRecentEventsRef.current.shift();
+              }
+            }
             sim.hitstopTimer = Math.max(sim.hitstopTimer, hitRes.hitstopSec);
             sim.cameraShakeTrauma = hitRes.clampedCameraTrauma;
             e.scaleX = activeFinisherSpec ? 1.12 : 1.04;

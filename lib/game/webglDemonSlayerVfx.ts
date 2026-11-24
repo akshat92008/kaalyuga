@@ -33,7 +33,8 @@ export type ElementalParticleKind =
   | 'water_droplet'
   | 'rock_shard'
   | 'wind_shard'
-  | 'soot_flake';
+  | 'soot_flake'
+  | 'dust_mote';
 
 export interface VfxTelemetrySnapshot {
   qualityPreset: VfxQualityPreset;
@@ -381,10 +382,27 @@ export function selectDemonSlayerPaletteForStance(stance: string): DemonSlayerVf
 // ============================================================================
 
 const RIBBON_VERTEX_SHADER = /* glsl */ `
+  uniform float uLife;
+  uniform float uCrestStyle;
   varying vec2 vUv;
   void main() {
     vUv = uv;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    vec3 strokePosition = position;
+    float u = uv.x;
+    float section = sin(u * 3.14159265);
+    if (uCrestStyle > 0.5 && uCrestStyle < 1.5) {
+      float roll = sin(u * 11.7 - uLife * 9.0);
+      float crestDistance = (u - 0.69 - uLife * 0.14) * 4.2;
+      float shoulder = exp(-crestDistance * crestDistance);
+      float surge = 1.0 - smoothstep(0.40, 0.91, uLife);
+      strokePosition.y += section * (12.0 * roll + 33.0 * shoulder * surge) * mix(0.56, 1.25, uv.y);
+      strokePosition.x += section * roll * 8.5 * uv.y;
+    } else if (uCrestStyle > 1.5 && uCrestStyle < 2.5) {
+      float flex = section * sin(u * 5.4 - uLife * 7.8) * (1.0 - uLife);
+      strokePosition.x += flex * mix(16.0, 9.0, uv.y);
+      strokePosition.y += flex * 8.0;
+    }
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(strokePosition, 1.0);
   }
 `;
 
@@ -939,6 +957,8 @@ interface ActiveWaterDragon {
   speed: number;
   life: number;
   maxLife: number;
+  reach: number;
+  wakeStep: number;
 }
 
 interface ActiveThunderZigzag {
@@ -961,6 +981,8 @@ interface ActiveWindGale {
   worldY: number;
   life: number;
   maxLife: number;
+  reach: number;
+  wakeStep: number;
 }
 
 interface ActiveCompassMandala {
@@ -1190,6 +1212,7 @@ function particleCellOffset(kind: ElementalParticleKind): [number, number] {
     case 'rock_shard':
     case 'wind_shard':
     case 'soot_flake':
+    case 'dust_mote':
       return [0.5, 0.0]; // Bot-Right cell (1,1)
     default:
       return [0.0, 0.0];
@@ -2165,21 +2188,47 @@ export class WebglDemonSlayerVfxOverlay {
       worldY: opts.y,
       angle: opts.angle,
       speed: 135,
+      reach, wakeStep: 0,
       life: 0,
       maxLife: opts.duration ?? 0.74,
     });
 
-    for (const position of [0.36, 0.74]) {
-      const x = opts.x + Math.cos(opts.angle) * reach * position;
-      const y = opts.y + Math.sin(opts.angle) * reach * position;
-      this.spawnGroundLightBounce({
-        x, y: y + 23, radius: 76, palette: 'water', duration: 0.62,
-        intensity: position > 0.5 ? 0.62 : 0.40,
-      });
+  }
+
+  private emitElementalWake(
+    effect: ActiveWaterDragon | ActiveWindGale,
+    element: 'water' | 'wind',
+    progress: number,
+    scale: number,
+    travel = 0,
+  ): void {
+    const water = element === 'water';
+    // Each patch is emitted once when the visible crest reaches that part of the curve.
+    while (effect.wakeStep < 5 && progress >= 0.07 + effect.wakeStep * 0.062) {
+      const step = effect.wakeStep++;
+      const along = 0.24 + step * 0.16;
+      const stroke = sampleElementalStroke(element, along, effect.reach, 0);
+      const next = sampleElementalStroke(element, along + 0.02, effect.reach, 0);
+      const cos = Math.cos(effect.angle);
+      const sin = Math.sin(effect.angle);
+      const x = effect.worldX + cos * travel + (stroke.x * cos + stroke.y * sin) * scale;
+      const y = effect.worldY + sin * travel + (stroke.x * sin - stroke.y * cos) * scale;
+      const tangent = effect.angle + Math.atan2(stroke.y - next.y, next.x - stroke.x);
       this.spawnElementalParticles({
-        x, y, angle: opts.angle, spread: 2.25, count: 18,
-        speed: position > 0.5 ? 270 : 190, palette: 'water', kind: 'water_droplet',
+        x, y: y + (water ? 6 : 15),
+        angle: tangent + (water ? -0.36 : 0.48),
+        spread: water ? 1.28 : 0.88,
+        count: water ? 8 : 6,
+        speed: water ? 155 + step * 23 : 88 + step * 15,
+        palette: element,
+        kind: water ? 'water_droplet' : 'dust_mote',
       });
+      if (water && (step === 1 || step === 4)) {
+        this.spawnGroundLightBounce({
+          x, y: y + 21, radius: 62 + step * 8, palette: 'water',
+          duration: 0.39, intensity: 0.35 + step * 0.060,
+        });
+      }
     }
   }
 
@@ -2488,7 +2537,7 @@ export class WebglDemonSlayerVfxOverlay {
     sweep.rotation.z = -opts.angle;
     this.scene.add(sweep);
     this.windGales.push({
-      sweep, angle: opts.angle, worldX: opts.x, worldY: opts.y,
+      sweep, angle: opts.angle, worldX: opts.x, worldY: opts.y, reach, wakeStep: 0,
       life: 0, maxLife: opts.duration ?? 0.62,
     });
 
@@ -2496,10 +2545,6 @@ export class WebglDemonSlayerVfxOverlay {
     const y = opts.y + Math.sin(opts.angle) * reach * 0.66;
     this.spawnGroundLightBounce({
       x, y: y + 20, radius: 90, palette: 'wind', duration: 0.43, intensity: 0.46,
-    });
-    this.spawnElementalParticles({
-      x, y, angle: opts.angle, spread: 1.20, count: 12,
-      speed: 275, palette: 'wind', kind: 'spark_needle',
     });
   }
 
@@ -3092,6 +3137,18 @@ export class WebglDemonSlayerVfxOverlay {
         slot.r = 0.85;
         slot.g = 0.82;
         slot.b = 0.74;
+      } else if (kind === 'dust_mote') {
+        const size = 7 + Math.random() * 9;
+        slot.scaleX = size * 1.5;
+        slot.scaleY = size * 0.58;
+        slot.vz = 28 + Math.random() * 55;
+        slot.gravity = 120;
+        slot.drag = 3.8;
+        slot.rotSpeed = (Math.random() - 0.5) * 5;
+        slot.maxLife = 0.31 + Math.random() * 0.24;
+        slot.r = 0.44;
+        slot.g = 0.53;
+        slot.b = 0.37;
       } else if (kind === 'wind_shard') {
         const s = 18 + Math.random() * 14;
         slot.scaleX = s * 1.45;
@@ -3491,6 +3548,7 @@ export class WebglDemonSlayerVfxOverlay {
       d.frontGroup.scale.set(grow, grow, grow);
       d.frontGroup.rotation.z = -d.angle;
       d.frontGroup.rotation.x = 0.24 * Math.sin(norm * Math.PI);
+      this.emitElementalWake(d, 'water', norm, grow / zoom);
       d.bodyMat.uniforms.uTime.value = this.elapsed * 1.4;
       d.bodyMat.uniforms.uLife.value = norm;
       const fade = 1 - Math.max(0, (norm - 0.65) / 0.35);
@@ -3557,6 +3615,7 @@ export class WebglDemonSlayerVfxOverlay {
         20,
       );
       g.sweep.scale.set(expand, expand, expand);
+      this.emitElementalWake(g, 'wind', norm, expand / zoom, travel * 45);
       g.sweep.material.uniforms.uTime.value = this.elapsed;
       g.sweep.material.uniforms.uLife.value = norm;
     }
