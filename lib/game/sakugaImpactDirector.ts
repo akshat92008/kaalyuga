@@ -3,7 +3,7 @@
 export type SakugaElement = 'agni' | 'varuna' | 'vayu' | 'vajra' | 'blood' | 'parry' | 'guardian';
 
 export interface SakugaImpactTrigger {
-  kind: 'heavy_hit' | 'parry_clash' | 'astra_burst' | 'posture_break' | 'execution' | 'boss_clash';
+  kind: 'light_hit' | 'heavy_hit' | 'parry_clash' | 'astra_burst' | 'astra_contact' | 'posture_break' | 'execution' | 'boss_clash';
   element: SakugaElement;
   worldX: number;
   worldY: number;
@@ -36,6 +36,7 @@ export interface SakugaFloorBlowout {
   life: number;
   maxLife: number;
   intensity: number;
+  angle: number;
 }
 
 export interface SakugaDirectorState {
@@ -45,6 +46,9 @@ export interface SakugaDirectorState {
   impactElement: SakugaElement;
   impactWorldX: number;
   impactWorldY: number;
+  impactKind: SakugaImpactTrigger['kind'] | null;
+  focus: { x: number; y: number; age: number; duration: number; zoom: number; rank: number;
+    kind: SakugaImpactTrigger['kind'] } | null;
 
   // Dynamic chiaroscuro arena darkness (0.34 baseline -> up to 0.72 during clashes/astras)
   chiaroscuroTarget: number;
@@ -137,6 +141,8 @@ export function createSakugaDirectorState(): SakugaDirectorState {
     impactElement: 'agni',
     impactWorldX: 0,
     impactWorldY: 0,
+    impactKind: null,
+    focus: null,
     chiaroscuroTarget: 0.36,
     chiaroscuroCurrent: 0.36,
     dutchTiltRad: 0,
@@ -170,6 +176,7 @@ export function createSakugaDirectorState(): SakugaDirectorState {
       life: 0,
       maxLife: 0.45,
       intensity: 1,
+      angle: 0,
     })),
   };
 }
@@ -213,6 +220,7 @@ export function spawnSakugaFloorBlowout(
     element: SakugaElement;
     duration?: number;
     intensity?: number;
+    angle?: number;
   }
 ): void {
   const spec = SAKUGA_ELEMENT_COLORS[opts.element];
@@ -230,6 +238,7 @@ export function spawnSakugaFloorBlowout(
   slot.life = 0;
   slot.maxLife = opts.duration ?? 0.48;
   slot.intensity = opts.intensity ?? 1.0;
+  slot.angle = opts.angle ?? 0;
 
   // Also energize dynamic character bounce light at this world point
   state.activeLightColor = spec.mid;
@@ -237,6 +246,35 @@ export function spawnSakugaFloorBlowout(
   state.activeLightIntensity = Math.max(state.activeLightIntensity, Math.min(1.2, opts.intensity ?? 1.0));
   state.activeLightX = opts.worldX;
   state.activeLightY = opts.worldY;
+}
+
+const COMBAT_CONTACT_PROFILES: Record<SakugaImpactTrigger['kind'], {
+  rank: number; zoom: number; hold: number; radius: number; light: number;
+}> = {
+  light_hit: { rank: 1, zoom: 0.014, hold: 0.16, radius: 73, light: 0.38 },
+  heavy_hit: { rank: 2, zoom: 0.037, hold: 0.26, radius: 126, light: 0.76 },
+  astra_burst: { rank: 2, zoom: 0.030, hold: 0.28, radius: 110, light: 0.67 },
+  astra_contact: { rank: 3, zoom: 0.035, hold: 0.27, radius: 135, light: 0.78 },
+  parry_clash: { rank: 3, zoom: 0.042, hold: 0.23, radius: 122, light: 0.90 },
+  posture_break: { rank: 3, zoom: 0.048, hold: 0.31, radius: 152, light: 0.90 },
+  execution: { rank: 4, zoom: 0.05, hold: 0.33, radius: 166, light: 0.95 },
+  boss_clash: { rank: 3, zoom: 0.04, hold: 0.29, radius: 146, light: 0.84 },
+};
+
+export function sampleCombatContactCamera(
+  state: SakugaDirectorState,
+  centerX: number,
+  centerY: number,
+): { zoom: number; offsetX: number; offsetY: number } {
+  const contact = state.focus;
+  if (!contact) return { zoom: 1, offsetX: 0, offsetY: 0 };
+  const t = Math.min(1, contact.age / contact.duration);
+  const envelope = (0.64 + 0.36 * Math.min(1, t * 7)) * Math.pow(1 - t, 2.1);
+  const zoom = contact.zoom * envelope;
+  const dx = Math.max(-195, Math.min(195, contact.x - centerX));
+  const dy = Math.max(-130, Math.min(130, contact.y - centerY));
+  // Aim into the exchange while keeping both fighters within the normal arena view.
+  return { zoom: 1 + zoom, offsetX: -dx * zoom * 2.0, offsetY: -dy * zoom * 1.6 };
 }
 
 /**
@@ -249,6 +287,16 @@ export function triggerSakugaImpact(
   trigger: SakugaImpactTrigger
 ): void {
   const intensity = Math.max(0.45, Math.min(1.5, trigger.intensity ?? 1.0));
+  const profile = COMBAT_CONTACT_PROFILES[trigger.kind];
+  const activeFocus = state.focus;
+  if (!activeFocus || profile.rank > activeFocus.rank ||
+      activeFocus.age >= activeFocus.duration * (profile.rank === activeFocus.rank ? 0.30 : 0.67)) {
+    state.focus = {
+      x: trigger.worldX, y: trigger.worldY, age: 0,
+      duration: profile.hold, zoom: profile.zoom * Math.min(1.25, intensity),
+      rank: profile.rank, kind: trigger.kind,
+    };
+  }
   const isMajor =
     trigger.kind === 'parry_clash' ||
     trigger.kind === 'posture_break' ||
@@ -263,51 +311,35 @@ export function triggerSakugaImpact(
     state.impactElement = trigger.element;
     state.impactWorldX = trigger.worldX;
     state.impactWorldY = trigger.worldY;
+    state.impactKind = trigger.kind;
   }
 
-  if (!isMajor) {
-    spawnSakugaFloorBlowout(state, {
-      worldX: trigger.worldX,
-      worldY: trigger.worldY + 14,
-      radius: 110,
-      element: trigger.element,
-      duration: 0.38,
-      intensity: intensity * 0.65,
-    });
-    return;
-  }
-
-  // Plunge arena shadows deep so the clash blazes like 8K HDR!
-  state.chiaroscuroTarget = Math.max(
-    state.chiaroscuroTarget,
-    isMajor ? 0.72 : trigger.kind === 'astra_burst' ? 0.64 : 0.54
-  );
-
-  // Dutch camera tilt kick (alternating direction by angle sign so consecutive hits whip!)
-  const tiltSign = Math.cos(trigger.angle) >= 0 ? 1 : -1;
-  const tiltKick = (isMajor ? 0.044 : 0.024) * intensity * tiltSign;
-  state.dutchTiltVel += tiltKick * 12;
-
-  // Spawn blazing HDR floor blowout underneath clash
   spawnSakugaFloorBlowout(state, {
     worldX: trigger.worldX,
     worldY: trigger.worldY + 14,
-    radius: (trigger.kind === 'parry_clash' ? 122 : 200) * Math.min(1.20, intensity),
+    radius: profile.radius,
     element: trigger.element,
-    duration: 0.44,
-    intensity: 0.95,
+    duration: profile.hold + 0.08,
+    intensity: profile.light * Math.min(1.25, intensity),
+    angle: trigger.angle,
   });
 
+  if (!isMajor) return;
+
+  state.chiaroscuroTarget = Math.max(state.chiaroscuroTarget, 0.57);
+  const tiltDirection = Math.cos(trigger.angle) >= 0 ? 1 : -1;
+  state.dutchTiltVel += 0.25 * intensity * tiltDirection;
+
   // Spawn signature Tengen-vs-Gyutaro cross-cutting razor slash beams!
-  const beamLen = (trigger.kind === 'parry_clash' ? 164 : 275) * Math.min(1.20, intensity);
+  const beamLen = (trigger.kind === 'parry_clash' ? 108 : 150) * Math.min(1.20, intensity);
   spawnSakugaCrossBeam(state, {
     worldX: trigger.worldX,
     worldY: trigger.worldY - 22,
     angle: trigger.angle,
     length: beamLen,
-    thickness: 10,
+    thickness: 7,
     element: trigger.element,
-    duration: 0.18,
+    duration: 0.16,
   });
   if (trigger.kind === 'parry_clash' || trigger.kind === 'boss_clash') {
     // Secondary counter-diagonal cross beam (forms the iconic anime X-clash!)
@@ -338,7 +370,11 @@ export function stepSakugaDirector(
     : opts?.isBossChamber
       ? 0.44
       : 0.36;
-  const vfxDarknessBoost = opts?.hasActiveElementalVfx ? 0.16 : 0;
+  const vfxDarknessBoost = opts?.hasActiveElementalVfx ? 0.07 : 0;
+  if (state.focus) {
+    state.focus.age += safeDt;
+    if (state.focus.age >= state.focus.duration) state.focus = null;
+  }
 
   // Impact frame countdown
   if (state.impactFrameTimer > 0) {
@@ -486,6 +522,8 @@ export function renderChiaroscuroAndFloorBlowouts(
     ctx.save();
     ctx.translate(f.worldX, f.worldY);
     ctx.scale(1, 0.56);
+    ctx.rotate(f.angle);
+    ctx.scale(1.13, 0.78);
 
     // Outer saturated elemental floodlight across the stone tiles
     ctx.globalCompositeOperation = 'lighter';
@@ -513,6 +551,36 @@ export function renderChiaroscuroAndFloorBlowouts(
     ctx.fill();
     ctx.restore();
   }
+}
+
+export function renderCombatActorBounce(
+  ctx: CanvasRenderingContext2D,
+  state: SakugaDirectorState,
+  x: number,
+  y: number,
+  size: number,
+): void {
+  const dx = state.activeLightX - x;
+  const dy = state.activeLightY - y;
+  const distance = Math.hypot(dx, dy);
+  const intensity = state.activeLightIntensity * Math.pow(Math.max(0, 1 - distance / 235), 1.5);
+  if (intensity < 0.055) return;
+  // Put the color on the side facing the strike and leave the contour visible.
+  const sourceX = Math.max(-size * 0.24, Math.min(size * 0.24, dx * 0.24));
+  const sourceY = Math.max(-size * 0.14, Math.min(size * 0.14, dy * 0.14));
+  ctx.save();
+  ctx.translate(x + sourceX, y - size * 0.57 + sourceY);
+  ctx.scale(0.70, 1);
+  ctx.globalCompositeOperation = 'screen';
+  const radius = size * 0.69;
+  const light = ctx.createRadialGradient(0, 0, 0, 0, 0, radius);
+  const [r, g, b] = state.activeLightRgb;
+  light.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${Math.min(0.42, intensity * 0.42)})`);
+  light.addColorStop(0.48, `rgba(${r}, ${g}, ${b}, ${intensity * 0.15})`);
+  light.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = light;
+  ctx.fillRect(-radius, -radius, radius * 2, radius * 2);
+  ctx.restore();
 }
 
 /**
@@ -730,7 +798,7 @@ export function renderSakugaScreenPostPass(
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, cw, ch);
     ctx.globalCompositeOperation = 'difference';
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.64)';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.29)';
     ctx.fillRect(0, 0, cw, ch);
   }
   ctx.globalCompositeOperation = 'lighter';

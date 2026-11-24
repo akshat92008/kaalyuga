@@ -192,9 +192,12 @@ import {
 } from '@/lib/game/bossEncounters';
 import {
   MAX_CLAMPED_CAMERA_TRAUMA,
+  type CombatHitReaction,
   ParashuFinisherVariant,
   formatCleanDamageNumber,
   receiveHit,
+  startCombatHitReaction,
+  stepCombatHitReaction,
   selectParashuFinisherVariant,
   shouldDamageProp,
 } from '@/lib/game/combatPipeline';
@@ -249,10 +252,12 @@ import {
   SakugaElement,
   createSakugaDirectorState,
   renderChiaroscuroAndFloorBlowouts,
+  renderCombatActorBounce,
   renderCrispVedicWardShield,
   renderDynamicElementalCastShadow,
   renderSakugaCrossBeams,
   renderSakugaScreenPostPass,
+  sampleCombatContactCamera,
   spawnSakugaFloorBlowout,
   stepSakugaDirector,
   triggerSakugaImpact,
@@ -412,6 +417,7 @@ interface EnemyEntity {
   postureBrokenTimer: number;
   immobilizedTimer: number;
   hitFlashTimer: number;
+  hitReaction?: CombatHitReaction;
   parryStanceTimer: number;
   ironGuardWindupTimer?: number;
   ironGuardCd?: number;
@@ -1002,6 +1008,7 @@ export default function KaliyugaArena() {
       comboWindowTimer: 0,
       invulnTimer: 0,
       hitFlashTimer: 0,
+      hitReaction: undefined as CombatHitReaction | undefined,
       immobilizeCd: 0,
       parryCd: 0,
       parryElapsedSec: 0,
@@ -1267,6 +1274,11 @@ export default function KaliyugaArena() {
                 cancelled: activeStrikeRef.current.sync.cancelled,
               }
             : null,
+          combatImpact: {
+            ...sakugaDirectorRef.current.focus,
+            inkKind: sakugaDirectorRef.current.impactKind,
+            reactCount: sim.enemies.filter(enemy => enemy.hitReaction).length,
+          },
           recentEvents: qaRecentEventsRef.current.slice(-36),
         };
       },
@@ -1281,6 +1293,7 @@ export default function KaliyugaArena() {
         p.hp = p.maxHp;
         p.displayHp = p.maxHp;
         p.hitFlashTimer = 0;
+        p.hitReaction = undefined;
         p.dashCharges = p.maxDashCharges;
         p.stamina = p.maxStamina;
         p.invulnTimer = Math.max(45, p.invulnTimer);
@@ -1312,6 +1325,7 @@ export default function KaliyugaArena() {
           enemy.maxHp = Math.max(9000, enemy.maxHp);
           enemy.hp = enemy.maxHp;
           enemy.displayHp = enemy.hp;
+          enemy.hitReaction = undefined;
           enemy.aiState = 'recover';
           enemy.aiTimer = 45;
           enemy.postureBrokenTimer = 0;
@@ -2557,6 +2571,7 @@ export default function KaliyugaArena() {
       sim.player.action = 'idle';
       sim.player.actionTimer = 0;
       sim.player.elevationY = 0;
+      sim.player.hitReaction = undefined;
       sim.player.invulnTimer = 1.4;
       sim.player.walkDistance = 0;
       sim.player.lastFootstepDist = 0;
@@ -3741,6 +3756,7 @@ export default function KaliyugaArena() {
       const corridorEndY = p.y + Math.sin(aimAngle) * spec.range;
 
       // Apply Stance-Specific Astra Effect to Enemies
+      let presentedAstraContact = false;
       sim.enemies.forEach((e) => {
         if (e.aiState === 'ko') return;
         const dist = Math.hypot(e.x - p.x, e.y - p.y);
@@ -3807,6 +3823,15 @@ export default function KaliyugaArena() {
 
         // Vayavyastra Smash hurls enemies outward for Wall-Slam; Thrust pulls Spear Wraiths off balance
         const kAngle = Math.atan2(e.y - p.y, e.x - p.x);
+        startCombatHitReaction(e,
+          astraId === 'vayavyastra' && p.stance === 'thrust' ? kAngle + Math.PI : kAngle, 'heavy');
+        if (!presentedAstraContact) {
+          presentedAstraContact = true;
+          triggerSakugaImpact(sakugaDirectorRef.current, {
+            kind: 'astra_contact', element: sakugaAstraElem, worldX: e.x, worldY: e.y,
+            angle: kAngle, intensity: 0.97,
+          });
+        }
         if (astraId === 'vayavyastra' && p.stance === 'smash') {
           const galePush = e.isBoss ? 140 : 320;
           e.vx += Math.cos(kAngle) * galePush;
@@ -4234,6 +4259,7 @@ export default function KaliyugaArena() {
         const posDmg = Math.round(evalRes.postureDamageDealt * boonMods.postureDamageMultiplier);
         e.posture = Math.max(0, e.posture - posDmg);
         e.hitFlashTimer = 0.16;
+        startCombatHitReaction(e, Math.atan2(e.y - p.y, e.x - p.x), 'riposte', e.posture <= 0);
         e.comboHitsRemaining = 0;
         e.aiState = 'recover';
         e.aiTimer = 1.65;
@@ -4809,13 +4835,11 @@ export default function KaliyugaArena() {
       brokenEnemy.y,
       p.slashAngle
     );
-    const executionAccent =
-      executionVfx.palette === 'wind' ? '#42f3b5' :
-      executionVfx.palette === 'thunder' ? '#ffe87e' : '#ff5434';
-    spawnShockwave(
-      brokenEnemy.x, brokenEnemy.y,
-      executionVfx.strikeRadius * 0.87, executionAccent, 0.36
-    );
+    triggerSakugaImpact(sakugaDirectorRef.current, {
+      kind: 'execution',
+      element: executionVfx.palette === 'wind' ? 'vayu' : executionVfx.palette === 'thunder' ? 'vajra' : 'agni',
+      worldX: brokenEnemy.x, worldY: brokenEnemy.y, angle: p.slashAngle, intensity: 1.2,
+    });
     if (finisherSpec.variant === 'downward_crush') {
       // Tight flame guillotine follows the blade down; the enemy remains visible.
       spawnHinokamiSlashArc(bloodDemonArtsRef.current, {
@@ -4831,10 +4855,6 @@ export default function KaliyugaArena() {
         thickness: 27, palette: 'water', direction: -1,
       });
     }
-    triggerImpactInversionFlash(
-      bloodDemonArtsRef.current,
-      brokenEnemy.x, brokenEnemy.y - 24, 0.054, executionAccent
-    );
     const execSlashRow =
       finisherSpec.variant === 'spin_360_cleave'
         ? PARASHU_FLIPBOOK_ROWS.SPIN_360_WHIRLWIND_RING
@@ -5335,7 +5355,7 @@ export default function KaliyugaArena() {
             if ((heavyHitRes.hpLost > 0 || heavyHitRes.triggeredPostureBreak) && !presentedImpact) {
               presentedImpact = true;
               triggerSakugaImpact(sakugaDirectorRef.current, {
-                kind: 'heavy_hit',
+                kind: heavyHitRes.triggeredPostureBreak ? 'posture_break' : 'heavy_hit',
                 element: heavyElement,
                 worldX: e.x - Math.cos(kAngle) * 16,
                 worldY: e.y - Math.sin(kAngle) * 12,
@@ -5724,17 +5744,6 @@ export default function KaliyugaArena() {
             });
           },
         };
-        if (isComboFinisher) {
-          const element: SakugaElement = lightSlashPalette === 'blood' ? 'guardian' : strike.element;
-          triggerSakugaImpact(sakugaDirectorRef.current, {
-            kind: 'heavy_hit',
-            element,
-            worldX: originX + Math.cos(capturedAngle) * 56,
-            worldY: originY + Math.sin(capturedAngle) * 38,
-            angle: capturedAngle,
-            intensity: 0.82,
-          });
-        }
         if (p.comboStep === 3 || activeFinisherSpec?.variant === 'spin_360_cleave') {
           sim.enemies.forEach((e) => {
             if (e.aiState === 'ko') return;
@@ -5754,6 +5763,7 @@ export default function KaliyugaArena() {
         );
 
         let hitAny = false;
+        let presentedLightContact = false;
         sim.enemies.forEach((e) => {
           if (e.aiState === 'ko') return;
           const d = Math.hypot(e.x - p.x, e.y - p.y);
@@ -5944,6 +5954,15 @@ export default function KaliyugaArena() {
             if (hitRes.hpLost > 0) {
               const contactX = e.x - Math.cos(kAngle) * (e.isBoss ? 25 : 12);
               const contactY = e.y - Math.sin(kAngle) * (e.isBoss ? 18 : 9);
+              if (!presentedLightContact || hitRes.triggeredPostureBreak) {
+                presentedLightContact = true;
+                triggerSakugaImpact(sakugaDirectorRef.current, {
+                  kind: hitRes.triggeredPostureBreak ? 'posture_break' : isComboFinisher ? 'heavy_hit' : 'light_hit',
+                  element: lightSlashPalette === 'blood' ? 'guardian' : strike.element,
+                  worldX: contactX, worldY: contactY, angle: kAngle,
+                  intensity: isComboFinisher ? 1.08 : 0.68 + capturedStep * 0.07,
+                });
+              }
               if (!hitRes.triggeredPostureBreak) {
                 fx?.spawnClashStarburst({
                   x: contactX, y: contactY - (e.isBoss ? 36 : 22),
@@ -6587,6 +6606,12 @@ export default function KaliyugaArena() {
             damageMultiplier: fluxDmgMult,
           });
           if (!fluxRes.inRange) return;
+          const pullAngle = Math.atan2(p.y - en.y, p.x - en.x);
+          startCombatHitReaction(en, pullAngle, 'heavy');
+          if (!hitAnyFlux) triggerSakugaImpact(sakugaDirectorRef.current, {
+            kind: 'astra_contact', element: 'varuna', worldX: en.x, worldY: en.y,
+            angle: pullAngle, intensity: 0.97,
+          });
           hitAnyFlux = true;
           en.hp = fluxRes.nextHp;
           sim.runDamageDealt += fluxRes.damage;
@@ -9390,8 +9415,9 @@ export default function KaliyugaArena() {
                     }
                     sim.hitstopTimer = parryRes.hitstopSec;
                     sim.cameraShakeTrauma = Math.min(MAX_CLAMPED_CAMERA_TRAUMA, sim.cameraShakeTrauma + 0.52);
-                    showPerfectParry((p.x + e.x) * 0.5, (p.y + e.y) * 0.5,
-                      Math.atan2(e.y - p.y, e.x - p.x));
+                    const deflectAngle = Math.atan2(e.y - p.y, e.x - p.x);
+                    startCombatHitReaction(e, deflectAngle, 'riposte', e.posture <= 0);
+                    showPerfectParry((p.x + e.x) * 0.5, (p.y + e.y) * 0.5, deflectAngle);
                     soundEngine.playVoiceBark('rudra_parry', { cooldownMs: 4500 });
                     spawnFloatingText(
                       p.x,
@@ -9499,6 +9525,11 @@ export default function KaliyugaArena() {
                     knockbackAngleRad: Math.atan2(p.y - e.y, p.x - e.x),
                     hitKind: e.isBoss ? 'boss_strike' : 'heavy',
                     currentCameraTrauma: sim.cameraShakeTrauma,
+                  });
+                  if (hitOnPlayer.hpLost > 0) triggerSakugaImpact(sakugaDirectorRef.current, {
+                    kind: e.isBoss ? 'boss_clash' : 'light_hit',
+                    element: 'blood', worldX: p.x, worldY: p.y,
+                    angle: Math.atan2(p.y - e.y, p.x - e.x), intensity: e.isBoss ? 0.95 : 0.55,
                   });
                   sim.hitstopTimer = Math.max(sim.hitstopTimer, hitOnPlayer.hitstopSec);
                   sim.cameraShakeTrauma = hitOnPlayer.clampedCameraTrauma;
@@ -10130,6 +10161,9 @@ export default function KaliyugaArena() {
             })
           : COMBAT_CAMERA_REST;
       const activeShot = liveShot ?? combatShot;
+      const contactShot = !liveShot && sim.state === 'playing' && !sim.modalPaused
+        ? sampleCombatContactCamera(sakugaDirectorRef.current, sim.camX + cw * 0.5, sim.camY + ch * 0.5)
+        : COMBAT_CAMERA_REST;
       const cameraShake = sampleSteadyImpactShake(now, sim.cameraShakeTrauma, cw, ch);
       const safeCamera = clampCinematicOffsetToWorld({
         viewportW: cw,
@@ -10138,9 +10172,9 @@ export default function KaliyugaArena() {
         worldH,
         camX: sim.camX,
         camY: sim.camY,
-        zoom: sim.cameraZoom * activeShot.zoom,
-        offsetX: sim.cameraKickX + activeShot.offsetX + cameraShake.x,
-        offsetY: sim.cameraKickY + activeShot.offsetY + cameraShake.y,
+        zoom: sim.cameraZoom * activeShot.zoom * contactShot.zoom,
+        offsetX: sim.cameraKickX + activeShot.offsetX + contactShot.offsetX + cameraShake.x,
+        offsetY: sim.cameraKickY + activeShot.offsetY + contactShot.offsetY + cameraShake.y,
       });
       // Step Ufotable Sakuga Impact & Chiaroscuro Director in real dt (smooth during hitstop!)
       stepSakugaDirector(sakugaDirectorRef.current, dt, {
@@ -11005,6 +11039,14 @@ export default function KaliyugaArena() {
           const isFlash = e.hitFlashTimer > 0;
           const bob = 0;
           const enemySkewX = 0;
+          const recoil = stepCombatHitReaction(e, dt);
+          ctx.save();
+          if (recoil) {
+            ctx.translate(e.x + recoil.offsetX, e.y + recoil.offsetY);
+            ctx.rotate(recoil.lean);
+            ctx.scale(1 + recoil.squash, 1 - recoil.squash * 0.82);
+            ctx.translate(-e.x, -e.y);
+          }
 
           if (
             e.type === 'dundubhi' ||
@@ -11347,8 +11389,8 @@ export default function KaliyugaArena() {
               e.aiState === 'attack'
                 ? Math.sin(e.aimAngle) * Math.sin((1 - enemyStateProgress) * Math.PI) * 5
                 : 0;
-            const hitShudderX = isFlash ? Math.sin(now * 0.14 + e.id) * 3.5 : 0;
-            const hitShudderY = isFlash ? Math.cos(now * 0.14 + e.id) * 2.0 : 0;
+            const hitShudderX = isFlash && !recoil ? Math.sin(now * 0.14 + e.id) * 3.5 : 0;
+            const hitShudderY = isFlash && !recoil ? Math.cos(now * 0.14 + e.id) * 2.0 : 0;
 
             const enemy3d = enemy3dRef.current;
             const renderedEnemy3D =
@@ -11442,6 +11484,7 @@ export default function KaliyugaArena() {
             }
           }
 
+          ctx.restore();
           if ((e.ironGuardWindupTimer || 0) > 0 && e.aiState !== 'ko') {
             renderCrispVedicWardShield(ctx, {
               x: e.x,
@@ -11562,6 +11605,7 @@ export default function KaliyugaArena() {
           }
         } else if (act.kind === 'player') {
           const p = sim.player;
+          const heroRecoil = stepCombatHitReaction(p, dt);
           const speedMag = Math.hypot(p.vx, p.vy);
           const isMoving = speedMag > 14;
           const stridePhase = p.walkDistance * 0.085;
@@ -11825,7 +11869,8 @@ export default function KaliyugaArena() {
             });
 
             ctx.save();
-            ctx.translate(p.x, p.y);
+            ctx.translate(p.x + (heroRecoil?.offsetX ?? 0), p.y + (heroRecoil?.offsetY ?? 0));
+            if (heroRecoil) ctx.rotate(heroRecoil.lean);
             ctx.drawImage(rudra3d.canvas, anchorX, anchorY, drawSize, drawSize);
             ctx.restore();
           } else {
@@ -11839,8 +11884,8 @@ export default function KaliyugaArena() {
               activeRudraSheet,
               frame,
               1,
-              p.x,
-              p.y,
+              p.x + (heroRecoil?.offsetX ?? 0),
+              p.y + (heroRecoil?.offsetY ?? 0),
               112,
               112,
               p.facing,
@@ -12044,58 +12089,14 @@ export default function KaliyugaArena() {
       void drawAdditiveFlipbookRowProgress;
       void renderLightningArcFlipbooks;
 
-      // 8.1. Pillar 4 — Dynamic Split Elemental Bounce Rim-Light over Hero & Nearby Enemies during Active Clashes
-      {
-        const p = sim.player;
-        const sakuga = sakugaDirectorRef.current;
-        const isHeroStriking =
-          p.action === 'light_attack' ||
-          p.action === 'heavy_unleash' ||
-          p.action === 'execute' ||
-          p.action === 'astra';
-        if (isHeroStriking || sakuga.activeLightIntensity > 0.08) {
-          const bounceRgb =
-            sakuga.activeLightIntensity > 0.12
-              ? `${sakuga.activeLightRgb[0]}, ${sakuga.activeLightRgb[1]}, ${sakuga.activeLightRgb[2]}`
-              : varunaInfusionTimerRef.current > 0
-              ? '45, 226, 255'
-              : p.stance === 'pillar'
-              ? '38, 247, 141'
-              : p.stance === 'thrust'
-              ? '255, 232, 64'
-              : '255, 138, 28';
-          const intensity = Math.max(isHeroStriking ? 0.36 : 0, sakuga.activeLightIntensity * 0.44);
-          ctx.save();
-          ctx.globalCompositeOperation = 'lighter';
-          const bGrad = ctx.createRadialGradient(p.x, p.y - 42, 6, p.x, p.y - 42, 110);
-          bGrad.addColorStop(0, `rgba(${bounceRgb}, ${Math.min(0.46, intensity).toFixed(3)})`);
-          bGrad.addColorStop(0.55, `rgba(${bounceRgb}, ${(intensity * 0.36).toFixed(3)})`);
-          bGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-          ctx.fillStyle = bGrad;
-          ctx.beginPath();
-          ctx.arc(p.x, p.y - 42, 110, 0, Math.PI * 2);
-          ctx.fill();
-
-          // Bounce light also hits nearby enemies inside the clash radius (Tengen-vs-Gyutaro split lighting!)
-          if (sakuga.activeLightIntensity > 0.14) {
-            for (let ei = 0; ei < sim.enemies.length; ei++) {
-              const foe = sim.enemies[ei];
-              if (foe.aiState === 'ko') continue;
-              const distL = Math.hypot(foe.x - sakuga.activeLightX, foe.y - sakuga.activeLightY);
-              if (distL > 340) continue;
-              const falloff = (1 - distL / 340) * sakuga.activeLightIntensity;
-              const eRad = foe.isBoss ? 128 : 74;
-              const eGrad = ctx.createRadialGradient(foe.x, foe.y - 40, 4, foe.x, foe.y - 40, eRad);
-              eGrad.addColorStop(0, `rgba(${bounceRgb}, ${(falloff * 0.38).toFixed(3)})`);
-              eGrad.addColorStop(0.6, `rgba(${bounceRgb}, ${(falloff * 0.14).toFixed(3)})`);
-              eGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-              ctx.fillStyle = eGrad;
-              ctx.beginPath();
-              ctx.arc(foe.x, foe.y - 40, eRad, 0, Math.PI * 2);
-              ctx.fill();
-            }
+      // Color from the contact follows the near side of both actors.
+      const contactLight = sakugaDirectorRef.current;
+      if (contactLight.activeLightIntensity > 0.08) {
+        renderCombatActorBounce(ctx, contactLight, sim.player.x, sim.player.y, 64);
+        for (const enemy of sim.enemies) {
+          if (enemy.aiState !== 'ko') {
+            renderCombatActorBounce(ctx, contactLight, enemy.x, enemy.y, enemy.isBoss ? 111 : 60);
           }
-          ctx.restore();
         }
       }
 

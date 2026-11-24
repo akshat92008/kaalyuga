@@ -42,6 +42,49 @@ export type CombatHitWeight =
   | 'projectile'
   | 'hazard';
 
+export interface CombatHitReaction {
+  age: number;
+  duration: number;
+  angle: number;
+  strength: number;
+}
+
+export function startCombatHitReaction(
+  target: Pick<ReceiveHitTarget, 'hitReaction' | 'isBoss'>,
+  angle: number,
+  weight: CombatHitWeight,
+  guardBroken = false,
+): void {
+  const size = guardBroken || weight === 'execute' || weight === 'finisher' ? 1.25
+    : weight === 'heavy' || weight === 'boss_slam' || weight === 'boss_strike' || weight === 'boss' ? 1 : 0.58;
+  const strength = size * (target.isBoss ? 0.43 : 1);
+  const previous = target.hitReaction;
+  if (previous && previous.age < previous.duration * 0.34 && previous.strength > strength) return;
+  target.hitReaction = {
+    age: 0, duration: 0.16 + size * 0.16, angle: Number.isFinite(angle) ? angle : 0, strength,
+  };
+}
+
+export function stepCombatHitReaction(
+  target: Pick<ReceiveHitTarget, 'hitReaction'>,
+  dt: number,
+): { offsetX: number; offsetY: number; lean: number; squash: number } | null {
+  const reaction = target.hitReaction;
+  if (!reaction) return null;
+  const t = reaction.age / reaction.duration;
+  // A sharp recoil on contact, a short counter-motion, and a planted recovery.
+  const recoil = (Math.pow(1 - t, 2.8) - Math.sin(t * Math.PI * 2) * t * (1 - t) * 0.55) * reaction.strength;
+  const direction = Math.cos(reaction.angle);
+  reaction.age += Math.max(0, Math.min(dt, 0.05));
+  if (reaction.age >= reaction.duration) target.hitReaction = undefined;
+  return {
+    offsetX: direction * recoil * 10,
+    offsetY: (Math.sin(reaction.angle) * 5 - 2) * recoil,
+    lean: direction * recoil * 0.21,
+    squash: recoil * 0.08,
+  };
+}
+
 export interface ReceiveHitTarget {
   hp: number;
   maxHp: number;
@@ -51,6 +94,7 @@ export interface ReceiveHitTarget {
   vx: number;
   vy: number;
   hitFlashTimer: number;
+  hitReaction?: CombatHitReaction;
   scaleX?: number;
   scaleY?: number;
   isBoss?: boolean;
@@ -219,6 +263,11 @@ export function receiveHit(
       target.aiTimer = breakDur;
       target.parryStanceTimer = 0;
     }
+  }
+
+  if (hpLost > 0 || triggeredPostureBreak || shatteredGuardNow || crackedArmorNow) {
+    startCombatHitReaction(target, input.knockbackAngleRad, effectiveWeight,
+      triggeredPostureBreak || shatteredGuardNow);
   }
 
   // White 1-frame hit-flash & subtle impact squash/stretch

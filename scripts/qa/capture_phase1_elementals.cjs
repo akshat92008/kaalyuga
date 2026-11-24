@@ -18,6 +18,7 @@ async function main() {
   });
   const screenshots = [];
   const weaponMotion = [];
+  const combatPresentation = [];
   const captureFailures = [];
   const press = (key) => page.keyboard.press(key);
   async function capture(name) {
@@ -67,6 +68,13 @@ async function main() {
                 Number.isFinite(event.contactX) && Number.isFinite(event.contactY)
               );
           }, { weapon, attack, previous }, { polling: 50, timeout: 45000 });
+          const impact = await page.evaluate(() => window.__kaliyugaPhaseQA.combatImpact);
+          combatPresentation.push({ weapon, attack, impact });
+          const expected = attack === 'light' ? 'light_hit' : 'heavy_hit';
+          if (impact.reactCount < 1 ||
+              ![expected, 'heavy_hit', 'posture_break'].includes(impact.kind)) {
+            captureFailures.push({ weapon, attack, impact });
+          }
           await capture(`regular-${weapon}-${attack}`);
         } finally {
           await page.evaluate(() => window.__kaliyugaPhaseQAFixture.resumeWeaponCapture());
@@ -234,14 +242,30 @@ async function main() {
     await page.waitForFunction(() => window.__kaliyugaPhaseQA.action === 'idle', undefined, { timeout: 15000 });
     await page.evaluate(() => window.__kaliyugaPhaseQAFixture.preparePerfectParry());
     await press('ShiftLeft');
+    await page.waitForFunction(() => window.__kaliyugaPhaseQA.combatImpact.inkKind === 'parry_clash',
+      undefined, { polling: 50, timeout: 45000 });
     await capture('perfect-parry');
+
+    for (const variant of ['downward_crush', 'spin_360_cleave', 'impaling_lunge']) {
+      const previous = await page.evaluate((variant) => {
+        window.__kaliyugaPhaseQAFixture.prepareExecution(variant);
+        return performance.now();
+      }, variant);
+      await press('KeyF');
+      await page.waitForFunction(({ variant, previous }) => {
+        const qa = window.__kaliyugaPhaseQA;
+        return qa.combatImpact.inkKind === 'execution' && qa.recentEvents.some(event =>
+          event.name === 'execution-contact' && event.meta === variant && event.frameTime > previous);
+      }, { variant, previous }, { polling: 50, timeout: 45000 });
+      await capture(`execution-${variant}`);
+    }
     await captureVrikodaraBenchmark();
     if (errors.length || captureFailures.length) throw Error(JSON.stringify({ errors, captureFailures }));
   } catch (error) {
     await capture('failure-current-screen');
     throw error;
   } finally {
-    await fs.writeFile(`${directory}/report.json`, JSON.stringify({ screenshots, errors, captureFailures, weaponMotion }, null, 2));
+    await fs.writeFile(`${directory}/report.json`, JSON.stringify({ screenshots, errors, captureFailures, weaponMotion, combatPresentation }, null, 2));
     try {
       await page.close();
       await video?.saveAs(`${directory}/phase1-combat-effects.webm`);
