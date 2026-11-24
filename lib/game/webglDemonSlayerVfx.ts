@@ -42,6 +42,9 @@ export interface VfxTelemetrySnapshot {
   isSoftwareGl: boolean;
   activeRibbons: number;
   activeBladeTrails: number;
+  divineInkReady: boolean;
+  divineInkTrailStarts: number;
+  divineInkReleaseStarts: number;
   activeParticles: number;
   maxParticles: number;
   activeFloorEffects: number;
@@ -1314,6 +1317,8 @@ export class WebglDemonSlayerVfxOverlay {
   private qualityPreset: VfxQualityPreset = 'balanced';
   private elapsed = 0;
   private divineInkAtlas: THREE.Texture | null = null;
+  private divineInkTrailStarts = 0;
+  private divineInkReleaseStarts = 0;
   private width = 1440;
   private height = 900;
   private isSoftwareGl = false;
@@ -1348,8 +1353,8 @@ export class WebglDemonSlayerVfxOverlay {
       this.qualityPreset = this.isSoftwareGl ? 'performance' : 'balanced';
       this.atlas = getOrCreatePainterlyVfxAtlas();
       // Explicit opt-in: unchanged default gameplay, no download unless requested.
-      if (new URLSearchParams(window.location.search).get('divineInk') === '1') {
-        new THREE.TextureLoader().load('/vfx/divine-ink/agni-ribbon-atlas.png', (tex) => {
+      if (new URLSearchParams(window.location.search).get('divineInk') !== '0') {
+        new THREE.TextureLoader().load('/vfx/divine-ink/agni-ribbon-v2.png', (tex) => {
           if (this.disposed || tex.image.width !== 2048 || tex.image.height !== 396) {
             tex.dispose();
             return;
@@ -1590,6 +1595,9 @@ export class WebglDemonSlayerVfxOverlay {
       isSoftwareGl: this.isSoftwareGl,
       activeRibbons: this.ribbons.length,
       activeBladeTrails,
+      divineInkReady: this.divineInkAtlas !== null,
+      divineInkTrailStarts: this.divineInkTrailStarts,
+      divineInkReleaseStarts: this.divineInkReleaseStarts,
       activeParticles,
       maxParticles: QUALITY_PARTICLE_CAP[this.qualityPreset],
       activeFloorEffects:
@@ -1695,6 +1703,7 @@ export class WebglDemonSlayerVfxOverlay {
       mat.uniforms.uDivineInkStart.value = this.elapsed;
     }
 
+    if (slot.frontMat.uniforms.uDivineInkEnabled.value > 0.5) this.divineInkTrailStarts++;
     const baseOp = opts.opacity ?? 0.98;
     configureMat(slot.backMat, baseOp * 0.94, 1.24);
     configureMat(slot.frontMat, baseOp, 1.38);
@@ -1954,6 +1963,7 @@ export class WebglDemonSlayerVfxOverlay {
     }
     const useDivineInk = Boolean(this.divineInkAtlas && opts.painterlyAgni && mode === 0);
     if (useDivineInk) {
+      this.divineInkReleaseStarts++;
       coreMat.uniforms.uDivineInkAtlas.value = this.divineInkAtlas;
       coreMat.uniforms.uDivineInkEnabled.value = 1;
       coreMat.uniforms.uDivineInkStart.value = this.elapsed;

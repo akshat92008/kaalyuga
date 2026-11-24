@@ -1,0 +1,15 @@
+{
+  "source": "Hand-drawn_anime_fire_ribbon_ae072c4d.mp4",
+  "sourceSha256": "094fb1b630dcfed92b5f849aea0c28a52a90f890d0837a3f17cdc1e3533a6bba",
+  "atlasSha256": "e1c4dadf5e1a9bb311f19833dfc074a35a0f0a20093f7790b94ee26f5e7c3719",
+  "frames": 12,
+  "columns": 4,
+  "rows": 3,
+  "frameWidth": 508,
+  "frameHeight": 128,
+  "padding": 2,
+  "width": 2048,
+  "height": 396,
+  "encoding": "indexed RGBA",
+  "commercialStatus": "prototype; source rights and provider terms review pending"
+}

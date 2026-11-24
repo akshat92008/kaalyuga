@@ -1,7 +1,7 @@
 name: Divine Ink Agni gameplay benchmark
 on:
   push:
-    branches: [feature/divine-ink-agni-benchmark-20261124]
+    branches: [main, feature/divine-ink-agni-benchmark-20261124]
   workflow_dispatch:
 permissions:
   contents: read
