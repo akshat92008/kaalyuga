@@ -5709,7 +5709,7 @@ export default function KaliyugaArena() {
               tiltY: 0,
               spinRate: 0,
               openStrike: true,
-              opacity: hasRigPose ? 0.43 : 0.99,
+              opacity: hasRigPose ? 0.74 : 0.99,
             });
             fx?.spawnElementalParticles({
               x: blade.tipX,
@@ -11617,6 +11617,7 @@ export default function KaliyugaArena() {
             vy: p.vy,
           });
           const liveStrike = activeStrikeRef.current;
+          const rudraIsSwinging = coreLock.rudraIsAttacking || coreLock.rudraIsHeavyAttack;
           const rendered3D =
             rudra3d &&
             rudra3d.updateAndRender({
@@ -11645,7 +11646,7 @@ export default function KaliyugaArena() {
               finisherVariant: p.finisherVariant,
               attackSerial: coreLock.isSusanooActive ? 0 : p.attackSerial,
               weaponSwing: liveStrike && liveStrike.sync.attackSerial === p.attackSerial &&
-                coreLock.rudraIsAttacking ? {
+                rudraIsSwinging ? {
                   weapon: liveStrike.weapon,
                   activeStart: liveStrike.sync.activeStart,
                   activeEnd: liveStrike.sync.activeEnd,
@@ -11707,7 +11708,7 @@ export default function KaliyugaArena() {
             drawW: drawSize,
             drawH: drawSize,
           };
-          const bladePose = rendered3D && coreLock.rudraIsAttacking ? rudra3d?.getLatestBladePose() : null;
+          const bladePose = rendered3D && rudraIsSwinging ? rudra3d?.getLatestBladePose() : null;
           const currentBladeSample = () => projectBakedBladePoseToArena(
             bladePose,
             rudraSpriteRectRef.current,
@@ -11743,7 +11744,7 @@ export default function KaliyugaArena() {
             const sync = liveStrike?.sync;
             const traceBlade = Boolean(
               sync && sync.attackSerial === p.attackSerial && !sync.cancelled &&
-              bladePose?.valid && coreLock.rudraIsAttacking && p.hp > 0 && p.hitFlashTimer <= 0 &&
+              bladePose?.valid && rudraIsSwinging && p.hp > 0 && p.hitFlashTimer <= 0 &&
               p.weaponSwingProgress >= Math.max(0, sync.activeStart - 0.17) &&
               p.weaponSwingProgress <= sync.activeEnd &&
               !(sync.tier === 'heavy' && sync.element === 'vayu')

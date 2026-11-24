@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { resolveRudraDesiredState } from './rudra3dRenderer';
 import {
   ArenaBladeSample,
   BakedBladePose,
@@ -181,4 +182,17 @@ test('blade trail accepts motion and breaks across a teleported weapon', () => {
   assert.equal(classifyBladeTrailStep(sample, sample), 'duplicate');
   assert.equal(classifyBladeTrailStep(sample, { ...sample, tipX: sample.tipX + 12 }), 'sweep');
   assert.equal(classifyBladeTrailStep(sample, { ...sample, rootY: sample.rootY - 70 }), 'break');
+});
+
+test('regular heavy swings choose a weapon-specific clip while execution keeps its authored pose', () => {
+  const heavy = {
+    isHurt: false, isDefeated: false, isParrying: false, isCasting: false, isDodging: false,
+    isHeavyAttack: true, isAttacking: false, comboStep: 1, vx: 0, vy: 0,
+  };
+  const clips = { attack2: true, attack3: true, heavy: true, cast: true };
+  const window = { activeStart: 0.28, activeEnd: 0.72 };
+  assert.equal(resolveRudraDesiredState({ ...heavy, weaponSwing: { ...window, weapon: 'khanda_dual' } }, clips), 'attack2');
+  assert.equal(resolveRudraDesiredState({ ...heavy, weaponSwing: { ...window, weapon: 'parashu' } }, clips), 'heavy');
+  assert.equal(resolveRudraDesiredState({ ...heavy, weaponSwing: { ...window, weapon: 'trishula_great' } }, clips), 'attack3');
+  assert.equal(resolveRudraDesiredState({ ...heavy, finisherVariant: 'spin_360_cleave' }, clips), 'cast');
 });

@@ -94,6 +94,7 @@ export function resolveRudraDesiredState(
     | 'isDodging'
     | 'comboStep'
     | 'finisherVariant'
+    | 'weaponSwing'
     | 'vx'
     | 'vy'
   >,
@@ -108,6 +109,12 @@ export function resolveRudraDesiredState(
     }
     if (input.finisherVariant === 'impaling_lunge' && availableActions.attack3) {
       return 'attack3';
+    }
+    // Give the fast weapon a crossing cut and the long weapon a forward
+    // lunge. Parashu keeps the overhead chop. All share the live hit clock.
+    if (!input.finisherVariant && input.weaponSwing) {
+      if (input.weaponSwing.weapon === 'khanda_dual' && availableActions.attack2) return 'attack2';
+      if (input.weaponSwing.weapon === 'trishula_great' && availableActions.attack3) return 'attack3';
     }
     return 'heavy';
   }
