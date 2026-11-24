@@ -310,7 +310,7 @@ export class Rudra3DRenderer {
     depthZ: 0.12,
     valid: false,
   };
-  private trailSeed: { serial: number; progress: number; pose: BakedBladePose } | null = null;
+  private trailSeeds: { serial: number; samples: { progress: number; pose: BakedBladePose }[] } | null = null;
   private bladeRootAnchor: THREE.Object3D | null = null;
   private bladeTipAnchor: THREE.Object3D | null = null;
   private torsoDepthAnchor: THREE.Object3D | null = null;
@@ -329,8 +329,8 @@ export class Rudra3DRenderer {
     return this.latestBladePose;
   }
 
-  public getBladeTrailSeed(serial: number): { progress: number; pose: BakedBladePose } | null {
-    return this.trailSeed?.serial === serial ? this.trailSeed : null;
+  public getBladeTrailSeeds(serial: number): readonly { progress: number; pose: BakedBladePose }[] {
+    return this.trailSeeds?.serial === serial ? this.trailSeeds.samples : [];
   }
 
   constructor(size = 256) {
@@ -731,13 +731,18 @@ export class Rudra3DRenderer {
 
     const window = input.weaponSwing;
     const serial = input.attackSerial;
-    if (window && serial !== undefined && this.trailSeed?.serial !== serial &&
+    if (window && serial !== undefined && this.trailSeeds?.serial !== serial &&
         input.attackProgress >= window.activeStart && input.attackProgress <= window.activeEnd) {
-      const seedProgress = Math.max(window.activeStart - 0.14, input.attackProgress - 0.16);
-      const seed = resolveRudraAnimStateAndClock({ ...input, attackProgress: seedProgress },
-        this.stateElapsedSec, this.elapsedSec, this.actions);
-      const pose = this.sampleSwingPose(seed.state, seed.animClock, facingAngle);
-      if (pose?.valid) this.trailSeed = { serial, progress: seedProgress, pose };
+      const samples: { progress: number; pose: BakedBladePose }[] = [];
+      const offsets = input.isHeavyAttack ? [0.16] : [0.09, 0.23, 0.36, 0.45];
+      for (const offset of offsets) {
+        const progress = Math.max(0, input.attackProgress - offset);
+        const seed = resolveRudraAnimStateAndClock({ ...input, attackProgress: progress },
+          this.stateElapsedSec, this.elapsedSec, this.actions);
+        const pose = this.sampleSwingPose(seed.state, seed.animClock, facingAngle);
+        if (pose?.valid) samples.push({ progress, pose });
+      }
+      this.trailSeeds = { serial, samples };
     }
 
     const baked = this.renderFrame(

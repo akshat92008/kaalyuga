@@ -11743,11 +11743,14 @@ export default function KaliyugaArena() {
             const webglVfxLive = webglDemonSlayerVfxRef.current;
             const previous = previousBladeSampleRef.current;
             const sync = liveStrike?.sync;
+            // Light hits commit in the action window. Preserve the visual
+            // follow-through on the next frame even if it lands in recovery.
+            const visualEnd = sync?.tier === 'light' ? 0.97 : sync?.activeEnd ?? 0;
             const traceBlade = Boolean(
               sync && sync.attackSerial === p.attackSerial && !sync.cancelled &&
               bladePose?.valid && rudraIsSwinging && p.hp > 0 && p.hitFlashTimer <= 0 &&
               p.weaponSwingProgress >= Math.max(0, sync.activeStart - 0.17) &&
-              p.weaponSwingProgress <= sync.activeEnd &&
+              p.weaponSwingProgress <= visualEnd &&
               !(sync.tier === 'heavy' && sync.element === 'vayu')
             );
             const sample = traceBlade ? currentBladeSample() : null;
@@ -11776,14 +11779,21 @@ export default function KaliyugaArena() {
                 });
                 liveBladeTrailActiveIdRef.current = liveTrailKey;
                 const previousSample = previous?.serial === sync.attackSerial ? previous.sample : null;
-                const bakedSeed = rudra3d.getBladeTrailSeed(sync.attackSerial);
-                const seed = previousSample && previousSample.progress < sample.progress &&
-                  classifyBladeTrailStep(previousSample, sample) === 'sweep' ? previousSample
-                  : bakedSeed && projectBakedBladePoseToArena(bakedSeed.pose, rudraSpriteRectRef.current, {
+                const isContinuous = (pose: ArenaBladeSample) =>
+                  pose.progress < sample.progress && classifyBladeTrailStep(pose, sample) === 'sweep' &&
+                  Math.hypot(pose.tipX - sample.tipX, pose.tipY - sample.tipY) >= 4;
+                if (previousSample && isContinuous(previousSample)) {
+                  submitBladeSample(previousSample);
+                } else {
+                  for (const bakedSeed of rudra3d.getBladeTrailSeeds(sync.attackSerial)) {
+                    const seed = projectBakedBladePoseToArena(bakedSeed.pose, rudraSpriteRectRef.current, {
                       playerX: p.x, playerY: p.y, slashAngle: p.slashAngle, progress: bakedSeed.progress,
                     });
-                if (seed && seed.progress < sample.progress && classifyBladeTrailStep(seed, sample) === 'sweep') {
-                  submitBladeSample(seed);
+                    if (isContinuous(seed)) {
+                      submitBladeSample(seed);
+                      break;
+                    }
+                  }
                 }
               }
               submitBladeSample(sample);

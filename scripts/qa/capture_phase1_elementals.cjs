@@ -81,7 +81,9 @@ async function main() {
         if (usesBladeTrail &&
             (samples.length < 2 || !samples.some((pose) =>
               Math.hypot(pose.contactX - samples[0].contactX, pose.contactY - samples[0].contactY) > 4))) {
-          throw Error(`No blade follow-through sampled for ${weapon} ${attack}: ${JSON.stringify(samples)}`);
+          const failure = { weapon, attack, samples };
+          captureFailures.push(failure);
+          console.log('No blade follow-through sampled: ' + JSON.stringify(failure));
         }
       }
     }
